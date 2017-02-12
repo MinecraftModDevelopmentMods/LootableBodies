@@ -16,3 +16,6 @@
 temp/*
 /run/*
 
+/.gradle/
+/build/
+/bin/
