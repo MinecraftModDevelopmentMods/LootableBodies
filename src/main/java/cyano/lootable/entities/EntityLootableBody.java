@@ -613,7 +613,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 
 	private static boolean matchesAny(String damageType, DamageSource... list){
 		for(int i = 0; i < list.length; i++){
-			if(damageType.hashCode() == list[i].hashCode()) return true;
+			if(damageType.equalsIgnoreCase(list[i].damageType)) return true;
 		}
 		return false;
 	}
