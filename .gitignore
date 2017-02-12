@@ -15,7 +15,3 @@
 /.idea/*
 temp/*
 /run/*
-
-/.gradle/
-/build/
-/bin/
