@@ -76,14 +76,14 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 
 	@Override
 	public boolean canInteractWith(EntityPlayer entityplayer) {
-		return targetInventory.isUseableByPlayer(entityplayer);
+		return targetInventory.isUsableByPlayer(entityplayer);
 	}
 
 
 	@Override
 	public ItemStack transferStackInSlot(EntityPlayer player, int slot) {
 		int hostSize = targetInventory.getSizeInventory();
-		ItemStack stack = null;
+		ItemStack stack = ItemStack.EMPTY;
 		Slot slotObject = (Slot) inventorySlots.get(slot);
 		//null checks and checks if the item can be stacked (maxStackSize > 1)
 		if (slotObject != null && slotObject.getHasStack()) {
@@ -93,24 +93,25 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 			//merges the item into player inventory since its in the tileEntity
 			if (slot < hostSize) {
 				if (!this.mergeItemStack(stackInSlot, hostSize, 36+hostSize, true)) {
-					return null;
+					return ItemStack.EMPTY;
 				}
 			}
 			//places it into the tileEntity if possible since it's in the player inventory
 			else if (!this.mergeItemStack(stackInSlot, 0, hostSize, false)) {
-				return null;
+				return ItemStack.EMPTY;
 			}
 
-			if (stackInSlot.stackSize == 0) {
-				slotObject.putStack(null);
+			if (stackInSlot.getCount() == 0) {
+				slotObject.putStack(ItemStack.EMPTY);
 			} else {
 				slotObject.onSlotChanged();
 			}
 
-			if (stackInSlot.stackSize == stack.stackSize) {
-				return null;
+			if (stackInSlot.getCount() == stack.getCount()) {
+				return ItemStack.EMPTY;
 			}
-			slotObject.onPickupFromSlot(player, stackInSlot);
+			slotObject.onTake(player, stackInSlot);
+			//TODO verify this was the right method to call
 		}
 		return stack;
 	}
