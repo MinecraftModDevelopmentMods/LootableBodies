@@ -1,7 +1,12 @@
 package cyano.lootable.graphics;
 
+import java.util.Map;
+
+import org.apache.logging.log4j.Level;
+
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.minecraft.MinecraftProfileTexture;
+
 import cyano.lootable.LootableBodies;
 import cyano.lootable.entities.EntityLootableBody;
 import net.minecraft.client.Minecraft;
@@ -21,9 +26,6 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fml.common.FMLLog;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import org.apache.logging.log4j.Level;
-
-import java.util.Map;
 
 /**
  * Created by Chris on 4/10/2016.
@@ -108,14 +110,15 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 		this.mainModel.isChild = entity.isChild();
 
 		try {
-			float rotationInterpolation = 0F;
+//			float rotationInterpolation = 0F;
 			float headYaw = 0;
 
 
 			float headPitch = 0;
 			this.renderLivingAt(entity, x, y, z);
 			float age = 0.0F;
-			this.rotateCorpse(entity, age, rotationInterpolation, partialTick);
+			//TODO figure out where this came from
+//			this.rotateCorpse(entity, age, rotationInterpolation, partialTick);
 			float scale = this.prepareScale(entity, 0F);
 			float armSwingAmount = 0.0F;
 			float armSwing = 0.0F;
@@ -184,9 +187,10 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 	protected void renderLivingAt(EntityLootableBody e, double x, double y, double z)
 	{
 		super.renderLivingAt(e,x,y,z); // translation
-		GlStateManager.rotate(90,1F,0F,0F); // face-down
+		GlStateManager.rotate(90,1F,0F,0F); // lying down
+		GlStateManager.rotate(180,0F,1F,0F); //face down
 		GlStateManager.rotate(e.getRotation(),0F,0F,1F); // turn
-		GlStateManager.translate(0F, -0.85F, -0.125F); // center
+		GlStateManager.translate(0F, -0.85F, 0.125F); // center
 	}
 
 }
