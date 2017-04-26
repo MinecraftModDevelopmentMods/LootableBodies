@@ -1,5 +1,9 @@
 package cyano.lootable.events;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+
 import cyano.lootable.LootableBodies;
 import cyano.lootable.entities.EntityLootableBody;
 import net.minecraft.command.server.CommandSummon;
@@ -9,6 +13,7 @@ import net.minecraft.init.Items;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.EnumHandSide;
+import net.minecraft.util.NonNullList;
 import net.minecraft.world.World;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
@@ -16,11 +21,6 @@ import net.minecraftforge.fml.common.FMLLog;
 import net.minecraftforge.fml.common.eventhandler.Event;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 public class PlayerDeathEventHandler {
 
@@ -62,23 +62,23 @@ public class PlayerDeathEventHandler {
 			corpse.setUserName(player.getName());
 			corpse.setRotation(player.rotationYaw);
 
-			List<ItemStack> items = new ArrayList<>();
+			NonNullList<ItemStack> items = NonNullList.<ItemStack>create();
 			for (EntityItem itemEntity : e.getDrops()) {
 				ItemStack item = itemEntity.getEntityItem();
-				if (item != null && cache.containsKey(item)) {
+				if (!item.isEmpty() && cache.containsKey(item)) {
 					corpse.setItemStackToSlot(cache.get(item),item);
-				} else {
+				} else if (!item.isEmpty()) {
 					items.add(item);
 				}
 			}
-			corpse.initializeItems(items.toArray(new ItemStack[0]));
+			corpse.initializeItems(items);
 
 			if(LootableBodies.addBonesToCorpse){
 				corpse.addItem(new ItemStack(Items.BONE,1+w.rand.nextInt(3)));
 				corpse.addItem(new ItemStack(Items.ROTTEN_FLESH,1+w.rand.nextInt(3)));
 			}
 
-			w.spawnEntityInWorld(corpse);
+			w.spawnEntity(corpse);
 
 
 			e.getDrops().clear();

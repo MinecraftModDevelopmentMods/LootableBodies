@@ -1,6 +1,17 @@
 package cyano.lootable.entities;
 
+import java.util.Arrays;
+import java.util.Deque;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.apache.commons.lang3.ObjectUtils;
+
 import com.mojang.authlib.GameProfile;
+
 import cyano.lootable.LootableBodies;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.EntityLiving;
@@ -19,16 +30,13 @@ import net.minecraft.tileentity.TileEntitySkull;
 import net.minecraft.util.DamageSource;
 import net.minecraft.util.EntityDamageSource;
 import net.minecraft.util.EnumHand;
+import net.minecraft.util.NonNullList;
 import net.minecraft.util.SoundEvent;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.common.FMLLog;
 import net.minecraftforge.fml.common.network.internal.FMLNetworkHandler;
-import org.apache.commons.lang3.ObjectUtils;
-
-import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
 
 
 public class EntityLootableBody extends EntityLiving implements IInventory{
@@ -39,7 +47,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	final static byte VACUUM_TIMELIMIT = 20;
 	final static int VACUUM_RADIUS = 3;
 
-	private final ItemStack[] mainInventory = new ItemStack[6*7];
+	private final NonNullList<ItemStack> mainInventory = NonNullList.withSize(6*7, ItemStack.EMPTY);
 	private final Deque<ItemStack> auxInventory = new LinkedList<>();
 	private byte vacuumTime = 0;
 	private long deathTimestamp;
@@ -149,7 +157,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		// move items from buffer to main inventory
 		if(isServer && !auxInventory.isEmpty()) {
 			for (int slot = this.getSizeInventory() - 1; slot >= EQUIPMENT_SLOTS.length; slot--) {
-				if(this.getStackInSlot(slot) == null){
+				if(this.getStackInSlot(slot).isEmpty()){
 					this.setInventorySlotContents(slot,auxInventory.pollFirst());
 					this.markDirty();
 					break;
@@ -184,8 +192,8 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	}
 
 	private ItemStack decayItem(ItemStack item, int amount) {
-		if(item != null
-				&& item.stackSize == 1
+		if(!item.isEmpty()
+				&& item.getCount() == 1
 				&& item.isItemStackDamageable()
 				&& item.getItem().isDamageable()){
 			int durabilityRemaining = item.getMaxDamage() - item.getItemDamage() - 1;
@@ -199,35 +207,38 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	public void addItem(ItemStack stack) {
 		for(int slot = EQUIPMENT_SLOTS.length; slot < this.getSizeInventory(); slot++){
 			stack = mergeItem(slot,stack);
-			if(stack == null) return;
+			if(stack.isEmpty()) return;
 		}
 		auxInventory.addLast(stack);
 	}
 
 
-	public void initializeItems(ItemStack[] inv) {
-
-		System.arraycopy(inv,0,mainInventory,0,Math.min(inv.length,mainInventory.length));
-		for(int i = mainInventory.length; i < inv.length; i++){
-			auxInventory.addLast(inv[i]);
+	public void initializeItems(NonNullList<ItemStack> inv) {
+		for(int i = 0; i < inv.size(); i++){
+			if(i < mainInventory.size()) {
+				mainInventory.set(i,inv.get(i));
+			}
+			else {
+				auxInventory.addLast(inv.get(i));	
+			}
 		}
 	}
 
 	public ItemStack mergeItem(int slot, ItemStack stack) {
-		if(stack == null) return null;
+		if(stack.isEmpty()) return stack;
 		ItemStack current = this.getStackInSlot(slot);
 		final int inventorySizeLimit = Math.min(stack.getMaxStackSize(),this.getInventoryStackLimit());
-		if(current == null){
+		if(current.isEmpty()){
 			this.setInventorySlotContents(slot, stack);
-			return null;
-		} else if(current.stackSize < inventorySizeLimit
+			return current;
+		} else if(current.getCount() < inventorySizeLimit
 				&& ItemStack.areItemsEqual(stack,current)
 				&& ItemStack.areItemStackTagsEqual(stack,current)){
-			int delta = Math.min(stack.stackSize,inventorySizeLimit - current.stackSize);
-			current.stackSize += delta;
-			stack.stackSize -= delta;
+			int delta = Math.min(stack.getCount(),inventorySizeLimit - current.getCount());
+			current.setCount(current.getCount() + delta);
+			stack.setCount(stack.getCount() - delta);
 			this.setInventorySlotContents(slot,current);
-			if(stack.stackSize <= 0) return null;
+			if(stack.getCount() <= 0) return ItemStack.EMPTY;
 			return stack;
 		}
 		return stack;
@@ -240,18 +251,18 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		if(src instanceof EntityDamageSource && src.getEntity() instanceof EntityPlayer){
 			EntityPlayer player = (EntityPlayer)src.getEntity();
 			ItemStack item = player.getHeldItem(EnumHand.MAIN_HAND);
-			if(item != null) {
+			if(!item.isEmpty()) {
 				if (item.getItem() instanceof ItemSpade || item.getItem().getToolClasses(item).contains("shovel")) {
 					this.kill();
 				}
 			}
 		}
-		if(type.equals(DamageSource.outOfWorld.getDamageType())) {
+		if(type.equals(DamageSource.OUT_OF_WORLD.getDamageType())) {
 			super.damageEntity(src,amount); // kill command and falling out of the world
 			return;
 		}
 
-		if(type.equals(DamageSource.inWall.getDamageType())){
+		if(type.equals(DamageSource.IN_WALL.getDamageType())){
 			this.jumpOutOfWall();
 		}
 
@@ -263,7 +274,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 			return;
 		}
 
-		if(matchesAny(type, DamageSource.anvil, DamageSource.cactus, DamageSource.fall, DamageSource.fallingBlock, DamageSource.flyIntoWall, DamageSource.inFire, DamageSource.lava, DamageSource.magic, DamageSource.lightningBolt, DamageSource.onFire)){
+		if(matchesAny(type, DamageSource.ANVIL, DamageSource.CACTUS, DamageSource.FALL, DamageSource.FALLING_BLOCK, DamageSource.FLY_INTO_WALL, DamageSource.IN_FIRE, DamageSource.LAVA, DamageSource.MAGIC, DamageSource.LIGHTNING_BOLT, DamageSource.ON_FIRE)){
 			if(LootableBodies.hurtByEnvironment)super.damageEntity(src,amount);
 			return;
 		}
@@ -328,7 +339,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		vector[0] *= normalizer;
 		vector[1] *= normalizer;
 		vector[2] *= normalizer;
-		IBlockState bs = worldObj.getBlockState(new BlockPos(this.posX+vector[0], this.posY+vector[1], this.posZ+vector[2]));
+		IBlockState bs = world.getBlockState(new BlockPos(this.posX+vector[0], this.posY+vector[1], this.posZ+vector[2]));
 		if(!(bs.getMaterial().blocksMovement())){
 			this.setPosition(this.posX+vector[0], this.posY+vector[1], this.posZ+vector[2]);
 			return;
@@ -337,39 +348,39 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		// then try finding an open space in all adjacent blocks
 		BlockPos n;
 		n = currentCoord.up();
-		if(!(worldObj.getBlockState(n).getMaterial().blocksMovement())){
+		if(!(world.getBlockState(n).getMaterial().blocksMovement())){
 			this.setPosition(n.getX()+0.5,n.getY()+0.015625, n.getZ()+0.5);
 			return;
 		}
 		n = currentCoord.north();
-		if(!(worldObj.getBlockState(n).getMaterial().blocksMovement())){
+		if(!(world.getBlockState(n).getMaterial().blocksMovement())){
 			this.setPosition(n.getX()+0.5,n.getY()+0.015625, n.getZ()+0.5);
 			return;
 		}
 		n = currentCoord.east();
-		if(!(worldObj.getBlockState(n).getMaterial().blocksMovement())){
+		if(!(world.getBlockState(n).getMaterial().blocksMovement())){
 			this.setPosition(n.getX()+0.5,n.getY()+0.015625, n.getZ()+0.5);
 			return;
 		}
 		n = currentCoord.south();
-		if(!(worldObj.getBlockState(n).getMaterial().blocksMovement())){
+		if(!(world.getBlockState(n).getMaterial().blocksMovement())){
 			this.setPosition(n.getX()+0.5,n.getY()+0.015625, n.getZ()+0.5);
 			return;
 		}
 		n = currentCoord.west();
-		if(!(worldObj.getBlockState(n).getMaterial().blocksMovement())){
+		if(!(world.getBlockState(n).getMaterial().blocksMovement())){
 			this.setPosition(n.getX()+0.5,n.getY()+0.015625, n.getZ()+0.5);
 			return;
 		}
 		n = currentCoord.down();
-		if(!(worldObj.getBlockState(n).getMaterial().blocksMovement())){
+		if(!(world.getBlockState(n).getMaterial().blocksMovement())){
 			this.setPosition(n.getX()+0.5,n.getY()+0.015625, n.getZ()+0.5);
 			return;
 		}
 		// then if the above fails, move 2 blocks in a random direction
-		vector[0] = worldObj.rand.nextDouble() * 2;
-		vector[1] = worldObj.rand.nextDouble() * 2;
-		vector[2] = worldObj.rand.nextDouble() * 2;
+		vector[0] = world.rand.nextDouble() * 2;
+		vector[1] = world.rand.nextDouble() * 2;
+		vector[2] = world.rand.nextDouble() * 2;
 		this.setPosition(this.posX+vector[0], this.posY+vector[1], this.posZ+vector[2]);
 		log("jumped to %s",this.getPosition());
 	}
@@ -379,7 +390,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	@Override
 	protected void kill() {
 		if(terminate < 0) terminate = DEATH_COUNTDOWN;
-		this.attackEntityFrom(DamageSource.outOfWorld, this.getMaxHealth());
+		this.attackEntityFrom(DamageSource.OUT_OF_WORLD, this.getMaxHealth());
 		this.markDirty();
 	}
 
@@ -444,7 +455,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	 */
 	@Override
 	public int getSizeInventory() {
-		return EQUIPMENT_SLOTS.length + mainInventory.length;
+		return EQUIPMENT_SLOTS.length + mainInventory.size();
 	}
 
 	/**
@@ -457,7 +468,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		if(index < EQUIPMENT_SLOTS.length){
 			return super.getItemStackFromSlot(EQUIPMENT_SLOTS[index]);
 		} else {
-			return mainInventory[index - EQUIPMENT_SLOTS.length];
+			return mainInventory.get(index - EQUIPMENT_SLOTS.length);
 		}
 	}
 
@@ -472,7 +483,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		if(index < EQUIPMENT_SLOTS.length){
 			super.setItemStackToSlot(EQUIPMENT_SLOTS[index], stack);
 		} else {
-			mainInventory[index - EQUIPMENT_SLOTS.length] = stack;
+			mainInventory.set(index - EQUIPMENT_SLOTS.length, stack);
 		}
 	}
 
@@ -484,7 +495,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	@Override
 	public ItemStack removeStackFromSlot(int index) {
 		ItemStack i = this.getStackInSlot(index);
-		this.setInventorySlotContents(index,null);
+		this.setInventorySlotContents(index,ItemStack.EMPTY);
 		return i;
 	}
 
@@ -498,8 +509,8 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	public ItemStack decrStackSize(int index, int count) {
 		ItemStack i = this.getStackInSlot(index);
 		ItemStack result = i.splitStack(count);
-		if (i.stackSize <= 0) {
-			i = null;
+		if (i.getCount() <= 0) {
+			i = ItemStack.EMPTY;
 		}
 		this.setInventorySlotContents(index, i);
 		return result;
@@ -528,12 +539,12 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	 * @param player
 	 */
 	@Override
-	public boolean isUseableByPlayer(EntityPlayer player) {
+	public boolean isUsableByPlayer(EntityPlayer player) {
 		return true;
 	}
 
 	@Override
-	public boolean processInteract(EntityPlayer player, EnumHand hand, ItemStack item){
+	public boolean processInteract(EntityPlayer player, EnumHand hand){
 		if(player.getPosition().distanceSq(this.getPosition()) < 25) {
 			FMLNetworkHandler.openGui(player, LootableBodies.getInstance(), 0, getEntityWorld(), this.getEntityId(), 0, 0);
 			return true;
@@ -582,9 +593,9 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	@Override
 	public void clear() {
 		for(int i = 0; i < EQUIPMENT_SLOTS.length; i++){
-			this.setInventorySlotContents(i,null);
+			this.setInventorySlotContents(i,ItemStack.EMPTY);
 		}
-		Arrays.fill(mainInventory,null);
+		mainInventory.clear();
 		auxInventory.clear();
 	}
 
@@ -593,7 +604,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	public boolean isEmpty(){
 		if(!auxInventory.isEmpty()) return false;
 		for(int slot = 0; slot < this.getSizeInventory(); slot++){
-			if(this.getStackInSlot(slot) != null) return false;
+			if(!this.getStackInSlot(slot).isEmpty()) return false;
 		}
 		return true;
 	}
@@ -601,12 +612,12 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	private void dropAllItems(){
 		for(EntityEquipmentSlot e : EQUIPMENT_SLOTS){
 			ItemStack i = this.getItemStackFromSlot(e);
-			if(i != null)this.getEntityWorld().spawnEntityInWorld(new EntityItem(this.getEntityWorld(),posX,posY,posZ,
+			if(i.isEmpty())this.getEntityWorld().spawnEntity(new EntityItem(this.getEntityWorld(),posX,posY,posZ,
 					i));
 		}for(ItemStack i : mainInventory){
-			if(i != null)this.getEntityWorld().spawnEntityInWorld(new EntityItem(this.getEntityWorld(),posX,posY,posZ,i));
+			if(i.isEmpty())this.getEntityWorld().spawnEntity(new EntityItem(this.getEntityWorld(),posX,posY,posZ,i));
 		}for(ItemStack i : auxInventory){
-			if(i != null)this.getEntityWorld().spawnEntityInWorld(new EntityItem(this.getEntityWorld(),posX,posY,posZ,i));
+			if(i.isEmpty())this.getEntityWorld().spawnEntity(new EntityItem(this.getEntityWorld(),posX,posY,posZ,i));
 		}
 		this.clear();
 	}
@@ -631,7 +642,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		final NBTTagList equipmentListTag = new NBTTagList();
 		for (int i = 0; i < this.getSizeInventory(); i++) {
 			ItemStack item = this.getStackInSlot(i);
-			if (item != null) {
+			if (!item.isEmpty()) {
 				NBTTagCompound slotTag = new NBTTagCompound();
 				slotTag.setByte("Slot", (byte)i);
 				item.writeToNBT(slotTag);
@@ -645,7 +656,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 			Iterator<ItemStack> iter = this.auxInventory.iterator();
 			while (iter.hasNext()) {
 				ItemStack i = iter.next();
-				if(i == null) continue;
+				if(i.isEmpty()) continue;
 				final NBTTagCompound nbttagcompound1 = new NBTTagCompound();
 				i.writeToNBT(nbttagcompound1);
 				nbtauxtaglist.appendTag(nbttagcompound1);
@@ -669,14 +680,14 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 			for (int i = 0; i < nbttaglist.tagCount(); ++i) {
 				NBTTagCompound slotTag = nbttaglist.getCompoundTagAt(i);
 				int slot = slotTag.getByte("Slot");
-				ItemStack item = ItemStack.loadItemStackFromNBT(slotTag);
+				ItemStack item = new ItemStack(slotTag);
 				this.setInventorySlotContents(slot,item);
 			}
 		}
 		if(root.hasKey("Aux")){
 			final NBTTagList nbttaglist = root.getTagList("Aux", 10);
 			for (int i = 0; i < nbttaglist.tagCount(); ++i) {
-				this.auxInventory.addLast(ItemStack.loadItemStackFromNBT(nbttaglist.getCompoundTagAt(i)));
+				this.auxInventory.addLast(new ItemStack(nbttaglist.getCompoundTagAt(i)));
 			}
 		}
 		if(root.hasKey("Vac")){
@@ -707,4 +718,5 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		}
 		return false;
 	}
+
 }
