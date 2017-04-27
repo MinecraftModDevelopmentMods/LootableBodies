@@ -23,8 +23,8 @@ public class RenderLootableBody extends RenderBiped{
         this.addLayer(new LayerBipedArmor((RendererLivingEntity)this) {
             @Override
             protected void initArmor() {
-                this.field_177189_c = new ModelCorpseSkeleton(0.5f, true); // model base (child version?)
-                this.field_177186_d = new ModelCorpseSkeleton(1.0f, true); // model base
+                this.modelLeggings = new ModelCorpseSkeleton(0.5f, true); // model base (child version?)
+                this.modelArmor = new ModelCorpseSkeleton(1.0f, true); // model base
             }
         });
         
