@@ -24,9 +24,6 @@ import net.minecraft.util.BlockPos;
 import net.minecraft.util.DamageSource;
 import net.minecraft.util.StringUtils;
 import net.minecraft.world.World;
-import net.minecraftforge.common.ForgeHooks;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
 
 import com.mojang.authlib.GameProfile;
 
@@ -47,10 +44,10 @@ public class EntityLootableBody extends net.minecraft.entity.EntityLiving implem
 	public static boolean hurtByOther = false;
 	public static boolean invulnerable = false;
 
-	final static byte VACUUM_TIMELIMIT = 20;
-	final static int VACUUM_RADIUS = 3;
+	static final byte VACUUM_TIMELIMIT = 20;
+	static final int VACUUM_RADIUS = 3;
 
-	final static int WATCHER_ID_OWNER = 28;
+	static final int WATCHER_ID_OWNER = 28;
 
 	private static final DamageSource selfDestruct = new DamageSource(EntityLootableBody.class.getSimpleName());
 
@@ -288,7 +285,7 @@ public class EntityLootableBody extends net.minecraft.entity.EntityLiving implem
 			this.vacuumTime = VACUUM_TIMELIMIT;
 		}
 		if (root.hasKey("DeathTime")) {
-			this.deathTimestamp = (root.getLong("DeathTime"));
+			this.deathTimestamp = root.getLong("DeathTime");
 		}
 		if (root.hasKey("Yaw")) {
 			this.rotationYaw = root.getFloat("Yaw");
@@ -763,8 +760,7 @@ public class EntityLootableBody extends net.minecraft.entity.EntityLiving implem
 	}
 
 	///// INVENTORY METHODS /////
-	// @Override // gradle thinks this method is called clearInventory(),
-	///// eclipse thinks it is called clear()
+	@Override
 	public void clear() {
 		for (int i = 0; i < this.equipment.length; ++i) {
 			this.equipment[i] = null;

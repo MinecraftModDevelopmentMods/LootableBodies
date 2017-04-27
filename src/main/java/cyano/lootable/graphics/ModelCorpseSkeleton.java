@@ -3,9 +3,7 @@ package cyano.lootable.graphics;
 import net.minecraftforge.fml.relauncher.*;
 import net.minecraft.client.model.ModelRenderer;
 import net.minecraft.client.model.ModelZombie;
-import net.minecraft.entity.monster.*;
 import net.minecraft.entity.*;
-import net.minecraft.util.MathHelper;
 
 @SideOnly(Side.CLIENT)
 public class ModelCorpseSkeleton extends ModelZombie {
