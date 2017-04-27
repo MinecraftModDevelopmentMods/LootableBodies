@@ -1,6 +1,5 @@
 package cyano.lootable;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.entity.RenderManager;
 import cpw.mods.fml.client.registry.RenderingRegistry;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
@@ -8,7 +7,6 @@ import cpw.mods.fml.common.event.FMLPostInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cyano.lootable.entities.EntityLootableBody;
 import cyano.lootable.graphics.RenderLootableBody;
-import cyano.lootable.graphics.RenderSkinnedLootableBody;
 
 public class ClientProxy extends Proxy{
     @Override

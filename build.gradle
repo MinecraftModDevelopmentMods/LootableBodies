@@ -1,6 +1,6 @@
 buildscript {
     repositories {
-        mavenCentral()
+        jcenter()
         maven {
             name = "forge"
             url = "http://files.minecraftforge.net/maven"
@@ -22,9 +22,9 @@ group= "cyano.lootable"
 archivesBaseName = "CyanosLootableBodies"
 
 minecraft {
-    version = "1.7.10-10.13.2.1230"
+    version = "1.7.10-10.13.4.1614-1.7.10"
     runDir = "eclipse"
-    
+    mappings = "stable_12"
 }
 
 dependencies {

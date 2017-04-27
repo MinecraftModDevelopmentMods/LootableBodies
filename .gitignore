@@ -7,3 +7,6 @@
 # Package Files #
 
 .idea/
+/.gradle/
+/build/
+/bin/

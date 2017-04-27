@@ -23,7 +23,6 @@ import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.DamageSource;
 import net.minecraft.util.StringUtils;
 import net.minecraft.world.World;
-import net.minecraftforge.common.ForgeHooks;
 
 import com.google.common.collect.Iterables;
 import com.mojang.authlib.GameProfile;
@@ -144,12 +143,12 @@ public class EntityLootableBody extends net.minecraft.entity.EntityLiving implem
 		if (owner.isComplete() && owner.getProperties().containsKey((Object)"textures")) {
 			return;
 		}
-		GameProfile field_152110_j = MinecraftServer.getServer().func_152358_ax().func_152655_a(owner.getName());
+		GameProfile field_152110_j = MinecraftServer.getServer().getPlayerProfileCache().getGameProfileForUsername(owner.getName());
 		if (field_152110_j == null) {
 			return;
 		}
 		if (Iterables.getFirst((Iterable)field_152110_j.getProperties().get("textures"), (Object)null) == null) {
-			field_152110_j = MinecraftServer.getServer().func_147130_as().fillProfileProperties(field_152110_j, true);
+			field_152110_j = MinecraftServer.getServer().getMinecraftSessionService().fillProfileProperties(field_152110_j, true);
 		}
 		owner = field_152110_j;
 		
@@ -266,7 +265,7 @@ public class EntityLootableBody extends net.minecraft.entity.EntityLiving implem
         if(vacuumTime < VACUUM_TIMELIMIT)root.setByte("Vac", vacuumTime);
         if(owner != null){
         	final NBTTagCompound nbtTagCompound = new NBTTagCompound();
-            NBTUtil.func_152460_a(nbtTagCompound, owner);
+            NBTUtil.writeGameProfileToNBT(nbtTagCompound, owner);
             root.setTag("Owner", nbtTagCompound);
         }
         root.setLong("DeathTime", this.deathTimestamp);
@@ -302,7 +301,7 @@ public class EntityLootableBody extends net.minecraft.entity.EntityLiving implem
         	this.rotationYaw = root.getFloat("Yaw");
         }
         if (root.hasKey("Owner")) {
-        	this.setOwner(NBTUtil.func_152459_a(root.getCompoundTag("Owner")));
+        	this.setOwner(NBTUtil.readGameProfileFromNBT(root.getCompoundTag("Owner")));
         }
         if (root.hasKey("Name")) {
         	this.setOwner(new GameProfile(null,root.getString("Name")));
@@ -669,7 +668,7 @@ public class EntityLootableBody extends net.minecraft.entity.EntityLiving implem
     private boolean canStack(ItemStack a, ItemStack b){
     	if(a == null || b == null) return false;
     	if(a.getItem() == b.getItem() && a.isStackable()){
-    		if(a.getItemDamage() != b.getItemDamage()) return false;
+    		if(a.getMetadata() != b.getMetadata()) return false;
     		if(a.isStackable() == false )return false;
     		if(a.stackSize + b.stackSize > Math.min(a.getMaxStackSize(),this.getInventoryStackLimit())) return false;
     		if(a.hasTagCompound() == false && b.hasTagCompound() == false){
@@ -688,9 +687,9 @@ public class EntityLootableBody extends net.minecraft.entity.EntityLiving implem
                 && itemstack.getItem().isDamageable()
                 && (!itemstack.isStackable())
                 && (!itemstack.getItem().getHasSubtypes())
-                && (itemstack.getItem().getMaxDamage() > 0) ) {
-            final int newDamageValue = itemstack.getItemDamage() + additionalItemDamage;
-            itemstack.setItemDamage(Math.min(newDamageValue, itemstack.getMaxDamage() - 1));
+                && (itemstack.getMaxDurability() > 0) ) {
+            final int newDamageValue = itemstack.getMetadata() + additionalItemDamage;
+            itemstack.setMetadata(Math.min(newDamageValue, itemstack.getMaxDurability() - 1));
         }
     	return itemstack;
     }
@@ -789,7 +788,7 @@ public class EntityLootableBody extends net.minecraft.entity.EntityLiving implem
 
 
 	@Override
-	public void closeInventory() {
+	public void closeChest() {
 		playSound("mob.horse.leather");
 	}
 
@@ -872,7 +871,7 @@ public class EntityLootableBody extends net.minecraft.entity.EntityLiving implem
 
 
 	@Override
-	public void openInventory() {
+	public void openChest() {
 		playSound("mob.horse.armor");
 	}
 
@@ -892,7 +891,7 @@ public class EntityLootableBody extends net.minecraft.entity.EntityLiving implem
 	@Override public String getInventoryName(){
 		return this.getClass().getSimpleName();
 	}
-	@Override public boolean hasCustomInventoryName(){
+	@Override public boolean isCustomInventoryName(){
 		return false;
 	}
 ///// END OF INVENTORY METHODS /////

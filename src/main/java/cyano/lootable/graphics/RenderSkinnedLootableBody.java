@@ -8,7 +8,6 @@ import net.minecraft.client.model.ModelRenderer;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.entity.RenderBiped;
 import net.minecraft.client.renderer.entity.RenderManager;
-import net.minecraft.client.renderer.entity.RenderPlayer;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
@@ -20,7 +19,6 @@ import net.minecraft.util.MathHelper;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.client.ForgeHooksClient;
 import net.minecraftforge.client.event.RenderLivingEvent;
-import net.minecraftforge.client.event.RenderPlayerEvent;
 import net.minecraftforge.common.MinecraftForge;
 
 import org.apache.logging.log4j.LogManager;
@@ -106,10 +104,12 @@ public class RenderSkinnedLootableBody extends RenderBiped{
         GL11.glPushMatrix();
         GL11.glDisable(2884);
         
+/*
         this.mainModel.onGround = this.renderSwingProgress(p_doRender_1_, p_doRender_9_);
         if (this.renderPassModel != null) {
             this.renderPassModel.onGround = this.mainModel.onGround;
         }
+*/
         this.mainModel.isRiding = p_doRender_1_.isRiding();
         if (this.renderPassModel != null) {
             this.renderPassModel.isRiding = this.mainModel.isRiding;
@@ -376,7 +376,7 @@ public class RenderSkinnedLootableBody extends RenderBiped{
                 modelbiped.bipedLeftLeg.showModel = (p_shouldRenderPass_2_ == 2 || p_shouldRenderPass_2_ == 3);
                 modelbiped = ForgeHooksClient.getArmorModel(p_shouldRenderPass_1_, itemstack, p_shouldRenderPass_2_, modelbiped);
                 this.setRenderPassModel(modelbiped);
-                modelbiped.onGround = this.mainModel.onGround;
+//                modelbiped.onGround = this.mainModel.onGround;
                 modelbiped.isRiding = this.mainModel.isRiding;
                 modelbiped.isChild = this.mainModel.isChild;
                 final int j = itemarmor.getColor(itemstack);
@@ -409,13 +409,13 @@ public class RenderSkinnedLootableBody extends RenderBiped{
     		return TEXTURE_STEVE;
     	}
     	final Minecraft minecraft = Minecraft.getMinecraft();
-        final Map cache = minecraft.func_152342_ad().func_152788_a(e.getOwner());
+        final Map cache = minecraft.getSkinManager().loadSkinFromCache(e.getOwner());
 //        System.out.println(gameprofile.getName()+" cache: (size = "+cache.keySet().size()+")");
 //        for(Object key : cache.keySet()){
 //        	System.out.println(key+"="+cache.get(key));
 //        }
         if (cache.containsKey(MinecraftProfileTexture.Type.SKIN)) {
-            return minecraft.func_152342_ad().func_152792_a(
+            return minecraft.getSkinManager().loadSkin(
             		(MinecraftProfileTexture)cache.get(MinecraftProfileTexture.Type.SKIN), MinecraftProfileTexture.Type.SKIN);
         } else {
             //return DefaultPlayerSkin.getDefaultSkin(EntityPlayer.getUUID(gameprofile));
