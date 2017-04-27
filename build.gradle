@@ -22,13 +22,13 @@ apply plugin: "com.matthewprenger.cursegradle"
 def mod_file = getModFile()
 version = getVersion("VERSION", mod_file)
 group= "cyano.lootable"
-archivesBaseName = "DrCyanosLootableBodies_1.9.4"
+archivesBaseName = "DrCyanosLootableBodies_1.9"
 sourceCompatibility = targetCompatibility = "1.8"
 
 minecraft {
-    version = "1.9.4-12.17.0.1976"
+    version = "1.9-12.16.1.1938-1.9.0"
     runDir = "run"
-    mappings = "stable_26"
+    mappings = "stable_24"
 }
 
 dependencies {
