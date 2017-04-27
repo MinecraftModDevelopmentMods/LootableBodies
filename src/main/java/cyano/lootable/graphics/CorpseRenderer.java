@@ -29,19 +29,19 @@ import java.util.Map;
  * Created by Chris on 4/10/2016.
  */
 
-
 @SideOnly(Side.CLIENT)
 public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 
-	private static final ResourceLocation localSkin = new ResourceLocation(LootableBodies.MODID+":textures/entity/corpse/corpse.png");
+	private static final ResourceLocation localSkin = new ResourceLocation(
+			LootableBodies.MODID + ":textures/entity/corpse/corpse.png");
 
 	protected final ModelPlayer thickArmsModel;
 	protected final ModelPlayer thinArmsModel;
 
 	public CorpseRenderer(RenderManager renderManagerIn) {
-		super(renderManagerIn,  new ModelPlayer(0.0F, true), 0.5F);
-		thinArmsModel = (ModelPlayer)this.mainModel;
-		thickArmsModel =  new ModelPlayer(0.0F, false);
+		super(renderManagerIn, new ModelPlayer(0.0F, true), 0.5F);
+		thinArmsModel = (ModelPlayer) this.mainModel;
+		thickArmsModel = new ModelPlayer(0.0F, false);
 		//
 		this.addLayer(new LayerBipedArmor(this));
 		this.addLayer(new LayerHeldItem(this));
@@ -51,26 +51,30 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 		RenderPigZombie j;
 	}
 
-	public ModelPlayer getMainModel()
-	{
-		return (ModelPlayer)super.getMainModel();
+	@Override
+	public ModelPlayer getMainModel() {
+		return (ModelPlayer) super.getMainModel();
 	}
 
-	public void setModel(boolean thinArms){
-		if(thinArms){
+	public void setModel(boolean thinArms) {
+		if (thinArms) {
 			this.mainModel = this.thinArmsModel;
 		} else {
 			this.mainModel = this.thickArmsModel;
 		}
 	}
+
 	/**
-	 * Returns the location of an entity's texture. Doesn't seem to be called unless you call Render.bindEntityTexture.
+	 * Returns the location of an entity's texture. Doesn't seem to be called
+	 * unless you call Render.bindEntityTexture.
 	 *
-	 * @param entity The entity to be rendered
+	 * @param entity
+	 *            The entity to be rendered
 	 */
 	@Override
 	protected ResourceLocation getEntityTexture(EntityLootableBody entity) {
-		if(LootableBodies.useLocalSkin) return localSkin;
+		if (LootableBodies.useLocalSkin)
+			return localSkin;
 
 		GameProfile profile = entity.getGameProfile();
 		if (profile != null && profile.getId() != null) {
@@ -82,19 +86,28 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 
 	public static ResourceLocation getSkin(GameProfile profile) {
 		final Minecraft minecraft = Minecraft.getMinecraft();
-		final Map loadSkinFromCache = minecraft.getSkinManager().loadSkinFromCache(profile); // returned map may or may not be typed
+		final Map loadSkinFromCache = minecraft.getSkinManager().loadSkinFromCache(profile); // returned
+																								// map
+																								// may
+																								// or
+																								// may
+																								// not
+																								// be
+																								// typed
 		if (loadSkinFromCache.containsKey(MinecraftProfileTexture.Type.SKIN)) {
-			ResourceLocation skin = minecraft.getSkinManager().loadSkin((MinecraftProfileTexture) loadSkinFromCache.get(MinecraftProfileTexture.Type.SKIN), MinecraftProfileTexture.Type.SKIN);
+			ResourceLocation skin = minecraft.getSkinManager().loadSkin(
+					(MinecraftProfileTexture) loadSkinFromCache.get(MinecraftProfileTexture.Type.SKIN),
+					MinecraftProfileTexture.Type.SKIN);
 			return skin;
 		} else {
 			return DefaultPlayerSkin.getDefaultSkin(profile.getId());
 		}
 	}
 
-
 	@Override
 	public void doRender(EntityLootableBody entity, double x, double y, double z, float yaw, float partialTick) {
-		if (net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.RenderLivingEvent.Pre<EntityLootableBody>(entity, this, x, y, z)))
+		if (net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+				new net.minecraftforge.client.event.RenderLivingEvent.Pre<EntityLootableBody>(entity, this, x, y, z)))
 			return;
 
 		this.setModel(entity.useThinArms());
@@ -103,14 +116,14 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 		GlStateManager.pushMatrix();
 		GlStateManager.disableCull();
 		this.mainModel.swingProgress = 0;
-		boolean shouldSit = entity.isRiding() && (entity.getRidingEntity() != null && entity.getRidingEntity().shouldRiderSit());
+		boolean shouldSit = entity.isRiding()
+				&& (entity.getRidingEntity() != null && entity.getRidingEntity().shouldRiderSit());
 		this.mainModel.isRiding = shouldSit;
 		this.mainModel.isChild = entity.isChild();
 
 		try {
 			float rotationInterpolation = 0F;
 			float headYaw = 0;
-
 
 			float headPitch = 0;
 			this.renderLivingAt(entity, x, y, z);
@@ -119,7 +132,6 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 			float scale = this.prepareScale(entity, 0F);
 			float armSwingAmount = 0.0F;
 			float armSwing = 0.0F;
-
 
 			GlStateManager.enableAlpha();
 			this.mainModel.setLivingAnimations(entity, armSwing, armSwingAmount, 0);
@@ -135,9 +147,7 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 					this.renderModel(entity, armSwing, armSwingAmount, age, headYaw, headPitch, scale);
 				}
 
-
 				this.renderLayers(entity, armSwing, armSwingAmount, partialTick, age, headYaw, headPitch, scale);
-
 
 				GlStateManager.disableOutlineMode();
 				GlStateManager.disableColorMaterial();
@@ -154,7 +164,6 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 				}
 
 				GlStateManager.depthMask(true);
-
 
 				this.renderLayers(entity, armSwing, armSwingAmount, partialTick, age, headYaw, headPitch, scale);
 
@@ -174,18 +183,17 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 			this.renderName(entity, x, y, z);
 		}
 
-		net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.RenderLivingEvent.Post<EntityLootableBody>(entity, this, x, y, z));
+		net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+				new net.minecraftforge.client.event.RenderLivingEvent.Post<EntityLootableBody>(entity, this, x, y, z));
 
 		this.setModel(true);
 	}
 
-
 	@Override
-	protected void renderLivingAt(EntityLootableBody e, double x, double y, double z)
-	{
-		super.renderLivingAt(e,x,y,z); // translation
-		GlStateManager.rotate(90,1F,0F,0F); // face-down
-		GlStateManager.rotate(e.getRotation(),0F,0F,1F); // turn
+	protected void renderLivingAt(EntityLootableBody e, double x, double y, double z) {
+		super.renderLivingAt(e, x, y, z); // translation
+		GlStateManager.rotate(90, 1F, 0F, 0F); // face-down
+		GlStateManager.rotate(e.getRotation(), 0F, 0F, 1F); // turn
 		GlStateManager.translate(0F, -0.85F, -0.125F); // center
 	}
 

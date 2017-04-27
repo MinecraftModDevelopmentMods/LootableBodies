@@ -24,37 +24,40 @@ import java.util.Map;
 
 public class PlayerDeathEventHandler {
 
-	private static final Map<EntityPlayer,Map<ItemStack,EntityEquipmentSlot>> equipmentCache = new HashMap<>();
+	private static final Map<EntityPlayer, Map<ItemStack, EntityEquipmentSlot>> equipmentCache = new HashMap<>();
 
-	@SubscribeEvent(priority= EventPriority.LOW)
-	public void entityDeathEvent(LivingDeathEvent e){
-		if(e.getEntity() instanceof EntityPlayer
-				&& e.getResult() != Event.Result.DENY
+	@SubscribeEvent(priority = EventPriority.LOW)
+	public void entityDeathEvent(LivingDeathEvent e) {
+		if (e.getEntity() instanceof EntityPlayer && e.getResult() != Event.Result.DENY
 				&& !e.getEntity().getEntityWorld().isRemote) {
-			final EntityPlayer player = (EntityPlayer)e.getEntity();
-			if(player.isSpectator()) return;
-			Map<ItemStack,EntityEquipmentSlot> cache = equipmentCache.computeIfAbsent(player,(EntityPlayer p)->new HashMap<>());
-			for(EntityEquipmentSlot slot : EntityLootableBody.EQUIPMENT_SLOTS){
-				cache.put(player.getItemStackFromSlot(slot),slot);
+			final EntityPlayer player = (EntityPlayer) e.getEntity();
+			if (player.isSpectator())
+				return;
+			Map<ItemStack, EntityEquipmentSlot> cache = equipmentCache.computeIfAbsent(player,
+					(EntityPlayer p) -> new HashMap<>());
+			for (EntityEquipmentSlot slot : EntityLootableBody.EQUIPMENT_SLOTS) {
+				cache.put(player.getItemStackFromSlot(slot), slot);
 			}
 
-			if(player.getPrimaryHand() == EnumHandSide.LEFT){
-				// swap main and off hand items (easier than messing with the rendering code)
-				cache.put(player.getItemStackFromSlot(EntityEquipmentSlot.MAINHAND),EntityEquipmentSlot.OFFHAND);
-				cache.put(player.getItemStackFromSlot(EntityEquipmentSlot.OFFHAND),EntityEquipmentSlot.MAINHAND);
+			if (player.getPrimaryHand() == EnumHandSide.LEFT) {
+				// swap main and off hand items (easier than messing with the
+				// rendering code)
+				cache.put(player.getItemStackFromSlot(EntityEquipmentSlot.MAINHAND), EntityEquipmentSlot.OFFHAND);
+				cache.put(player.getItemStackFromSlot(EntityEquipmentSlot.OFFHAND), EntityEquipmentSlot.MAINHAND);
 			}
 		}
 	}
 
-	@SubscribeEvent(priority= EventPriority.LOWEST)
-	public void entityDropEvent(LivingDropsEvent e){
-		if(e.getEntity() instanceof EntityPlayer
-				&& e.getResult() != Event.Result.DENY
+	@SubscribeEvent(priority = EventPriority.LOWEST)
+	public void entityDropEvent(LivingDropsEvent e) {
+		if (e.getEntity() instanceof EntityPlayer && e.getResult() != Event.Result.DENY
 				&& !e.getEntity().getEntityWorld().isRemote) {
-			final EntityPlayer player = (EntityPlayer)e.getEntity();
-			if(player.isSpectator()) return;
+			final EntityPlayer player = (EntityPlayer) e.getEntity();
+			if (player.isSpectator())
+				return;
 			final World w = player.getEntityWorld();
-			Map<ItemStack,EntityEquipmentSlot> cache = equipmentCache.computeIfAbsent(player, (EntityPlayer p) -> new HashMap<>());
+			Map<ItemStack, EntityEquipmentSlot> cache = equipmentCache.computeIfAbsent(player,
+					(EntityPlayer p) -> new HashMap<>());
 
 			EntityLootableBody corpse = new EntityLootableBody(player);
 			corpse.forceSpawn = true;
@@ -66,30 +69,29 @@ public class PlayerDeathEventHandler {
 			for (EntityItem itemEntity : e.getDrops()) {
 				ItemStack item = itemEntity.getEntityItem();
 				if (item != null && cache.containsKey(item)) {
-					corpse.setItemStackToSlot(cache.get(item),item);
+					corpse.setItemStackToSlot(cache.get(item), item);
 				} else {
 					items.add(item);
 				}
 			}
 			corpse.initializeItems(items.toArray(new ItemStack[0]));
 
-			if(LootableBodies.addBonesToCorpse){
-				corpse.addItem(new ItemStack(Items.BONE,1+w.rand.nextInt(3)));
-				corpse.addItem(new ItemStack(Items.ROTTEN_FLESH,1+w.rand.nextInt(3)));
+			if (LootableBodies.addBonesToCorpse) {
+				corpse.addItem(new ItemStack(Items.BONE, 1 + w.rand.nextInt(3)));
+				corpse.addItem(new ItemStack(Items.ROTTEN_FLESH, 1 + w.rand.nextInt(3)));
 			}
 
 			w.spawnEntityInWorld(corpse);
-
 
 			e.getDrops().clear();
 		}
 	}
 
-
-	private static void log(String s, Object... o){
-		FMLLog.info("%s: %s", LootableBodies.MODID,String.format(s,o));
+	private static void log(String s, Object... o) {
+		FMLLog.info("%s: %s", LootableBodies.MODID, String.format(s, o));
 	}
-	private static void log(Object o){
-		FMLLog.info("%s: %s", LootableBodies.MODID,String.valueOf(o));
+
+	private static void log(Object o) {
+		FMLLog.info("%s: %s", LootableBodies.MODID, String.valueOf(o));
 	}
 }

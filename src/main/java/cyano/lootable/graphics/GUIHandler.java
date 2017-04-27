@@ -19,12 +19,12 @@ import java.util.concurrent.locks.ReentrantLock;
 public class GUIHandler implements IGuiHandler {
 	private static final AtomicInteger guiIDCounter = new AtomicInteger(1);
 
+	private static final Lock initLock = new ReentrantLock();
+	private static GUIHandler instance = null;
+
 	private GUIHandler() {
 		// using singleton instantiation
 	}
-
-	private static final Lock initLock = new ReentrantLock();
-	private static GUIHandler instance = null;
 
 	/**
 	 * Gets a singleton instance of MachineGUIRegistry
@@ -51,13 +51,13 @@ public class GUIHandler implements IGuiHandler {
 	 */
 	@Override
 	@SideOnly(Side.CLIENT)
-	public Object getClientGuiElement(int id, EntityPlayer player, World world,
-									  int x, int y, int z) {
+	public Object getClientGuiElement(int id, EntityPlayer player, World world, int x, int y, int z) {
 		switch (id) {
-			case 0:
-				Entity e = world.getEntityByID(x);
-				if (e instanceof EntityLootableBody)
-					return new CorpseGUIContainer(player.inventory, (IInventory) e);
+		case 0:
+			Entity e = world.getEntityByID(x);
+			if (e instanceof EntityLootableBody)
+				return new CorpseGUIContainer(player.inventory, (IInventory) e);
+		default:
 		}
 		return null;
 	}
@@ -66,13 +66,13 @@ public class GUIHandler implements IGuiHandler {
 	 * Implementation of net.minecraftforge.fml.common.network.IGuiHandler
 	 */
 	@Override
-	public Object getServerGuiElement(int id, EntityPlayer player, World world,
-									  int x, int y, int z) {
+	public Object getServerGuiElement(int id, EntityPlayer player, World world, int x, int y, int z) {
 		switch (id) {
-			case 0:
-				Entity e = world.getEntityByID(x);
-				if (e instanceof EntityLootableBody)
-					return new CorpseContainer(player.inventory, (IInventory) e);
+		case 0:
+			Entity e = world.getEntityByID(x);
+			if (e instanceof EntityLootableBody)
+				return new CorpseContainer(player.inventory, (IInventory) e);
+		default:
 		}
 		return null;
 	}

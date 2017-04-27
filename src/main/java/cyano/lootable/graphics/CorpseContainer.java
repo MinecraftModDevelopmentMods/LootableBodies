@@ -20,15 +20,16 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 	private static final EntityEquipmentSlot[] EQUIPMENT_SLOTS = EntityLootableBody.EQUIPMENT_SLOTS;
 
 	private final IInventory targetInventory;
-	public CorpseContainer(InventoryPlayer playerItems, IInventory entity){
+
+	public CorpseContainer(InventoryPlayer playerItems, IInventory entity) {
 		this.targetInventory = entity;
 		net.minecraft.inventory.ContainerHorseInventory k;
 		net.minecraft.inventory.ContainerPlayer h;
 		int index = 0;
-		while(index < 4) {
+		while (index < 4) {
 			// armor
 			final int i = index;
-			this.addSlotToContainer(new net.minecraft.inventory.Slot(targetInventory, i, 8, 8 + 18*i) {
+			this.addSlotToContainer(new net.minecraft.inventory.Slot(targetInventory, i, 8, 8 + 18 * i) {
 				@Override
 				public int getSlotStackLimit() {
 					return 1;
@@ -36,30 +37,32 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 
 				@Override
 				public boolean isItemValid(ItemStack item) {
-					return super.isItemValid(item) && item.getItem().isValidArmor(item, EQUIPMENT_SLOTS[i], (Entity) targetInventory);
+					return super.isItemValid(item)
+							&& item.getItem().isValidArmor(item, EQUIPMENT_SLOTS[i], (Entity) targetInventory);
 				}
+
 				@SideOnly(Side.CLIENT)
-				public String getSlotTexture()
-				{
-					return ItemArmor.EMPTY_SLOT_NAMES[3-i];
+				@Override
+				public String getSlotTexture() {
+					return ItemArmor.EMPTY_SLOT_NAMES[3 - i];
 				}
 			});
 			index++;
 		}
-		while(index < EQUIPMENT_SLOTS.length){
+		while (index < EQUIPMENT_SLOTS.length) {
 			// held items
 			final int i = index;
-			this.addSlotToContainer(new net.minecraft.inventory.Slot(targetInventory, i, 8 + 18 * (i - 4), 98 ) {
+			this.addSlotToContainer(new net.minecraft.inventory.Slot(targetInventory, i, 8 + 18 * (i - 4), 98) {
 				@SideOnly(Side.CLIENT)
-				public String getSlotTexture()
-				{
+				@Override
+				public String getSlotTexture() {
 					return "minecraft:items/empty_armor_slot_shield";
 				}
 			});
 			index++;
 		}
 
-		while(index < targetInventory.getSizeInventory()){
+		while (index < targetInventory.getSizeInventory()) {
 			int n = index - EQUIPMENT_SLOTS.length;
 			int x = n % 6;
 			int y = n / 6;
@@ -72,31 +75,29 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 		bindPlayerInventory(playerItems, 140);
 	}
 
-
-
 	@Override
 	public boolean canInteractWith(EntityPlayer entityplayer) {
 		return targetInventory.isUseableByPlayer(entityplayer);
 	}
-
 
 	@Override
 	public ItemStack transferStackInSlot(EntityPlayer player, int slot) {
 		int hostSize = targetInventory.getSizeInventory();
 		ItemStack stack = null;
 		Slot slotObject = (Slot) inventorySlots.get(slot);
-		//null checks and checks if the item can be stacked (maxStackSize > 1)
+		// null checks and checks if the item can be stacked (maxStackSize > 1)
 		if (slotObject != null && slotObject.getHasStack()) {
 			ItemStack stackInSlot = slotObject.getStack();
 			stack = stackInSlot.copy();
 
-			//merges the item into player inventory since its in the tileEntity
+			// merges the item into player inventory since its in the tileEntity
 			if (slot < hostSize) {
-				if (!this.mergeItemStack(stackInSlot, hostSize, 36+hostSize, true)) {
+				if (!this.mergeItemStack(stackInSlot, hostSize, 36 + hostSize, true)) {
 					return null;
 				}
 			}
-			//places it into the tileEntity if possible since it's in the player inventory
+			// places it into the tileEntity if possible since it's in the
+			// player inventory
 			else if (!this.mergeItemStack(stackInSlot, 0, hostSize, false)) {
 				return null;
 			}
@@ -122,7 +123,7 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 			}
 		}
 		for (int i = 0; i < 9; i++) {
-			addSlotToContainer(new Slot(playerInv, i, 8 + i * 18, yOffset+58));
+			addSlotToContainer(new Slot(playerInv, i, 8 + i * 18, yOffset + 58));
 		}
 	}
 

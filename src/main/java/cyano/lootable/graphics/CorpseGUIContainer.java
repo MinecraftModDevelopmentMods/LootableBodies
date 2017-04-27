@@ -12,12 +12,12 @@ import org.lwjgl.opengl.GL11;
  * Created by Chris on 4/12/2016.
  */
 @SideOnly(Side.CLIENT)
-public class CorpseGUIContainer extends net.minecraft.client.gui.inventory.GuiContainer{
+public class CorpseGUIContainer extends net.minecraft.client.gui.inventory.GuiContainer {
 
-	private final ResourceLocation image = new ResourceLocation(LootableBodies.MODID+":textures/gui/corpse.png");
+	private final ResourceLocation image = new ResourceLocation(LootableBodies.MODID + ":textures/gui/corpse.png");
 
 	public CorpseGUIContainer(InventoryPlayer playerItems, IInventory entity) {
-		super(new CorpseContainer(playerItems,entity));
+		super(new CorpseContainer(playerItems, entity));
 		this.xSize = 176;
 		this.ySize = 222;
 	}
@@ -25,10 +25,13 @@ public class CorpseGUIContainer extends net.minecraft.client.gui.inventory.GuiCo
 	/**
 	 * Draws the background layer of this container (behind the items).
 	 *
-	 * @param partialTicks How far into the current tick the game is, with 0.0 being the start of the tick and 1.0 being
-	 *                     the end.
-	 * @param mouseX       Mouse x coordinate
-	 * @param mouseY       Mouse y coordinate
+	 * @param partialTicks
+	 *            How far into the current tick the game is, with 0.0 being the
+	 *            start of the tick and 1.0 being the end.
+	 * @param mouseX
+	 *            Mouse x coordinate
+	 * @param mouseY
+	 *            Mouse y coordinate
 	 */
 	@Override
 	protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
@@ -36,6 +39,10 @@ public class CorpseGUIContainer extends net.minecraft.client.gui.inventory.GuiCo
 		int x = (width - xSize) / 2;
 		int y = (height - ySize) / 2;
 		this.mc.renderEngine.bindTexture(image);
-		this.drawTexturedModalRect(x, y, 0, 0, this.xSize, this.ySize); // x, y, textureOffsetX, textureOffsetY, width, height)
+		this.drawTexturedModalRect(x, y, 0, 0, this.xSize, this.ySize); // x, y,
+																		// textureOffsetX,
+																		// textureOffsetY,
+																		// width,
+																		// height)
 	}
 }

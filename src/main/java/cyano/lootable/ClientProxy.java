@@ -10,29 +10,30 @@ import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 
-public class ClientProxy extends Proxy{
-    @Override
-    public void preInit(FMLPreInitializationEvent e) {
-        super.preInit(e);
-        // client-only pre-init code
-		RenderingRegistry.registerEntityRenderingHandler(EntityLootableBody.class, new IRenderFactory<EntityLootableBody>() {
-			@Override
-			public Render<? super EntityLootableBody> createRenderFor(RenderManager rm) {
-				return (new CorpseRenderer(rm));
-			}
-		});
-    }
+public class ClientProxy extends Proxy {
+	@Override
+	public void preInit(FMLPreInitializationEvent e) {
+		super.preInit(e);
+		// client-only pre-init code
+		RenderingRegistry.registerEntityRenderingHandler(EntityLootableBody.class,
+				new IRenderFactory<EntityLootableBody>() {
+					@Override
+					public Render<? super EntityLootableBody> createRenderFor(RenderManager rm) {
+						return new CorpseRenderer(rm);
+					}
+				});
+	}
 
-    @Override
-    public void init(FMLInitializationEvent e) {
-        super.init(e);
+	@Override
+	public void init(FMLInitializationEvent e) {
+		super.init(e);
 		// client-only init code
-    }
+	}
 
-    @Override
-    public void postInit(FMLPostInitializationEvent e) {
-        super.postInit(e);
-        // client-only post-init code
-    }
-    
+	@Override
+	public void postInit(FMLPostInitializationEvent e) {
+		super.postInit(e);
+		// client-only post-init code
+	}
+
 }
