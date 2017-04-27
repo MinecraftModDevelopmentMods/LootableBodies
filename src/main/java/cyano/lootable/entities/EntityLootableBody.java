@@ -575,6 +575,7 @@ public class EntityLootableBody extends net.minecraft.entity.EntityLiving implem
 	}
 
 	@Deprecated // 1.7.10 does not provide parent for this method.
+	@Override
 	public ItemStack[] getInventory() {
 		return this.equipment;
 	}

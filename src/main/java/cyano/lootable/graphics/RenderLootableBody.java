@@ -272,6 +272,7 @@ public class RenderLootableBody extends RenderBiped {
 				.post(new RenderLivingEvent.Post(p_doRender_1_, this, p_doRender_2_, p_doRender_4_, p_doRender_6_));
 	}
 
+	@Override
 	protected void renderModel(final EntityLivingBase p_renderModel_1_, final float p_renderModel_2_,
 			final float p_renderModel_3_, final float p_renderModel_4_, final float p_renderModel_5_,
 			final float p_renderModel_6_, final float p_renderModel_7_) {
