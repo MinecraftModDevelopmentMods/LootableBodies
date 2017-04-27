@@ -78,7 +78,7 @@ public class PlayerDeathEventHandler {
 				corpse.addItem(new ItemStack(Items.ROTTEN_FLESH,1+w.rand.nextInt(3)));
 			}
 
-			w.spawnEntityInWorld(corpse);
+			w.spawnEntity(corpse);
 
 
 			e.getDrops().clear();

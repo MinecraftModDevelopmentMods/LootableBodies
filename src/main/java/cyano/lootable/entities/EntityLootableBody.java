@@ -328,7 +328,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		vector[0] *= normalizer;
 		vector[1] *= normalizer;
 		vector[2] *= normalizer;
-		IBlockState bs = worldObj.getBlockState(new BlockPos(this.posX+vector[0], this.posY+vector[1], this.posZ+vector[2]));
+		IBlockState bs = world.getBlockState(new BlockPos(this.posX+vector[0], this.posY+vector[1], this.posZ+vector[2]));
 		if(!(bs.getMaterial().blocksMovement())){
 			this.setPosition(this.posX+vector[0], this.posY+vector[1], this.posZ+vector[2]);
 			return;
@@ -337,39 +337,39 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		// then try finding an open space in all adjacent blocks
 		BlockPos n;
 		n = currentCoord.up();
-		if(!(worldObj.getBlockState(n).getMaterial().blocksMovement())){
+		if(!(world.getBlockState(n).getMaterial().blocksMovement())){
 			this.setPosition(n.getX()+0.5,n.getY()+0.015625, n.getZ()+0.5);
 			return;
 		}
 		n = currentCoord.north();
-		if(!(worldObj.getBlockState(n).getMaterial().blocksMovement())){
+		if(!(world.getBlockState(n).getMaterial().blocksMovement())){
 			this.setPosition(n.getX()+0.5,n.getY()+0.015625, n.getZ()+0.5);
 			return;
 		}
 		n = currentCoord.east();
-		if(!(worldObj.getBlockState(n).getMaterial().blocksMovement())){
+		if(!(world.getBlockState(n).getMaterial().blocksMovement())){
 			this.setPosition(n.getX()+0.5,n.getY()+0.015625, n.getZ()+0.5);
 			return;
 		}
 		n = currentCoord.south();
-		if(!(worldObj.getBlockState(n).getMaterial().blocksMovement())){
+		if(!(world.getBlockState(n).getMaterial().blocksMovement())){
 			this.setPosition(n.getX()+0.5,n.getY()+0.015625, n.getZ()+0.5);
 			return;
 		}
 		n = currentCoord.west();
-		if(!(worldObj.getBlockState(n).getMaterial().blocksMovement())){
+		if(!(world.getBlockState(n).getMaterial().blocksMovement())){
 			this.setPosition(n.getX()+0.5,n.getY()+0.015625, n.getZ()+0.5);
 			return;
 		}
 		n = currentCoord.down();
-		if(!(worldObj.getBlockState(n).getMaterial().blocksMovement())){
+		if(!(world.getBlockState(n).getMaterial().blocksMovement())){
 			this.setPosition(n.getX()+0.5,n.getY()+0.015625, n.getZ()+0.5);
 			return;
 		}
 		// then if the above fails, move 2 blocks in a random direction
-		vector[0] = worldObj.rand.nextDouble() * 2;
-		vector[1] = worldObj.rand.nextDouble() * 2;
-		vector[2] = worldObj.rand.nextDouble() * 2;
+		vector[0] = world.rand.nextDouble() * 2;
+		vector[1] = world.rand.nextDouble() * 2;
+		vector[2] = world.rand.nextDouble() * 2;
 		this.setPosition(this.posX+vector[0], this.posY+vector[1], this.posZ+vector[2]);
 		log("jumped to %s",this.getPosition());
 	}
@@ -528,7 +528,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	 * @param player
 	 */
 	@Override
-	public boolean isUseableByPlayer(EntityPlayer player) {
+	public boolean isUsableByPlayer(EntityPlayer player) {
 		return true;
 	}
 
@@ -601,12 +601,12 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	private void dropAllItems(){
 		for(EntityEquipmentSlot e : EQUIPMENT_SLOTS){
 			ItemStack i = this.getItemStackFromSlot(e);
-			if(i != null)this.getEntityWorld().spawnEntityInWorld(new EntityItem(this.getEntityWorld(),posX,posY,posZ,
+			if(i != null)this.getEntityWorld().spawnEntity(new EntityItem(this.getEntityWorld(),posX,posY,posZ,
 					i));
 		}for(ItemStack i : mainInventory){
-			if(i != null)this.getEntityWorld().spawnEntityInWorld(new EntityItem(this.getEntityWorld(),posX,posY,posZ,i));
+			if(i != null)this.getEntityWorld().spawnEntity(new EntityItem(this.getEntityWorld(),posX,posY,posZ,i));
 		}for(ItemStack i : auxInventory){
-			if(i != null)this.getEntityWorld().spawnEntityInWorld(new EntityItem(this.getEntityWorld(),posX,posY,posZ,i));
+			if(i != null)this.getEntityWorld().spawnEntity(new EntityItem(this.getEntityWorld(),posX,posY,posZ,i));
 		}
 		this.clear();
 	}

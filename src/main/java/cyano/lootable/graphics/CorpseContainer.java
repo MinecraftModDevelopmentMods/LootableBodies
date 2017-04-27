@@ -76,7 +76,7 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 
 	@Override
 	public boolean canInteractWith(EntityPlayer entityplayer) {
-		return targetInventory.isUseableByPlayer(entityplayer);
+		return targetInventory.isUsableByPlayer(entityplayer);
 	}
 
 
