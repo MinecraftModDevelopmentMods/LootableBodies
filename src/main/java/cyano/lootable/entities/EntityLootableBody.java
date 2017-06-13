@@ -1,6 +1,5 @@
 package cyano.lootable.entities;
 
-import java.util.Arrays;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -89,10 +88,6 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		FMLLog.info("%s: %s",getClass().getSimpleName(), String.format(format, o));
 	}
 
-	private void log(Object o){
-		FMLLog.info("%s: %s",getClass().getSimpleName(),String.valueOf(o));
-	}
-
 	private String oldName = null;
 	@Override
 	public void onEntityUpdate(){
@@ -139,7 +134,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 			}
 			long age = currentTime - deathTimestamp;
 			if(age > LootableBodies.corpseDecayTime){
-				this.kill();
+				this.onKillCommand();
 			}
 		}
 
@@ -253,7 +248,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 			ItemStack item = player.getHeldItem(EnumHand.MAIN_HAND);
 			if(!item.isEmpty()) {
 				if (item.getItem() instanceof ItemSpade || item.getItem().getToolClasses(item).contains("shovel")) {
-					this.kill();
+					this.onKillCommand();
 				}
 			}
 		}
@@ -385,10 +380,8 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		log("jumped to %s",this.getPosition());
 	}
 
-
-
 	@Override
-	protected void kill() {
+	public void onKillCommand() {
 		if(terminate < 0) terminate = DEATH_COUNTDOWN;
 		this.attackEntityFrom(DamageSource.OUT_OF_WORLD, this.getMaxHealth());
 		this.markDirty();

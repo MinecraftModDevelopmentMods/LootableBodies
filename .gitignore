@@ -1,18 +1,28 @@
-/README.txt
-/.classpath
-/forge-*-changelog.txt
-/bin/*
-/.gradle/*
-/eclipse/.metadata/.plugins/org.eclipse.core.resources/.history/*
-/eclipse/.metadata/*.dat
-/eclipse/.metadata/*.tree
-/eclipse/.metadata/*.index
-*.index
-*~
-/temp/*
-/build/*
-/classes/*
-/.idea/*
-temp/*
-/run/*
+# eclipse
+bin
+*.launch
+.settings
+.metadata
+.classpath
+.project
 
+# idea
+out
+*.ipr
+*.iws
+*.iml
+.idea
+
+# gradle
+build
+.gradle
+
+# other
+eclipse
+run
+
+# mac
+.DS_Store
+*.hprof
+1.10.2/LICENSE-new.txt
+gradle.properties
