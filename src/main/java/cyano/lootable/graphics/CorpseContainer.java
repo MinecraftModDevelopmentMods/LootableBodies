@@ -22,8 +22,6 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 	private final IInventory targetInventory;
 	public CorpseContainer(InventoryPlayer playerItems, IInventory entity){
 		this.targetInventory = entity;
-		net.minecraft.inventory.ContainerHorseInventory k;
-		net.minecraft.inventory.ContainerPlayer h;
 		int index = 0;
 		while(index < 4) {
 			// armor

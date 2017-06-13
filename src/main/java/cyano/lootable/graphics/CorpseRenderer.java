@@ -6,6 +6,7 @@ import org.apache.logging.log4j.Level;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.minecraft.MinecraftProfileTexture;
+import com.mojang.authlib.minecraft.MinecraftProfileTexture.Type;
 
 import cyano.lootable.LootableBodies;
 import cyano.lootable.entities.EntityLootableBody;
@@ -15,8 +16,6 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.entity.RenderLivingBase;
 import net.minecraft.client.renderer.entity.RenderManager;
-import net.minecraft.client.renderer.entity.RenderPigZombie;
-import net.minecraft.client.renderer.entity.RenderPlayer;
 import net.minecraft.client.renderer.entity.layers.LayerArrow;
 import net.minecraft.client.renderer.entity.layers.LayerBipedArmor;
 import net.minecraft.client.renderer.entity.layers.LayerCustomHead;
@@ -49,8 +48,6 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 		this.addLayer(new LayerHeldItem(this));
 		this.addLayer(new LayerArrow(this));
 		this.addLayer(new LayerCustomHead(this.getMainModel().bipedHead));
-		RenderPlayer k;
-		RenderPigZombie j;
 	}
 
 	public ModelPlayer getMainModel()
@@ -84,7 +81,7 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 
 	public static ResourceLocation getSkin(GameProfile profile) {
 		final Minecraft minecraft = Minecraft.getMinecraft();
-		final Map loadSkinFromCache = minecraft.getSkinManager().loadSkinFromCache(profile); // returned map may or may not be typed
+		final Map<Type, MinecraftProfileTexture> loadSkinFromCache = minecraft.getSkinManager().loadSkinFromCache(profile); // returned map may or may not be typed
 		if (loadSkinFromCache.containsKey(MinecraftProfileTexture.Type.SKIN)) {
 			ResourceLocation skin = minecraft.getSkinManager().loadSkin((MinecraftProfileTexture) loadSkinFromCache.get(MinecraftProfileTexture.Type.SKIN), MinecraftProfileTexture.Type.SKIN);
 			return skin;
