@@ -155,11 +155,4 @@ public class LootableBodies {
 		}
 		return false;
 	}
-	
-	private static boolean and(boolean... bools){
-		for(int i = 0; i < bools.length; i++){
-			if(bools[i] == false) return false;
-		}
-		return true;
-	}
 }
