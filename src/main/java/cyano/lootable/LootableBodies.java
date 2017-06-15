@@ -4,6 +4,7 @@ package cyano.lootable;
 import cyano.lootable.entities.EntityLootableBody;
 import cyano.lootable.events.PlayerDeathEventHandler;
 import cyano.lootable.graphics.GUIHandler;
+import net.minecraft.entity.Entity;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.config.Configuration;
@@ -125,9 +126,9 @@ public class LootableBodies {
 		
 	}
 	private int entityIndex = 0;
-	private void registerEntity(Class entityClass){
+	private void registerEntity(Class<?> entityClass){
 		String idName = "Corpse";
- 		EntityRegistry.registerModEntity(new ResourceLocation("lootablebodies:"+idName), entityClass, idName, entityIndex++/*mod-specific entity id*/, this, 32/*trackingRange*/, 1/*updateFrequency*/, true/*sendsVelocityUpdates*/);
+ 		EntityRegistry.registerModEntity(new ResourceLocation("lootablebodies:"+idName), (Class<? extends Entity>) entityClass, idName, entityIndex++/*mod-specific entity id*/, this, 32/*trackingRange*/, 1/*updateFrequency*/, true/*sendsVelocityUpdates*/, entityIndex, entityIndex);
  		
 	}
     
@@ -153,12 +154,5 @@ public class LootableBodies {
 			if(bools[i] == true) return true;
 		}
 		return false;
-	}
-	
-	private static boolean and(boolean... bools){
-		for(int i = 0; i < bools.length; i++){
-			if(bools[i] == false) return false;
-		}
-		return true;
 	}
 }
