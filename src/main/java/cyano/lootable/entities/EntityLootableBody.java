@@ -167,7 +167,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 					posX - VACUUM_RADIUS, posY - VACUUM_RADIUS, posZ - VACUUM_RADIUS,
 					posX + VACUUM_RADIUS, posY + VACUUM_RADIUS, posZ + VACUUM_RADIUS));
 			for(EntityItem item : items){
-				ItemStack stack = item.getEntityItem();
+				ItemStack stack = item.getItem();
 				this.addItem(stack);
 			}
 			for(EntityItem item : items){
@@ -243,8 +243,8 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	@Override
 	protected void damageEntity(DamageSource src, float amount){
 		String type = String.valueOf(src == null ? null : src.getDamageType()); // null protection
-		if(src instanceof EntityDamageSource && src.getEntity() instanceof EntityPlayer){
-			EntityPlayer player = (EntityPlayer)src.getEntity();
+		if(src instanceof EntityDamageSource && src.getTrueSource() instanceof EntityPlayer){
+			EntityPlayer player = (EntityPlayer)src.getTrueSource();
 			ItemStack item = player.getHeldItem(EnumHand.MAIN_HAND);
 			if(!item.isEmpty()) {
 				if (item.getItem() instanceof ItemSpade || item.getItem().getToolClasses(item).contains("shovel")) {

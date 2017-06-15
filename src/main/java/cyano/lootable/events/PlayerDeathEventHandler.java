@@ -61,7 +61,7 @@ public class PlayerDeathEventHandler {
 
 			NonNullList<ItemStack> items = NonNullList.<ItemStack>create();
 			for (EntityItem itemEntity : e.getDrops()) {
-				ItemStack item = itemEntity.getEntityItem();
+				ItemStack item = itemEntity.getItem();
 				if (!item.isEmpty() && cache.containsKey(item)) {
 					corpse.setItemStackToSlot(cache.get(item),item);
 				} else if (!item.isEmpty()) {
