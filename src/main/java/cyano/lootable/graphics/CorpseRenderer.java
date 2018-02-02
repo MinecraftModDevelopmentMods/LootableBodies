@@ -2,6 +2,7 @@ package cyano.lootable.graphics;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.minecraft.MinecraftProfileTexture;
+import com.mojang.authlib.minecraft.MinecraftProfileTexture.Type;
 import cyano.lootable.LootableBodies;
 import cyano.lootable.entities.EntityLootableBody;
 import net.minecraft.client.Minecraft;
@@ -82,7 +83,7 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 
 	public static ResourceLocation getSkin(GameProfile profile) {
 		final Minecraft minecraft = Minecraft.getMinecraft();
-		final Map loadSkinFromCache = minecraft.getSkinManager().loadSkinFromCache(profile); // returned map may or may not be typed
+		final Map<Type, MinecraftProfileTexture> loadSkinFromCache = minecraft.getSkinManager().loadSkinFromCache(profile); // returned map may or may not be typed
 		if (loadSkinFromCache.containsKey(MinecraftProfileTexture.Type.SKIN)) {
 			ResourceLocation skin = minecraft.getSkinManager().loadSkin((MinecraftProfileTexture) loadSkinFromCache.get(MinecraftProfileTexture.Type.SKIN), MinecraftProfileTexture.Type.SKIN);
 			return skin;
