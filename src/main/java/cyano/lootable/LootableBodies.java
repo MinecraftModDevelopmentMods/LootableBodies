@@ -18,7 +18,7 @@ import net.minecraftforge.fml.common.network.NetworkRegistry;
 import net.minecraftforge.fml.common.registry.EntityRegistry;
 
 @Mod(modid = LootableBodies.MODID, name=LootableBodies.NAME, version = LootableBodies.VERSION,
-		acceptedMinecraftVersions = "[1.10.2,)")
+		acceptedMinecraftVersions = "[1.12.2,)")
 public class LootableBodies {
     public static final String MODID = "lootablebodies";
     public static final String NAME ="DrCyano's Lootable Bodies";
@@ -128,7 +128,7 @@ public class LootableBodies {
 	private int entityIndex = 0;
 	private void registerEntity(Class<? extends Entity> entityClass){
 		String idName = "Corpse";
- 		EntityRegistry.registerModEntity(new ResourceLocation(idName), entityClass, idName, entityIndex++/*mod-specific entity id*/, this, 32/*trackingRange*/, 1/*updateFrequency*/, true/*sendsVelocityUpdates*/);
+ 		EntityRegistry.registerModEntity(new ResourceLocation("lootablebodies",idName), entityClass, idName, entityIndex++/*mod-specific entity id*/, this, 32/*trackingRange*/, 1/*updateFrequency*/, true/*sendsVelocityUpdates*/);
  		
 	}
     
