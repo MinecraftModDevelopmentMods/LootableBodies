@@ -79,8 +79,12 @@ public class PlayerDeathEventHandler {
 			}
 
 			w.spawnEntity(corpse);
+			w.updateEntityWithOptionalForce(corpse, false);
 
 			e.getDrops().clear();
+			
+			equipmentCache.remove(e.getEntity());
+			
 		}
 	}
 	
