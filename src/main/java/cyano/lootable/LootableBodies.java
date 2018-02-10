@@ -22,7 +22,7 @@ import net.minecraftforge.fml.common.registry.EntityRegistry;
 public class LootableBodies {
     public static final String MODID = "lootablebodies";
     public static final String NAME ="DrCyano's Lootable Bodies";
-    public static final String VERSION = "2.2.0";
+    public static final String VERSION = "2.3.0";
 	private static LootableBodies INSTANCE = null;
 
 	public static boolean displayNameTag = true;
