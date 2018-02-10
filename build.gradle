@@ -26,7 +26,7 @@ apply plugin: "com.matthewprenger.cursegradle"
 def mod_file = getModFile()
 version = getVersion("VERSION", mod_file)
 group= "cyano.lootable"
-archivesBaseName = "DrCyanosLootableBodies_1.12.2"
+archivesBaseName = "DrCyanosLootableBodies_1.12"
 sourceCompatibility = targetCompatibility = "1.8"
 
 minecraft {
