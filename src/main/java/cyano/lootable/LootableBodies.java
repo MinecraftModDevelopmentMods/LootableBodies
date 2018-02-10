@@ -18,11 +18,11 @@ import net.minecraftforge.fml.common.network.NetworkRegistry;
 import net.minecraftforge.fml.common.registry.EntityRegistry;
 
 @Mod(modid = LootableBodies.MODID, name=LootableBodies.NAME, version = LootableBodies.VERSION,
-		acceptedMinecraftVersions = "[1.12.2,)")
+		acceptedMinecraftVersions = "[1.12,)")
 public class LootableBodies {
     public static final String MODID = "lootablebodies";
     public static final String NAME ="DrCyano's Lootable Bodies";
-    public static final String VERSION = "2.2.0";
+    public static final String VERSION = "2.4.0";
 	private static LootableBodies INSTANCE = null;
 
 	public static boolean displayNameTag = true;
