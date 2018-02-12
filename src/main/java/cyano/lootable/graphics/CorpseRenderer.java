@@ -95,7 +95,7 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 
 	@Override
 	public void doRender(EntityLootableBody entity, double x, double y, double z, float yaw, float partialTick) {
-		if (net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.RenderLivingEvent.Pre<EntityLootableBody>(entity, this, x, y, z)))
+		if (net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.RenderLivingEvent.Pre<EntityLootableBody>(entity, this, partialTick, x, y, z)))
 			return;
 
 		this.setModel(entity.useThinArms());
@@ -175,7 +175,7 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 			this.renderName(entity, x, y, z);
 		}
 
-		net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.RenderLivingEvent.Post<EntityLootableBody>(entity, this, x, y, z));
+		net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.RenderLivingEvent.Post<EntityLootableBody>(entity, this, partialTick, x, y, z));
 
 		this.setModel(true);
 	}
