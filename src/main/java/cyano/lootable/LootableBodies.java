@@ -38,8 +38,12 @@ public class LootableBodies {
     public static boolean allowCorpseDecay = true;
     public static boolean decayOnlyWhenEmpty = true;
     public static long corpseDecayTime = 3600*20; // in game ticks
-    
-    @SidedProxy(clientSide="cyano.lootable.ClientProxy", serverSide="cyano.lootable.ServerProxy")
+	
+	public static boolean corpseBuoyancy = false;
+	public static boolean voidPlatform= false;
+	public static boolean dimensionSpecificPlatform = true;
+	
+	@SidedProxy(clientSide="cyano.lootable.ClientProxy", serverSide="cyano.lootable.ServerProxy")
     public static Proxy proxy;
     
 	
@@ -62,7 +66,7 @@ public class LootableBodies {
 				+ "location: assets/"+MODID+"/textures/entity/corpse/corpse.png");
     	displayNameTag = config.getBoolean("display_nametag", "options", displayNameTag,
 				"If true, corpses will show their owner's name");
-    	
+    
 		addBonesToCorpse = config.getBoolean("add_bones_to_corpse", "options", addBonesToCorpse,
 			"If true, corpses will have bones and rotten flesh added to them.");
 
@@ -96,6 +100,13 @@ public class LootableBodies {
 				+ "enable_corpse_decay option is set to true). \n"
 				+ "The format is hours:minutes:seconds or just hours:minutes");
     	corpseDecayTime = Math.max(parseTimeInSeconds(decayTime),2)*20; // 2 second minimum
+		
+		corpseBuoyancy = config.getBoolean("enable_corpse_buoyancy","corpse recovery", corpseBuoyancy,
+				"If true, corpses will float in fluids.");
+		voidPlatform = config.getBoolean("prevent_void_loss", "corpse recovery", voidPlatform,
+				"If true, corpses that would fall into the void instead create platform to lay on");
+		dimensionSpecificPlatform= config.getBoolean("dim_specific_platform", "corpse recovery", dimensionSpecificPlatform,
+				"If true, corpses generate dimension specific platforms, otherwise they only make cobblestone platforms");
 
 		config.save();
 		proxy.preInit(event);
@@ -120,7 +131,7 @@ public class LootableBodies {
 		registerEntity(EntityLootableBody.class);
 		MinecraftForge.EVENT_BUS.register(new PlayerDeathEventHandler());
 		NetworkRegistry.INSTANCE.registerGuiHandler( LootableBodies.getInstance(), GUIHandler.getInstance());
- 		
+ 	
 		proxy.init(event);
 		
 		

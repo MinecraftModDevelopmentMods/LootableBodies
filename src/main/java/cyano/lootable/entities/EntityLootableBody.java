@@ -2,12 +2,14 @@ package cyano.lootable.entities;
 
 import com.mojang.authlib.GameProfile;
 import cyano.lootable.LootableBodies;
+import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EnumCreatureAttribute;
 import net.minecraft.entity.SharedMonsterAttributes;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.init.Blocks;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.Item;
@@ -75,9 +77,8 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		//this.newPosZ = posZ; // no newPosZ?
 		this.markDirty();
 	}
-
-
-
+	
+	
 	private void log(String format, Object... o){
 		FMLLog.info("%s: %s",getClass().getSimpleName(), String.format(format, o));
 	}
@@ -172,9 +173,57 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 				getEntityWorld().removeEntity(item);
 			}
 		}
+		
+		if(isServer && LootableBodies.corpseBuoyancy && vacuumTime >= VACUUM_TIMELIMIT && (this.inWater || this.isInLava())) {
+			this.motionY += 0.025D;
+			this.motionY *= 0.9;
+		}
+		
+		if(isServer && LootableBodies.voidPlatform && this.posY < 0) {
+			generateVoidPlatform();
+			this.setPositionAndUpdate((int)this.posX, 1.5, (int)this.posZ);
+		}
 
 	}
-
+	
+	@Override
+	public boolean handleWaterMovement() {
+		if (this.world.handleMaterialAcceleration(this.getEntityBoundingBox().grow(0.0D, -0.4000000059604645D, 0.0D).shrink(0.001D), Material.WATER, this)) 		{
+			this.fallDistance = 0.0F;
+			this.inWater = true;
+			this.extinguish();
+		} else {
+			this.inWater = false;
+		}
+		
+		return this.inWater;
+	}
+	
+	private void generateVoidPlatform() {
+		World world = this.world;
+		BlockPos testPos = new BlockPos((int)this.posX, 0, (int)this.posZ);
+		
+		IBlockState platformBlockstate = getPlatformBlock(this.dimension);
+		
+		for(int j = -1; j <= 1; j++) {
+			for(int k = -1; k <= 1; k++)	{
+				if(world.isAirBlock(testPos.add(j,0,k)))
+					world.setBlockState(testPos.add(j,0,k), platformBlockstate, 3);
+			}
+		}
+	}
+	
+	private IBlockState getPlatformBlock(int i) {
+		switch(LootableBodies.dimensionSpecificPlatform ? i : 0) {
+			case -1:
+				return Blocks.NETHERRACK.getDefaultState();
+			case 1:
+				return Blocks.END_STONE.getDefaultState();
+			default:
+				return Blocks.COBBLESTONE.getDefaultState();
+		}
+	}
+	
 	private void decayItems(int amount) {
 		for(int slot = 0; slot < this.getSizeInventory(); slot++){
 			this.setInventorySlotContents(slot,this.decayItem(this.getStackInSlot(slot), amount));
