@@ -1,6 +1,0 @@
-{
-  "name": "Lootablebodies",
-  "tagline": "",
-  "body": "# DrCyano's Lootable Bodies\r\nA death-chest mod for Minecraft\r\n\r\n## Requirements\r\nThis mod requires that you install Minecraft Forge version 1.9-12.16.0.1865 or later.\r\n\r\n## Installing\r\nAfter you have successfully installed Forge, simply place the file *lootable-bodies-#.#.jar* in your *mods* folder. You can get the lootable-bodies-#.#.jar file from the Releases tab of this repository page.\r\n\r\n",
-  "note": "Don't delete this file! It's used internally to help with page regeneration."
-}
