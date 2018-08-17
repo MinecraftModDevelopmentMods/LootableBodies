@@ -116,7 +116,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 			oldName = nameUpdate;
 			if(nameUpdate != null && nameUpdate.trim().length() > 0) {
 				GameProfile gp = new GameProfile(null, nameUpdate);
-				if((!LootableBodies.useLocalSkin) && isClient) gp = TileEntitySkull.updateGameprofile(gp);
+				if((!LootableBodies.useLocalSkin) && isClient) gp = TileEntitySkull.updateGameProfile(gp);
 				setGameProfile(gp);
 				this.setCustomNameTag(nameUpdate);
 			} else {
