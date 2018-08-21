@@ -6,6 +6,10 @@ buildscript {
             url = "http://files.minecraftforge.net/maven"
         }
         maven {
+            name = 'gradle'
+            url 'https://plugins.gradle.org/m2/'
+        }
+        maven {
             name = "sonatype"
             url = "https://oss.sonatype.org/content/repositories/snapshots/"
         }
@@ -23,7 +27,7 @@ archivesBaseName = "CyanosLootableBodies"
 
 minecraft {
     version = "1.7.10-10.13.4.1614-1.7.10"
-    runDir = "eclipse"
+    runDir = "run"
     mappings = "stable_12"
 }
 
