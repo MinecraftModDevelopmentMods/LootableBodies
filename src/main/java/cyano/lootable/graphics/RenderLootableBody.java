@@ -28,7 +28,7 @@ public class RenderLootableBody extends RenderBiped {
 																			// (child
 																			// version?)
 				this.modelArmor = new ModelCorpseSkeleton(1.0f, true); // model
-																		// base
+																			// base
 			}
 		});
 

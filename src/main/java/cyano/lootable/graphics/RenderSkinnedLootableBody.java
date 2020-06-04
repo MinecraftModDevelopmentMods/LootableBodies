@@ -36,7 +36,7 @@ public class RenderSkinnedLootableBody extends RenderBiped {
 																			// (child
 																			// version?)
 				this.modelArmor = new ModelCorpseSkeleton(1.0f, true); // model
-																		// base
+																			// base
 			}
 		});
 		this.addLayer(new LayerHeldItem(this));
