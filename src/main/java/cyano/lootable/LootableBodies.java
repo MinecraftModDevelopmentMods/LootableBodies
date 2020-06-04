@@ -32,6 +32,8 @@ public class LootableBodies {
 	@SidedProxy(clientSide = "cyano.lootable.ClientProxy", serverSide = "cyano.lootable.ServerProxy")
 	public static Proxy proxy;
 
+	private int entityIndex = 0;
+
 	// Mark this method for receiving an FMLEvent (in this case, it's the
 	// FMLPreInitializationEvent)
 	@EventHandler
@@ -110,7 +112,9 @@ public class LootableBodies {
 
 	private int parseTimeInSeconds(String time) {
 		String[] component = time.split(":");
-		int hr = 0, min = 0, sec = 0;
+		int hr = 0;
+		int min = 0;
+		int sec = 0;
 		if (component.length > 0)
 			hr = Integer.parseInt(component[0].trim());
 		if (component.length > 1)
@@ -131,8 +135,6 @@ public class LootableBodies {
 		proxy.init(event);
 
 	}
-
-	private int entityIndex = 0;
 
 	private void registerEntity(Class entityClass) {
 		String idName = MODID + "_" + entityClass.getSimpleName();

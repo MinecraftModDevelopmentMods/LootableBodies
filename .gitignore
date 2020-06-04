@@ -17,3 +17,5 @@ temp/*
 /run/*
 
 /bin/
+.project
+.settings/
