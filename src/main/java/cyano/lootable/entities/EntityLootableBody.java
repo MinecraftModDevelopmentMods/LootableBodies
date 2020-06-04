@@ -822,7 +822,8 @@ public class EntityLootableBody extends net.minecraft.entity.EntityLiving implem
 	}
 
 	@Override
-	public ItemStack removeStackFromSlot(int index) {
+	public ItemStack getStackInSlotOnClosing(int index) {
+//	public ItemStack removeStackFromSlot(int index) {
 		ItemStack x = equipment[index];
 		equipment[index] = null;
 		return x;

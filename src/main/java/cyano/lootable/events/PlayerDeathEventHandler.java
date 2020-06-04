@@ -34,7 +34,7 @@ public class PlayerDeathEventHandler {
 			// "+corpse.getOwner()+" at
 			// ("+corpse.posX+","+corpse.posY+","+corpse.posZ+") with rotation
 			// "+rotation+".");
-			if (w.getGameRules().getBoolean("keepInventory") == false) { // keepInventory
+			if (w.getGameRules().getGameRuleBooleanValue("keepInventory") == false) { // keepInventory
 																			// check
 				// set items
 				corpse.setCurrentItemOrArmor(0, EntityLootableBody.applyItemDamage(withdrawHeldItem(player)));
@@ -72,7 +72,7 @@ public class PlayerDeathEventHandler {
 			if (player.inventory.getStackInSlot(i) == null)
 				continue;
 			if (item == player.inventory.getStackInSlot(i)) {
-				player.inventory.removeStackFromSlot(i);
+				player.inventory.getStackInSlotOnClosing(i);
 				break;
 			}
 		}

@@ -16,14 +16,14 @@ buildscript {
 }
 apply plugin: 'net.minecraftforge.gradle.forge'
 
-version = "1.8.8-1.4.1"
+version = "1.8-1.4.1"
 group= "cyano.lootable"
 archivesBaseName = "CyanosLootableBodies"
 
 minecraft {
-    version = "1.8.8-11.15.0.1655"
+    version = "1.8-11.14.4.1577"
     runDir = "run"
-    mappings = "stable_20"
+    mappings = "stable_18"
 //    makeObfSourceJar = true
 }
 
