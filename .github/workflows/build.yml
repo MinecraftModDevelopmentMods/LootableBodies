@@ -1,6 +1,8 @@
-jobs:
+name: "Validate Build"
+on: [push, pull_request]
 
-  build:
+jobs:
+  validate:
     runs-on: ubuntu-latest
 
     steps:
