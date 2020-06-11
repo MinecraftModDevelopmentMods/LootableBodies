@@ -16,7 +16,7 @@ jobs:
         architecture: x64 # (x64 or x86) - defaults to x64
 
     - name: Setup CI Workspace
-      run: gradlew clean setupciworkspace
+      run: ./gradlew clean setupciworkspace
 
     - name: Build with Gradle
-      run: gradlew build
+      run: ./gradlew build
