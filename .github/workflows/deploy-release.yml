@@ -1,0 +1,335 @@
+name: Release Lootable Bodies
+run-name: Release Lootable Bodies ${{ inputs.release_version }} (${{ inputs.curseforge_release_level }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Complete Minecraft 1.10.2 version from gradle.properties, ending in 110021.
+        required: true
+        type: string
+      curseforge_release_level:
+        description: CurseForge release level.
+        required: true
+        default: release
+        type: choice
+        options: [release, beta, alpha]
+      confirm_live_publication:
+        description: Publish the audited files to Maven, CurseForge and GitHub after all checks pass.
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+
+concurrency:
+  group: lootablebodies-release-${{ inputs.release_version }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Validate release request
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      release_sha: ${{ steps.validate.outputs.release_sha }}
+      release_version: ${{ steps.validate.outputs.release_version }}
+    steps:
+      - name: Require the MMD dispatcher and a supported target
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == 'MinecraftModDevelopmentMods/LootableBodies' ]]
+          [[ "$GITHUB_REF" == 'refs/heads/master-1.12' ]]
+          [[ "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.110021$ ]]
+      - name: Check out the maintained Minecraft 1.10.2 branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: '1.10.2'
+          fetch-depth: 0
+      - name: Validate identity, exact commit and successful checks
+        id: validate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+          values = dict(line.split('=', 1) for line in Path('gradle.properties').read_text().splitlines()
+                        if line.strip() and not line.lstrip().startswith('#') and '=' in line)
+          expected = {'minecraft_version': '1.10.2', 'forge_version': '12.18.3.2511',
+                      'loader_name': 'forge', 'loader_code': '1', 'java_version': '8',
+                      'java_toolchain_version': '8.0.502+7', 'gradle_java_version': '17',
+                      'mod_id': 'lootablebodies', 'mod_artifact': 'LootableBodies',
+                      'mod_group': 'zone.moddev.mc.lootablebodies', 'mod_license': 'LGPL-2.1-only',
+                      'curseforge_project_id': '240968'}
+          if any(values.get(key) != value for key, value in expected.items()):
+              raise SystemExit('Release identity differs from the maintained Minecraft 1.10.2 build')
+          version = os.environ['RELEASE_VERSION']
+          if version != values['mod_version'] or not re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.110021', version):
+              raise SystemExit('Requested version does not match the selected branch')
+          sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          repo = os.environ['GITHUB_REPOSITORY']
+          checks = json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/commits/{sha}/check-runs?per_page=100'], text=True))['check_runs']
+          required = {'Cold Forge bootstrap', 'Build, test, and audit', 'Analyze Java', 'Validation'}
+          for name in required:
+              matching = [check for check in checks if check['name'] == name]
+              if not matching or max(matching, key=lambda c: c['id'])['conclusion'] != 'success':
+                  raise SystemExit(f'The selected commit has no successful {name} check')
+          release = subprocess.run(['gh', 'api', f'repos/{repo}/releases/tags/{version}'], capture_output=True, text=True)
+          if release.returncode == 0:
+              raise SystemExit('This GitHub release already exists; inspect the completed publication before retrying')
+          if '404' not in release.stderr:
+              raise SystemExit('Could not establish whether this release already exists')
+          tag = subprocess.run(['gh', 'api', f'repos/{repo}/git/ref/tags/{version}'], capture_output=True, text=True)
+          if tag.returncode == 0 and json.loads(tag.stdout)['object']['sha'] != sha:
+              raise SystemExit('Existing release tag points to another commit')
+          if tag.returncode != 0 and '404' not in tag.stderr:
+              raise SystemExit('Could not verify the release tag')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write(f'release_sha={sha}\nrelease_version={version}\n')
+          PY
+
+  build:
+    name: Build immutable release artifact
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      artifact_name: ${{ steps.bundle.outputs.artifact_name }}
+    steps:
+      - name: Check out the verified commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.preflight.outputs.release_sha }}
+      - name: Install Mavenizer Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '25.0.3+9.0.LTS'
+      - name: Install production Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '8.0.502+7'
+      - name: Install Gradle Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17.0.1+12'
+      - name: Pin the production toolchain
+        run: echo "LOOTABLEBODIES_JAVA8_HOME=$JAVA_HOME_8_X64" >> "$GITHUB_ENV"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+      - name: Build, test and audit the release
+        run: |
+          chmod +x ./gradlew
+          ./gradlew clean build javadoc verifyEclipseProductionClasspath prepareReleaseBundle \
+            --no-daemon --stacktrace \
+            -Dorg.gradle.java.installations.paths="$JAVA_HOME,$JAVA_HOME_8_X64,$JAVA_HOME_25_X64" \
+            -Dorg.gradle.java.installations.auto-detect=false \
+            -Dorg.gradle.java.installations.auto-download=false
+      - name: Stage the exact audited bundle
+        id: bundle
+        env:
+          RELEASE_VERSION: ${{ needs.preflight.outputs.release_version }}
+          RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/release-bundle"
+          cp build/release/bundle/* "$RUNNER_TEMP/release-bundle/"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          prefix = 'LootableBodies-' + os.environ['RELEASE_VERSION']
+          expected = {prefix + suffix for suffix in ['.jar', '-sources.jar', '-javadoc.jar', '.pom']}
+          expected.update({'SHA256SUMS', 'CHANGELOG.txt'})
+          actual = {p.name for p in (Path(os.environ['RUNNER_TEMP']) / 'release-bundle').iterdir()}
+          if actual != expected:
+              raise SystemExit('Release bundle contains missing or unexpected files')
+          PY
+          (cd "$RUNNER_TEMP/release-bundle" && sha256sum --check SHA256SUMS)
+          echo "artifact_name=LootableBodies-$RELEASE_VERSION-$RELEASE_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          {
+            echo "Prepared Lootable Bodies $RELEASE_VERSION from commit $RELEASE_SHA."
+            echo
+            cat build/release/SHA256SUMS
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the immutable release bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ steps.bundle.outputs.artifact_name }}
+          if-no-files-found: error
+          retention-days: 90
+          path: ${{ runner.temp }}/release-bundle/*
+
+  release_confirmation:
+    name: Confirm live publication
+    needs: [preflight, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require confirmation and release-secret access
+        env:
+          CONFIRM_LIVE_PUBLICATION: ${{ inputs.confirm_live_publication }}
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+          MAVEN_UPLOAD_URL: ${{ secrets.MAVEN_UPLOAD_URL }}
+          MAVEN_UPLOAD_USERNAME: ${{ secrets.MAVEN_UPLOAD_USERNAME }}
+          MAVEN_UPLOAD_PASSWORD: ${{ secrets.MAVEN_UPLOAD_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [[ "$CONFIRM_LIVE_PUBLICATION" == true ]] || { echo 'Live publication was not confirmed'; exit 1; }
+          for name in CURSEFORGE_TOKEN MAVEN_UPLOAD_URL MAVEN_UPLOAD_USERNAME MAVEN_UPLOAD_PASSWORD; do
+            [[ -n "${!name:-}" ]] || { echo "Required release secret is unavailable: $name"; exit 1; }
+          done
+          echo 'Publication confirmed; all required release secrets are available.'
+
+  create_release_tag:
+    name: Create validated release tag
+    needs: [preflight, build, release_confirmation]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Create or verify the immutable version tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
+          RELEASE_VERSION: ${{ needs.preflight.outputs.release_version }}
+        run: |
+          set -euo pipefail
+          if tag="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_VERSION" 2>/dev/null)"; then
+            [[ "$(jq -r '.object.sha' <<<"$tag")" == "$RELEASE_SHA" ]]
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$RELEASE_VERSION" -f sha="$RELEASE_SHA" >/dev/null
+          fi
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_VERSION" --jq '.object.sha')" == "$RELEASE_SHA" ]]
+
+  publish_maven:
+    name: Publish Maven
+    needs: [preflight, build, create_release_tag]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the verified publication definition
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.preflight.outputs.release_sha }}
+      - name: Install Mavenizer Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '25.0.3+9.0.LTS'
+      - name: Install production Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '8.0.502+7'
+      - name: Install Gradle Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17.0.1+12'
+      - name: Pin the production toolchain
+        run: echo "LOOTABLEBODIES_JAVA8_HOME=$JAVA_HOME_8_X64" >> "$GITHUB_ENV"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+      - name: Download the immutable release bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: ${{ runner.temp }}/release-input
+      - name: Verify release checksums
+        run: (cd "$RUNNER_TEMP/release-input" && sha256sum --check SHA256SUMS)
+      - name: Publish the prepared Maven artifacts
+        env:
+          MAVEN_UPLOAD_URL: ${{ secrets.MAVEN_UPLOAD_URL }}
+          MAVEN_UPLOAD_USERNAME: ${{ secrets.MAVEN_UPLOAD_USERNAME }}
+          MAVEN_UPLOAD_PASSWORD: ${{ secrets.MAVEN_UPLOAD_PASSWORD }}
+          LOOTABLEBODIES_RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
+          LOOTABLEBODIES_RELEASE_VERSION: ${{ needs.preflight.outputs.release_version }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew publishMavenJavaPublicationToReleaseRepository \
+            -PpreparedReleaseDir="$RUNNER_TEMP/release-input" --no-daemon --stacktrace \
+            -Dorg.gradle.java.installations.paths="$JAVA_HOME,$JAVA_HOME_8_X64,$JAVA_HOME_25_X64" \
+            -Dorg.gradle.java.installations.auto-detect=false \
+            -Dorg.gradle.java.installations.auto-download=false
+
+  publish_curseforge:
+    name: Publish CurseForge
+    needs: [preflight, build, publish_maven]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download the immutable release bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: ${{ runner.temp }}/release-input
+      - name: Verify release checksums
+        run: (cd "$RUNNER_TEMP/release-input" && sha256sum --check SHA256SUMS)
+      - name: Publish Lootable Bodies to CurseForge
+        uses: Kira-NT/mc-publish@52307b03863581dec6b652b83e597aec02ebb075 # v3.3.1
+        with:
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          curseforge-id: '240968'
+          name: Lootable Bodies ${{ needs.preflight.outputs.release_version }} for Minecraft 1.10.2 (Forge)
+          version: ${{ needs.preflight.outputs.release_version }}
+          version-type: ${{ inputs.curseforge_release_level }}
+          changelog-file: ${{ runner.temp }}/release-input/CHANGELOG.txt
+          loaders: forge
+          game-versions: '1.10.2'
+          game-version-filter: none
+          environment: client | server
+          java: Java 8
+          fail-mode: fail
+          files: |
+            ${{ runner.temp }}/release-input/LootableBodies-${{ needs.preflight.outputs.release_version }}.jar
+            ${{ runner.temp }}/release-input/LootableBodies-${{ needs.preflight.outputs.release_version }}-sources.jar
+            ${{ runner.temp }}/release-input/LootableBodies-${{ needs.preflight.outputs.release_version }}-javadoc.jar
+
+  publish_github:
+    name: Publish GitHub Release
+    needs: [preflight, build, publish_curseforge]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Download the immutable release bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: ${{ runner.temp }}/release-input
+      - name: Verify release checksums
+        run: (cd "$RUNNER_TEMP/release-input" && sha256sum --check SHA256SUMS)
+      - name: Publish the GitHub release last
+        uses: Kira-NT/mc-publish@52307b03863581dec6b652b83e597aec02ebb075 # v3.3.1
+        with:
+          github-token: ${{ github.token }}
+          github-tag: ${{ needs.preflight.outputs.release_version }}
+          github-commitish: ${{ needs.preflight.outputs.release_sha }}
+          github-draft: false
+          github-prerelease: false
+          name: Lootable Bodies ${{ needs.preflight.outputs.release_version }} for Minecraft 1.10.2 (Forge)
+          version: ${{ needs.preflight.outputs.release_version }}
+          version-type: release
+          changelog-file: ${{ runner.temp }}/release-input/CHANGELOG.txt
+          fail-mode: fail
+          files: |
+            ${{ runner.temp }}/release-input/LootableBodies-${{ needs.preflight.outputs.release_version }}.jar
+            ${{ runner.temp }}/release-input/LootableBodies-${{ needs.preflight.outputs.release_version }}-sources.jar
+            ${{ runner.temp }}/release-input/LootableBodies-${{ needs.preflight.outputs.release_version }}-javadoc.jar
+            ${{ runner.temp }}/release-input/LootableBodies-${{ needs.preflight.outputs.release_version }}.pom
+            ${{ runner.temp }}/release-input/SHA256SUMS
+            ${{ runner.temp }}/release-input/CHANGELOG.txt

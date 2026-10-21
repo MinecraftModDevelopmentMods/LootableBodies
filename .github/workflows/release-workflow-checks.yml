@@ -1,0 +1,29 @@
+name: Validate release workflow
+on:
+  push:
+    branches: ['feature/release-workflow', 'master-1.12']
+    paths: ['.github/workflows/**']
+  pull_request:
+    branches: ['master-1.12']
+    paths: ['.github/workflows/**']
+permissions:
+  contents: read
+jobs:
+  validate:
+    name: Validate release workflow
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install pinned actionlint
+        run: |
+          curl --fail --location --retry 3 \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+            --output "$RUNNER_TEMP/actionlint.tar.gz"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/actionlint"
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP/actionlint"
+      - name: Check release workflow syntax
+        run: >-
+          "$RUNNER_TEMP/actionlint/actionlint" -shellcheck= -pyflakes=
+          .github/workflows/deploy-release.yml .github/workflows/release-workflow-checks.yml
