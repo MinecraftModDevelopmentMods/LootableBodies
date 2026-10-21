@@ -114,6 +114,10 @@ final class ReportedIssueChecks {
         world.getGameRules().setOrCreateGameRule("keepInventory","false");world.getChunkFromChunkCoords(2,0);
         EntityPlayerMP p=new EntityPlayerMP(server,world,new GameProfile(UUID.randomUUID(),"IssueFive"),new PlayerInteractionManager(world));
         p.connection=new QuietConnection(p);p.setGameType(GameType.SURVIVAL);p.setPosition(32.5,80,0.5);
+        // Vanilla clients need player-list information before a tracked player
+        // spawn, including the brief spawn-point visit during real respawn.
+        server.getPlayerList().sendPacketToAllPlayers(new net.minecraft.network.play.server.SPacketPlayerListItem(
+                net.minecraft.network.play.server.SPacketPlayerListItem.Action.ADD_PLAYER,p));
         RuntimeChecks.require(world.spawnEntity(p),"Fixture player spawn");server.getPlayerList().getPlayers().add(p);
         p.inventory.currentItem=4;p.inventory.mainInventory[4]=shovel();p.inventory.mainInventory[9]=RuntimeChecks.stack(301);
         Map<String,Integer> expected=tagged(p);
