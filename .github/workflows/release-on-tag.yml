@@ -1,0 +1,60 @@
+name: Validate Lootable Bodies release tag
+
+on:
+  push:
+    tags:
+      - '*.*.*.*'
+
+permissions:
+  actions: read
+  contents: read
+  checks: read
+
+concurrency:
+  group: lootablebodies-release-tag-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  validate-release-tag:
+    name: Validate release identity and prior CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Validate target-qualified tag
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+          values = dict(line.split('=', 1) for line in Path('gradle.properties').read_text().splitlines()
+                        if line.strip() and not line.lstrip().startswith('#') and '=' in line)
+          expected = {'minecraft_version': '1.10.2', 'loader_name': 'forge', 'loader_code': '1',
+                      'mod_id': 'lootablebodies', 'mod_artifact': 'LootableBodies',
+                      'mod_group': 'zone.moddev.mc.lootablebodies', 'curseforge_project_id': '240968',
+                      'mod_license': 'LGPL-2.1-only'}
+          if any(values.get(key) != value for key, value in expected.items()):
+              raise SystemExit('Wrong Lootable Bodies release identity')
+          version = values['mod_version']
+          if not re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.110021', version):
+              raise SystemExit('Release version must use Major.Minor.Bug.110021')
+          if os.environ['GITHUB_REF_NAME'] != version:
+              raise SystemExit('Release tag must exactly match mod_version')
+          PY
+
+      - name: Require successful build checks on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          count="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100" \
+            --jq '[.check_runs[] | select(.name == "Build, test, and audit" and .conclusion == "success")] | length')"
+          if [[ "$count" -lt 1 ]]; then
+            echo 'The tagged commit has no successful Build, test, and audit check' >&2
+            exit 1
+          fi
+
+      - name: Record the release workflow link
+        run: echo 'Tag validated. Publish only through the confirmed Release Lootable Bodies workflow on the default branch.' >> "$GITHUB_STEP_SUMMARY"

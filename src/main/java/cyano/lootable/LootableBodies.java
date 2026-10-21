@@ -14,14 +14,17 @@ import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.network.NetworkRegistry;
 import net.minecraftforge.fml.common.registry.EntityRegistry;
+import java.io.File;
 
 @Mod(modid = LootableBodies.MODID, name=LootableBodies.NAME, version = LootableBodies.VERSION,
-		acceptedMinecraftVersions = "[1.10.2,)")
+		acceptedMinecraftVersions = "[1.10.2]",
+        guiFactory = "cyano.lootable.graphics.CorpseConfigGuiFactory")
 public class LootableBodies {
     public static final String MODID = "lootablebodies";
     public static final String NAME ="DrCyano's Lootable Bodies";
-    public static final String VERSION = "2.2.0";
+    public static final String VERSION = "2.4.1.110021";
 	private static LootableBodies INSTANCE = null;
+    private static Configuration configuration;
 
 	public static boolean displayNameTag = true;
     public static boolean addBonesToCorpse = true;
@@ -45,9 +48,16 @@ public class LootableBodies {
     @EventHandler public void preInit(FMLPreInitializationEvent event)
     {
 		INSTANCE = this;
+        loadConfiguration(event.getSuggestedConfigurationFile());
+        proxy.preInit(event);
+    }
+
+    /** Reads startup rules. GUI saves deliberately do not call this method. */
+    public static void loadConfiguration(File file) {
         // Do stuff in pre-init phase (read config, create blocks and items, register them)
     	// load config
-    	Configuration config = new Configuration(event.getSuggestedConfigurationFile());
+        Configuration config = new Configuration(file);
+        configuration = config;
     	config.load();
 
     	corpseHP = config.getFloat("corpse_HP", "options", corpseHP, 1,Short.MAX_VALUE,
@@ -95,12 +105,36 @@ public class LootableBodies {
 				+ "The format is hours:minutes:seconds or just hours:minutes");
     	corpseDecayTime = Math.max(parseTimeInSeconds(decayTime),2)*20; // 2 second minimum
 
+        for (String category : new String[] {"options", "corpse damage", "corpse decay"}) {
+            for (net.minecraftforge.common.config.Property property : config.getCategory(category).values()) {
+                String key = property.getName();
+                // Unknown pack options are retained without exposing them in our GUI.
+                if (!isKnownOption(key)) continue;
+                property.setLanguageKey("lootablebodies.config." + key);
+                property.setRequiresMcRestart(!key.equals("local_texture") && !key.equals("display_nametag"));
+            }
+        }
 		config.save();
-		proxy.preInit(event);
     }
 
-	
-	private int parseTimeInSeconds(String time) {
+    private static boolean isKnownOption(String key) {
+        return java.util.Arrays.asList("corpse_HP", "local_texture", "display_nametag", "add_bones_to_corpse",
+                "hurt_by_environment", "hurt_by_weapons", "hurt_by_misc", "item_decay_rate",
+                "enable_corpse_decay", "empty_only_decay", "corpse_decay_time").contains(key);
+    }
+
+    public static Configuration getConfiguration() {
+        return configuration;
+    }
+
+    /** Persists pending rules, applying only this client's appearance preferences. */
+    public static void saveClientConfiguration() {
+        if (configuration == null) return;
+        useLocalSkin = configuration.getCategory("options").get("local_texture").getBoolean();
+        displayNameTag = configuration.getCategory("options").get("display_nametag").getBoolean();
+        configuration.save();
+    }
+	private static int parseTimeInSeconds(String time) {
 		String[] component = time.split(":");
 		int hr = 0,min=0,sec=0;
 		if(component.length > 0)hr = Integer.parseInt(component[0].trim());

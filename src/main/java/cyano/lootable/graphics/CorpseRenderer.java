@@ -81,13 +81,21 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 	}
 
 	public static ResourceLocation getSkin(GameProfile profile) {
+		ResourceLocation fallback = profile == null || profile.getId() == null
+				? DefaultPlayerSkin.getDefaultSkinLegacy() : DefaultPlayerSkin.getDefaultSkin(profile.getId());
+		if(profile == null || profile.getId() == null) return fallback;
+		try {
 		final Minecraft minecraft = Minecraft.getMinecraft();
 		final Map loadSkinFromCache = minecraft.getSkinManager().loadSkinFromCache(profile); // returned map may or may not be typed
 		if (loadSkinFromCache.containsKey(MinecraftProfileTexture.Type.SKIN)) {
 			ResourceLocation skin = minecraft.getSkinManager().loadSkin((MinecraftProfileTexture) loadSkinFromCache.get(MinecraftProfileTexture.Type.SKIN), MinecraftProfileTexture.Type.SKIN);
 			return skin;
 		} else {
-			return DefaultPlayerSkin.getDefaultSkin(profile.getId());
+			return fallback;
+		}
+		} catch(RuntimeException unavailable) {
+			// A service/cache failure must not abort renderModel and hide the body.
+			return fallback;
 		}
 	}
 

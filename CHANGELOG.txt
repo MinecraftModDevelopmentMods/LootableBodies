@@ -1,0 +1,22 @@
+2.4.1.110021 - Minecraft 1.10.2, Forge
+
+Updated the Minecraft 1.10.2 build and release setup.
+
+- Fixed item loss and duplication during corpse creation, inventory transfers,
+  hotbar swaps, dragging and cancelled drops.
+- Improved recovery of damaged corpse records while keeping recoverable items.
+- Corpses wait for nearby unloaded terrain instead of falling through it.
+- Failed player skin lookups use a default skin without blocking the game.
+- Added a Config button on the Mods list. Appearance changes apply locally;
+  world and server rules take effect after restarting Minecraft.
+- Kept translations intact when building jars on Windows.
+
+Unreadable item and damaged field records stay with the corpse for recovery.
+Keep backups and keep using this maintained reader for affected saves; older
+builds discard its additional recovery records when saving. Missing mods must
+be restored before their items can be recovered. This release does not qualify
+arbitrary modpacks or upgrades to a different Minecraft version.
+
+Existing corpse inventories, saved identities and configuration defaults are
+preserved. Created by Cyanobacterium; maintained by SkyBlade1978 and Minecraft
+Mod Development. This release uses LGPLv2.1 and retains the original CC0 notice.
