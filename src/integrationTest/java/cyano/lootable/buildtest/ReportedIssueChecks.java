@@ -164,7 +164,7 @@ final class ReportedIssueChecks {
     }
     private static void unloadReload() throws Exception {
         EntityLootableBody b=fullBody(128,128,8.5);UUID uuid=b.getUniqueID();Map<String,Integer> expected=inventory(b);
-        world.getChunkProvider().unload(world.getChunkFromChunkCoords(128,128));world.getChunkProvider().tick();flushChunks();world.updateEntities();
+        unloadChunk(128,128);world.updateEntities();
         RuntimeChecks.require(!world.getChunkProvider().chunkExists(128,128),"Fixture chunk did not actually unload");
         RuntimeChecks.require(!world.loadedEntityList.contains(b),"Unloaded corpse still receives normal world ticks");
         world.getChunkFromChunkCoords(128,128);EntityLootableBody loaded=RuntimeChecks.find(world,uuid);
@@ -174,7 +174,7 @@ final class ReportedIssueChecks {
         EntityLootableBody body; int cx,cz,nx,nz; BlockPos platform;
         ForgeChunkManager.Ticket ticket;
         Map<String,Integer> expected;
-        void unload(){world.getChunkProvider().unload(world.getChunkFromChunkCoords(nx,nz));world.getChunkProvider().tick();flushChunks();RuntimeChecks.require(!world.getChunkProvider().chunkExists(nx,nz),"Support chunk did not unload");}
+        void unload(){unloadChunk(nx,nz);RuntimeChecks.require(!world.getChunkProvider().chunkExists(nx,nz),"Support chunk did not unload");}
         void frozen(){for(int i=0;i<100;i++)world.updateEntity(body);System.out.println("ISSUE17_UNLOADED_SUPPORT y="+body.posY+" alive="+body.isEntityAlive()+" inventory="+inventory(body).size()+" supportLoaded="+world.getChunkProvider().chunkExists(nx,nz));RuntimeChecks.require(body.isEntityAlive() && body.posY==80 && expected.equals(inventory(body)),"Corpse fell through unloaded neighbour support and lost recoverable inventory");}
         void resume(){world.getChunkFromChunkCoords(nx,nz);for(int i=0;i<10;i++)world.updateEntity(body);RuntimeChecks.require(body.onGround && body.posY==80 && body.addedToChunk && expected.equals(inventory(body)),"Corpse failed to resume safely after support terrain loaded");}
         @Override public void close(){ForgeChunkManager.releaseTicket(ticket);}
@@ -216,6 +216,16 @@ final class ReportedIssueChecks {
             for(int i=0;i<100;i++)world.updateEntity(f.body);
             RuntimeChecks.require(!f.body.isEntityAlive() && inventory(f.body).isEmpty(),"Loaded real void behavior changed into a rescue feature");
         }
+    }
+    private static void unloadChunk(int x,int z) {
+        net.minecraft.world.gen.ChunkProviderServer provider=world.getChunkProvider();
+        provider.unload(world.getChunkFromChunkCoords(x,z));
+        // Each 1.10 provider tick saves/unloads at most 100 chunks. An integrated
+        // client can leave a larger queue when the test teleports its players.
+        int attempts=provider.getLoadedChunks().size()/100+2;
+        for(int i=0;i<attempts && provider.chunkExists(x,z);i++)provider.tick();
+        flushChunks();
+        RuntimeChecks.require(!provider.chunkExists(x,z),"Fixture chunk remained loaded after draining the unload queue");
     }
     private static void flushChunks() {
         // Reload only after the engine's queued region write has completed.
