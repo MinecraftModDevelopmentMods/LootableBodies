@@ -118,10 +118,22 @@ jobs:
           -Dorg.gradle.java.installations.auto-detect=false
           -Dorg.gradle.java.installations.auto-download=false
 
+      - name: Install legacy client display and audio support
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes x11-xserver-utils libgl1-mesa-dri libglu1-mesa libopenal1 pulseaudio
+          command -v xrandr
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=minecraft
+          echo "PULSE_SINK=minecraft" >> "$GITHUB_ENV"
+          echo "ALSOFT_DRIVERS=pulse" >> "$GITHUB_ENV"
+
       - name: Verify real graphical client and corpse GUI
         env:
           LIBGL_ALWAYS_SOFTWARE: 'true'
-        run: xvfb-run -a ./gradlew clientIntegrationTest preparePackagedIntegrationProbe exportRuntimeClasspath --no-daemon
+        run: >-
+          xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset'
+          sh -c 'xrandr --query && ./gradlew clientIntegrationTest preparePackagedIntegrationProbe exportRuntimeClasspath --no-daemon'
 
       - name: Verify exact packaged dedicated servers
         run: >-
@@ -143,7 +155,7 @@ jobs:
         env:
           LIBGL_ALWAYS_SOFTWARE: 'true'
         run: >-
-          xvfb-run -a python3 tools/verify_packaged_client.py --java "$JAVA_HOME_8_X64/bin/java"
+          xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 tools/verify_packaged_client.py --java "$JAVA_HOME_8_X64/bin/java"
           --forge-jar build/packaged-runtime/forge-distribution/forge-1.10.2-12.18.3.2511-universal.jar
           --output build/packaged-client --gradle-home "$HOME/.gradle"
 
@@ -151,7 +163,7 @@ jobs:
         env:
           LIBGL_ALWAYS_SOFTWARE: 'true'
         run: >-
-          xvfb-run -a python3 tools/verify_multiplayer.py --java "$JAVA_HOME_8_X64/bin/java"
+          xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 tools/verify_multiplayer.py --java "$JAVA_HOME_8_X64/bin/java"
           --forge-home build/packaged-runtime/forge-distribution --gradle-home "$HOME/.gradle"
           --output build/packaged-multiplayer
 
