@@ -78,6 +78,7 @@ tasks.withType(Javadoc).configureEach {
 tasks.withType(AbstractArchiveTask).configureEach {
     preserveFileTimestamps = false
     reproducibleFileOrder = true
+    filteringCharset = 'UTF-8'
 }
 ext.archiveTextPatterns = ['**/*.info', '**/*.java', '**/*.lang', '**/*.mcmeta', '**/*.html',
         '**/*.css', '**/*.js', '**/*.md', '**/*.txt', '**/package-list', '**/LICENSE', '**/LICENSE-CC0', '**/NOTICE']
@@ -183,6 +184,7 @@ ext.releaseJar = renamer.classes(tasks.named('jar', Jar)) {
     artifacts { add(name, releaseJar) }
 }
 tasks.named('assemble') { dependsOn releaseJar, 'sourcesJar', 'javadocJar' }
+tasks.named('test') { dependsOn 'jar', 'sourcesJar' }
 
 apply from: 'gradle/ide.gradle'
 apply from: 'gradle/audit.gradle'

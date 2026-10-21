@@ -35,6 +35,10 @@ ext.auditReleaseArchives = { File directory ->
                     int major = ((bytes[6] & 255) << 8) | (bytes[7] & 255)
                     if (major != 52) throw new GradleException("${path} is class major ${major}")
                 }
+                if (path.endsWith('.lang')) {
+                    java.nio.charset.StandardCharsets.UTF_8.newDecoder().decode(
+                            java.nio.ByteBuffer.wrap(zip.getInputStream(entry).bytes))
+                }
                 String content = new String(zip.getInputStream(entry).bytes, 'ISO-8859-1')
                 if (content =~ /(?i)([a-z]:[\\\/]users[\\\/]|[a-z]:[\\\/]LootableBodies|\/home\/runner|\/Users\/|gh[pousr]_[A-Za-z0-9]{20}|-----BEGIN .*PRIVATE KEY-----)/)
                     throw new GradleException("Private path/credential in ${name}: ${path}")

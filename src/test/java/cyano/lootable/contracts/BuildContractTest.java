@@ -10,6 +10,31 @@ class BuildContractTest {
     private String text(String path) throws Exception {
         return new String(Files.readAllBytes(Paths.get(path)), StandardCharsets.UTF_8);
     }
+    @Test void packagedTranslationsRetainTheirUtf8Bytes() throws Exception {
+        Properties release = new Properties();
+        try (java.io.InputStream input = Files.newInputStream(Paths.get("gradle.properties"))) { release.load(input); }
+        String prefix = "LootableBodies-" + release.getProperty("mod_version");
+        for (String archive : Arrays.asList("build/libs-dev/" + prefix + "-deobf.jar", "build/libs/" + prefix + "-sources.jar")) {
+            try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(archive)) {
+                java.util.Enumeration<? extends java.util.zip.ZipEntry> entries = zip.entries();
+                int locales = 0;
+                while (entries.hasMoreElements()) {
+                    java.util.zip.ZipEntry entry = entries.nextElement();
+                    if (!entry.getName().endsWith(".lang")) continue;
+                    byte[] bytes;
+                    try (java.io.InputStream input = zip.getInputStream(entry); java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+                        byte[] buffer = new byte[1024]; int count;
+                        while ((count = input.read(buffer)) != -1) out.write(buffer, 0, count);
+                        bytes = out.toByteArray();
+                    }
+                    StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes));
+                    assertArrayEquals(Files.readAllBytes(Paths.get("build/resources/main", entry.getName())), bytes, archive + ": " + entry.getName());
+                    locales++;
+                }
+                assertEquals(14, locales, archive);
+            }
+        }
+    }
     @Test void originalIdentityAndDeclaredReleaseRemainConsistent() throws Exception {
         String source = text("src/main/java/cyano/lootable/LootableBodies.java");
         assertTrue(source.contains("MODID = \"lootablebodies\""));

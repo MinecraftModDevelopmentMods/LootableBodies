@@ -9,6 +9,7 @@ Updated the Minecraft 1.10.2 build and release setup.
 - Failed player skin lookups use a default skin without blocking the game.
 - Added a Config button on the Mods list. Appearance changes apply locally;
   world and server rules take effect after restarting Minecraft.
+- Kept translations intact when building jars on Windows.
 
 Unreadable item and damaged field records stay with the corpse for recovery.
 Keep backups and keep using this maintained reader for affected saves; older
