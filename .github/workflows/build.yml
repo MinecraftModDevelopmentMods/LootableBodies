@@ -3,9 +3,11 @@ on:
   push:
     paths-ignore:
       - '.github/workflows/**'
+      - '**/*.md'
   pull_request:
     paths-ignore:
       - '.github/workflows/**'
+      - '**/*.md'
 
 jobs:
   validate:
