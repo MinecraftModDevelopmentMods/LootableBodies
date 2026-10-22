@@ -13,6 +13,28 @@ def source_files(world):
             if not name.startswith('data/lootablebodies-upgrade')}
 
 
+def inject_unsafe_journal(world, case):
+    if case not in ('damaged-index', 'blocked-journal'):
+        raise ValueError('Unknown abort fixture: ' + case)
+    world = world.resolve()
+    journal = world / 'data/lootablebodies-upgrade'
+    journal.parent.mkdir(exist_ok=True)
+    if journal.exists():
+        # This is the disposable world copy; retain its prior journal outside
+        # the world before injecting the deliberate fault. Never touch source.
+        saved = world.parent / 'original-journal'
+        if journal.is_symlink() or not journal.resolve().is_relative_to(world):
+            raise RuntimeError('Abort fixture journal is outside its disposable world')
+        if saved.parent.resolve() != world.parent or saved.exists():
+            raise RuntimeError('Abort fixture journal backup is not a new sibling')
+        journal.rename(saved)
+    if case == 'damaged-index':
+        journal.mkdir()
+        (journal / 'index.nbt').write_bytes(b'interrupted invalid index')
+    else:
+        journal.write_bytes(b'cannot create a journal directory here')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--java', type=Path, required=True)
@@ -33,13 +55,7 @@ def main():
         prepare(home, args.forge_home.resolve(), '1.12.2', candidate, probe)
         shutil.copytree(source, home / 'world')
         world = home / 'world'
-        journal = world / 'data/lootablebodies-upgrade'
-        journal.parent.mkdir(exist_ok=True)
-        if case == 'damaged-index':
-            journal.mkdir()
-            (journal / 'index.nbt').write_bytes(b'interrupted invalid index')
-        else:
-            journal.write_bytes(b'cannot create a journal directory here')
+        inject_unsafe_journal(world, case)
         before = source_files(world)
         log = home / 'abort.log'
         with log.open('w', encoding='utf-8') as output:
