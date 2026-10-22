@@ -104,6 +104,12 @@ jobs:
               matching = [check for check in checks if check['name'] == name]
               if not matching or max(matching, key=lambda c: c['id'])['conclusion'] != 'success':
                   raise SystemExit(f'The selected commit has no successful {name} check')
+          if minecraft == '1.11.2':
+              audits = json.loads(subprocess.check_output(['gh', 'api',
+                  f'repos/{repo}/actions/workflows/artifact-audit-1.11.yml/runs?event=workflow_run&per_page=100'], text=True))['workflow_runs']
+              matching = [run for run in audits if run['display_title'] == f'Audit 1.11.2 artifacts from {sha}']
+              if not matching or max(matching, key=lambda run: run['id'])['conclusion'] != 'success':
+                  raise SystemExit('The selected commit has no successful independent artifact audit')
           release = subprocess.run(['gh', 'api', f'repos/{repo}/releases/tags/{version}'], capture_output=True, text=True)
           if release.returncode == 0:
               raise SystemExit('This GitHub release already exists; inspect the completed publication before retrying')
