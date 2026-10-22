@@ -3,7 +3,7 @@ run-name: Audit 1.11.2 artifacts from ${{ github.event.workflow_run.head_sha }}
 
 on:
   workflow_run:
-    workflows: [LootableBodies 1.11 CI]
+    workflows: [LootableBodies 1.10 CI, LootableBodies 1.11 CI]
     types: [completed]
 
 permissions:
@@ -14,7 +14,9 @@ jobs:
   audit:
     # Pull-request merge trees are audited inside CI. Push artifacts use the
     # workflow run's exact head SHA, which is also their declared artifact name.
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    if: >-
+      github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' &&
+      (github.event.workflow_run.head_branch == 'master-1.11.2' || github.event.workflow_run.head_branch == '1.11.2-dev')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
