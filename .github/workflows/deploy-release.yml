@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: Complete Minecraft 1.10.2 version from gradle.properties, ending in 110021.
+        description: Complete version from gradle.properties, ending in 110021 or 111021.
         required: true
         type: string
       curseforge_release_level:
@@ -37,23 +37,35 @@ jobs:
     outputs:
       release_sha: ${{ steps.validate.outputs.release_sha }}
       release_version: ${{ steps.validate.outputs.release_version }}
+      minecraft_version: ${{ steps.target.outputs.minecraft_version }}
+      source_branch: ${{ steps.target.outputs.source_branch }}
     steps:
       - name: Require the MMD dispatcher and a supported target
+        id: target
         env:
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
           set -euo pipefail
           [[ "$GITHUB_REPOSITORY" == 'MinecraftModDevelopmentMods/LootableBodies' ]]
           [[ "$GITHUB_REF" == 'refs/heads/master-1.12' ]]
-          [[ "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.110021$ ]]
-      - name: Check out the maintained Minecraft 1.10.2 branch
+          [[ "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(110021|111021)$ ]]
+          case "$RELEASE_VERSION" in
+            *.110021) minecraft_version=1.10.2; source_branch=1.10.2 ;;
+            *.111021) minecraft_version=1.11.2; source_branch=1.11.2-dev ;;
+            *) exit 1 ;;
+          esac
+          echo "minecraft_version=$minecraft_version" >> "$GITHUB_OUTPUT"
+          echo "source_branch=$source_branch" >> "$GITHUB_OUTPUT"
+      - name: Check out the selected Minecraft branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: '1.10.2'
+          ref: ${{ steps.target.outputs.source_branch }}
           fetch-depth: 0
       - name: Validate identity, exact commit and successful checks
         id: validate
         env:
+          MINECRAFT_VERSION: ${{ steps.target.outputs.minecraft_version }}
+          SOURCE_BRANCH: ${{ steps.target.outputs.source_branch }}
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
@@ -63,21 +75,31 @@ jobs:
           from pathlib import Path
           values = dict(line.split('=', 1) for line in Path('gradle.properties').read_text().splitlines()
                         if line.strip() and not line.lstrip().startswith('#') and '=' in line)
-          expected = {'minecraft_version': '1.10.2', 'forge_version': '12.18.3.2511',
+          minecraft = os.environ['MINECRAFT_VERSION']
+          targets = {'1.10.2': ('1.10.2', '12.18.3.2511', '110021'),
+                     '1.11.2': ('1.11.2-dev', '13.20.1.2588', '111021')}
+          branch, forge, suffix = targets[minecraft]
+          if os.environ['SOURCE_BRANCH'] != branch:
+              raise SystemExit('The selected branch does not match its Minecraft version')
+          expected = {'minecraft_version': minecraft, 'forge_version': forge,
                       'loader_name': 'forge', 'loader_code': '1', 'java_version': '8',
                       'java_toolchain_version': '8.0.502+7', 'gradle_java_version': '17',
                       'mod_id': 'lootablebodies', 'mod_artifact': 'LootableBodies',
                       'mod_group': 'zone.moddev.mc.lootablebodies', 'mod_license': 'LGPL-2.1-only',
                       'curseforge_project_id': '240968'}
           if any(values.get(key) != value for key, value in expected.items()):
-              raise SystemExit('Release identity differs from the maintained Minecraft 1.10.2 build')
+              raise SystemExit('Release identity differs from the selected Minecraft build')
           version = os.environ['RELEASE_VERSION']
-          if version != values['mod_version'] or not re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.110021', version):
+          if version != values['mod_version'] or not re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.' + suffix, version):
               raise SystemExit('Requested version does not match the selected branch')
           sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           repo = os.environ['GITHUB_REPOSITORY']
           checks = json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/commits/{sha}/check-runs?per_page=100'], text=True))['check_runs']
           required = {'Cold Forge bootstrap', 'Build, test, and audit', 'Analyze Java', 'Validation'}
+          if minecraft == '1.11.2':
+              required.update(origin + ' / ' + stamps
+                              for origin in ['original-110', 'released-110', 'original-111', 'recovery-110']
+                              for stamps in ['normal', 'stamps'])
           for name in required:
               matching = [check for check in checks if check['name'] == name]
               if not matching or max(matching, key=lambda c: c['id'])['conclusion'] != 'success':
@@ -124,7 +146,9 @@ jobs:
           distribution: temurin
           java-version: '17.0.1+12'
       - name: Pin the production toolchain
-        run: echo "LOOTABLEBODIES_JAVA8_HOME=$JAVA_HOME_8_X64" >> "$GITHUB_ENV"
+        run: |
+          echo "LOOTABLEBODIES_JAVA8_HOME=$JAVA_HOME_8_X64" >> "$GITHUB_ENV"
+          echo "LOOTABLEBODIES_MAVENIZER_JAVA_HOME=$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
       - name: Build, test and audit the release
@@ -239,7 +263,9 @@ jobs:
           distribution: temurin
           java-version: '17.0.1+12'
       - name: Pin the production toolchain
-        run: echo "LOOTABLEBODIES_JAVA8_HOME=$JAVA_HOME_8_X64" >> "$GITHUB_ENV"
+        run: |
+          echo "LOOTABLEBODIES_JAVA8_HOME=$JAVA_HOME_8_X64" >> "$GITHUB_ENV"
+          echo "LOOTABLEBODIES_MAVENIZER_JAVA_HOME=$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
       - name: Download the immutable release bundle
@@ -282,12 +308,12 @@ jobs:
         with:
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
           curseforge-id: '240968'
-          name: Lootable Bodies ${{ needs.preflight.outputs.release_version }} for Minecraft 1.10.2 (Forge)
+          name: Lootable Bodies ${{ needs.preflight.outputs.release_version }} for Minecraft ${{ needs.preflight.outputs.minecraft_version }} (Forge)
           version: ${{ needs.preflight.outputs.release_version }}
           version-type: ${{ inputs.curseforge_release_level }}
           changelog-file: ${{ runner.temp }}/release-input/CHANGELOG.txt
           loaders: forge
-          game-versions: '1.10.2'
+          game-versions: ${{ needs.preflight.outputs.minecraft_version }}
           game-version-filter: none
           environment: client | server
           java: Java 8
@@ -321,7 +347,7 @@ jobs:
           github-commitish: ${{ needs.preflight.outputs.release_sha }}
           github-draft: false
           github-prerelease: false
-          name: Lootable Bodies ${{ needs.preflight.outputs.release_version }} for Minecraft 1.10.2 (Forge)
+          name: Lootable Bodies ${{ needs.preflight.outputs.release_version }} for Minecraft ${{ needs.preflight.outputs.minecraft_version }} (Forge)
           version: ${{ needs.preflight.outputs.release_version }}
           version-type: release
           changelog-file: ${{ runner.temp }}/release-input/CHANGELOG.txt

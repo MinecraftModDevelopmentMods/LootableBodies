@@ -3,12 +3,15 @@
 When a player dies, a corpse holds their dropped items. Right-click the corpse
 to recover them.
 
-The maintained Minecraft 1.10.2 version is on the
-[1.10.2 branch](https://github.com/MinecraftModDevelopmentMods/LootableBodies/tree/1.10.2).
-Its README covers installation, the Config screen and saved-item recovery.
+The maintained versions are:
+
+- [Minecraft 1.10.2](https://github.com/MinecraftModDevelopmentMods/LootableBodies/tree/1.10.2)
+- [Minecraft 1.11.2](https://github.com/MinecraftModDevelopmentMods/LootableBodies/tree/1.11.2-dev)
+
+Each version's README covers installation, settings and saved-item recovery.
 
 This default branch contains the older Minecraft 1.12.2 source. It has not
-received the maintained 1.10.2 build and inventory updates. It requires Forge
+received the maintained build and inventory updates. It requires Forge
 1.12.2-14.23.4.2705 or later.
 
 Download the file for your Minecraft version from
