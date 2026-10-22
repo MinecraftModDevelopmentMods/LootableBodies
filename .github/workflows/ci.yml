@@ -126,9 +126,10 @@ jobs:
           -Dorg.gradle.java.installations.auto-download=false
 
       - name: Install legacy client display and audio support
+        timeout-minutes: 10
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes x11-xserver-utils libgl1-mesa-dri libglu1-mesa libopenal1 pulseaudio
+          sudo apt-get update -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+          sudo apt-get install --yes --no-install-recommends -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 x11-xserver-utils libgl1-mesa-dri libglu1-mesa libopenal1 pulseaudio pulseaudio-utils
           command -v xrandr
           pulseaudio --start --exit-idle-time=-1
           pactl load-module module-null-sink sink_name=minecraft
