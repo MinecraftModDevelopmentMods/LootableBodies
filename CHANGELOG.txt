@@ -1,0 +1,15 @@
+2.4.2.111021 - Minecraft 1.11.2, Forge
+
+- Fixed item loss and duplication during death, corpse inventory transfers,
+  hotbar swaps, dragging and cancelled drops.
+- Added protection for corpses when upgrading 1.10.2 and 1.11.2 worlds,
+  including bodies in chunks you visit later.
+- Kept unreadable item records for recovery when missing mods return.
+- Corpses wait for unloaded terrain and only move out of walls when there is
+  enough clear, loaded space for the whole body.
+- Added a Config button on the Mods list. Appearance changes apply straight
+  away; world and server rules take effect after restarting Minecraft.
+- Fixed untranslated names on nameless corpses and their spawn eggs.
+
+Existing settings and defaults are unchanged. Back up your world before
+upgrading, including its data folder. Downgrading an upgraded world is unsupported.

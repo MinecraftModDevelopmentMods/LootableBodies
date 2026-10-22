@@ -1,8 +1,5 @@
 package cyano.lootable.graphics;
 
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
-
 import cyano.lootable.entities.EntityLootableBody;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
@@ -12,10 +9,16 @@ import net.minecraftforge.fml.common.network.IGuiHandler;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
 /**
  * Created by Chris on 4/12/2016.
  */
 public class GUIHandler implements IGuiHandler {
+	private static final AtomicInteger guiIDCounter = new AtomicInteger(1);
+
 	private GUIHandler() {
 		// using singleton instantiation
 	}

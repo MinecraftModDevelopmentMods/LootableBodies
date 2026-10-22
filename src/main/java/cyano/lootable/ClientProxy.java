@@ -14,6 +14,7 @@ public class ClientProxy extends Proxy{
     @Override
     public void preInit(FMLPreInitializationEvent e) {
         super.preInit(e);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new cyano.lootable.graphics.ClientConfigChanges());
         // client-only pre-init code
 		RenderingRegistry.registerEntityRenderingHandler(EntityLootableBody.class, new IRenderFactory<EntityLootableBody>() {
 			@Override
