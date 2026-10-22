@@ -128,6 +128,9 @@ jobs:
       - name: Install legacy client display and audio support
         timeout-minutes: 10
         run: |
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            echo 'https://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
+          fi
           sudo apt-get update -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
           sudo apt-get install --yes --no-install-recommends -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 x11-xserver-utils libgl1-mesa-dri libglu1-mesa libopenal1 pulseaudio pulseaudio-utils
           command -v xrandr
