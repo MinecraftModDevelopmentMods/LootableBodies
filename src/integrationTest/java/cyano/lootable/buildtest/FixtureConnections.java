@@ -12,6 +12,9 @@ import net.minecraftforge.fml.client.FMLClientHandler;
 /** Uses ordinary Forge connection setup; retries only a runner-confirmed pre-login encoding failure. */
 final class FixtureConnections {
     private FixtureConnections() {}
+    static boolean ready(String role) {
+        return "A".equals(role)||new File(System.getProperty("lootablebodies.multiplayer.sync"),"client-A-joined").isFile();
+    }
     static void connect(Minecraft mc) {
         String address="127.0.0.1:"+Integer.parseInt(System.getProperty("lootablebodies.multiplayer.port"));
         FMLClientHandler.instance().connectToServer(new GuiMainMenu(),new ServerData("Disposable check",address,false));

@@ -304,6 +304,8 @@ jobs:
             build/packaged-client/nbt-client-checks.txt
             build/packaged-client/connected-checks.txt
             build/packaged-client/screenshots/*.png
+            build/packaged-*/**/*.login-retries.json
+            build/packaged-*/sync/login-*
             build/packaged-multiplayer/**/*.log
             build/packaged-multiplayer/**/crash-reports/**
             build/packaged-multiplayer/clientA/screenshots/*.png

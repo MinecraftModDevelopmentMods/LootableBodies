@@ -36,7 +36,7 @@ final class MultiplayerClientChecks {
             RuntimeChecks.require(++ticks<6000,"Multiplayer client timeout role="+role+" phase="+lastPhase);
             if(new File(MultiplayerChecks.sync(),"abort").exists())throw new AssertionError("Multiplayer runner abort");
             if(FixtureConnections.retry(mc,role))connecting=false;
-            if(!connecting && mc.currentScreen instanceof GuiMainMenu){
+            if(!connecting && FixtureConnections.ready(role) && mc.currentScreen instanceof GuiMainMenu){
                 connecting=true;mc.gameSettings.pauseOnLostFocus=false;mc.gameSettings.limitFramerate=30;mc.gameSettings.renderDistanceChunks=4;
                 FixtureConnections.connect(mc);
             }

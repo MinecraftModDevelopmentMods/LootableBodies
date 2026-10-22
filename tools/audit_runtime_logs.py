@@ -80,7 +80,7 @@ def audit(path, development=False, upgrade=False, fixture_logins=False):
             failures.append(line)
     if not text.strip(): failures.append('Empty runtime log')
     if failures: raise RuntimeError(str(path)+'\n'+'\n'.join(failures))
-    return {'path':str(path),'lines':len(text.splitlines()),'expected_platform_errors':sum(
+    return {'path':str(path),'lines':len(text.splitlines()),'recovered_forge_pre_login_failures':len(login_lines),'expected_platform_errors':sum(
         1 for line in text.splitlines() if re.search(r'/ERROR\]|/FATAL\]',line))}
 
 

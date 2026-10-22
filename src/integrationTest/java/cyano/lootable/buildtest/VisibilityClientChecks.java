@@ -39,7 +39,7 @@ final class VisibilityClientChecks {
             int n=Integer.parseInt(new String(Files.readAllBytes(VisibilityChecks.file("phase").toPath()),StandardCharsets.UTF_8).trim());
             if(n!=phase){phase=n;frames=0;guiFrames=0;respawnSent=false;rendered.clear();System.out.println("VISIBILITY_CLIENT_PHASE "+role+" "+phase);}frames++;
             if(FixtureConnections.retry(mc,role))connecting=false;
-            if(!connecting && mc.world==null && mc.currentScreen instanceof GuiMainMenu && (phase==0 || phase==9 || phase==11)) {
+            if(!connecting && FixtureConnections.ready(role) && mc.world==null && mc.currentScreen instanceof GuiMainMenu && (phase==0 || phase==9 || phase==11)) {
                 connecting=true;mc.gameSettings.pauseOnLostFocus=false;mc.gameSettings.limitFramerate=30;mc.gameSettings.renderDistanceChunks=4;
                 FixtureConnections.connect(mc);
             }

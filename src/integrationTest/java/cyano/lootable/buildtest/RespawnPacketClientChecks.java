@@ -77,7 +77,7 @@ final class RespawnPacketClientChecks {
             if(nextIndex!=index||nextPhase!=phase){index=nextIndex;phase=nextPhase;frames=0;guiFrames=0;System.out.println("RESPAWN_CLIENT_PHASE "+role+" "+index+" "+phase);}
             uuid=state[2].equals("none")?null:UUID.fromString(state[2]);entityId=Integer.parseInt(state[3]);frames++;
             if(FixtureConnections.retry(mc,role))connecting=false;
-            if(!connecting&&mc.currentScreen instanceof GuiMainMenu) {
+            if(!connecting&&FixtureConnections.ready(role)&&mc.currentScreen instanceof GuiMainMenu) {
                 connecting=true;mc.gameSettings.pauseOnLostFocus=false;mc.gameSettings.limitFramerate=30;mc.gameSettings.renderDistanceChunks=4;
                 FixtureConnections.connect(mc);
             }

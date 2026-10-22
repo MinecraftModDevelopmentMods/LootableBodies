@@ -71,7 +71,7 @@ def main():
             if processes['server'].poll() is not None or time.monotonic()>deadline: raise RuntimeError('Disposable server did not start')
             time.sleep(.2)
         monitor=LoginMonitor(root)
-        start_clients(start,processes,root,monitor);deadline=time.monotonic()+180
+        start_clients(start);deadline=time.monotonic()+180
         while any(p.poll() is None for p in processes.values()):
             monitor.poll()
             if any(p.poll() not in (None,0) for p in processes.values()): raise RuntimeError('Multiplayer process failed')

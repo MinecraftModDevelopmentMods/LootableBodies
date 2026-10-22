@@ -2,7 +2,6 @@
 import hashlib
 import json
 import re
-import time
 from pathlib import Path
 
 FAILURE = re.compile(r"^\[\d{2}:\d{2}:\d{2}\] \[Server thread/INFO\] \[(?:minecraft/NetHandlerPlayServer|net\.minecraft\.network\.NetHandlerPlayServer)\]: Container([AB]) lost connection: Internal Exception: io\.netty\.handler\.codec\.EncoderException: java\.io\.IOException: Can't serialize unregistered packet$")
@@ -16,6 +15,9 @@ class LoginMonitor:
         text=(self.home/'server.log').read_text(encoding='utf-8',errors='replace')
         lines=text[:text.rfind('\n')+1].splitlines()
         for line in lines[self.seen:]:
+            joined=JOIN.fullmatch(line)
+            if joined and joined[1]=='A' and joined[2]=='joined':
+                (self.home/'sync/client-A-joined').touch()
             match=FAILURE.fullmatch(line)
             if match:
                 role=match[1];self.counts[role]+=1
@@ -25,15 +27,10 @@ class LoginMonitor:
                 raise RuntimeError('Unrecognised connection failure: '+line)
         self.seen=len(lines)
 
-def start_clients(start, processes, home, monitor):
-    """Keep the shared Forge handshake channel out of concurrent initial login."""
-    start('clientA');deadline=time.monotonic()+75
-    while 'ContainerA joined the game' not in (Path(home)/'server.log').read_text(errors='replace'):
-        monitor.poll()
-        if any(p.poll() is not None for p in processes.values()) or time.monotonic()>deadline:
-            raise RuntimeError('First client did not join')
-        time.sleep(.2)
-    start('clientB')
+def start_clients(start):
+    """Boot both clients together; the client B controller waits for A's join marker."""
+    start('clientA');start('clientB')
+
 
 def receipt_lines(path, text):
     receipt=path.with_name(path.name+'.login-retries.json')

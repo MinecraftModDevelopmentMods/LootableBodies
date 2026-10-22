@@ -65,7 +65,7 @@ def main():
             if processes['server'].poll() is not None or time.monotonic()>deadline: raise RuntimeError('Server did not start')
             time.sleep(.2)
         monitor=LoginMonitor(home)
-        start_clients(start,processes,home,monitor);deadline=time.monotonic()+650
+        start_clients(start);deadline=time.monotonic()+650
         while any(process.poll() is None for process in processes.values()):
             monitor.poll()
             if processes['server'].poll() is not None and not (shared/(args.mode+'.pass')).is_file():

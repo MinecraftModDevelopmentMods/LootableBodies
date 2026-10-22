@@ -2,7 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from fixture_login import LoginMonitor, write_receipts, archive_live_logs
+from fixture_login import LoginMonitor, write_receipts, archive_live_logs, start_clients
 from audit_runtime_logs import audit
 
 FAILURE = "[12:00:00] [Server thread/INFO] [minecraft/NetHandlerPlayServer]: ContainerA lost connection: Internal Exception: io.netty.handler.codec.EncoderException: java.io.IOException: Can't serialize unregistered packet\n"
@@ -14,6 +14,14 @@ class FixtureLoginTests(unittest.TestCase):
         self.root=Path(self.temp.name);(self.root/'sync').mkdir()
         self.log=self.root/'server.log';self.log.write_text('')
         self.monitor=LoginMonitor(self.root)
+    def test_clients_boot_together_but_only_a_join_opens_b_connection_gate(self):
+        starts=[]
+        start_clients(starts.append)
+        self.assertEqual(starts,['clientA','clientB'])
+        self.assertFalse((self.root/'sync/client-A-joined').exists())
+        self.log.write_text(JOIN);self.monitor.poll()
+        self.assertTrue((self.root/'sync/client-A-joined').is_file())
+
     def test_live_log_receipts_survive_the_cold_reload(self):
         self.log.write_text(FAILURE+JOIN);self.monitor.poll()
         (self.root/'sync/login-retried-A').write_text('1')
