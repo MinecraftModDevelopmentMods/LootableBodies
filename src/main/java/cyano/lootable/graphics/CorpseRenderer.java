@@ -1,13 +1,7 @@
 package cyano.lootable.graphics;
 
-import java.util.Map;
-
-import org.apache.logging.log4j.Level;
-
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.minecraft.MinecraftProfileTexture;
-import com.mojang.authlib.minecraft.MinecraftProfileTexture.Type;
-
 import cyano.lootable.LootableBodies;
 import cyano.lootable.entities.EntityLootableBody;
 import net.minecraft.client.Minecraft;
@@ -16,6 +10,8 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.entity.RenderLivingBase;
 import net.minecraft.client.renderer.entity.RenderManager;
+import net.minecraft.client.renderer.entity.RenderPigZombie;
+import net.minecraft.client.renderer.entity.RenderPlayer;
 import net.minecraft.client.renderer.entity.layers.LayerArrow;
 import net.minecraft.client.renderer.entity.layers.LayerBipedArmor;
 import net.minecraft.client.renderer.entity.layers.LayerCustomHead;
@@ -25,6 +21,9 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fml.common.FMLLog;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
+import org.apache.logging.log4j.Level;
+
+import java.util.Map;
 
 /**
  * Created by Chris on 4/10/2016.
@@ -48,6 +47,8 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 		this.addLayer(new LayerHeldItem(this));
 		this.addLayer(new LayerArrow(this));
 		this.addLayer(new LayerCustomHead(this.getMainModel().bipedHead));
+		RenderPlayer k;
+		RenderPigZombie j;
 	}
 
 	public ModelPlayer getMainModel()
@@ -80,13 +81,21 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 	}
 
 	public static ResourceLocation getSkin(GameProfile profile) {
+		ResourceLocation fallback = profile == null || profile.getId() == null
+				? DefaultPlayerSkin.getDefaultSkinLegacy() : DefaultPlayerSkin.getDefaultSkin(profile.getId());
+		if(profile == null || profile.getId() == null) return fallback;
+		try {
 		final Minecraft minecraft = Minecraft.getMinecraft();
-		final Map<Type, MinecraftProfileTexture> loadSkinFromCache = minecraft.getSkinManager().loadSkinFromCache(profile); // returned map may or may not be typed
+		final Map loadSkinFromCache = minecraft.getSkinManager().loadSkinFromCache(profile); // returned map may or may not be typed
 		if (loadSkinFromCache.containsKey(MinecraftProfileTexture.Type.SKIN)) {
 			ResourceLocation skin = minecraft.getSkinManager().loadSkin((MinecraftProfileTexture) loadSkinFromCache.get(MinecraftProfileTexture.Type.SKIN), MinecraftProfileTexture.Type.SKIN);
 			return skin;
 		} else {
-			return DefaultPlayerSkin.getDefaultSkin(profile.getId());
+			return fallback;
+		}
+		} catch(RuntimeException unavailable) {
+			// A service/cache failure must not abort renderModel and hide the body.
+			return fallback;
 		}
 	}
 
@@ -183,10 +192,9 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 	protected void renderLivingAt(EntityLootableBody e, double x, double y, double z)
 	{
 		super.renderLivingAt(e,x,y,z); // translation
-		GlStateManager.rotate(90,1F,0F,0F); // lying down
-		GlStateManager.rotate(180,0F,1F,0F); //face down
+		GlStateManager.rotate(90,1F,0F,0F); // face-down
 		GlStateManager.rotate(e.getRotation(),0F,0F,1F); // turn
-		GlStateManager.translate(0F, -0.85F, 0.125F); // center
+		GlStateManager.translate(0F, -0.85F, -0.125F); // center
 	}
 
 }
