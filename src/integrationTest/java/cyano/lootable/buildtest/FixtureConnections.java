@@ -17,6 +17,7 @@ final class FixtureConnections {
     }
     static void connect(Minecraft mc) {
         String address="127.0.0.1:"+Integer.parseInt(System.getProperty("lootablebodies.multiplayer.port"));
+        FMLClientHandler.instance().setupServerList();
         FMLClientHandler.instance().connectToServer(new GuiMainMenu(),new ServerData("Disposable check",address,false));
     }
     static boolean retry(Minecraft mc,String role) throws Exception {
