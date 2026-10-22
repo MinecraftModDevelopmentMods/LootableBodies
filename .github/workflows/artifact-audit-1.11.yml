@@ -1,0 +1,62 @@
+name: Audit LootableBodies 1.11 artifacts
+run-name: Audit 1.11.2 artifacts from ${{ github.event.workflow_run.head_sha }}
+
+on:
+  workflow_run:
+    workflows: [LootableBodies 1.11 CI]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    # Pull-request merge trees are audited inside CI. Push artifacts use the
+    # workflow run's exact head SHA, which is also their declared artifact name.
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '25.0.3+9.0.LTS'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '8.0.502+7'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17.0.1+12'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: LootableBodies-1.11.2-${{ github.event.workflow_run.head_sha }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: downloaded
+      - name: Require exact inputs and assemble an immutable audit bundle
+        run: |
+          set -euo pipefail
+          mkdir audited
+          for name in LootableBodies-2.4.2.111021.jar LootableBodies-2.4.2.111021-sources.jar LootableBodies-2.4.2.111021-javadoc.jar; do
+            test -s "downloaded/build/libs/$name"
+            cp "downloaded/build/libs/$name" audited/
+          done
+          test -s downloaded/build/release/SHA256SUMS
+          test -s downloaded/build/publications/mavenJava/pom-default.xml
+          test -s downloaded/CHANGELOG.txt
+          cp downloaded/build/release/SHA256SUMS audited/
+          cp downloaded/build/publications/mavenJava/pom-default.xml audited/LootableBodies-2.4.2.111021.pom
+          cp downloaded/CHANGELOG.txt audited/
+      - name: Audit original bytes without recompiling the jars
+        env:
+          LOOTABLEBODIES_JAVA8_HOME: ${{ env.JAVA_HOME_8_X64 }}
+          LOOTABLEBODIES_MAVENIZER_JAVA_HOME: ${{ env.JAVA_HOME_25_X64 }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew verifyPreparedReleaseArtifacts -PpreparedReleaseDir=audited --no-daemon
