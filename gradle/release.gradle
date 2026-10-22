@@ -1,0 +1,181 @@
+import groovy.xml.XmlSlurper
+import org.gradle.api.publish.maven.tasks.AbstractPublishToMaven
+
+def expectedIdentity = [
+        mod_id: 'lootablebodies', mod_artifact: 'LootableBodies',
+        mod_group: 'zone.moddev.mc.lootablebodies', mod_vendor: 'Cyanobacterium',
+        mod_name: "DrCyano's Lootable Bodies", mod_authors: 'Cyanobacterium,SkyBlade1978',
+        minecraft_version: '1.12.2', forge_version: '14.23.5.2859',
+        mapping_channel: 'stable', mapping_version: '39-1.12',
+        loader_name: 'forge', loader_code: '1', curseforge_project_id: '240968',
+        java_version: '8', java_toolchain_version: '8.0.502+7', gradle_java_version: '17',
+        mod_license: 'LGPL-2.1-only', mod_license_name: 'GNU Lesser General Public License, Version 2.1',
+        mod_license_url: 'https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt',
+        mod_url: 'https://github.com/MinecraftModDevelopmentMods/LootableBodies',
+        mod_scm_connection: 'scm:git:https://github.com/MinecraftModDevelopmentMods/LootableBodies.git',
+        mod_scm_developer_connection: 'scm:git:ssh://git@github.com/MinecraftModDevelopmentMods/LootableBodies.git'
+]
+expectedIdentity.each { key, value ->
+    if (project.findProperty(key)?.toString() != value)
+        throw new GradleException("Release identity mismatch: ${key} must be ${value}")
+}
+def versionParts = project.version.toString().split('\\.', -1)
+def minecraftParts = project.minecraft_version.toString().split('\\.')
+String target = minecraftParts[0] + minecraftParts[1].padLeft(2, '0') +
+        (minecraftParts.length == 3 ? minecraftParts[2] : '0').padLeft(2, '0') + project.loader_code
+if (versionParts.length != 4 || !versionParts.every { it ==~ /(?:0|[1-9][0-9]*)/ } || versionParts[3] != target)
+    throw new GradleException("mod_version must use Major.Minor.Bug.${target} for Minecraft ${minecraft_version} Forge")
+ext.functional_version = versionParts[0..2].join('.')
+ext.release_tag = project.version.toString()
+ext.display_version = project.version.toString()
+
+def preparedReleaseDir = providers.gradleProperty('preparedReleaseDir')
+def generatedPom = layout.buildDirectory.file('publications/mavenJava/pom-default.xml')
+
+tasks.register('verifyReleaseConfiguration') {
+    group = 'verification'
+    doLast {
+        String source = file('src/main/java/cyano/lootable/LootableBodies.java').getText('UTF-8')
+        if (!source.contains("VERSION = \"${project.version}\"") || !source.contains('MODID = "lootablebodies"') ||
+                !source.contains('acceptedMinecraftVersions = "[1.12.2]"') || !source.contains('String idName = "Corpse"'))
+            throw new GradleException('Java release version or persistent identity differs from release metadata')
+        if (!file('README.md').getText('UTF-8').contains(releaseNames[0]) ||
+                !file('CHANGELOG.txt').getText('UTF-8').contains(project.version.toString()))
+            throw new GradleException('Release documentation does not match the declared artifact/version')
+        if (!file('LICENSE').getText('UTF-8').contains('Version 2.1, February 1999') ||
+                !file('LICENSE-CC0').getText('UTF-8').startsWith('CC0 1.0 Universal'))
+            throw new GradleException('Maintained LGPL licence or original CC0 notice is missing')
+    }
+}
+tasks.withType(JavaCompile).configureEach { dependsOn 'verifyReleaseConfiguration' }
+tasks.named('processResources') { dependsOn 'verifyReleaseConfiguration' }
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            groupId = project.mod_group
+            artifactId = project.mod_artifact
+            version = project.version.toString()
+            if (preparedReleaseDir.isPresent()) {
+                artifact(new File(file(preparedReleaseDir.get()), releaseNames[0]))
+                artifact(new File(file(preparedReleaseDir.get()), releaseNames[1])) { classifier = 'sources' }
+                artifact(new File(file(preparedReleaseDir.get()), releaseNames[2])) { classifier = 'javadoc' }
+            } else {
+                artifact(releaseJar)
+                artifact(tasks.named('sourcesJar'))
+                artifact(tasks.named('javadocJar'))
+            }
+            pom {
+                name = project.mod_name
+                description = project.mod_description
+                url = project.mod_url
+                licenses { license { name = project.mod_license_name; url = project.mod_license_url; distribution = 'repo' } }
+                developers {
+                    developer { id = 'cyanobacterium'; name = 'Cyanobacterium (DrCyano / Synechocystis)' }
+                    developer { id = 'SkyBlade1978'; name = 'SkyBlade1978'; url = 'https://github.com/SkyBlade1978' }
+                }
+                scm {
+                    connection = project.mod_scm_connection
+                    developerConnection = project.mod_scm_developer_connection
+                    url = project.mod_url
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = 'release'
+            url = uri(providers.environmentVariable('MAVEN_UPLOAD_URL').getOrElse('https://invalid.invalid/publication-disabled'))
+            credentials {
+                username = providers.environmentVariable('MAVEN_UPLOAD_USERNAME').getOrElse('')
+                password = providers.environmentVariable('MAVEN_UPLOAD_PASSWORD').getOrElse('')
+            }
+        }
+    }
+}
+
+tasks.register('verifyMavenCoordinates') {
+    group = 'verification'
+    dependsOn 'generatePomFileForMavenJavaPublication', 'verifyReleaseConfiguration'
+    doLast {
+        def pom = new XmlSlurper(false, false).parse(generatedPom.get().asFile)
+        if ([pom.groupId.text(), pom.artifactId.text(), pom.version.text()] !=
+                [project.mod_group, project.mod_artifact, project.version.toString()] ||
+                pom.name.text() != project.mod_name || pom.url.text() != project.mod_url ||
+                pom.licenses.license.size() != 1 || pom.licenses.license.name.text() != project.mod_license_name ||
+                pom.licenses.license.url.text() != project.mod_license_url ||
+                pom.scm.connection.text() != project.mod_scm_connection ||
+                pom.scm.developerConnection.text() != project.mod_scm_developer_connection ||
+                pom.scm.url.text() != project.mod_url || pom.dependencies.dependency.size() != 0 ||
+                !pom.developers.developer.name.text().contains('Cyanobacterium'))
+            throw new GradleException('Generated Maven POM does not match the release identity/licence')
+        def declared = publishing.publications.mavenJava.artifacts.collect {
+            [it.extension, it.classifier ?: '', it.file.name]
+        }.sort { it[1] }
+        def expected = [['jar', '', releaseNames[0]], ['jar', 'sources', releaseNames[1]],
+                        ['jar', 'javadoc', releaseNames[2]]].sort { it[1] }
+        if (declared != expected) throw new GradleException('Maven must contain exactly runtime, sources and Javadocs')
+    }
+}
+tasks.withType(Test).configureEach { dependsOn 'verifyMavenCoordinates' }
+tasks.named('check') { dependsOn 'verifyMavenCoordinates', 'verifyReleaseConfiguration' }
+
+tasks.register('prepareReleaseBundle', Sync) {
+    group = 'build'
+    description = 'Prepares the audited local jars, POM, checksums and changelog without publishing.'
+    dependsOn 'writeReleaseChecksums', 'verifyMavenCoordinates'
+    from(layout.buildDirectory.dir('libs')) { include releaseNames }
+    from(generatedPom) { rename { releasePomName } }
+    from(layout.buildDirectory.file('release/SHA256SUMS'))
+    from('CHANGELOG.txt')
+    into layout.buildDirectory.dir('release/bundle')
+}
+tasks.register('verifyPreparedReleaseArtifacts') {
+    group = 'verification'
+    description = 'Checks an immutable prepared bundle without recompiling its jars.'
+    dependsOn 'verifyMavenCoordinates'
+    doLast {
+        if (!preparedReleaseDir.isPresent()) throw new GradleException('preparedReleaseDir is required')
+        File prepared = file(preparedReleaseDir.get())
+        Set<String> expected = (releaseNames + [releasePomName, 'SHA256SUMS', 'CHANGELOG.txt']) as Set
+        Set<String> actual = (prepared.listFiles() ?: [] as File[])*.name as Set
+        if (!prepared.isDirectory() || actual != expected)
+            throw new GradleException('Prepared release must contain exactly the declared jars, POM, checksums and changelog')
+        auditReleaseArchives(prepared)
+        List<String> sums = releaseNames.collect { "${releaseDigest(new File(prepared, it))}  ${it}".toString() }.sort()
+        if (new File(prepared, 'SHA256SUMS').readLines('UTF-8').sort() != sums)
+            throw new GradleException('Prepared release checksums do not match the immutable jars')
+        if (!Arrays.equals(new File(prepared, releasePomName).bytes, generatedPom.get().asFile.bytes))
+            throw new GradleException('Prepared release POM differs from the configured release metadata')
+        if (!Arrays.equals(new File(prepared, 'CHANGELOG.txt').bytes, file('CHANGELOG.txt').bytes))
+            throw new GradleException('Prepared release changelog differs from the reviewed source')
+    }
+}
+
+// Only the confirmed MMD release workflow may upload an audited prepared bundle.
+gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.any { it instanceof AbstractPublishToMaven || it.name in ['publish', 'publishToMavenLocal'] }) {
+        if (graph.allTasks.any { it.name == 'publishToMavenLocal' || it.class.name.contains('PublishToMavenLocal') } ||
+                System.getenv('GITHUB_ACTIONS') != 'true' ||
+                System.getenv('GITHUB_REPOSITORY') != 'MinecraftModDevelopmentMods/LootableBodies' ||
+                System.getenv('LOOTABLEBODIES_RELEASE_VERSION') != project.version.toString() ||
+                !(System.getenv('GITHUB_RUN_ID') ==~ /[0-9]+/) || !preparedReleaseDir.isPresent())
+            throw new GradleException('Publication is disabled outside the confirmed MMD release workflow')
+    }
+}
+tasks.register('validateMavenRelease') {
+    doLast {
+        def expectedSha = System.getenv('LOOTABLEBODIES_RELEASE_SHA') ?: ''
+        def gitHead = providers.exec { commandLine('git', 'rev-parse', 'HEAD') }
+        def actualSha = gitHead.standardOutput.asText.get().trim()
+        if (!expectedSha.matches('[a-f0-9]{40}') || actualSha != expectedSha)
+            throw new GradleException('The publication checkout does not match the confirmed release commit')
+        def uploadUrl = System.getenv('MAVEN_UPLOAD_URL') ?: ''
+        if (!uploadUrl.matches('https://[^/ ]+(/.*)?') || uploadUrl.startsWith('https://invalid.invalid') ||
+                !System.getenv('MAVEN_UPLOAD_USERNAME') || !System.getenv('MAVEN_UPLOAD_PASSWORD'))
+            throw new GradleException('A remote HTTPS Maven repository and release credentials are required')
+    }
+}
+tasks.withType(AbstractPublishToMaven).configureEach {
+    dependsOn 'validateMavenRelease', 'verifyPreparedReleaseArtifacts'
+}

@@ -1,36 +1,336 @@
-name: "Validate Build"
+name: LootableBodies 1.12 CI
+
 on:
   push:
-    paths-ignore:
-      - '.github/workflows/**'
-      - '.github/scripts/**'
-      - '**/*.md'
+    branches:
+      - master-1.12.2
+      - master-1.12
+      - 'feature/**'
   pull_request:
-    paths-ignore:
-      - '.github/workflows/**'
-      - '.github/scripts/**'
-      - '**/*.md'
+    branches:
+      - master-1.12.2
+      - master-1.12
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lootablebodies-1.12-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  validate:
+  cold-forge-bootstrap:
+    name: Cold Forge bootstrap
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install pinned Java 25 ForgeGradle Mavenizer runtime
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '25.0.3+9.0.LTS'
+
+      - name: Install pinned Java 8 compilation toolchain
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '8.0.502+7'
+
+      - name: Install pinned Java 17 Gradle runtime
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17.0.1+12'
+
+      - name: Bootstrap Forge from an empty cache
+        env:
+          GRADLE_USER_HOME: ${{ runner.temp }}/lootablebodies-cold-gradle
+          LOOTABLEBODIES_JAVA8_HOME: ${{ env.JAVA_HOME_8_X64 }}
+          LOOTABLEBODIES_MAVENIZER_JAVA_HOME: ${{ env.JAVA_HOME_25_X64 }}
+        run: |
+          set -euo pipefail
+          test ! -e .gradle
+          test ! -e "$GRADLE_USER_HOME"
+          mkdir -p "$GRADLE_USER_HOME"
+          chmod +x ./gradlew
+          ./gradlew classes --no-daemon --no-build-cache --stacktrace \
+            -Dorg.gradle.java.installations.paths="$JAVA_HOME,$JAVA_HOME_8_X64,$JAVA_HOME_25_X64" \
+            -Dorg.gradle.java.installations.auto-detect=false \
+            -Dorg.gradle.java.installations.auto-download=false
+
+      - name: Verify the same cache offline
+        env:
+          GRADLE_USER_HOME: ${{ runner.temp }}/lootablebodies-cold-gradle
+          LOOTABLEBODIES_JAVA8_HOME: ${{ env.JAVA_HOME_8_X64 }}
+          LOOTABLEBODIES_MAVENIZER_JAVA_HOME: ${{ env.JAVA_HOME_25_X64 }}
+        run: |
+          ./gradlew classes --offline --rerun-tasks --no-daemon --no-build-cache --stacktrace \
+            -Dorg.gradle.java.installations.paths="$JAVA_HOME,$JAVA_HOME_8_X64,$JAVA_HOME_25_X64" \
+            -Dorg.gradle.java.installations.auto-detect=false \
+            -Dorg.gradle.java.installations.auto-download=false
+
+  build:
+    name: Build, test, and audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-    - name: Set up JDK 1.8
-      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
-      with:
-        distribution: temurin
-        java-version: '8.0.502+7'
-        java-package: jdk # (jre, jdk, or jdk+fx) - defaults to jdk
-        architecture: x64 # (x64 or x86) - defaults to x64
+      - name: Install pinned Java 25 ForgeGradle Mavenizer runtime
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '25.0.3+9.0.LTS'
 
-    - name: Make Wrapper Executable
-      run: chmod a+x gradlew
+      - name: Install pinned Java 8 compilation toolchain
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '8.0.502+7'
 
-    - name: Setup CI Workspace
-      run: ./gradlew clean setupciworkspace
+      - name: Install pinned Java 17 Gradle runtime
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17.0.1+12'
 
-    - name: Build with Gradle
-      run: ./gradlew build
+      - name: Pin production JDK
+        run: |
+          echo "LOOTABLEBODIES_JAVA8_HOME=$JAVA_HOME_8_X64" >> "$GITHUB_ENV"
+          echo "LOOTABLEBODIES_MAVENIZER_JAVA_HOME=$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+        with:
+          cache-disabled: true
+
+      - name: Make the wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Test runtime log contracts
+        run: python3 -m unittest discover -s tools -p 'test_*.py' -v
+
+      - name: Build, test, and audit release artifacts
+        run: >-
+          ./gradlew clean check build javadoc forgeControlServer verifyReleaseArtifacts writeReleaseChecksums
+          upgradeContractTest inventoryRegressionTest containerInteractionTest dropCreativeInteractionTest nbtRecoveryTest
+          nameLifetimeTest healthAttributeTest effectHurtTest positionMotionTest rotationFallTest
+          verifyEclipseProductionClasspath --no-daemon --stacktrace
+          -Dorg.gradle.java.installations.paths="$JAVA_HOME,$JAVA_HOME_8_X64,$JAVA_HOME_25_X64"
+          -Dorg.gradle.java.installations.auto-detect=false
+          -Dorg.gradle.java.installations.auto-download=false
+
+      - name: Install legacy client display and audio support
+        timeout-minutes: 10
+        run: |
+          sudo apt-get update -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+          sudo apt-get install --yes --no-install-recommends -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 x11-xserver-utils libgl1-mesa-dri libglu1-mesa libopenal1 pulseaudio pulseaudio-utils
+          command -v xrandr
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=minecraft
+          echo "PULSE_SINK=minecraft" >> "$GITHUB_ENV"
+          echo "ALSOFT_DRIVERS=pulse" >> "$GITHUB_ENV"
+
+      - name: Verify real graphical client and corpse GUI
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 'true'
+        run: >-
+          xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset'
+          sh -c 'xrandr --query && ./gradlew clientIntegrationTest preparePackagedIntegrationProbe exportRuntimeClasspath --no-daemon'
+
+      - name: Verify exact packaged dedicated servers
+        run: >-
+          python3 tools/verify_packaged.py --java "$JAVA_HOME_8_X64/bin/java"
+          --output build/packaged-runtime
+
+      - name: Verify malformed corpse NBT and returning items across JVMs
+        run: >-
+          python3 tools/verify_nbt_recovery.py --java "$JAVA_HOME_8_X64/bin/java"
+          --forge-home build/packaged-runtime/forge-distribution --output build/packaged-nbt
+
+      - name: Verify ordinary production servers exclude the test mod
+        run: |
+          python3 tools/verify_normal_server.py --java "$JAVA_HOME_8_X64/bin/java" --forge-home build/packaged-runtime/forge-distribution --output build/ordinary-development --development
+          python3 tools/verify_normal_server.py --java "$JAVA_HOME_8_X64/bin/java" --forge-home build/packaged-runtime/forge-distribution --output build/ordinary-packaged
+
+      - name: Audit complete development logs
+        run: >-
+          python3 tools/audit_runtime_logs.py --development
+          build/integration-run/fresh.log build/integration-run/reload.log build/integration-run/deferred.log
+          build/client-integration-run/logs/latest.log build/forge-control-run/logs/latest.log
+
+      - name: Verify exact packaged client
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 'true'
+        run: >-
+          xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 tools/verify_packaged_client.py --java "$JAVA_HOME_8_X64/bin/java"
+          --forge-jar build/packaged-runtime/forge-distribution/forge-1.12.2-14.23.5.2859-universal.jar
+          --output build/packaged-client --gradle-home "$HOME/.gradle"
+
+      - name: Verify configuration, skins and the reported death sequence
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 'true'
+        run: |
+          for mode in config skin issues names; do
+            xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 tools/verify_packaged_client.py --java "$JAVA_HOME_8_X64/bin/java" --forge-jar build/packaged-runtime/forge-distribution/forge-1.12.2-14.23.5.2859-universal.jar --output "build/packaged-client-$mode" --gradle-home "$HOME/.gradle" --mode "$mode"
+          done
+
+      - name: Verify two real loopback clients and persisted shared inventory
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 'true'
+        run: >-
+          xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 tools/verify_multiplayer.py --java "$JAVA_HOME_8_X64/bin/java"
+          --forge-home build/packaged-runtime/forge-distribution --gradle-home "$HOME/.gradle"
+          --output build/packaged-multiplayer
+
+      - name: Verify respawn packets with a connected observer
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 'true'
+        run: >-
+          xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 tools/verify_visibility.py
+          --java "$JAVA_HOME_8_X64/bin/java" --forge-home build/packaged-runtime/forge-distribution
+          --gradle-home "$HOME/.gradle" --output build/packaged-respawn --mode respawn
+
+      - name: Verify simultaneous respawns after restart
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 'true'
+        run: >-
+          xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 tools/verify_visibility.py
+          --java "$JAVA_HOME_8_X64/bin/java" --forge-home build/packaged-runtime/forge-distribution
+          --gradle-home "$HOME/.gradle" --output build/packaged-respawn-restart --mode respawn
+          --source-server build/packaged-respawn/server --simultaneous --counter-collision
+
+      - name: Verify default timing, TNT death and connected chunk re-entry
+        env:
+          LIBGL_ALWAYS_SOFTWARE: 'true'
+        run: |
+          xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 tools/verify_visibility.py --java "$JAVA_HOME_8_X64/bin/java" --forge-home build/packaged-runtime/forge-distribution --gradle-home "$HOME/.gradle" --output build/packaged-visibility --mode visibility
+          xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 tools/verify_visibility.py --java "$JAVA_HOME_8_X64/bin/java" --forge-home build/packaged-runtime/forge-distribution --gradle-home "$HOME/.gradle" --output build/packaged-visibility-restart --mode visibility --source-server build/packaged-visibility/server
+
+      - name: Audit complete runtime file logs and crash directories
+        run: >-
+          python3 tools/audit_runtime_logs.py --recursive
+          build/packaged-runtime build/packaged-nbt build/ordinary-packaged
+          build/packaged-client build/packaged-client-config build/packaged-client-skin build/packaged-client-issues build/packaged-client-names
+          build/packaged-multiplayer build/packaged-respawn build/packaged-respawn-restart
+          build/packaged-visibility build/packaged-visibility-restart
+
+      - name: Compare a second forced build
+        run: |
+          mkdir -p "$RUNNER_TEMP/first-build"
+          cp build/libs/LootableBodies-2.4.3.112021{,-sources,-javadoc}.jar build/release/SHA256SUMS build/publications/mavenJava/pom-default.xml "$RUNNER_TEMP/first-build/"
+          ./gradlew assemble writeReleaseChecksums verifyMavenCoordinates --rerun-tasks --offline --no-daemon --no-build-cache
+          for name in LootableBodies-2.4.3.112021{,-sources,-javadoc}.jar; do
+            cmp "$RUNNER_TEMP/first-build/$name" "build/libs/$name"
+          done
+          cmp "$RUNNER_TEMP/first-build/SHA256SUMS" build/release/SHA256SUMS
+          cmp "$RUNNER_TEMP/first-build/pom-default.xml" build/publications/mavenJava/pom-default.xml
+
+      - name: Prepare and test the local release contract
+        run: |
+          ./gradlew prepareReleaseBundle --offline --no-daemon
+          python3 tools/verify_release_setup.py --output build/release-contracts
+
+      - name: Require all six declared artifacts
+        run: |
+          for path in build/libs/LootableBodies-2.4.3.112021.jar build/libs/LootableBodies-2.4.3.112021-sources.jar build/libs/LootableBodies-2.4.3.112021-javadoc.jar build/release/SHA256SUMS build/publications/mavenJava/pom-default.xml CHANGELOG.txt; do
+            test -s "$path"
+          done
+
+      - name: Upload audited release candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: LootableBodies-1.12.2-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            build/libs/LootableBodies-2.4.3.112021.jar
+            build/libs/LootableBodies-2.4.3.112021-sources.jar
+            build/libs/LootableBodies-2.4.3.112021-javadoc.jar
+            build/release/SHA256SUMS
+            build/publications/mavenJava/pom-default.xml
+            CHANGELOG.txt
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: LootableBodies-1.12.2-diagnostics-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            build/test-results/**
+            build/reports/**
+            build/release-contracts/**
+            build/*-run/logs/**
+            build/*-run/crash-reports/**
+            build/integration-run/world/inventory-checks.txt
+            build/integration-run/world/container-checks.txt
+            build/integration-run/world/drop-creative-checks.txt
+            build/integration-run/world/nbt-checks.txt
+            build/integration-run/world/name-lifetime-checks.txt
+            build/integration-run/world/health-attribute-checks.txt
+            build/integration-run/world/effect-hurt-checks.txt
+            build/integration-run/world/position-motion-checks.txt
+            build/integration-run/world/rotation-fall-checks.txt
+            build/packaged-runtime/**/*.log
+            build/packaged-runtime/**/crash-reports/**
+            build/packaged-runtime/candidate-fresh/world/inventory-checks.txt
+            build/packaged-runtime/candidate-fresh/world/container-checks.txt
+            build/packaged-runtime/candidate-fresh/world/drop-creative-checks.txt
+            build/packaged-runtime/candidate-fresh/world/nbt-checks.txt
+            build/packaged-runtime/candidate-fresh/world/name-lifetime-checks.txt
+            build/packaged-runtime/candidate-fresh/world/health-attribute-checks.txt
+            build/packaged-runtime/candidate-fresh/world/effect-hurt-checks.txt
+            build/packaged-runtime/candidate-fresh/world/position-motion-checks.txt
+            build/packaged-runtime/candidate-fresh/world/rotation-fall-checks.txt
+            build/packaged-nbt/**/*.log
+            build/packaged-nbt/**/crash-reports/**
+            build/packaged-nbt/candidate/world/nbt-world-checks.txt
+            build/client-integration-run/screenshots/*.png
+            build/client-integration-run/connected-checks.txt
+            build/client-integration-run/drop-client-checks.txt
+            build/client-integration-run/nbt-client-checks.txt
+            build/packaged-client/client.log
+            build/packaged-client/drop-client-checks.txt
+            build/packaged-client/nbt-client-checks.txt
+            build/packaged-client/connected-checks.txt
+            build/packaged-client/screenshots/*.png
+            build/packaged-multiplayer/**/*.log
+            build/packaged-multiplayer/**/crash-reports/**
+            build/packaged-multiplayer/clientA/screenshots/*.png
+            build/packaged-multiplayer/clientB/screenshots/*.png
+            build/packaged-multiplayer/sync/checks.txt
+            build/packaged-respawn/**/*.log
+            build/packaged-respawn/**/crash-reports/**
+            build/packaged-respawn/sync/*.txt
+            build/packaged-client-config/**/*.log
+            build/packaged-client-config/*.txt
+            build/packaged-client-config/screenshots/*.png
+            build/packaged-client-skin/**/*.log
+            build/packaged-client-skin/*.txt
+            build/packaged-client-skin/screenshots/*.png
+            build/packaged-client-issues/**/*.log
+            build/packaged-client-issues/*.txt
+            build/packaged-client-issues/screenshots/*.png
+            build/packaged-client-names/**/*.log
+            build/packaged-client-names/*.txt
+            build/packaged-client-names/screenshots/*.png
+            build/ordinary-development/**/*.log
+            build/ordinary-packaged/**/*.log
+            build/packaged-respawn-restart/**/*.log
+            build/packaged-respawn-restart/sync/*.txt
+            build/packaged-visibility/**/*.log
+            build/packaged-visibility/sync/*.txt
+            build/packaged-visibility/clientA/screenshots/*.png
+            build/packaged-visibility/clientB/screenshots/*.png
+            build/packaged-visibility-restart/**/*.log
+            build/packaged-visibility-restart/sync/*.txt
+            build/packaged-visibility-restart/clientA/screenshots/*.png
+            build/packaged-visibility-restart/clientB/screenshots/*.png
+            build/problems/**

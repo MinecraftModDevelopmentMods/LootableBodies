@@ -1,121 +1,225 @@
-buildscript {
-    repositories {
-        jcenter()
-        maven {
-            name = "forge"
-            url = "http://files.minecraftforge.net/maven"
-        }
-        maven {
-            name = 'gradle'
-            url 'https://plugins.gradle.org/m2/'
-        }
-        maven {
-            name = "sonatype"
-            url = 'https://oss.sonatype.org/content/groups/public'
-        }
-    }
-    dependencies {
-        classpath "net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT"
-        classpath 'gradle.plugin.com.matthewprenger:CurseGradle:1.0.11'
-    }
+import org.apache.tools.ant.filters.FixCrLfFilter
+
+plugins {
+    id 'java'
+    id 'eclipse'
+    id 'idea'
+    id 'maven-publish'
+    id 'net.minecraftforge.renamer' version '1.1.5'
+    id 'net.minecraftforge.gradle' version '7.0.34'
 }
 
-apply plugin: "net.minecraftforge.gradle.forge"
-apply plugin: "com.matthewprenger.cursegradle"
+group = project.mod_group
+version = project.mod_version
+base.archivesName = project.mod_artifact
 
-def mod_file = getModFile()
-version = getVersion("VERSION", mod_file)
-group= "cyano.lootable"
-sourceCompatibility = targetCompatibility = "1.8"
+// Gradle uses Java 17; every compiler, test and game process uses this JDK 8.
+// Eclipse does not inherit the command-line helper's environment. Keep its
+// machine-specific toolchain selection in an ignored local properties file.
+Properties localJavaSetup = new Properties()
+File localJavaSetupFile = file('gradle-local.properties')
+if (localJavaSetupFile.isFile()) localJavaSetupFile.withInputStream { localJavaSetup.load(it) }
+def pinnedJava8 = providers.environmentVariable('LOOTABLEBODIES_JAVA8_HOME')
+        .orElse(providers.gradleProperty('lootablebodies.java8.home'))
+        .orElse(providers.provider { localJavaSetup.getProperty('lootablebodies.java8.home') })
+def exactJava8Spec = pinnedJava8.isPresent() ?
+        org.gradle.jvm.toolchain.internal.SpecificInstallationToolchainSpec.fromJavaHome(
+                project.services.get(org.gradle.api.internal.provider.PropertyFactory), file(pinnedJava8.get())) : null
+def pinnedJava25 = providers.environmentVariable('LOOTABLEBODIES_MAVENIZER_JAVA_HOME')
+        .orElse(providers.gradleProperty('lootablebodies.mavenizer.java.home'))
+        .orElse(providers.provider { localJavaSetup.getProperty('lootablebodies.mavenizer.java.home') })
+def exactJava25Spec = pinnedJava25.isPresent() ?
+        org.gradle.jvm.toolchain.internal.SpecificInstallationToolchainSpec.fromJavaHome(
+                project.services.get(org.gradle.api.internal.provider.PropertyFactory), file(pinnedJava25.get())) : null
+ext.mavenizerLauncher = exactJava25Spec != null ? javaToolchains.launcherFor(exactJava25Spec) :
+        javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25); vendor = JvmVendorSpec.ADOPTIUM }
+fgtools.configure('mavenizer') { javaLauncher.set(mavenizerLauncher) }
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(8)
+        vendor = JvmVendorSpec.ADOPTIUM
+    }
+    withSourcesJar()
+    withJavadocJar()
+}
+ext.productionLauncher = exactJava8Spec != null ? javaToolchains.launcherFor(exactJava8Spec) :
+        javaToolchains.launcherFor(java.toolchain)
+fgtools.configure('slimelauncher') { javaLauncher.set(productionLauncher) }
+def productionCompiler = exactJava8Spec != null ? javaToolchains.compilerFor(exactJava8Spec) :
+        javaToolchains.compilerFor(java.toolchain)
+def productionJavadoc = exactJava8Spec != null ? javaToolchains.javadocToolFor(exactJava8Spec) :
+        javaToolchains.javadocToolFor(java.toolchain)
+
+tasks.register('verifyJavaSetup') {
+    group = 'verification'
+    doLast {
+        if (JavaVersion.current() != JavaVersion.VERSION_17) throw new GradleException('Run Gradle with Java 17')
+        def metadata = productionLauncher.get().metadata
+        Properties release = new Properties()
+        metadata.installationPath.file('release').asFile.withInputStream { release.load(it) }
+        if (release.getProperty('SEMANTIC_VERSION') != '"8.0.502+7"' ||
+                release.getProperty('IMPLEMENTOR') != '"Eclipse Adoptium"') {
+            throw new GradleException("Production requires Temurin 8.0.502+7, found ${metadata.javaRuntimeVersion} ${metadata.vendor}")
+        }
+        logger.lifecycle("Gradle Java: ${System.getProperty('java.runtime.version')}; production: ${metadata}")
+        def worker = mavenizerLauncher.get().metadata
+        Properties workerRelease = new Properties()
+        worker.installationPath.file('release').asFile.withInputStream { workerRelease.load(it) }
+        if (workerRelease.getProperty('JAVA_RUNTIME_VERSION') != '"25.0.3+9-LTS"' ||
+                workerRelease.getProperty('IMPLEMENTOR') != '"Eclipse Adoptium"')
+            throw new GradleException('The separate Mavenizer worker requires Temurin 25.0.3+9-LTS')
+        logger.lifecycle("Mavenizer worker: ${worker}; game/compilation remain on Java 8")
+    }
+}
+tasks.withType(JavaCompile).configureEach {
+    dependsOn 'verifyJavaSetup'
+    javaCompiler = productionCompiler
+    sourceCompatibility = '1.8'
+    targetCompatibility = '1.8'
+    options.encoding = 'UTF-8'
+}
+tasks.named('compileTestJava', JavaCompile) { options.compilerArgs.add('-proc:none') }
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    javaLauncher = productionLauncher
+    workingDir = projectDir
+}
+tasks.withType(JavaExec).configureEach { javaLauncher = productionLauncher }
+tasks.withType(Javadoc).configureEach {
+    javadocTool = productionJavadoc
+    failOnError = true
+    options.encoding = 'UTF-8'
+    options.addStringOption('Xdoclint:none', '-quiet')
+    options.addBooleanOption('notimestamp', true)
+}
+tasks.withType(AbstractArchiveTask).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+    filteringCharset = 'UTF-8'
+}
+ext.archiveTextPatterns = ['**/*.info', '**/*.java', '**/*.lang', '**/*.mcmeta', '**/*.html',
+        '**/*.css', '**/*.js', '**/*.md', '**/*.txt', '**/package-list', '**/LICENSE', '**/LICENSE-CC0', '**/NOTICE']
+ext.normalizeArchiveText = { details ->
+    details.filter(FixCrLfFilter, eol: FixCrLfFilter.CrLf.newInstance('lf'),
+            eof: FixCrLfFilter.AddAsisRemove.newInstance('asis'))
+}
 
 minecraft {
-    version = "1.12.2-14.23.4.2705"
-    runDir = "run"
-    mappings = "stable_39"
-}
-
-dependencies {
-    // none
-}
-
-processResources {
-    inputs.property "version", project.version
-    inputs.property "mcversion", project.minecraft.version
-
-    from(sourceSets.main.resources.srcDirs) {
-        include 'mcmod.info'
-        expand 'version': project.version, 'mcversion': project.minecraft.version
-    }
-
-    from(sourceSets.main.resources.srcDirs) {
-        exclude 'mcmod.info'
-    }
-}
-
-task deobfJar(type: Jar) {
-    classifier = "deobf"
-    from sourceSets.main.output
-}
-
-task javadocJar(type: Jar, dependsOn: javadoc) {
-    classifier = "javadoc"
-    from javadoc.getDestinationDir()
-}
-
-artifacts {
-    archives deobfJar
-    archives sourceJar
-    archives javadocJar
-}
-
-curseforge {
-    apiKey = ""
-    project {
-        id = "240968"
-        changelog = file("CHANGELOG.txt")
-        releaseType = "release"
-        mainArtifact(jar) {
-            displayName = "Dr Cyano's Lootable Bodies $project.version"
+    mappings channel: project.mapping_channel, version: project.mapping_version
+    runs {
+        configureEach {
+            workingDir.convention layout.projectDirectory.dir(
+                    providers.gradleProperty('gameRunDirectory').getOrElse('run'))
+            systemProperty 'log4j.configurationFile', file('gradle/log4j2.xml').toURI().toString()
         }
-        addArtifact sourceJar
-        addArtifact deobfJar
-        addArtifact javadocJar
+        register('client')
+        register('server') { args 'nogui' }
     }
 }
+tasks.matching { it.name == 'runServer' }.configureEach { standardInput = System.in }
 
-String getModFile() {
-    String path = "";
-    FileTree tree = fileTree(dir: "src/main/java")
-    tree.include '**/*.java'
-    tree.visit { element ->
-        if (element.file.isFile()) {
-            element.file.eachLine { String s ->
-                s = s.trim();
-                if (s.startsWith("@Mod")) {
-                    path = "src/main/java/$element.relativePath"
-                }
+// Legacy FML discovers classes and processed resources from a single root.
+ext.developmentOutput = layout.buildDirectory.dir('forge12-development/main')
+tasks.register('syncDevelopmentOutput', Sync) {
+    dependsOn 'classes'
+    from tasks.named('compileJava', JavaCompile).flatMap { it.destinationDirectory }
+    from sourceSets.main.output.resourcesDir
+    into developmentOutput
+}
+tasks.configureEach {
+    if (name in ['runClient', 'runServer']) {
+        dependsOn 'syncDevelopmentOutput'
+        doFirst {
+            Set<File> split = sourceSets.main.output.files
+            classpath = files(developmentOutput, classpath.filter { !split.contains(it) })
+            def forbidden = classpath.files.findAll {
+                it.path.replace('\\', '/') =~ /(?i)(\/test(?:\/|$)|junit|opentest4j|mockito|byte-buddy|integration-test)/
             }
+            if (forbidden) throw new GradleException("Ordinary launch contains testing code: ${forbidden}")
         }
     }
-    return path;
 }
 
-String getVersion(String type, String mod_file) {
-    String major = "0";
-    String revision = "0";
-    String patch = "0";
-    String prefix = "public static final String $type = \"";
-    File file = file(mod_file)
-    file.eachLine { String s ->
-        s = s.trim();
-        if (s.startsWith(prefix)) {
-            s = s.substring(prefix.length(), s.length() - 2);
-            String[] pts = s.split("\\.");
-
-            major = pts[0];
-            revision = pts[1];
-            patch = pts[2];
-        }
+repositories {
+    minecraft.mavenizer(it)
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
+    exclusiveContent {
+        forRepository { maven { name = 'Sponge'; url = 'https://repo.spongepowered.org/repository/maven-public' } }
+        filter { includeGroupAndSubgroups('org.spongepowered') }
     }
-    return "$major.$revision.$patch";
+    mavenCentral()
+    maven { url = 'https://libraries.minecraft.net/' }
 }
+dependencies {
+    implementation minecraft.dependency("net.minecraftforge:forge:${minecraft_version}-${forge_version}")
+    compileOnly 'org.lwjgl.lwjgl:lwjgl_util:2.9.4-nightly-20150209'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.12.2'
+}
+
+tasks.named('processResources', ProcessResources) {
+    filteringCharset = 'UTF-8'
+    inputs.properties(version: project.version, mcversion: project.minecraft_version,
+            mod_url: project.mod_url, mod_license: project.mod_license)
+    filesMatching('mcmod.info') {
+        expand version: project.version, mcversion: project.minecraft_version,
+                mod_url: project.mod_url, mod_license: project.mod_license
+    }
+    filesMatching(archiveTextPatterns, normalizeArchiveText)
+}
+tasks.named('jar', Jar) {
+    archiveClassifier = 'deobf'
+    destinationDirectory = layout.buildDirectory.dir('libs-dev')
+    from(['LICENSE', 'LICENSE-CC0', 'NOTICE']) { into 'META-INF' }
+    manifest.attributes('Implementation-Title': project.mod_name,
+            'Implementation-Version': project.version, 'Implementation-Vendor': project.mod_vendor,
+            'Maven-Artifact': "${project.group}:${base.archivesName.get()}:${project.version}",
+            'Implementation-License': project.mod_license,
+            'Built-On-Java': '8', 'Built-On': "${minecraft_version}-${forge_version}")
+    filesMatching(archiveTextPatterns, normalizeArchiveText)
+}
+ext.releaseJar = renamer.classes(tasks.named('jar', Jar)) {
+    map.from minecraft.dependency.toSrgFile
+    libraries.from(sourceSets.main.compileClasspath)
+    archiveClassifier = null
+    output = layout.buildDirectory.file("libs/${base.archivesName.get()}-${project.version}.jar")
+}
+['sourcesJar', 'javadocJar'].each { name ->
+    tasks.named(name, Jar) {
+        from(['LICENSE', 'LICENSE-CC0', 'NOTICE']) { into 'META-INF' }
+        manifest.attributes('Implementation-Title': project.mod_name,
+                'Implementation-Version': project.version, 'Implementation-Vendor': project.mod_vendor,
+                'Implementation-License': project.mod_license,
+                'Maven-Artifact': "${project.group}:${base.archivesName.get()}:${project.version}:${name == 'sourcesJar' ? 'sources' : 'javadoc'}")
+        filesMatching(archiveTextPatterns, normalizeArchiveText)
+    }
+}
+['apiElements', 'runtimeElements'].each { name ->
+    configurations.named(name) { artifacts.clear() }
+    artifacts { add(name, releaseJar) }
+}
+tasks.named('assemble') { dependsOn releaseJar, 'sourcesJar', 'javadocJar' }
+tasks.named('test') { dependsOn 'jar', 'sourcesJar' }
+
+apply from: 'gradle/ide.gradle'
+apply from: 'gradle/audit.gradle'
+apply from: 'gradle/release.gradle'
+apply from: 'gradle/runtime.gradle'
+apply from: 'gradle/baseline.gradle'
+
+tasks.register('verifyProductionRuntimeClasspath') {
+    group = 'verification'
+    dependsOn 'syncDevelopmentOutput'
+    doLast {
+        if (configurations.runtimeClasspath.files.any {
+            it.path.replace('\\','/') =~ /(?i)(\/test(?:\/|$)|junit|opentest4j|mockito|byte-buddy|integration-test|buildtest)/
+        }) throw new GradleException('Testing code leaked into the production runtime')
+        if (!developmentOutput.get().file('mcmod.info').asFile.text.contains("\"version\": \"${project.version}\""))
+            throw new GradleException('Development resources are not processed')
+    }
+}
+tasks.named('check') { dependsOn 'verifyProductionRuntimeClasspath' }
+
+// Publication is restricted to the confirmed MMD release workflow.

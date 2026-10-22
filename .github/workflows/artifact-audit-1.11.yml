@@ -3,7 +3,7 @@ run-name: Audit 1.11.2 artifacts from ${{ github.event.workflow_run.head_sha }}
 
 on:
   workflow_run:
-    workflows: [LootableBodies 1.10 CI, LootableBodies 1.11 CI]
+    workflows: [LootableBodies 1.10 CI, LootableBodies 1.11 CI, LootableBodies 1.12 CI]
     types: [completed]
 
 permissions:

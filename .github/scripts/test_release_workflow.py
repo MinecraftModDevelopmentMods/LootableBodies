@@ -13,6 +13,10 @@ WORKFLOW = Path(__file__).resolve().parents[1] / 'workflows/deploy-release.yml'
 REPOSITORY = 'MinecraftModDevelopmentMods/LootableBodies'
 SHA = 'a' * 40
 CORE = ['Cold Forge bootstrap', 'Build, test, and audit', 'Analyze Java', 'Validation']
+MATRIX112 = [origin + ' / ' + stamps for origin in
+             ['original-110', 'released-110', 'original-111', 'recovery-110',
+              'released-111', 'original-112', 'recovery-111', 'via111-110']
+             for stamps in ['normal', 'stamps']]
 MATRIX = [origin + ' / ' + stamps for origin in
           ['original-110', 'released-110', 'original-111', 'recovery-110']
           for stamps in ['normal', 'stamps']]
@@ -42,7 +46,10 @@ class ReleaseWorkflowTests(unittest.TestCase):
             return result.returncode, values
 
     def validate(self, minecraft, names=None, mutation=None, release_exists=False, wrong_tag=False, audit_success=True):
-        suffix, branch, forge = ('110021', '1.10.2', '12.18.3.2511') if minecraft == '1.10.2' else ('111021', '1.11.2-dev', '13.20.1.2588')
+        suffix, branch, forge = {
+            '1.10.2': ('110021', '1.10.2', '12.18.3.2511'),
+            '1.11.2': ('111021', '1.11.2-dev', '13.20.1.2588'),
+            '1.12.2': ('112021', 'master-1.12', '14.23.5.2859')}[minecraft]
         version = '2.4.2.' + suffix
         values = dict(minecraft_version=minecraft, forge_version=forge, loader_name='forge', loader_code='1',
             java_version='8', java_toolchain_version='8.0.502+7', gradle_java_version='17', mod_id='lootablebodies',
@@ -50,12 +57,12 @@ class ReleaseWorkflowTests(unittest.TestCase):
             curseforge_project_id='240968', mod_version=version)
         if mutation:
             values.update(mutation)
-        checks = CORE + (MATRIX if minecraft == '1.11.2' else []) if names is None else names
+        checks = CORE + {'1.11.2': MATRIX, '1.12.2': MATRIX112}.get(minecraft, []) if names is None else names
         def command(args, **options):
             if args[0] == 'git':
                 return SHA + '\n'
             if '/actions/workflows/' in args[-1]:
-                return json.dumps({'workflow_runs': [{'id': 1, 'display_title': 'Audit 1.11.2 artifacts from ' + SHA,
+                return json.dumps({'workflow_runs': [{'id': 1, 'display_title': 'Audit ' + minecraft + ' artifacts from ' + SHA,
                     'conclusion': 'success' if audit_success else 'failure'}]})
             return json.dumps({'check_runs': [dict(name=name, id=i, conclusion='success') for i, name in enumerate(checks)]})
         def existing(args, **options):
@@ -73,8 +80,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 patch('subprocess.check_output', side_effect=command), patch('subprocess.run', side_effect=existing):
             exec(compile(code, 'release-preflight', 'exec'), {})
 
-    def test_routes_both_supported_versions(self):
-        for suffix, minecraft, branch in [('110021', '1.10.2', '1.10.2'), ('111021', '1.11.2', '1.11.2-dev')]:
+    def test_routes_all_supported_versions(self):
+        for suffix, minecraft, branch in [('110021', '1.10.2', '1.10.2'), ('111021', '1.11.2', '1.11.2-dev'), ('112021', '1.12.2', 'master-1.12')]:
             with self.subTest(minecraft=minecraft):
                 status, values = self.select('2.4.2.' + suffix)
                 self.assertEqual(0, status)
@@ -82,7 +89,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 self.assertEqual(branch, values['source_branch'])
 
     def test_invalid_versions_are_rejected(self):
-        for version in ['2.4.2', '2.4.2.112021', '02.4.2.111021', '2.4.2.111021;exit 0']:
+        for version in ['2.4.2', '2.4.2.113021', '02.4.2.111021', '2.4.2.111021;exit 0']:
             with self.subTest(version=version):
                 self.assertNotEqual(0, self.select(version)[0])
 
@@ -102,6 +109,16 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_111_requires_an_independent_audit_of_its_exact_artifact(self):
         with self.assertRaises(SystemExit):
             self.validate('1.11.2', audit_success=False)
+
+    def test_112_requires_every_upgrade_case(self):
+        self.validate('1.12.2')
+        for missing in MATRIX112:
+            with self.subTest(missing=missing), self.assertRaises(SystemExit):
+                self.validate('1.12.2', names=CORE + [name for name in MATRIX112 if name != missing])
+
+    def test_112_requires_an_independent_audit_of_its_exact_artifact(self):
+        with self.assertRaises(SystemExit):
+            self.validate('1.12.2', audit_success=False)
 
     def test_identity_changes_are_rejected(self):
         for mutation in [{'mod_id': 'other'}, {'minecraft_version': '1.10.2'}, {'mod_license': 'CC0-1.0'}]:

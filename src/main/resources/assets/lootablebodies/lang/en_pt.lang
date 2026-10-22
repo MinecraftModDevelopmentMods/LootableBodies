@@ -1,0 +1,12 @@
+entity.lootablebodies.Corpse.name=Bag o' Bones
+
+entity.lootablebodies.corpse.name=Bag o' Bones
+entity.Corpse.name=Bag o' Bones
+
+lootablebodies.config.enable_corpse_buoyancy=Float in fluids
+lootablebodies.config.prevent_void_loss=Create a platform above the void
+lootablebodies.config.dim_specific_platform=Use dimension-specific platform blocks
+
+lootablebodies.config.enable_corpse_buoyancy.tooltip=Float in fluids after collection ends. Requires restarting Minecraft or the server.
+lootablebodies.config.prevent_void_loss.tooltip=Create a platform when a corpse falls into the void. Requires restarting Minecraft or the server.
+lootablebodies.config.dim_specific_platform.tooltip=Use netherrack in the Nether and end stone in the End. Requires restarting Minecraft or the server.
