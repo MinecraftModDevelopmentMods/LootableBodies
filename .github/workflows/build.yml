@@ -217,7 +217,7 @@ jobs:
 
       - name: Audit complete runtime file logs and crash directories
         run: >-
-          python3 tools/audit_runtime_logs.py --recursive
+          python3 tools/audit_runtime_logs.py --recursive --fixture-logins
           build/packaged-runtime build/packaged-nbt build/ordinary-packaged
           build/packaged-client build/packaged-client-config build/packaged-client-skin build/packaged-client-issues build/packaged-client-names
           build/packaged-multiplayer build/packaged-respawn build/packaged-respawn-restart

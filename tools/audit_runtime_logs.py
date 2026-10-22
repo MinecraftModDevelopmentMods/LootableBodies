@@ -41,11 +41,13 @@ def development_control_lines(lines):
     return accepted
 
 
-def audit(path, development=False, upgrade=False):
+def audit(path, development=False, upgrade=False, fixture_logins=False):
     if path.name.endswith('.log.gz'):
         with gzip.open(path,'rt',encoding='utf-8',errors='replace') as stream: text=stream.read()
     else: text=path.read_text(encoding='utf-8',errors='replace')
     failures=[]
+    from fixture_login import receipt_lines
+    login_lines=receipt_lines(path,text) if fixture_logins else set()
     # These exact diagnostics are reproduced by the independent Forge control.
     platform=['FML appears to be missing any signature data. This is not a good thing']
     if development:
@@ -54,6 +56,7 @@ def audit(path, development=False, upgrade=False):
     proven=development_control_lines(lines) if development else set()
     version_check_block=False
     for number,line in enumerate(lines):
+        if number in login_lines: continue
         if line.startswith('['):
             version_check_block=('Forge Version Check/DEBUG]' in line and
                 ('[ForgeVersionCheck/forge]: Failed to process update information' in line or
@@ -65,7 +68,7 @@ def audit(path, development=False, upgrade=False):
             for message in (FORGE_UPGRADE_RENAME, FORGE_UPGRADE_RENAME.replace(']:', '/]:'), FORGE_UPGRADE_RENAME.replace('FML.ModTracker','fml.ModTracker'), FORGE_UPGRADE_RENAME.replace('FML.ModTracker','fml.ModTracker').replace(']:','/]:')))
         if re.search(r'/ERROR\]|/FATAL\]|\bERROR (?:Error processing|Unable to locate)',line) and number not in proven and not known_upgrade_rename and not any(message in line for message in platform):
             failures.append(line)
-        if re.search(r'AssertionError|NoSuchMethodError|NoSuchFieldError|NoClassDefFoundError|ClassNotFoundException|NullPointerException|OutOfMemoryError|Exception stopping server|Encountered an unexpected exception|Couldn.t render entity|Missing sound for event:|Patcher expecting empty class data|Skipping Entity with id|Unidentified mapping|Unable to load model',line):
+        if re.search(r'Can.t serialize unregistered packet|AssertionError|NoSuchMethodError|NoSuchFieldError|NoClassDefFoundError|ClassNotFoundException|NullPointerException|OutOfMemoryError|Exception stopping server|Encountered an unexpected exception|Couldn.t render entity|Missing sound for event:|Patcher expecting empty class data|Skipping Entity with id|Unidentified mapping|Unable to load model',line):
             failures.append(line)
         # Reproduced in the Forge-only control's complete DEBUG log: its old
         # HTTP promotions URL returns "Moved Permanently" instead of JSON.
@@ -86,6 +89,7 @@ if __name__=='__main__':
     parser.add_argument('--development',action='store_true')
     parser.add_argument('--upgrade',action='store_true')
     parser.add_argument('--recursive',action='store_true')
+    parser.add_argument('--fixture-logins',action='store_true',help='Require hashed receipts for recovered Forge-only pre-login encoding failures')
     parser.add_argument('logs',nargs='+',type=Path)
     args=parser.parse_args()
     for path in args.logs:
@@ -94,4 +98,4 @@ if __name__=='__main__':
             paths=sorted(p for p in path.rglob('*') if p.is_file() and (p.name.endswith('.log') or p.name.endswith('.log.gz')))
             if not paths: raise RuntimeError('Missing runtime logs: '+str(path))
             if list(path.rglob('crash-reports/*.txt')): raise RuntimeError('Unexpected crash reports: '+str(path))
-        for log in paths: print(audit(log,args.development,args.upgrade))
+        for log in paths: print(audit(log,args.development,args.upgrade,args.fixture_logins))

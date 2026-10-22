@@ -8,7 +8,6 @@ import java.nio.file.Files;
 import java.util.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.*;
-import net.minecraft.client.multiplayer.GuiConnecting;
 import net.minecraft.entity.Entity;
 import net.minecraft.inventory.ClickType;
 import net.minecraft.item.ItemStack;
@@ -39,9 +38,10 @@ final class VisibilityClientChecks {
             RuntimeChecks.require(!VisibilityChecks.file("abort").exists(),"Visibility runner aborted");
             int n=Integer.parseInt(new String(Files.readAllBytes(VisibilityChecks.file("phase").toPath()),StandardCharsets.UTF_8).trim());
             if(n!=phase){phase=n;frames=0;guiFrames=0;respawnSent=false;rendered.clear();System.out.println("VISIBILITY_CLIENT_PHASE "+role+" "+phase);}frames++;
+            if(FixtureConnections.retry(mc,role))connecting=false;
             if(!connecting && mc.world==null && mc.currentScreen instanceof GuiMainMenu && (phase==0 || phase==9 || phase==11)) {
                 connecting=true;mc.gameSettings.pauseOnLostFocus=false;mc.gameSettings.limitFramerate=30;mc.gameSettings.renderDistanceChunks=4;
-                mc.displayGuiScreen(new GuiConnecting(new GuiMainMenu(),mc,"127.0.0.1",Integer.parseInt(System.getProperty("lootablebodies.multiplayer.port"))));
+                FixtureConnections.connect(mc);
             }
             if(mc.world==null || mc.player==null)return;
             if(frames%200==0)System.out.println("VISIBILITY_CLIENT_STATE "+role+" phase="+phase+" position="+mc.player.getPosition()+" rendered="+rendered+" screen="+(mc.currentScreen==null?null:mc.currentScreen.getClass().getSimpleName())+" container="+mc.player.openContainer.getClass().getSimpleName());

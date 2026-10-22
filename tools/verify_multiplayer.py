@@ -9,6 +9,7 @@ import socket
 import subprocess
 import time
 from audit_runtime_logs import audit
+from fixture_login import LoginMonitor, start_clients, write_receipts
 from client_runtime import assemble_libraries
 from verify_packaged import MAIN, FORGE, digest, prepare, run
 from verify_packaged_client import prepare_assets
@@ -69,8 +70,10 @@ def main():
         while not (shared/'server.ready').is_file():
             if processes['server'].poll() is not None or time.monotonic()>deadline: raise RuntimeError('Disposable server did not start')
             time.sleep(.2)
-        start('clientA');start('clientB');deadline=time.monotonic()+180
+        monitor=LoginMonitor(root)
+        start_clients(start,processes,root,monitor);deadline=time.monotonic()+180
         while any(p.poll() is None for p in processes.values()):
+            monitor.poll()
             if any(p.poll() not in (None,0) for p in processes.values()): raise RuntimeError('Multiplayer process failed')
             if time.monotonic()>deadline: raise RuntimeError('Multiplayer timed out')
             time.sleep(.2)
@@ -89,8 +92,9 @@ def main():
             'two_tcp_clients_final_gui_and_saved_nbt']
     if (shared/'checks.txt').read_text().splitlines()!=['PASS '+name for name in checks]:
         raise RuntimeError('Missing multiplayer check result')
+    write_receipts(root)
     for name in ('server','clientA','clientB'):
-        audit(root/(name+'.log'));audit(root/name/'logs/latest.log')
+        audit(root/(name+'.log'),fixture_logins=True);audit(root/name/'logs/latest.log',fixture_logins=True)
         if list((root/name).rglob('crash-reports/*')): raise RuntimeError('Crash report '+name)
         if digest(root/name/'mods'/MAIN)!=before: raise RuntimeError('Candidate mismatch '+name)
     for role in ('A','B'):

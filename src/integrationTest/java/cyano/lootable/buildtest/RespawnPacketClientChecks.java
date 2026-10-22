@@ -10,7 +10,6 @@ import java.nio.file.Files;
 import java.util.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.*;
-import net.minecraft.client.multiplayer.GuiConnecting;
 import net.minecraft.entity.Entity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.*;
@@ -77,9 +76,10 @@ final class RespawnPacketClientChecks {
             int nextIndex=Integer.parseInt(state[0]),nextPhase=Integer.parseInt(state[1]);
             if(nextIndex!=index||nextPhase!=phase){index=nextIndex;phase=nextPhase;frames=0;guiFrames=0;System.out.println("RESPAWN_CLIENT_PHASE "+role+" "+index+" "+phase);}
             uuid=state[2].equals("none")?null:UUID.fromString(state[2]);entityId=Integer.parseInt(state[3]);frames++;
+            if(FixtureConnections.retry(mc,role))connecting=false;
             if(!connecting&&mc.currentScreen instanceof GuiMainMenu) {
                 connecting=true;mc.gameSettings.pauseOnLostFocus=false;mc.gameSettings.limitFramerate=30;mc.gameSettings.renderDistanceChunks=4;
-                mc.displayGuiScreen(new GuiConnecting(new GuiMainMenu(),mc,"127.0.0.1",Integer.parseInt(System.getProperty("lootablebodies.multiplayer.port"))));
+                FixtureConnections.connect(mc);
             }
             if(mc.world==null||mc.player==null)return;
             if(!traced) {

@@ -9,7 +9,6 @@ import java.util.HashSet;
 import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiMainMenu;
-import net.minecraft.client.multiplayer.GuiConnecting;
 import net.minecraft.entity.Entity;
 import net.minecraft.inventory.ClickType;
 import net.minecraft.util.EnumHand;
@@ -36,9 +35,10 @@ final class MultiplayerClientChecks {
             if(finished){mc.shutdown();return;}
             RuntimeChecks.require(++ticks<6000,"Multiplayer client timeout role="+role+" phase="+lastPhase);
             if(new File(MultiplayerChecks.sync(),"abort").exists())throw new AssertionError("Multiplayer runner abort");
+            if(FixtureConnections.retry(mc,role))connecting=false;
             if(!connecting && mc.currentScreen instanceof GuiMainMenu){
                 connecting=true;mc.gameSettings.pauseOnLostFocus=false;mc.gameSettings.limitFramerate=30;mc.gameSettings.renderDistanceChunks=4;
-                mc.displayGuiScreen(new GuiConnecting(new GuiMainMenu(),mc,"127.0.0.1",Integer.parseInt(System.getProperty("lootablebodies.multiplayer.port"))));
+                FixtureConnections.connect(mc);
             }
             if(mc.world==null || mc.player==null)return;
             int phase;try{phase=Integer.parseInt(new String(Files.readAllBytes(new File(MultiplayerChecks.sync(),"phase").toPath()),StandardCharsets.UTF_8).trim());}catch(IOException busy){return;}

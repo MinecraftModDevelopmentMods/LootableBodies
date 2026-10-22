@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 import shutil
 from audit_runtime_logs import audit
+from fixture_login import LoginMonitor, start_clients, write_receipts
 from verify_multiplayer import client_command
 from verify_packaged import prepare, FORGE, MAIN, digest, run
 from verify_packaged_client import prepare_assets
@@ -63,8 +64,10 @@ def main():
         while not (shared/'server.ready').is_file():
             if processes['server'].poll() is not None or time.monotonic()>deadline: raise RuntimeError('Server did not start')
             time.sleep(.2)
-        start('clientA');start('clientB');deadline=time.monotonic()+650
+        monitor=LoginMonitor(home)
+        start_clients(start,processes,home,monitor);deadline=time.monotonic()+650
         while any(process.poll() is None for process in processes.values()):
+            monitor.poll()
             if processes['server'].poll() is not None and not (shared/(args.mode+'.pass')).is_file():
                 raise RuntimeError('Server failed: '+str(home/'server.log'))
             if any(process.poll() not in (None,0) for process in processes.values()): raise RuntimeError('Owned client failed')
@@ -80,9 +83,10 @@ def main():
             except subprocess.TimeoutExpired: process.kill();process.wait()
         for log in logs: log.close()
     if not (shared/(args.mode+'.pass')).is_file(): raise RuntimeError('Missing server result')
+    write_receipts(home)
     for name in ['server','clientA','clientB']:
         if digest(home/name/'mods'/MAIN)!=before: raise RuntimeError('Candidate copy changed')
-        audit(home/(name+'.log'));audit(home/name/'logs/latest.log')
+        audit(home/(name+'.log'),fixture_logins=True);audit(home/name/'logs/latest.log',fixture_logins=True)
         if list((home/name).rglob('crash-reports/*.txt')): raise RuntimeError('Crash report')
     for role in ['A','B']:
         if not (home/('client'+role)/(args.mode+'-client.pass')).is_file(): raise RuntimeError('Client did not finish '+role)

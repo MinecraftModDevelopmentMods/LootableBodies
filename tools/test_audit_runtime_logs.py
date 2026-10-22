@@ -24,6 +24,14 @@ class RuntimeLogAuditTests(unittest.TestCase):
                 'Caused by: java.lang.IllegalStateException: Expected BEGIN_OBJECT but was STRING at line 1 column 1\n'
                 '\tat net.minecraftforge.common.ForgeVersion$1.process(ForgeVersion.java:' + str(number) + ')\n')
 
+    def test_login_encoding_failure_at_info_level_is_rejected(self):
+        text = ("[12:00:00] [Server thread/INFO] [minecraft/NetHandlerPlayServer]: "
+                "ContainerA lost connection: Internal Exception: io.netty.handler.codec.EncoderException: "
+                "java.io.IOException: Can't serialize unregistered packet\n")
+        for options in ({}, {'development': True}, {'upgrade': True}):
+            with self.subTest(options=options), self.assertRaises(RuntimeError):
+                self.check_log(text, **options)
+
     def test_upgrade_warning_in_both_control_proven_logger_formats(self):
         for debug in [False, True]:
             with self.subTest(debug=debug):
