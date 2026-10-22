@@ -14,6 +14,43 @@ class FixtureLoginTests(unittest.TestCase):
         self.root=Path(self.temp.name);(self.root/'sync').mkdir()
         self.log=self.root/'server.log';self.log.write_text('')
         self.monitor=LoginMonitor(self.root)
+    def test_completed_respawn_client_may_close_its_transport(self):
+        reset=FAILURE.replace("io.netty.handler.codec.EncoderException: java.io.IOException: Can't serialize unregistered packet",'io.netty.channel.unix.Errors$NativeIoException: syscall:read(..) failed: Connection reset by peer')
+        self.log.write_text(reset)
+        client=self.root/'clientA';client.mkdir();(client/'respawn-client.pass').touch()
+        (self.root/'clientA.log').write_text('LOOTABLE_BODIES_RESPAWN_CLIENT_PASS A\n')
+        (self.root/'sync/state').write_text('16 9 none 0')
+        self.monitor.poll()
+        self.assertFalse((self.root/'sync/login-retry-A').exists())
+    def test_completed_visibility_client_may_close_its_transport(self):
+        reset=FAILURE.replace("io.netty.handler.codec.EncoderException: java.io.IOException: Can't serialize unregistered packet",'io.netty.channel.unix.Errors$NativeIoException: syscall:read(..) failed: Connection reset by peer')
+        self.log.write_text(reset);client=self.root/'clientA';client.mkdir()
+        (client/'visibility-client.pass').touch()
+        (self.root/'clientA.log').write_text('LOOTABLE_BODIES_VISIBILITY_CLIENT_PASS role=A\n')
+        (self.root/'sync/phase').write_text('18');self.monitor.poll()
+    def test_completed_shared_inventory_client_may_close_its_transport(self):
+        reset=FAILURE.replace("io.netty.handler.codec.EncoderException: java.io.IOException: Can't serialize unregistered packet",'io.netty.channel.unix.Errors$NativeIoException: syscall:read(..) failed: Connection reset by peer')
+        self.log.write_text(reset);client=self.root/'clientA';client.mkdir()
+        (client/'multiplayer-client.pass').touch()
+        (self.root/'clientA.log').write_text('LOOTABLE_BODIES_MULTIPLAYER_CLIENT_PASS role=A\n')
+        (self.root/'sync/phase').write_text('8');self.monitor.poll()
+
+    def test_reset_before_client_pass_or_in_active_phase_still_fails(self):
+        reset=FAILURE.replace("io.netty.handler.codec.EncoderException: java.io.IOException: Can't serialize unregistered packet",'io.netty.channel.unix.Errors$NativeIoException: syscall:read(..) failed: Connection reset by peer')
+        self.log.write_text(reset)
+        with self.assertRaises(RuntimeError):self.monitor.poll()
+        client=self.root/'clientA';client.mkdir();(client/'respawn-client.pass').touch()
+        (self.root/'clientA.log').write_text('LOOTABLE_BODIES_RESPAWN_CLIENT_PASS A\n')
+        (self.root/'sync/state').write_text('15 3 none 0')
+        with self.assertRaises(RuntimeError):self.monitor.poll()
+    def test_client_marker_without_actual_completed_client_log_still_fails(self):
+        reset=FAILURE.replace("io.netty.handler.codec.EncoderException: java.io.IOException: Can't serialize unregistered packet",'io.netty.channel.unix.Errors$NativeIoException: syscall:read(..) failed: Connection reset by peer')
+        self.log.write_text(reset)
+        client=self.root/'clientA';client.mkdir();(client/'respawn-client.pass').touch()
+        (self.root/'clientA.log').write_text('RESPAWN_CLIENT_PHASE A 16 9\n')
+        (self.root/'sync/state').write_text('16 9 none 0')
+        with self.assertRaises(RuntimeError):self.monitor.poll()
+
     def test_clients_boot_together_but_only_a_join_opens_b_connection_gate(self):
         starts=[]
         start_clients(starts.append)

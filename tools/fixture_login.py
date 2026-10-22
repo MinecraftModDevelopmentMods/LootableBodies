@@ -8,6 +8,25 @@ FAILURE = re.compile(r"^\[\d{2}:\d{2}:\d{2}\] \[Server thread/INFO\] \[(?:minecr
 JOIN = re.compile(r'^\[\d{2}:\d{2}:\d{2}\] \[Server thread/INFO\] \[(?:minecraft/DedicatedServer|net\.minecraft\.server\.dedicated\.DedicatedServer)\]: Container([AB]) (joined|left) the game$')
 LIMIT = 3
 
+RESET = re.compile(r"^\[\d{2}:\d{2}:\d{2}\] \[Server thread/INFO\] \[(?:minecraft/NetHandlerPlayServer|net\.minecraft\.network\.NetHandlerPlayServer)\]: Container([AB]) lost connection: Internal Exception: io\.netty\.channel\.unix\.Errors\$NativeIoException: syscall:read\(\.\.\) failed: Connection reset by peer$")
+
+
+def completed_client(home, role):
+    """A terminal phase, pass file and exact client log marker must all agree."""
+    log=home/('client'+role+'.log')
+    if not log.is_file():return False
+    lines=log.read_text(encoding='utf-8',errors='replace').splitlines()
+    for mode,phase,marker in [('respawn','9','LOOTABLE_BODIES_RESPAWN_CLIENT_PASS '+role),
+                             ('visibility','18','LOOTABLE_BODIES_VISIBILITY_CLIENT_PASS role='+role),
+                             ('multiplayer','8','LOOTABLE_BODIES_MULTIPLAYER_CLIENT_PASS role='+role)]:
+        if not (home/('client'+role)/(mode+'-client.pass')).is_file():continue
+        state=home/'sync'/('state' if mode=='respawn' else 'phase')
+        if not state.is_file():continue
+        fields=state.read_text().split();index=1 if mode=='respawn' else 0
+        if len(fields)<=index or fields[index]!=phase:continue
+        if any(line==marker or line.endswith(': '+marker) for line in lines):return True
+    return False
+
 class LoginMonitor:
     def __init__(self, home):
         self.home=Path(home);self.seen=0;self.counts={'A':0,'B':0}
@@ -24,7 +43,9 @@ class LoginMonitor:
                 if self.counts[role]>LIMIT:raise RuntimeError('Forge login retry limit: '+role)
                 (self.home/'sync'/('login-retry-'+role)).write_text(str(self.counts[role]))
             elif 'lost connection: Internal Exception:' in line:
-                raise RuntimeError('Unrecognised connection failure: '+line)
+                reset=RESET.fullmatch(line)
+                if not reset or not completed_client(self.home,reset[1]):
+                    raise RuntimeError('Unrecognised connection failure: '+line)
         self.seen=len(lines)
 
 def start_clients(start):

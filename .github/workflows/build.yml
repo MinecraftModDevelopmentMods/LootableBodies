@@ -328,6 +328,9 @@ jobs:
             build/packaged-client-names/screenshots/*.png
             build/ordinary-development/**/*.log
             build/ordinary-packaged/**/*.log
+            build/packaged-*/client*/*.pass
+            build/packaged-*/sync/state
+            build/packaged-*/sync/phase
             build/packaged-respawn-restart/**/*.log
             build/packaged-respawn-restart/sync/*.txt
             build/packaged-visibility/**/*.log
