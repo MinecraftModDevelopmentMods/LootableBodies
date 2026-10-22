@@ -20,7 +20,7 @@ import net.minecraftforge.fml.common.gameevent.*;
 /** Death/respawn timing matrix, with an independently connected observer. */
 public final class RespawnPacketChecks {
     private final MinecraftServer server;
-    private int index,phase,ticks,phaseTicks;
+    private int index,phase,ticks,phaseTicks,startupTicks;
     private EntityPlayerMP dead;
     private EntityPlayerMP observerDead;
     private EntityLootableBody body;
@@ -35,6 +35,26 @@ public final class RespawnPacketChecks {
             &&!LootableBodies.hurtByEnvironment&&!LootableBodies.hurtByAttacks&&!LootableBodies.hurtByMisc,"Respawn matrix requires production defaults");
         this.server=server;state(0);Files.write(file("server.ready").toPath(),new byte[]{1});FMLCommonHandler.instance().bus().register(this);
     }
+    static void verifySlowClientStartup(MinecraftServer server) throws Exception {
+        String previous=System.getProperty("lootablebodies.multiplayer.sync");
+        File folder=new File(server.getWorld(0).getSaveHandler().getWorldDirectory(),"respawn-startup-regression");
+        Files.createDirectories(folder.toPath());
+        RespawnPacketChecks fixture=null;
+        try {
+            System.setProperty("lootablebodies.multiplayer.sync",folder.getAbsolutePath());
+            fixture=new RespawnPacketChecks(server);
+            // Cold software-rendered clients may need more than 500 server ticks
+            // to reach their first login. Exercise the actual fixture tick path.
+            for(int tick=0;tick<1000;tick++)fixture.tick(new TickEvent.ServerTickEvent(TickEvent.Phase.END));
+            RuntimeChecks.require(!fixture.finished&&fixture.index==0&&fixture.phase==0&&fixture.phaseTicks==0,
+                "Client startup consumed the death/respawn case deadline");
+            System.out.println("RESPAWN_STARTUP_CLOCK_PASS waiting_ticks=1000 case_ticks=0");
+        } finally {
+            if(fixture!=null)FMLCommonHandler.instance().bus().unregister(fixture);
+            if(previous==null)System.clearProperty("lootablebodies.multiplayer.sync");
+            else System.setProperty("lootablebodies.multiplayer.sync",previous);
+        }
+    }
     static File file(String name){return new File(System.getProperty("lootablebodies.multiplayer.sync"),name);}
     private EntityPlayerMP player(String role){return server.getPlayerList().getPlayerByUsername("Container"+role);}
     private boolean ack(String role,int p){return file(role+".case-"+index+"-"+p).isFile();}
@@ -42,9 +62,14 @@ public final class RespawnPacketChecks {
     @SubscribeEvent public void tick(TickEvent.ServerTickEvent e) {
         if(e.phase!=TickEvent.Phase.END||finished)return;
         try {
-            RuntimeChecks.require(++ticks<20000,"Respawn matrix total timeout");phaseTicks++;
+            RuntimeChecks.require(++ticks<20000,"Respawn matrix total timeout");
             RuntimeChecks.require(!file("abort").exists(),"Respawn matrix aborted");
             EntityPlayerMP a=player("A"),b=player("B");trace(a);trace(b);
+            if(index==0&&phase==0&&(a==null||b==null||!ack("A",0)||!ack("B",0))) {
+                RuntimeChecks.require(++startupTicks<2400,"Clients did not finish startup before the respawn matrix");
+                return;
+            }
+            phaseTicks++;
             if(phaseTicks%100==0)System.out.println("RESPAWN_MATRIX_STATE case="+index+" phase="+phase+" A="+(a==null?null:a.getPosition())+" body="+(body==null?null:body.getPosition())+" tracked="+(body==null?null:body.world.getMinecraftServer().getWorld(body.dimension).getEntityTracker().getTrackingPlayers(body)));
             RuntimeChecks.require(phaseTicks<500,"Corpse missing after accepted respawn case="+index+" phase="+phase);
             if(phase==0 && a!=null&&b!=null&&ack("A",0)&&ack("B",0)) {

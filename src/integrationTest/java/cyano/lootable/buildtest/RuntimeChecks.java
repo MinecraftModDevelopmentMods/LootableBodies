@@ -73,6 +73,8 @@ public final class RuntimeChecks {
                 LootableBodies.ticksPerItemDecay == 6000 && LootableBodies.corpseDecayTime == 72000 &&
                 LootableBodies.allowCorpseDecay && LootableBodies.decayOnlyWhenEmpty, "default configuration");
         defaultsChecked=true;
+        if(phase.equals("fresh")&&FMLCommonHandler.instance().getSide().isServer())
+            RespawnPacketChecks.verifySlowClientStartup(server);
         // Freeze timers only in this verifier while comparing exact inventories.
         LootableBodies.allowCorpseDecay = false;
         LootableBodies.ticksPerItemDecay = -1;
