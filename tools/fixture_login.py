@@ -73,3 +73,16 @@ def write_receipts(home):
         try:receipt_lines(path,text)
         except Exception:
             receipt.unlink();raise
+
+def archive_live_logs(home):
+    """Preserve each first-process log and receipt before Forge replaces latest.log."""
+    home=Path(home)
+    for name in ('latest.log','debug.log'):
+        source=home/'server/logs'/name
+        if not source.is_file():continue
+        target=home/('server-live-'+name)
+        receipt=source.with_name(source.name+'.login-retries.json')
+        target_receipt=target.with_name(target.name+'.login-retries.json')
+        if target.exists() or target_receipt.exists():raise RuntimeError('Refusing existing archived fixture log')
+        source.rename(target)
+        if receipt.is_file():receipt.rename(target_receipt)

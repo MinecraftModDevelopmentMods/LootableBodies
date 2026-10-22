@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 import shutil
 from audit_runtime_logs import audit
-from fixture_login import LoginMonitor, start_clients, write_receipts
+from fixture_login import LoginMonitor, start_clients, write_receipts, archive_live_logs
 from verify_multiplayer import client_command
 from verify_packaged import prepare, FORGE, MAIN, digest, run
 from verify_packaged_client import prepare_assets
@@ -92,6 +92,7 @@ def main():
         if not (home/('client'+role)/(args.mode+'-client.pass')).is_file(): raise RuntimeError('Client did not finish '+role)
     if args.mode=='visibility' and not args.source_server:
         (home/'server/server.properties').write_text(props.replace('server-port='+str(port),'server-port=0'))
+        archive_live_logs(home)
         run(java,home/'server','visibility-reload')
     if args.source_server and fingerprint(args.source_server/'world')!=source_before:
         raise RuntimeError('Source world changed')

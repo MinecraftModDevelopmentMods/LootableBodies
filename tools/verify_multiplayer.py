@@ -9,7 +9,7 @@ import socket
 import subprocess
 import time
 from audit_runtime_logs import audit
-from fixture_login import LoginMonitor, start_clients, write_receipts
+from fixture_login import LoginMonitor, start_clients, write_receipts, archive_live_logs
 from client_runtime import assemble_libraries
 from verify_packaged import MAIN, FORGE, digest, prepare, run
 from verify_packaged_client import prepare_assets
@@ -105,6 +105,7 @@ def main():
         for shot in ('shared-ready.png','shared-final.png'):
             if not (home/'screenshots'/shot).is_file(): raise RuntimeError('Missing screenshot '+role+' '+shot)
     (server/'server.properties').write_text(properties.replace('server-port='+str(port),'server-port=0')+'view-distance=4\n')
+    archive_live_logs(root)
     run(java,server,'multiplayer-reload')
     if digest(jar)!=before: raise RuntimeError('Candidate changed')
     (root/'result.json').write_text(json.dumps({'candidate_sha256':before,'two_real_tcp_clients':True,
