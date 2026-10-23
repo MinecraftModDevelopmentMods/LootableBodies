@@ -136,6 +136,13 @@ class ReleaseWorkflowTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             self.validate('1.13.2', audit_success=False)
 
+    def test_113_audit_receives_the_registered_shared_ci_completion(self):
+        # GitHub registers this shared workflow under its default-branch name,
+        # even when the run uses another Minecraft branch's workflow contents.
+        audit = WORKFLOW.with_name('artifact-audit-1.13.yml').read_text(encoding='utf-8')
+        event_names = audit.split('workflows: [', 1)[1].split(']', 1)[0].split(',')
+        self.assertIn('LootableBodies 1.12 CI', [name.strip() for name in event_names])
+
     def test_identity_changes_are_rejected(self):
         for mutation in [{'mod_id': 'other'}, {'minecraft_version': '1.10.2'}, {'mod_license': 'CC0-1.0'}]:
             with self.subTest(mutation=mutation), self.assertRaises(SystemExit):
