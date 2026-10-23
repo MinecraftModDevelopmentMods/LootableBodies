@@ -16,7 +16,7 @@ import net.minecraft.client.resources.*;
 import net.minecraft.server.management.PlayerProfileCache;
 import net.minecraft.tileentity.TileEntitySkull;
 import net.minecraft.util.ResourceLocation;
-import net.minecraftforge.fml.relauncher.ReflectionHelper;
+
 
 /** Deterministic service faults; no real account or authentication service required. */
 final class VisibilitySkinChecks {
@@ -53,7 +53,7 @@ final class VisibilitySkinChecks {
                 throw new UnsupportedOperationException(method.getName());
             }));
             EntityLootableBody body=new EntityLootableBody(mc.world);body.setUserName("VisibilityFault");
-            try {body.onEntityUpdate();RuntimeChecks.require(body.getGameProfile()!=null,"Failure erased fallback profile");mark(report,"profile_failure_does_not_abort_client_tick",true);}
+            try {body.baseTick();RuntimeChecks.require(body.getGameProfile()!=null,"Failure erased fallback profile");mark(report,"profile_failure_does_not_abort_client_tick",true);}
             catch(Throwable failure) {failures.add("profile: "+failure);mark(report,"profile_failure_does_not_abort_client_tick",false);}
             RuntimeChecks.require(failedRequest.await(2,TimeUnit.SECONDS),"Profile failure was never injected");
             // Deliberately slow lookup must leave the render/tick thread responsive.
@@ -62,11 +62,11 @@ final class VisibilitySkinChecks {
                 throw new UnsupportedOperationException(method.getName());
             }));
             EntityLootableBody slow=new EntityLootableBody(mc.world);slow.setUserName("VisibilitySlow");
-            long start=System.nanoTime();slow.onEntityUpdate();long millis=(System.nanoTime()-start)/1000000;
+            long start=System.nanoTime();slow.baseTick();long millis=(System.nanoTime()-start)/1000000;
             try {RuntimeChecks.require(millis<150,"Slow profile blocked client tick for "+millis+"ms");mark(report,"delayed_profile_does_not_block_client_tick",true);}
             catch(Throwable failure) {failures.add("delay: "+failure);mark(report,"delayed_profile_does_not_block_client_tick",false);}
             boolean local=LootableBodies.useLocalSkin;LootableBodies.useLocalSkin=true;
-            slow.setUserName("VisibilityRenamed");slow.onEntityUpdate();LootableBodies.useLocalSkin=local;
+            slow.setUserName("VisibilityRenamed");slow.baseTick();LootableBodies.useLocalSkin=local;
             Thread.sleep(650); // Only the fault fixture waits; never production code.
             RuntimeChecks.require(requests.get()==2,"Faults never exercised actual profile services");
             RuntimeChecks.require(slow.getGameProfile().getName().equals("VisibilityRenamed"),"Late skin result overwrote renamed corpse");

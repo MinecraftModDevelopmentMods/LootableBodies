@@ -3,6 +3,7 @@
   <Appenders>
     <Console name="Console" target="SYSTEM_OUT"><PatternLayout pattern="[%d{HH:mm:ss}] [%t/%level] [%logger]: %msg%n"/></Console>
     <File name="RuntimeLog" fileName="logs/latest.log" append="false"><PatternLayout pattern="[%d{HH:mm:ss}] [%t/%level] [%logger]: %msg%n"/></File>
+    <File name="DebugLog" fileName="logs/debug.log" append="false"><PatternLayout pattern="[%d{HH:mm:ss.SSS}] [%t/%level] [%logger]: %msg%n"/></File>
   </Appenders>
-  <Loggers><Root level="info"><AppenderRef ref="Console"/><AppenderRef ref="RuntimeLog"/></Root></Loggers>
+  <Loggers><Root level="debug"><AppenderRef ref="Console" level="info"/><AppenderRef ref="RuntimeLog" level="info"/><AppenderRef ref="DebugLog"/></Root></Loggers>
 </Configuration>

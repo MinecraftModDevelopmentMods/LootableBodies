@@ -18,6 +18,8 @@ MODS = {
                          'C82CC329BA53A218CADB681D646F64A9C457341577BC4F9AA07E2F9926434CCF'),
 }
 MODS.update({
+    'released-112.jar': ('https://github.com/MinecraftModDevelopmentMods/LootableBodies/releases/download/2.4.3.112021/LootableBodies-2.4.3.112021.jar',
+                         'A9F4B115828834F60C5905526A8A99794B1DFE4802AB4D48858F2D597F3FCBCA'),
     'released-111.jar': ('https://github.com/MinecraftModDevelopmentMods/LootableBodies/releases/download/2.4.2.111021/LootableBodies-2.4.2.111021.jar',
                          '59ACF5652505F08A7F011307B3CD68F3754FCFC14C4C330BD952475351AEC932'),
     'original-112.jar': ('https://mediafilez.forgecdn.net/files/2529/840/DrCyanosLootableBodies_1.12-2.4.0.jar',
@@ -48,7 +50,7 @@ def fetch(url, path, expected):
     for address in [url, url + '?source=lootablebodies-migration', url + '?source=lootablebodies111']:
         try:
             print('MIGRATION_INPUT_FETCH',path.name,flush=True)
-            request = urllib.request.Request(address, headers={'User-Agent': 'LootableBodiesMigrationTests/2.4.3.112021'})
+            request = urllib.request.Request(address, headers={'User-Agent': 'LootableBodiesMigrationTests/2.4.4.113021'})
             with urllib.request.urlopen(request, timeout=30) as response:
                 chunks=[]; started=time.monotonic()
                 while True:

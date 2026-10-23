@@ -4,7 +4,7 @@ import static cyano.lootable.ItemStacks.emptyStack;
 
 import cyano.lootable.LootableBodies;
 import cyano.lootable.entities.EntityLootableBody;
-import net.minecraft.command.server.CommandSummon;
+
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Items;
@@ -15,10 +15,10 @@ import net.minecraft.world.World;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.EntityEvent;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.eventhandler.Event;
-import net.minecraftforge.fml.common.eventhandler.EventPriority;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import cyano.lootable.ModLog;
+import net.minecraftforge.eventbus.api.Event;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -74,8 +74,7 @@ public class PlayerDeathEventHandler {
 			final World w = player.getEntityWorld();
 
 			EntityLootableBody corpse = new EntityLootableBody(player);
-			CommandSummon k;
-			corpse.setUserName(player.getName());
+			corpse.setUserName(player.getGameProfile().getName());
 			corpse.setRotation(player.rotationYaw);
 
 			List<ItemStack> items = new ArrayList<>();
@@ -101,16 +100,16 @@ public class PlayerDeathEventHandler {
 			if(w.spawnEntity(corpse)) {
 				e.getDrops().clear();
 			} else {
-				FMLLog.warning("%s: Corpse spawn rejected; original death drops retained", LootableBodies.MODID);
+				ModLog.warning("%s: Corpse spawn rejected; original death drops retained", LootableBodies.MODID);
 			}
 		}
 	}
 
 
 	private static void log(String s, Object... o){
-		FMLLog.info("%s: %s", LootableBodies.MODID,String.format(s,o));
+		ModLog.info("%s: %s", LootableBodies.MODID,String.format(s,o));
 	}
 	private static void log(Object o){
-		FMLLog.info("%s: %s", LootableBodies.MODID,String.valueOf(o));
+		ModLog.info("%s: %s", LootableBodies.MODID,String.valueOf(o));
 	}
 }

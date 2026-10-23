@@ -77,6 +77,7 @@ tasks.withType(JavaCompile).configureEach {
     sourceCompatibility = '1.8'
     targetCompatibility = '1.8'
     options.encoding = 'UTF-8'
+    options.compilerArgs.addAll(['-Xmaxerrs','1000'])
 }
 tasks.named('compileTestJava', JavaCompile) { options.compilerArgs.add('-proc:none') }
 tasks.withType(Test).configureEach {
@@ -97,29 +98,79 @@ tasks.withType(AbstractArchiveTask).configureEach {
     reproducibleFileOrder = true
     filteringCharset = 'UTF-8'
 }
-ext.archiveTextPatterns = ['**/*.info', '**/*.java', '**/*.lang', '**/*.mcmeta', '**/*.html',
+ext.archiveTextPatterns = ['**/*.info', '**/*.java', '**/*.json', '**/*.toml', '**/*.mcmeta', '**/*.html',
         '**/*.css', '**/*.js', '**/*.md', '**/*.txt', '**/package-list', '**/LICENSE', '**/LICENSE-CC0', '**/NOTICE']
 ext.normalizeArchiveText = { details ->
     details.filter(FixCrLfFilter, eol: FixCrLfFilter.CrLf.newInstance('lf'),
             eof: FixCrLfFilter.AddAsisRemove.newInstance('asis'))
 }
 
+apply from: 'gradle/assets.gradle'
+
 minecraft {
     mappings channel: project.mapping_channel, version: project.mapping_version
     runs {
         configureEach {
+            mainClass = 'net.minecraftforge.userdev.LaunchTesting'
             workingDir.convention layout.projectDirectory.dir(
                     providers.gradleProperty('gameRunDirectory').getOrElse('run'))
             systemProperty 'log4j.configurationFile', file('gradle/log4j2.xml').toURI().toString()
         }
-        register('client')
-        register('server') { args 'nogui' }
+        register('client') { client=true; args '--assetsDir', minecraftAssets.asFile.absolutePath, '--assetIndex', '1.13.1' }
+        register('server') { client=false; args '--nogui' }
     }
 }
+minecraft.runs.configureEach { options ->
+    systemProperties.put('user.home',minecraftGameHome.asFile.absolutePath)
+    environment.put('APPDATA',minecraftGameHome.asFile.absolutePath)
+    environment.put('target',options.name=='client'?'fmluserdevclient':'fmluserdevserver')
+    environment.put('MCP_MAPPINGS',"${mapping_channel}_${mapping_version}")
+    environment.put('MCP_VERSION',mcp_version.toString())
+    environment.put('FORGE_VERSION',forge_version.toString())
+    environment.put('FORGE_GROUP','net.minecraftforge')
+    environment.put('MC_VERSION',minecraft_version.toString())
+    String root=layout.buildDirectory.dir('forge13-development/main').get().asFile.absolutePath
+    environment.put('MOD_CLASSES',"${mod_id}%%${root}${File.pathSeparator}${mod_id}%%${root}")
+    if(options.name=='client') {
+        environment.put('assetDirectory',minecraftAssets.asFile.absolutePath)
+        environment.put('assetIndex','1.13.1')
+        environment.put('nativesDirectory',new File(gradle.gradleUserHomeDir,"caches/minecraftforge/forgegradle/slime-launcher/cache/net/minecraftforge/forge/${minecraft_version}-${forge_version}/natives").absolutePath)
+    }
+}
+
+tasks.withType(JavaExec).configureEach { run ->
+    if (run.name in ['runClient','runServer']) {
+        environment 'target', run.name=='runClient'?'fmluserdevclient':'fmluserdevserver'
+        environment 'MCP_MAPPINGS', "${mapping_channel}_${mapping_version}"
+        environment 'MCP_VERSION', mcp_version
+        environment 'FORGE_VERSION', forge_version
+        environment 'FORGE_GROUP', 'net.minecraftforge'
+        environment 'MC_VERSION', minecraft_version
+        String root=layout.buildDirectory.dir('forge13-development/main').get().asFile.absolutePath
+        environment 'MOD_CLASSES', "${mod_id}%%${root}${File.pathSeparator}${mod_id}%%${root}"
+        if(run.name=='runClient') {
+            File cache=new File(gradle.gradleUserHomeDir,'caches/forge_gradle')
+            environment 'assetDirectory',minecraftAssets.asFile.absolutePath
+            environment 'assetIndex','1.13.1'
+            environment 'nativesDirectory',new File(cache,"minecraftforge/forgegradle/slime-launcher/cache/net/minecraftforge/forge/${minecraft_version}-${forge_version}/natives").absolutePath
+        }
+    }
+}
+
+tasks.matching { it.name == 'runClient' }.configureEach { dependsOn 'prepareMinecraftAssets' }
+
 tasks.matching { it.name == 'runServer' }.configureEach { standardInput = System.in }
+tasks.register('prepareProductionRunDirectory') {
+    doLast {
+        ['client','server'].each { name ->
+            File mods = new File(minecraft.runs.getByName(name).workingDir.get().asFile, 'mods')
+            if (!mods.isDirectory() && !mods.mkdirs()) throw new GradleException("Cannot create production mods directory: ${mods}")
+        }
+    }
+}
 
 // Legacy FML discovers classes and processed resources from a single root.
-ext.developmentOutput = layout.buildDirectory.dir('forge12-development/main')
+ext.developmentOutput = layout.buildDirectory.dir('forge13-development/main')
 tasks.register('syncDevelopmentOutput', Sync) {
     dependsOn 'classes'
     from tasks.named('compileJava', JavaCompile).flatMap { it.destinationDirectory }
@@ -129,6 +180,7 @@ tasks.register('syncDevelopmentOutput', Sync) {
 tasks.configureEach {
     if (name in ['runClient', 'runServer']) {
         dependsOn 'syncDevelopmentOutput'
+        dependsOn 'prepareProductionRunDirectory'
         doFirst {
             Set<File> split = sourceSets.main.output.files
             classpath = files(developmentOutput, classpath.filter { !split.contains(it) })
@@ -153,7 +205,6 @@ repositories {
 }
 dependencies {
     implementation minecraft.dependency("net.minecraftforge:forge:${minecraft_version}-${forge_version}")
-    compileOnly 'org.lwjgl.lwjgl:lwjgl_util:2.9.4-nightly-20150209'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.12.2'
@@ -163,7 +214,7 @@ tasks.named('processResources', ProcessResources) {
     filteringCharset = 'UTF-8'
     inputs.properties(version: project.version, mcversion: project.minecraft_version,
             mod_url: project.mod_url, mod_license: project.mod_license)
-    filesMatching('mcmod.info') {
+    filesMatching('META-INF/mods.toml') {
         expand version: project.version, mcversion: project.minecraft_version,
                 mod_url: project.mod_url, mod_license: project.mod_license
     }
@@ -216,10 +267,16 @@ tasks.register('verifyProductionRuntimeClasspath') {
         if (configurations.runtimeClasspath.files.any {
             it.path.replace('\\','/') =~ /(?i)(\/test(?:\/|$)|junit|opentest4j|mockito|byte-buddy|integration-test|buildtest)/
         }) throw new GradleException('Testing code leaked into the production runtime')
-        if (!developmentOutput.get().file('mcmod.info').asFile.text.contains("\"version\": \"${project.version}\""))
+        if (!developmentOutput.get().file('META-INF/mods.toml').asFile.text.contains("version=\"${project.version}\""))
             throw new GradleException('Development resources are not processed')
     }
 }
 tasks.named('check') { dependsOn 'verifyProductionRuntimeClasspath' }
 
 // Publication is restricted to the confirmed MMD release workflow.
+
+// Renamer registers every auxiliary probe with assemble. Production archives
+// have their own explicit inputs; probes are built by their verification gates.
+gradle.projectsEvaluated {
+    tasks.named('assemble') { setDependsOn([releaseJar,tasks.named('sourcesJar'),tasks.named('javadocJar')]) }
+}

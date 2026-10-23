@@ -1,51 +1,38 @@
 package cyano.lootable.upgrade;
-
-import cyano.lootable.LootableBodies;
-import java.lang.reflect.Field;
+import com.mojang.datafixers.DataFixer;
+import java.lang.reflect.*;
+import java.util.*;
+import java.util.function.UnaryOperator;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.datafix.DataFixer;
-import net.minecraft.util.datafix.FixTypes;
-import net.minecraft.util.datafix.IFixType;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.storage.AnvilChunkLoader;
-import net.minecraft.world.chunk.storage.IChunkLoader;
-import net.minecraftforge.event.world.WorldEvent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.common.eventhandler.EventPriority;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.relauncher.ReflectionHelper;
-
-/** Supplies preserved source context before the Anvil loader invokes Forge's fixers. */
-@Mod.EventBusSubscriber(modid=LootableBodies.MODID)
+import net.minecraft.world.gen.feature.structure.LegacyStructureDataUtil;
+/** Installs preservation before native save handlers and chunk readers run. */
 public final class ChunkVersionContext {
     private ChunkVersionContext() { }
-
-    @SubscribeEvent(priority=EventPriority.HIGHEST)
-    public static void load(WorldEvent.Load event) {
-        if(!(event.getWorld() instanceof WorldServer))return;
-        IChunkLoader loader=((WorldServer)event.getWorld()).getChunkProvider().chunkLoader;
-        if(!(loader instanceof AnvilChunkLoader))return;
-        try {
-            // Forge has no setter for this pinned 1.12 Anvil boundary. World.Load
-            // precedes spawn preparation and later dimension chunk loading.
-            Field field=ReflectionHelper.findField(AnvilChunkLoader.class,"fixer","field_193416_e");
-            DataFixer delegate=(DataFixer)field.get(loader);
-            if(!(delegate instanceof ContextFixer))field.set(loader,new ContextFixer(delegate));
-        } catch(ReflectiveOperationException failure) {
-            throw new IllegalStateException("Lootable Bodies could not install safe chunk version handling",failure);
-        }
+    public static void installServer(MinecraftServer server) {
+        installFixer(server,null);
+        installFixer(server.getActiveAnvilConverter(),null);
     }
-
-    private static final class ContextFixer extends DataFixer {
-        private final DataFixer delegate;
-        ContextFixer(DataFixer delegate){super(UpgradePreservation.MINECRAFT_VERSION);this.delegate=delegate;}
-        @Override public NBTTagCompound process(IFixType type,NBTTagCompound input) {
-            NBTTagCompound result=delegate.process(type,type==FixTypes.CHUNK?UpgradePreservation.chunkContext(input):input);
-            if(type==FixTypes.CHUNK)UpgradePreservation.clearChunkContext(result);
-            return result;
-        }
-        @Override public NBTTagCompound process(IFixType type,NBTTagCompound input,int version) {
-            return delegate.process(type,input,version);
-        }
+    public static void installWorld(WorldServer world) {
+        Object loader=world.getChunkProvider().chunkLoader;
+        if(!(loader instanceof AnvilChunkLoader))throw new IllegalStateException("Unsupported chunk reader; refusing unprotected world loading");
+        installFixer(world.getSaveHandler(),null);
+        installFixer(loader,chunk->LegacyStructureDataUtil.func_212183_a(world.getDimension().getType(),world.getMapStorage()).func_212181_a(chunk));
+    }
+    static void installFixer(Object owner,UnaryOperator<NBTTagCompound> structures) {
+        List<Field> fields=new ArrayList<>();
+        for(Class<?> type=owner.getClass();type!=null;type=type.getSuperclass())for(Field field:type.getDeclaredFields())
+            if(!Modifier.isStatic(field.getModifiers()) && field.getType()==DataFixer.class)fields.add(field);
+        if(fields.size()!=1)throw new IllegalStateException("Cannot identify a unique native data fixer before world loading");
+        try {
+            Field field=fields.get(0);field.setAccessible(true);DataFixer existing=(DataFixer)field.get(owner);
+            if(existing==null)throw new IllegalStateException("Missing native data fixer");
+            if(existing instanceof NativeSafeFixer && structures==null)return;
+            DataFixer delegate=existing instanceof NativeSafeFixer?((NativeSafeFixer)existing).delegate:existing;
+            DataFixer replacement=new NativeSafeFixer(delegate,structures);field.set(owner,replacement);
+            if(field.get(owner)!=replacement)throw new IllegalStateException("Native preservation boundary was not installed");
+        }catch(ReflectiveOperationException failure){throw new IllegalStateException("Cannot install native preservation before world loading",failure);}
     }
 }

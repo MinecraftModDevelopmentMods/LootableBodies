@@ -18,6 +18,10 @@ ORIGINS = {
     'recovery-110': ('1.10.2', '2.4.1.110021', '7F9F0EE7BF09F943ED85398982EB7C2207F3DD55B75E9E92A7531C393BE1045B'),
 }
 ORIGINS.update({
+    'via112-110': ('1.10.2','2.2.0','688AFBBF4485D1F3746C68903C9E0885D57F42CCFBFA0CB4A0FC42982C0B3F2B'),
+    'via112-111': ('1.11.2','2.4.2.111021','59ACF5652505F08A7F011307B3CD68F3754FCFC14C4C330BD952475351AEC932'),
+    'released-112': ('1.12.2','2.4.3.112021','A9F4B115828834F60C5905526A8A99794B1DFE4802AB4D48858F2D597F3FCBCA'),
+    'recovery-112': ('1.12.2','2.4.3.112021','A9F4B115828834F60C5905526A8A99794B1DFE4802AB4D48858F2D597F3FCBCA'),
     'via111-110': ('1.10.2','2.2.0','688AFBBF4485D1F3746C68903C9E0885D57F42CCFBFA0CB4A0FC42982C0B3F2B'),
     'released-111': ('1.11.2', '2.4.2.111021', '59ACF5652505F08A7F011307B3CD68F3754FCFC14C4C330BD952475351AEC932'),
     'original-112': ('1.12.2', '2.4.0', 'DE701F657A03BFFE08D6F9FEB1516B37B23B0171B91716087C7C84D9C19B9B5C'),
@@ -76,8 +80,9 @@ def main():
     parser.add_argument('--forge110-home', type=Path, required=True)
     parser.add_argument('--forge111-home', type=Path, required=True)
     parser.add_argument('--forge112-home', type=Path, required=True)
+    parser.add_argument('--forge113-home', type=Path)
     for origin in ORIGINS:
-        if origin.startswith('recovery-') or origin=='via111-110':
+        if origin.startswith('recovery-') or origin.startswith('via'):
             continue
         parser.add_argument('--' + origin, type=Path, required=True)
     parser.add_argument('--origins', nargs='+', choices=list(ORIGINS), default=list(ORIGINS))
@@ -97,6 +102,12 @@ def main():
     report = {'seeder_sha256': digest(seeder), 'origins': {}}
     for origin, (minecraft, version, expected) in ORIGINS.items():
         if origin not in args.origins:
+            continue
+        if origin.startswith('via112-'):
+            details=seed_transition112(args,project,root,seeder,origin)
+            report['origins'][origin]=details
+            (root/'seed-report.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+            print('LEGACY_WORLD_SEALED',origin,len(details['world']),'files',flush=True)
             continue
         if origin=='via111-110':
             details=seed_transition(args,project,root,seeder)
@@ -143,30 +154,39 @@ def seed_transition(args,project,root,seeder):
             'source_world_unchanged':True,'distant_regions_unchanged':distant,'world':fingerprint(target/'world')}
 
 
+def seed_transition112(args,project,root,seeder,origin):
+    original=args.original_110.resolve() if origin=='via112-110' else args.released_111.resolve()
+    minecraft,version,expected=ORIGINS[origin];released=args.released_112.resolve()
+    if digest(original)!=expected or digest(released)!=ORIGINS['released-112'][2]:raise RuntimeError('Incorrect intermediate production jar')
+    source=root/(origin+'-source');distribution=args.forge110_home if minecraft=='1.10.2' else args.forge111_home
+    prepare(source,distribution.resolve(),minecraft,original,seeder);sealed=seed(args.java.resolve(),source,minecraft,version)
+    historical=project/'.gradle/legacy-tools/released-112'
+    record=json.loads((historical/'tools.json').read_text());name='integration-test-mod/lootablebodies-build-tests-reobf.jar'
+    probe=historical/'source/build'/name
+    if record['source']!='ee8ee733fa091e961f27812ad780d56c35813f30' or digest(probe)!=record['artifacts'][name]:raise RuntimeError('Historical 1.12 verifier source or checksum changed')
+    target=root/origin;prepare(target,args.forge112_home.resolve(),'1.12.2',released,probe)
+    shutil.copytree(source/'world',target/'world');world=target/'world'
+    shutil.copy2(next((world/'playerdata').glob('*.dat')),world/'upgrade-player-source.nbt')
+    distant={str(p.relative_to(world)):digest(p) for p in world.rglob('region/r.*.mca') if p.name in ('r.8.8.mca','r.16.16.mca')}
+    with (target/'transition.log').open('w',encoding='utf-8') as log:
+        result=subprocess.run([str(args.java.resolve()),'-Xmx2G','-Dlootablebodies.phase=upgrade-near','-jar',FORGE['1.12.2']+'-universal.jar','nogui'],cwd=target,stdout=log,stderr=subprocess.STDOUT,timeout=240)
+    text=(target/'transition.log').read_text(encoding='utf-8',errors='replace')
+    if result.returncode or 'LOOTABLE_BODIES_WORLD_UPGRADE_PASS phase=upgrade-near' not in text or not (world/'upgrade-near.pass').is_file():raise RuntimeError('Actual released 1.12 transition failed: '+str(target/'transition.log'))
+    audit(target/'transition.log',upgrade=True)
+    if fingerprint(source/'world')!=sealed or len(distant)!=6 or any(digest(world/p)!=value for p,value in distant.items()):raise RuntimeError('Intermediate writer changed source or unopened regions')
+    if list(target.glob('crash-reports/*')):raise RuntimeError('Historical transition crash report')
+    (world/'upgrade-near.pass').rename(world/'transition112.pass')
+    return {'minecraft':minecraft+' via 1.12.2','mod_version':version+' via 2.4.3.112021','jar_sha256':expected,'intermediate_jar_sha256':digest(released),'transition_probe_sha256':digest(probe),'source_world_unchanged':True,'distant_regions_unchanged':distant,'world':fingerprint(world)}
+
+
 PHASES = ['upgrade-near', 'upgrade-near-reload', 'upgrade-near-recover', 'upgrade-near-recovered',
           'upgrade-far', 'upgrade-far-reload', 'upgrade-late', 'upgrade-return', 'upgrade-final', 'upgrade-final-reload']
 
 
 def run_upgrade(java, home, phase):
-    marker = home / 'world' / (phase + '.pass')
-    if marker.exists():
-        raise RuntimeError('Refusing stale phase marker')
-    log = home / (phase + '.log')
-    with log.open('w', encoding='utf-8') as output:
-        result = subprocess.run([str(java), '-Xmx2G', '-Dlootablebodies.phase=' + phase,
-                                 '-jar', FORGE['1.12.2'] + '-universal.jar', 'nogui'], cwd=home,
-                                stdout=output, stderr=subprocess.STDOUT, timeout=240)
-    text = log.read_text(encoding='utf-8', errors='replace')
-    if result.returncode or not marker.is_file() or 'LOOTABLE_BODIES_WORLD_UPGRADE_PASS phase=' + phase not in text or 'LOOTABLE_BODIES_RUNTIME_PASS phase=' + phase not in text:
-        raise RuntimeError('World upgrade failed: ' + str(log))
-    audit(log, upgrade=True)
-    for name in ['latest.log','debug.log','fml-server-latest.log']:
-        debug=home/'logs'/name
-        if debug.is_file():
-            shutil.copy2(debug,home/(phase+'.'+name))
-            audit(debug,upgrade=True)
-    if list((home / 'crash-reports').glob('*')):
-        raise RuntimeError('World upgrade crash report: ' + str(home))
+    from native_runtime import run_server
+    run_server(java,home,phase,message='LOOTABLE_BODIES_WORLD_UPGRADE_PASS phase='+phase)
+
 
 
 def patch_stamps(world, disposable):
@@ -219,11 +239,8 @@ def patch_stamps(world, disposable):
 def verify(args, project):
     if not args.seeds:
         raise ValueError('--seeds is required for the upgrade matrix')
-    if not args.control_report:
-        raise ValueError('Run the independent Forge upgrade control first and supply --control-report')
-    control = json.loads(args.control_report.read_text(encoding='utf-8'))
-    if control.get('lootable_bodies_installed') is not False or control.get('source_unchanged') is not True or control.get('reproduced_diagnostic') != FORGE_UPGRADE_RENAME or control.get('control_jar_sha256') != digest(project / 'build/control-test-mod/forge-platform-control-reobf.jar'):
-        raise RuntimeError('Invalid independent Forge control evidence')
+    if not args.forge113_home:
+        raise ValueError('--forge113-home is required for the native upgrade matrix')
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     candidate = project / 'build/libs' / MAIN_JAR
@@ -246,11 +263,13 @@ def verify(args, project):
     if set(sources) != set(args.origins):
         raise RuntimeError('Missing requested historical fixture')
     report = {'candidate_sha256': candidate_hash, 'probe_sha256':probe_hash, 'cases': {}}
-    for origin, (source, details) in sources.items():
+    for origin in args.origins:
+        source,details=sources[origin]
         for variant in args.variants:
             name = origin + '-' + variant
             home = root / name
-            prepare(home, args.forge112_home.resolve(), '1.12.2', candidate, probe)
+            from native_runtime import prepare_server
+            prepare_server(home,args.forge113_home.resolve(),candidate,probe)
             shutil.copytree(source, home / 'world')
             world = home / 'world'
             player_files = list((world / 'playerdata').glob('*.dat'))
@@ -275,7 +294,7 @@ def verify(args, project):
                             if entity.value.get('id', Tag(8, '')).value not in ('lootablebodies.Corpse', 'lootablebodies:corpse'):
                                 continue
                             if wave >= 0 or phase in ('upgrade-return', 'upgrade-final', 'upgrade-final-reload'):
-                                if entity.value['id'].value != 'lootablebodies:corpse' or entity.value.get('LootableBodiesDataVersion') != Tag(3, 2):
+                                if entity.value['id'].value != 'lootablebodies:corpse' or entity.value.get('LootableBodiesDataVersion') != Tag(3, 3):
                                     raise RuntimeError('A loaded corpse was not actually saved in the new format')
                                 persisted += 1
                 if persisted < (3 if wave >= 0 else 8):

@@ -1,0 +1,7 @@
+modLoader="javafml"
+loaderVersion="[25,)"
+license="LGPL-2.1-only"
+[[mods]]
+modId="forgeplatformcontrol"
+version="1"
+displayName="Disposable Forge control"

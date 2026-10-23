@@ -1,8 +1,10 @@
-2.4.3.112021 - Minecraft 1.12.2, Forge
+2.4.4.113021 - Minecraft 1.13.2, Forge
 
-- Brings the maintained inventory and corpse recovery fixes to 1.12.2.
-- Adds the Config button on the Mods screen.
-- Protects older corpses and their items when upgrading from 1.10.2, 1.11.2 or an earlier 1.12.2 build, including chunks visited later.
-- Keeps the existing buoyancy and void-platform options and their defaults.
+Updated for Minecraft 1.13.2.
 
-Back up the whole world before upgrading, including its data folder.
+Includes the inventory, corpse and config improvements from 1.12.2.
+Fixed occasional stalls when joining a server.
+Protects bodies and their contents when upgrading older 1.10.2, 1.11.2
+and 1.12.2 worlds, including chunks visited later.
+
+Back up the whole world, including its data folder, before upgrading.

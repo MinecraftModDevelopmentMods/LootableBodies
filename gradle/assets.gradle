@@ -1,0 +1,31 @@
+// Keep development launches independent of any installed Minecraft instance.
+ext.minecraftGameHome = layout.projectDirectory.dir('.gradle/minecraft-home')
+String assetFolder=org.gradle.internal.os.OperatingSystem.current().isMacOsX()?'Library/Application Support/minecraft/assets':'.minecraft/assets'
+ext.minecraftAssets = minecraftGameHome.dir(assetFolder)
+tasks.register('prepareMinecraftAssets') {
+    group = 'ide'
+    doLast {
+        File root=minecraftAssets.asFile
+        def sha1={File value -> java.security.MessageDigest.getInstance('SHA-1').digest(value.bytes).encodeHex().toString()}
+        def download={String url,String expected,File output ->
+            if(!output.isFile() || sha1(output)!=expected) {
+                output.parentFile.mkdirs()
+                File pending=new File(output.parentFile,output.name+'.download')
+                new URL(url).withInputStream { input -> pending.withOutputStream { stream -> stream << input } }
+                if(sha1(pending)!=expected)throw new GradleException("Minecraft asset checksum mismatch: ${output.name}")
+                java.nio.file.Files.move(pending.toPath(),output.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            }
+        }
+        File descriptor=new File(root,'1.13.2.json')
+        download('https://piston-meta.mojang.com/v1/packages/fa3ddc22146c46bfeb0e9d322c6f83b937e25005/1.13.2.json','fa3ddc22146c46bfeb0e9d322c6f83b937e25005',descriptor)
+        def version=new groovy.json.JsonSlurper().parse(descriptor)
+        File index=new File(root,'indexes/1.13.1.json')
+        download(version.assetIndex.url,version.assetIndex.sha1,index)
+        Set<String> hashes=new groovy.json.JsonSlurper().parse(index).objects.values().collect {it.hash} as Set
+        hashes.each {hash ->
+            String relative=hash.substring(0,2)+'/'+hash
+            download('https://resources.download.minecraft.net/'+relative,hash,new File(root,'objects/'+relative))
+        }
+        logger.lifecycle("Verified ${hashes.size()} official Minecraft asset objects")
+    }
+}

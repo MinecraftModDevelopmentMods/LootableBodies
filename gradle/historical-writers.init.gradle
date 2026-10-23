@@ -1,0 +1,10 @@
+// Compile fixture writers against the pinned historical API, not native 1.13.
+gradle.projectsEvaluated {
+    def p=gradle.rootProject
+    File writerRoot=p.file(p.property('historicalWriterSource'))
+    File seeder=new File(writerRoot,'src/legacySeed/java')
+    if(!seeder.isDirectory())throw new GradleException('Missing historical writer sources')
+    p.tasks.named('compileLegacySeed',JavaCompile) {
+        setSource([p.fileTree(seeder),p.file('src/integrationTest/java/cyano/lootable/buildtest/FixtureItems.java')])
+    }
+}

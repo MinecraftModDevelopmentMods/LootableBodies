@@ -40,19 +40,39 @@ tasks.register('configureEclipseBuildship') {
                 productionLauncher.get().metadata.installationPath.asFile.canonicalPath)
         toolchains.setProperty('lootablebodies.mavenizer.java.home',
                 mavenizerLauncher.get().metadata.installationPath.asFile.canonicalPath)
+        File workspacePrefs=new File(projectDir.parentFile,'.metadata/.plugins/org.eclipse.core.runtime/.settings/org.eclipse.buildship.core.prefs')
+        Properties workspace=new Properties()
+        if(workspacePrefs.isFile())workspacePrefs.withInputStream { workspace.load(it) }
+        workspace.setProperty('eclipse.preferences.version','1')
+        // Buildship uses different keys for workspace and project preferences.
+        ['connection.java.home', 'connection.gradle.distribution', 'connection.gradle.user.home'].each {
+            workspace.remove(it)
+        }
+        workspace.setProperty('java.home',file(System.getProperty('java.home')).canonicalPath)
+        workspace.setProperty('gradle.distribution','GRADLE_DISTRIBUTION(WRAPPER)')
+        workspace.setProperty('gradle.user.home',gradle.gradleUserHomeDir.canonicalPath)
+        workspacePrefs.parentFile.mkdirs()
+        workspacePrefs.withOutputStream { workspace.store(it,'Local Buildship workspace Java') }
         localJavaSetup.withOutputStream { toolchains.store(it, 'Local production Java toolchain') }
     }
 }
 tasks.register('isolateEclipseProductionRuns') {
     group = 'ide'
-    dependsOn 'prepareEclipseResources', 'configureEclipseBuildship'
+    dependsOn 'prepareEclipseResources', 'configureEclipseBuildship', 'prepareMinecraftAssets', 'prepareProductionRunDirectory'
     doLast {
         ['runClient.launch', 'runServer.launch'].each { name ->
             File launch = file(name)
             if (!launch.isFile()) throw new GradleException("Generate ${name} with genEclipseRuns first")
             String contents = launch.getText('UTF-8')
+            File cache=new File(gradle.gradleUserHomeDir,'caches/forge_gradle')
+            contents=contents.replace('value="{asset_index}"','value="1.13.1"')
+                .replace('value="{assets_root}"',"value=\"${minecraftAssets.asFile.absolutePath}\"")
+                .replace('value="{natives}"',"value=\"${new File(cache,"minecraftforge/forgegradle/slime-launcher/cache/net/minecraftforge/forge/${minecraft_version}-${forge_version}/natives").absolutePath}\"")
+            String eclipseRoot=file('bin/main').absolutePath
+            String eclipseMods="${mod_id}%%${eclipseRoot}${File.pathSeparator}${mod_id}%%${eclipseRoot}"
+            contents=contents.replaceAll(/(<mapEntry key="MOD_CLASSES" value=")[^"]*("\/>)/) {whole,start,end -> start+eclipseMods+end}
             contents = contents.replace('/JavaSE-8', '/JavaSE-1.8')
-            contents = contents.replace('key="MC_VERSION" value="${MC_VERSION}"', 'key="MC_VERSION" value="1.12.2"')
+            contents = contents.replace('key="MC_VERSION" value="${MC_VERSION}"', 'key="MC_VERSION" value="1.13.2"')
             contents = contents.replaceAll(/<booleanAttribute key="org.eclipse.jdt.launching.ATTR_EXCLUDE_TEST_CODE" value="[^"]*"\/>/, '')
             contents = contents.replace('</launchConfiguration>',
                     '  <booleanAttribute key="org.eclipse.jdt.launching.ATTR_EXCLUDE_TEST_CODE" value="true"/>\n</launchConfiguration>')
@@ -77,6 +97,16 @@ tasks.register('verifyEclipseProductionClasspath') {
     group = 'verification'
     dependsOn 'genEclipseRuns', 'eclipse'
     doLast {
+        File workspaceFile = new File(projectDir.parentFile,
+                '.metadata/.plugins/org.eclipse.core.runtime/.settings/org.eclipse.buildship.core.prefs')
+        Properties workspace = new Properties()
+        workspaceFile.withInputStream { workspace.load(it) }
+        ['java.home': file(System.getProperty('java.home')).canonicalPath,
+         'gradle.distribution': 'GRADLE_DISTRIBUTION(WRAPPER)',
+         'gradle.user.home': gradle.gradleUserHomeDir.canonicalPath].each { key, expected ->
+            if (workspace.getProperty(key) != expected)
+                throw new GradleException("Eclipse workspace ${key} must use ${expected}; found ${workspace.getProperty(key) ?: '(unset)'}")
+        }
         String classpathXml = file('.classpath').text
         if (!classpathXml.contains('path="build/resources/main"') || classpathXml.contains('path="src/main/resources"'))
             throw new GradleException('Eclipse must use Gradle-processed resources')
@@ -87,8 +117,8 @@ tasks.register('verifyEclipseProductionClasspath') {
             if (!entry.attributes.attribute.any { it.@name.text() == 'test' && it.@value.text() == 'true' })
                 throw new GradleException('Eclipse testing library is not marked test-only')
         }
-        def metadata = new groovy.json.JsonSlurper().parse(file('bin/main/mcmod.info'))[0]
-        if (metadata.modid != project.mod_id || metadata.version != project.version.toString() || metadata.mcversion != project.minecraft_version)
+        String metadata=file('bin/main/META-INF/mods.toml').getText('UTF-8')
+        if(!metadata.contains("version=\"${project.version}\"") || !metadata.contains('modId="lootablebodies"'))
             throw new GradleException('Eclipse resources are not processed production resources')
         ['runClient.launch', 'runServer.launch'].each { name ->
             String xml = file(name).text.replace('\\', '/')
@@ -96,16 +126,21 @@ tasks.register('verifyEclipseProductionClasspath') {
                     xml =~ /(?i)(src\/test|bin\/test|junit-|integration-test|mockito|byte-buddy)/ ||
                     !xml.contains('PROJECT_ATTR" value="LootableBodies"'))
                 throw new GradleException("${name} has the wrong project or exposes tests")
-            if (!xml.contains('key="MC_VERSION" value="1.12.2"'))
+            if (!xml.contains('key="MC_VERSION" value="1.13.2"'))
                 throw new GradleException('Eclipse Minecraft version is unresolved')
             def launchModel = new groovy.xml.XmlSlurper().parseText(xml)
+            String classes = launchModel.mapAttribute.mapEntry.find { it.@key.text() == 'MOD_CLASSES' }.@value.text()
+            String expectedRoot = file('bin/main').absolutePath.replace('\\', '/')
+            String expectedClasses = "${mod_id}%%${expectedRoot}${File.pathSeparator}${mod_id}%%${expectedRoot}"
+            if (classes != expectedClasses)
+                throw new GradleException("${name} must launch Eclipse's production output")
             String directory = launchModel.stringAttribute.find {
                 it.@key.text() == 'org.eclipse.jdt.launching.WORKING_DIRECTORY'
             }.@value.text()
             if (file(directory).canonicalFile != file(providers.gradleProperty('gameRunDirectory').getOrElse('run')).canonicalFile)
                 throw new GradleException("${name} must use the production run directory, found ${directory}")
-            if (name == 'runServer.launch' && (!xml.contains('nogui') || xml.contains('--nogui')))
-                throw new GradleException('Legacy dedicated server needs bare nogui')
+            if (name == 'runServer.launch' && !xml.contains('--nogui'))
+                throw new GradleException('Forge 25 dedicated server needs --nogui')
         }
     }
 }

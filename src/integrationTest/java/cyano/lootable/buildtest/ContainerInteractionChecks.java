@@ -21,7 +21,7 @@ import net.minecraft.world.*;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.EntityJoinWorldEvent;
 import net.minecraftforge.event.entity.item.ItemTossEvent;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /** Server packet/transaction tests; packets are decoded from their actual wire layout. */
 final class ContainerInteractionChecks {
@@ -121,20 +121,20 @@ final class ContainerInteractionChecks {
         fill(b);fill(p);open(p,b);ItemStack original=item(120,17);
         if(source==0)b.setInventorySlotContents(6,original.copy());
         else if(source==1)p.inventory.mainInventory.set(9,original.copy());else p.inventory.setItemStack(original.copy());
-        if(capture){p.captureDrops=true;p.capturedDrops.add(new EntityItem(world,96.5,80,96.5,item(121,11)));}
+        if(capture){p.captureDrops(new java.util.ArrayList<>());p.captureDrops().add(new EntityItem(world,96.5,80,96.5,item(121,11)));}
         Map<String,Integer> before=total(b,p);RejectedDrops reject=new RejectedDrops();reject.toss=rejection==1;reject.join=rejection==2;
         RecordingConnection connection=(RecordingConnection)p.connection;int initialSyncs=connection.resyncs;
         MinecraftForge.EVENT_BUS.register(reject);
         try{packet(p,source==2?-999:source==0?6:48,button,source==2?ClickType.PICKUP:ClickType.THROW,null);}
         finally{MinecraftForge.EVENT_BUS.unregister(reject);}
-        conserved(before,b,p);RuntimeChecks.require(p.captureDrops==capture,"Toss changed capture state");
+        conserved(before,b,p);RuntimeChecks.require((p.captureDrops()!=null)==capture,"Toss changed capture state");
         int amount=source==2?(button==0?17:1):(button==0?1:17);
         ItemStack remaining=rejection==0 && amount==17?null:item(120,rejection==0?17-amount:17);
         equal(source==2?p.inventory.getItemStack():p.openContainer.getSlot(source==0?6:48).getStack(),remaining,"Drop quantity/source restoration differs");
         if(rejection!=0)RuntimeChecks.require(connection.resyncs>initialSyncs,"Rejected predicted drop did not resync initiating client");
-        if(capture)RuntimeChecks.require(p.capturedDrops.size()==2,"Toss discarded pre-existing captured item");
+        if(capture)RuntimeChecks.require(p.captureDrops().size()==2,"Toss discarded pre-existing captured item");
         if(rejection==0 && !capture){
-            int dropped=0;for(Entity e:world.loadedEntityList)if(e instanceof EntityItem && !e.isDead){equal(((EntityItem)e).getItem(),item(120,amount),"Accepted drop NBT differs");dropped++;}
+            int dropped=0;for(Entity e:world.loadedEntityList)if(e instanceof EntityItem && !e.removed){equal(((EntityItem)e).getItem(),item(120,amount),"Accepted drop NBT differs");dropped++;}
             RuntimeChecks.require(dropped==1,"Accepted toss did not create exactly one entity");
         }
     }
@@ -144,12 +144,12 @@ final class ContainerInteractionChecks {
         else p.inventory.setItemStack(item(120,17));
         Map<String,Integer> before=total(b,p);RejectedDrops reject=new RejectedDrops();reject.toss=toss;reject.join=!toss;MinecraftForge.EVENT_BUS.register(reject);
         try{if(swap)packet(p,0,0,ClickType.SWAP,null);else close(p);}finally{MinecraftForge.EVENT_BUS.unregister(reject);}
-        conserved(before,b,p);RuntimeChecks.require(b.isEntityAlive(),"Creative fallback owner no longer alive");
+        conserved(before,b,p);RuntimeChecks.require(b.isAlive(),"Creative fallback owner no longer alive");
     }
     private static void collect(int mode) throws Exception {
         EntityLootableBody b=body();EntityPlayerMP p=player(),q=player();open(p,b);open(q,b);
         b.setInventorySlotContents(6,item(120,20));b.setInventorySlotContents(7,item(120,30));b.setInventorySlotContents(8,item(121,14));
-        ItemStack differentDamage=item(120,12);differentDamage.setItemDamage((differentDamage.getItemDamage()+1)%16);b.setInventorySlotContents(9,differentDamage);
+        ItemStack differentDamage=item(120,12);differentDamage.setDamage((differentDamage.getDamage()+1)%16);b.setInventorySlotContents(9,differentDamage);
         p.inventory.mainInventory.set(9,item(120,10));p.inventory.setItemStack(mode==3?ItemStack.EMPTY:item(120,mode==2?64:5));
         if(mode==4)p.setGameType(GameType.CREATIVE);
         if(mode==5){q.inventory.setItemStack(item(120,4));packet(q,10,0,ClickType.PICKUP_ALL,null);}
@@ -186,7 +186,7 @@ final class ContainerInteractionChecks {
         try{wire.writeShort(cancelled?-1:9);wire.writeItemStack(item(121,23));CPacketCreativeInventoryAction packet=new CPacketCreativeInventoryAction();packet.readPacketData(wire);p.connection.processCreativeInventoryAction(packet);}
         finally{wire.release();MinecraftForge.EVENT_BUS.unregister(reject);}
         RuntimeChecks.require(unchanged.equals(data(b)),"Creative inventory packet changed corpse instead of player");equal(p.inventory.mainInventory.get(9),creative&&!cancelled?item(121,23):null,"Creative player packet permission/target differs");
-        if(cancelled)RuntimeChecks.require(world.loadedEntityList.stream().noneMatch(e->e instanceof EntityItem && !e.isDead),"Cancelled creative minted drop spawned anyway");
+        if(cancelled)RuntimeChecks.require(world.loadedEntityList.stream().noneMatch(e->e instanceof EntityItem && !e.removed),"Cancelled creative minted drop spawned anyway");
     }
 
     private static void check(String name,Check test) {
@@ -210,7 +210,7 @@ final class ContainerInteractionChecks {
         CorpseContainer c=new CorpseContainer(p.inventory,b);c.windowId=7;p.openContainer=c;c.addListener(p);return c;
     }
     private static ItemStack item(int id,int count){ItemStack s=RuntimeChecks.stack(id);s.setCount(count);return s;}
-    private static ItemStack pumpkins(int count){ItemStack s=new ItemStack(Blocks.PUMPKIN,count);s.setTagCompound(item(120,1).getTagCompound().copy());return s;}
+    private static ItemStack pumpkins(int count){ItemStack s=new ItemStack(Blocks.CARVED_PUMPKIN,count);s.setTag(item(120,1).getTag().copy());return s;}
     private static void fill(EntityPlayerMP p){for(int i=0;i<36;i++)p.inventory.mainInventory.set(i,item(100+i,64));}
     private static void fill(EntityLootableBody b){for(int i=0;i<48;i++)b.setInventorySlotContents(i,item(i,i<6?1:64));b.addItem(item(70,31));}
     private static void packet(EntityPlayerMP p,int slot,int button,ClickType type,ItemStack predicted) throws Exception {
@@ -239,22 +239,22 @@ final class ContainerInteractionChecks {
         packet(p,-999,2|(mode<<2),ClickType.QUICK_CRAFT,null);
     }
     private static void equal(ItemStack actual,ItemStack expected,String reason){RuntimeChecks.require(RuntimeChecks.sameStack(actual == null ? ItemStack.EMPTY : actual,expected == null ? ItemStack.EMPTY : expected),reason);}
-    private static NBTTagCompound data(EntityLootableBody b){NBTTagCompound n=new NBTTagCompound();b.writeEntityToNBT(n);return n;}
+    private static NBTTagCompound data(EntityLootableBody b){NBTTagCompound n=new NBTTagCompound();b.writeAdditional(n);return n;}
     private static void add(Map<String,Integer> all,ItemStack s){
-        if((s == null || s.isEmpty()) || s.getCount()<=0)return;NBTTagCompound n=s.writeToNBT(new NBTTagCompound());n.removeTag("Count");
+        if((s == null || s.isEmpty()) || s.getCount()<=0)return;NBTTagCompound n=s.write(new NBTTagCompound());n.removeTag("Count");
         String key=n.toString();all.put(key,all.getOrDefault(key,0)+s.getCount());
     }
     private static Map<String,Integer> total(EntityLootableBody b,EntityPlayerMP... players){
         Map<String,Integer> all=new TreeMap<>();
-        for(int i=0;i<48;i++)add(all,b.getStackInSlot(i));NBTTagList aux=data(b).getTagList("Aux",10);
-        for(int i=0;i<aux.tagCount();i++)add(all,new ItemStack(aux.getCompoundTagAt(i)));
-        for(EntityPlayerMP p:players){for(int i=0;i<p.inventory.getSizeInventory();i++)add(all,p.inventory.getStackInSlot(i));add(all,p.inventory.getItemStack());for(EntityItem e:p.capturedDrops)add(all,e.getItem());}
-        for(Entity e:world.loadedEntityList)if(e instanceof EntityItem && !e.isDead)add(all,((EntityItem)e).getItem());
+        for(int i=0;i<48;i++)add(all,b.getStackInSlot(i));NBTTagList aux=data(b).getList("Aux",10);
+        for(int i=0;i<aux.size();i++)add(all,ItemStack.read(aux.getCompound(i)));
+        for(EntityPlayerMP p:players){for(int i=0;i<p.inventory.getSizeInventory();i++)add(all,p.inventory.getStackInSlot(i));add(all,p.inventory.getItemStack());for(EntityItem e:p.captureDrops()==null?java.util.Collections.<EntityItem>emptyList():p.captureDrops())add(all,e.getItem());}
+        for(Entity e:world.loadedEntityList)if(e instanceof EntityItem && !e.removed)add(all,((EntityItem)e).getItem());
         return all;
     }
     private static void conserved(Map<String,Integer> expected,EntityLootableBody b,EntityPlayerMP... players){
         RuntimeChecks.require(expected.equals(total(b,players)),"Item count/type/damage/custom NBT lost or duplicated");
-        NBTTagCompound before=data(b),immutable=before.copy();EntityLootableBody copy=new EntityLootableBody(world);copy.readEntityFromNBT(before);
+        NBTTagCompound before=data(b),immutable=before.copy();EntityLootableBody copy=new EntityLootableBody(world);copy.readAdditional(before);
         RuntimeChecks.require(Objects.equals(before.getTag("Equipment"),data(copy).getTag("Equipment")) && Objects.equals(before.getTag("Aux"),data(copy).getTag("Aux")),"Post-interaction NBT round trip changed inventory");
         RuntimeChecks.require(before.equals(immutable),"Post-interaction reader mutated saved input");
     }
@@ -313,7 +313,7 @@ final class ContainerInteractionChecks {
     }
     private static void fullCorpse() throws Exception {
         EntityLootableBody b=body();fill(b);EntityPlayerMP p=player();p.inventory.mainInventory.set(9,item(110,23));open(p,b);
-        NBTTagCompound unchanged=data(b);Map<String,Integer> before=total(b,p);packet(p,48,0,ClickType.QUICK_MOVE,null);b.onEntityUpdate();
+        NBTTagCompound unchanged=data(b);Map<String,Integer> before=total(b,p);packet(p,48,0,ClickType.QUICK_MOVE,null);b.baseTick();
         RuntimeChecks.require(unchanged.getTag("Equipment").equals(data(b).getTag("Equipment")) && unchanged.getTag("Aux").equals(data(b).getTag("Aux")),"Full corpse overwrote indexed/Aux contents");conserved(before,b,p);
     }
     public static final class RejectedDrops {
@@ -326,27 +326,27 @@ final class ContainerInteractionChecks {
         RejectedDrops reject=new RejectedDrops();reject.join=rejectJoin;reject.toss=rejectToss;MinecraftForge.EVENT_BUS.register(reject);
         try{click(p,0,0,ClickType.SWAP);}finally{MinecraftForge.EVENT_BUS.unregister(reject);}
         equal(b.getStackInSlot(0),pumpkins(1),"Displacement changed normal incoming swap");equal(p.inventory.mainInventory.get(0),pumpkins(63),"Displacement changed hotbar remainder");conserved(before,b,p);
-        if(!rejectJoin && !rejectToss)RuntimeChecks.require(world.loadedEntityList.stream().anyMatch(e->e instanceof EntityItem && !e.isDead),"Successful displacement no longer drops normally");
+        if(!rejectJoin && !rejectToss)RuntimeChecks.require(world.loadedEntityList.stream().anyMatch(e->e instanceof EntityItem && !e.removed),"Successful displacement no longer drops normally");
     }
     private static void closeCursor(boolean rejected,boolean full) throws Exception {
         EntityLootableBody b=body();EntityPlayerMP p=player();if(full){fill(b);fill(p);}open(p,b);p.inventory.setItemStack(item(120,17));Map<String,Integer> before=total(b,p);
         RejectedDrops reject=new RejectedDrops();reject.join=rejected;MinecraftForge.EVENT_BUS.register(reject);
         try{close(p);}finally{MinecraftForge.EVENT_BUS.unregister(reject);}
         equal(p.inventory.getItemStack(),null,"Closing left a nonsaved cursor stack");conserved(before,b,p);
-        if(!rejected)RuntimeChecks.require(world.loadedEntityList.stream().anyMatch(e->e instanceof EntityItem && !e.isDead),"Cursor close no longer performs normal accepted drop");
+        if(!rejected)RuntimeChecks.require(world.loadedEntityList.stream().anyMatch(e->e instanceof EntityItem && !e.removed),"Cursor close no longer performs normal accepted drop");
     }
     private static void capturedCursor() throws Exception {
         EntityLootableBody b=body();EntityPlayerMP p=player();open(p,b);p.inventory.setItemStack(item(120,17));
-        p.captureDrops=true;p.capturedDrops.add(new EntityItem(world,96.5,80,96.5,item(121,11)));Map<String,Integer> before=total(b,p);
-        close(p);RuntimeChecks.require(p.captureDrops,"Container close changed caller's drop capture state");conserved(before,b,p);
+        p.captureDrops(new java.util.ArrayList<>());p.captureDrops().add(new EntityItem(world,96.5,80,96.5,item(121,11)));Map<String,Integer> before=total(b,p);
+        close(p);RuntimeChecks.require(p.captureDrops()!=null,"Container close changed caller's drop capture state");conserved(before,b,p);
     }
     private static void dyingCursor() throws Exception {
         EntityLootableBody b=body();EntityPlayerMP p=player();fill(p);open(p,b);p.inventory.setItemStack(item(120,17));
-        b.onKillCommand();b.onEntityUpdate();Map<String,Integer> before=total(b,p);
+        b.onKillCommand();b.baseTick();Map<String,Integer> before=total(b,p);
         RejectedDrops reject=new RejectedDrops();reject.join=true;MinecraftForge.EVENT_BUS.register(reject);
         try{close(p);}finally{MinecraftForge.EVENT_BUS.unregister(reject);}
-        for(int i=0;i<15;i++)b.onEntityUpdate();
-        RuntimeChecks.require(b.isEntityAlive() || b.isEmpty(),"Cursor fallback was put into an owner still scheduled for removal");
+        for(int i=0;i<15;i++)b.baseTick();
+        RuntimeChecks.require(b.isAlive() || b.isEmpty(),"Cursor fallback was put into an owner still scheduled for removal");
         conserved(before,b,p);
     }
     private static void twoPlayerShift() throws Exception {
@@ -378,7 +378,7 @@ final class ContainerInteractionChecks {
     }
     private static void stale(boolean removed) throws Exception {
         EntityLootableBody b=body();b.setInventorySlotContents(6,item(19,23));EntityPlayerMP p=player();open(p,b);Map<String,Integer> before=total(b,p);
-        if(removed)b.setDead();else p.setPosition(200,80,200);
+        if(removed)b.remove();else p.setPosition(200,80,200);
         packet(p,6,0,ClickType.QUICK_MOVE,null);equal(b.getStackInSlot(6),item(19,23),"Stale packet extracted before tick closed GUI");conserved(before,b,p);
     }
     private static void staleDrag() throws Exception {

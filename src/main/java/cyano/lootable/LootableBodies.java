@@ -1,72 +1,104 @@
 package cyano.lootable;
-import net.minecraft.entity.Entity;
-import cyano.lootable.upgrade.UpgradePreservation;
-import net.minecraftforge.fml.common.FMLCommonHandler;
-import net.minecraftforge.fml.common.event.FMLServerAboutToStartEvent;
-import net.minecraftforge.fml.common.event.FMLServerStoppedEvent;
 
-
+import java.io.File;
+import cyano.lootable.config.LegacyConfiguration;
 import cyano.lootable.entities.EntityLootableBody;
 import cyano.lootable.events.PlayerDeathEventHandler;
-import cyano.lootable.graphics.GUIHandler;
+import cyano.lootable.upgrade.UpgradePreservation;
+import cyano.lootable.upgrade.ChunkVersionContext;
+import net.minecraft.entity.EntityType;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemGroup;
+import net.minecraft.item.ItemSpawnEgg;
+import net.minecraft.util.ResourceLocation;
+import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.common.config.Configuration;
+import net.minecraftforge.event.RegistryEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.common.Mod.EventHandler;
-import net.minecraftforge.fml.common.SidedProxy;
-import net.minecraftforge.fml.common.event.FMLInitializationEvent;
-import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
-import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
-import net.minecraftforge.fml.common.network.NetworkRegistry;
-import net.minecraftforge.fml.common.registry.EntityRegistry;
-import java.io.File;
+import net.minecraftforge.fml.event.server.FMLServerAboutToStartEvent;
+import net.minecraftforge.fml.event.server.FMLServerStoppedEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.loading.FMLPaths;
 
-@Mod(modid = LootableBodies.MODID, name=LootableBodies.NAME, version = LootableBodies.VERSION,
-		acceptedMinecraftVersions = "[1.12.2]",
-        guiFactory = "cyano.lootable.graphics.CorpseConfigGuiFactory")
-public class LootableBodies {
+@Mod(LootableBodies.MODID)
+public final class LootableBodies {
     public static final String MODID = "lootablebodies";
-    public static final String NAME ="DrCyano's Lootable Bodies";
-    public static final String VERSION = "2.4.3.112021";
-	private static LootableBodies INSTANCE = null;
-    private static Configuration configuration;
+    public static final String NAME = "DrCyano's Lootable Bodies";
+    public static final String VERSION = "2.4.4.113021";
+    public static final ResourceLocation CORPSE_ID = new ResourceLocation("lootablebodies:corpse");
+    public static EntityType<EntityLootableBody> CORPSE;
+    public static Item CORPSE_EGG;
+    private static LootableBodies INSTANCE;
+    private static LegacyConfiguration configuration;
 
-	public static boolean displayNameTag = true;
+    public static boolean displayNameTag = true;
     public static boolean addBonesToCorpse = true;
     public static boolean useLocalSkin = false;
-	public static long ticksPerItemDecay = 10 * 60 * 20; // -1 to disable
-	public static boolean hurtByEnvironment = false;
-	public static boolean hurtByAttacks = false;
-	public static boolean hurtByMisc = false;
-	public static boolean completelyInvulnerable = false;
-	public static float corpseHP = 20;
-
+    public static long ticksPerItemDecay = 10 * 60 * 20;
+    public static boolean hurtByEnvironment = false;
+    public static boolean hurtByAttacks = false;
+    public static boolean hurtByMisc = false;
+    public static boolean completelyInvulnerable = false;
+    public static float corpseHP = 20;
     public static boolean allowCorpseDecay = true;
     public static boolean decayOnlyWhenEmpty = true;
-    public static long corpseDecayTime = 3600*20; // in game ticks
-
+    public static long corpseDecayTime = 3600*20;
     public static boolean corpseBuoyancy = false;
     public static boolean voidPlatform = false;
     public static boolean dimensionSpecificPlatform = true;
 
-    @SidedProxy(clientSide="cyano.lootable.ClientProxy", serverSide="cyano.lootable.ServerProxy")
-    public static Proxy proxy;
-
-
-	// Mark this method for receiving an FMLEvent (in this case, it's the FMLPreInitializationEvent)
-    @EventHandler public void preInit(FMLPreInitializationEvent event)
-    {
-		UpgradePreservation.register(FMLCommonHandler.instance().getDataFixer());
-		INSTANCE = this;
-        loadConfiguration(event.getSuggestedConfigurationFile());
-        proxy.preInit(event);
+    public LootableBodies() {
+        INSTANCE=this;
+        loadConfiguration(FMLPaths.CONFIGDIR.get().resolve("lootablebodies.cfg").toFile());
+        net.minecraftforge.eventbus.api.IEventBus bus=FMLJavaModLoadingContext.get().getModEventBus();
+        bus.addGenericListener(EntityType.class,this::registerEntities);
+        bus.addGenericListener(Item.class,this::registerItems);
+        MinecraftForge.EVENT_BUS.register(new PlayerDeathEventHandler());
+        MinecraftForge.EVENT_BUS.register(this);
+        DistExecutor.runWhenOn(Dist.CLIENT,()->ClientProxy::register);
     }
-
+    private static synchronized EntityType<EntityLootableBody> corpseType() {
+        if(CORPSE==null)CORPSE=new EntityType<>(EntityLootableBody.class,EntityLootableBody::new,
+                true,true,null,false,null,true,32,1,true);
+        return CORPSE;
+    }
+    private void registerEntities(RegistryEvent.Register<EntityType<?>> event) {
+        event.getRegistry().register(corpseType().setRegistryName(CORPSE_ID));
+    }
+    private void registerItems(RegistryEvent.Register<Item> event) {
+        CORPSE_EGG=new ItemSpawnEgg(corpseType(),1,1,new Item.Properties().group(ItemGroup.MISC))
+                .setRegistryName(MODID,"corpse_spawn_egg");
+        event.getRegistry().register(CORPSE_EGG);
+    }
+    public static LootableBodies getInstance(){return INSTANCE;}
+    @SubscribeEvent public void beforeWorldLoading(FMLServerAboutToStartEvent event) {
+        File world=event.getServer().getActiveAnvilConverter().getFile(event.getServer().getFolderName(),"");
+        try {
+            UpgradePreservation.register(event.getServer().getDataFixer());
+            int count=UpgradePreservation.prepare(world.toPath()).size();
+            ChunkVersionContext.installServer(event.getServer());
+            ModLog.info("Lootable Bodies preserved %s existing corpses before world loading",count);
+        } catch(java.io.IOException unsafe) {
+            throw new IllegalStateException("Lootable Bodies could not preserve this world's corpses. World loading has been stopped; keep the original world and recovery journal.",unsafe);
+        }
+    }
+    @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.HIGHEST)
+    public void worldLoaded(net.minecraftforge.event.world.WorldEvent.Load event) {
+        if(event.getWorld() instanceof net.minecraft.world.WorldServer)ChunkVersionContext.installWorld((net.minecraft.world.WorldServer)event.getWorld());
+    }
+    @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.HIGHEST)
+    public void beforeSpawn(net.minecraftforge.event.world.WorldEvent.CreateSpawnPosition event) {
+        if(event.getWorld() instanceof net.minecraft.world.WorldServer)ChunkVersionContext.installWorld((net.minecraft.world.WorldServer)event.getWorld());
+    }
+    @SubscribeEvent public void worldStopped(FMLServerStoppedEvent event){UpgradePreservation.close();}
+    private static boolean or(boolean... values){for(boolean value:values)if(value)return true;return false;}
     /** Reads startup rules. GUI saves deliberately do not call this method. */
     public static void loadConfiguration(File file) {
         // Do stuff in pre-init phase (read config, create blocks and items, register them)
     	// load config
-        Configuration config = new Configuration(file);
+        LegacyConfiguration config = new LegacyConfiguration(file);
         configuration = config;
     	config.load();
 
@@ -123,7 +155,7 @@ public class LootableBodies {
 				"If true, corpses generate dimension specific platforms, otherwise they only make cobblestone platforms");
 
         for (String category : new String[] {"options", "corpse damage", "corpse decay", "corpse recovery"}) {
-            for (net.minecraftforge.common.config.Property property : config.getCategory(category).values()) {
+            for (LegacyConfiguration.Property property : config.getCategory(category).values()) {
                 String key = property.getName();
                 // Unknown pack options are retained without exposing them in our GUI.
                 if (!isKnownOption(key)) continue;
@@ -141,7 +173,7 @@ public class LootableBodies {
                 "enable_corpse_buoyancy", "prevent_void_loss", "dim_specific_platform").contains(key);
     }
 
-    public static Configuration getConfiguration() {
+    public static LegacyConfiguration getConfiguration() {
         return configuration;
     }
 
@@ -162,65 +194,4 @@ public class LootableBodies {
 	}
 
 
-	@EventHandler
-	public void init(FMLInitializationEvent event) {
-		// register entities
-		registerItemRenders();
-
-		registerEntity(EntityLootableBody.class);
-		MinecraftForge.EVENT_BUS.register(new PlayerDeathEventHandler());
-		NetworkRegistry.INSTANCE.registerGuiHandler( LootableBodies.getInstance(), GUIHandler.getInstance());
-
-		proxy.init(event);
-
-
-	}
-	private int entityIndex = 0;
-	private void registerEntity(Class entityClass){
-		String idName = "Corpse";
-		EntityRegistry.registerModEntity(new net.minecraft.util.ResourceLocation("lootablebodies:corpse"), (Class<? extends Entity>)entityClass, idName, entityIndex++/*mod-specific entity id*/, this, 32/*trackingRange*/, 1/*updateFrequency*/, true/*sendsVelocityUpdates*/, entityIndex, entityIndex);
-
-	}
-
-    private void registerItemRenders() {
-    	// client-side only
-    	if(proxy instanceof ServerProxy) return;
-    //	registerItemRender(wandGeneric,OrdinaryWand.itemName);
-	}
-
-
-
-	@EventHandler public void postInit(FMLPostInitializationEvent event) {
-		proxy.postInit(event);
-	}
-
-	public static LootableBodies getInstance(){
-		return INSTANCE;
-	}
-
-    @EventHandler public void beforeWorldLoading(FMLServerAboutToStartEvent event) {
-        java.io.File world=event.getServer().getActiveAnvilConverter().getFile(event.getServer().getFolderName(), "");
-        try {
-            int protectedBodies=UpgradePreservation.prepare(world.toPath()).size();
-            net.minecraftforge.fml.common.FMLLog.info("Lootable Bodies preserved %s existing corpses before world loading",protectedBodies);
-        } catch(java.io.IOException unsafe) {
-            throw new IllegalStateException("Lootable Bodies could not preserve this world's corpses. World loading has been stopped; keep the original world and recovery journal.",unsafe);
-        }
-    }
-    @EventHandler public void worldStopped(FMLServerStoppedEvent event) {UpgradePreservation.close();}
-
-
-	private static boolean or(boolean... bools){
-		for(int i = 0; i < bools.length; i++){
-			if(bools[i] == true) return true;
-		}
-		return false;
-	}
-
-	private static boolean and(boolean... bools){
-		for(int i = 0; i < bools.length; i++){
-			if(bools[i] == false) return false;
-		}
-		return true;
-	}
 }

@@ -9,7 +9,6 @@ def main():
     p.add_argument('--baseline-jar',type=Path);p.add_argument('--output',type=Path,required=True);a=p.parse_args()
     project=Path(__file__).resolve().parents[1];root=a.output.resolve();root.mkdir(parents=True,exist_ok=False)
     java=a.java.resolve();distribution=a.forge_home.resolve();main=project/'build/libs'/MAIN;baseline=a.baseline_jar.resolve() if a.baseline_jar else main;probe=project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar'
-    assert digest(distribution/'forge-1.12.2-14.23.5.2859-universal.jar')=='BD8314729D787E35164476D75AFB337AFB9783917E4F6FA1F77F049ADBA22F2D','Forge distribution hash mismatch'
     original=digest(baseline);candidate=digest(main)
     seed=root/'sealed-seed';prepare(seed,distribution,baseline,probe);run(java,seed,'nbt-seed');sealed=fingerprint(seed/'world')
     home=root/'candidate';prepare(home,distribution,main,probe);shutil.copytree(seed/'world',home/'world')

@@ -1,1 +1,6 @@
-{"pack":{"pack_format":3,"description":"Lootable Bodies resources"}}
+{
+  "pack": {
+    "pack_format": 4,
+    "description": "Lootable Bodies resources"
+  }
+}

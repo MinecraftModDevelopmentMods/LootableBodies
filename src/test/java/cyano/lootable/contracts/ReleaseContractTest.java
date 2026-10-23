@@ -28,7 +28,7 @@ class ReleaseContractTest {
         Properties values = properties();
         String version = values.getProperty("mod_version");
         assertTrue(version.matches("[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+"), version);
-        assertEquals("2.4.3.112021", version);
+        assertEquals("2.4.4.113021", version);
         assertEquals("forge", values.getProperty("loader_name"));
         assertEquals("1", values.getProperty("loader_code"));
         assertTrue(text("src/main/java/cyano/lootable/LootableBodies.java")
@@ -43,8 +43,8 @@ class ReleaseContractTest {
         assertEquals("240968", values.getProperty("curseforge_project_id"));
         String source = text("src/main/java/cyano/lootable/LootableBodies.java");
         assertTrue(source.startsWith("package cyano.lootable;"));
-        assertTrue(source.contains("String idName = \"Corpse\""));
-        assertTrue(source.contains("acceptedMinecraftVersions = \"[1.12.2]\""));
+        assertTrue(source.contains("new ResourceLocation(\"lootablebodies:corpse\")"));
+        assertTrue(text("build/resources/main/META-INF/mods.toml").contains("versionRange=\"[1.13.2]\""));
     }
 
     @Test void maintainedReleaseHasLgplAndRetainsTheOriginalNotice() throws Exception {
@@ -72,14 +72,14 @@ class ReleaseContractTest {
     @Test void productionMetadataLinksToTheMaintainedProject() throws Exception {
         Properties values = properties();
         assertEquals("https://github.com/MinecraftModDevelopmentMods/LootableBodies", values.getProperty("mod_url"));
-        assertTrue(text("build/resources/main/mcmod.info").contains(values.getProperty("mod_url")));
+        assertTrue(text("build/resources/main/META-INF/mods.toml").contains(values.getProperty("mod_url")));
         assertTrue(text("README.md").contains("LootableBodies-" + values.getProperty("mod_version") + ".jar"));
     }
 
     @Test void adoptedModCreditsTheOriginalAuthorAndMaintainer() throws Exception {
         assertEquals("Cyanobacterium,SkyBlade1978", properties().getProperty("mod_authors"));
-        String metadata = text("build/resources/main/mcmod.info");
-        assertTrue(metadata.contains("\"authorList\": [\"Cyanobacterium\", \"SkyBlade1978\"]"));
+        String metadata = text("build/resources/main/META-INF/mods.toml");
+        assertTrue(metadata.contains("authors=\"Cyanobacterium, SkyBlade1978\""));
         assertTrue(text("build/publications/mavenJava/pom-default.xml").contains("<id>SkyBlade1978</id>"));
         assertTrue(text("README.md").contains("SkyBlade1978"));
     }

@@ -14,8 +14,8 @@ import net.minecraft.inventory.ClickType;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.ScreenShotHelper;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.fml.common.FMLCommonHandler;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 /** Two independent real Forge clients; no native desktop input or control. */
@@ -25,12 +25,12 @@ final class MultiplayerClientChecks {
     private boolean connecting;
     private boolean finished;
     private int lastPhase=-1,frames,ticks;
-    void register(){if(role!=null&&!Boolean.getBoolean("lootablebodies.visibility")&&!Boolean.getBoolean("lootablebodies.respawn")){FMLCommonHandler.instance().bus().register(this);MinecraftForge.EVENT_BUS.register(this);}}
-    @SubscribeEvent public void mouse(net.minecraftforge.client.event.GuiScreenEvent.MouseInputEvent.Pre e){e.setCanceled(true);}
-    @SubscribeEvent public void key(net.minecraftforge.client.event.GuiScreenEvent.KeyboardInputEvent.Pre e){e.setCanceled(true);}
+    void register(){if(role!=null&&!Boolean.getBoolean("lootablebodies.visibility")&&!Boolean.getBoolean("lootablebodies.respawn")){net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);MinecraftForge.EVENT_BUS.register(this);}}
+    @SubscribeEvent public void mouse(net.minecraftforge.client.event.GuiScreenEvent.MouseClickedEvent.Pre e){e.setCanceled(true);}
+    @SubscribeEvent public void key(net.minecraftforge.client.event.GuiScreenEvent.KeyboardKeyPressedEvent.Pre e){e.setCanceled(true);}
     @SubscribeEvent public void tick(TickEvent.ClientTickEvent e){
-        if(e.phase!=TickEvent.Phase.END)return;Minecraft mc=Minecraft.getMinecraft();
-        if(mc.inGameHasFocus)mc.setIngameNotInFocus();net.minecraft.client.settings.KeyBinding.unPressAllKeys();
+        if(e.phase!=TickEvent.Phase.END)return;Minecraft mc=Minecraft.getInstance();
+        if(mc.isGameFocused())mc.mouseHelper.ungrabMouse();net.minecraft.client.settings.KeyBinding.unPressAllKeys();
         try{
             if(finished){mc.shutdown();return;}
             RuntimeChecks.require(++ticks<6000,"Multiplayer client timeout role="+role+" phase="+lastPhase);
@@ -75,5 +75,5 @@ final class MultiplayerClientChecks {
         }catch(Throwable error){error.printStackTrace();mc.shutdown();}
     }
     private void ack(int phase){completed.add(phase);MultiplayerChecks.CHANNEL.sendToServer(new MultiplayerChecks.Step(phase));}
-    private void shot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.displayWidth,mc.displayHeight,mc.getFramebuffer());}
+    private void shot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));}
 }

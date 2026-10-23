@@ -10,45 +10,29 @@ import subprocess
 import time
 from audit_runtime_logs import audit
 from fixture_login import LoginMonitor, start_clients, write_receipts, archive_live_logs
-from client_runtime import assemble_libraries
-from verify_packaged import MAIN, FORGE, digest, prepare, run
-from verify_packaged_client import prepare_assets
+from native_runtime import project_assets,FORGE,digest,prepare_server as prepare,run_server as run,client_command as native_client_command,prepare_client
+from release_identity import MAIN_JAR as MAIN
 
 
-def client_command(project, java, distribution, root, cache, shared, port, role):
-    root.mkdir()
-    (root/'mods').mkdir(); (root/'config').mkdir()
-    (root/'options.txt').write_text('realmsNotifications:false\n')
-    for path in (project/'build/libs'/MAIN, project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar'):
-        shutil.copy2(path,root/'mods'/path.name)
-    (root/'config/lootablebodies.cfg').write_text('options {\n B:local_texture=true\n}\n')
-    forge=distribution/(FORGE+'-universal.jar');shutil.copy2(forge,root/forge.name)
-    vanilla=cache/'minecraftforge/forgegradle/mavenizer/caches/minecraft_tasks/1.12.2/client.jar'
-    if hashlib.sha1(vanilla.read_bytes()).hexdigest()!='0f275bc1547d01fa5f56ba34bdc87d981ee12daf': raise RuntimeError('Vanilla client hash')
-    natives=cache/'minecraftforge/forgegradle/slime-launcher/cache/net/minecraftforge/forge/1.12.2-14.23.5.2859/natives'
-    deps=[Path(p) for p in json.loads((project/'build/runtime-classpath.json').read_text())]
-    deps=assemble_libraries(deps,root)
-    if any(any(s in str(p).lower() for s in ('junit','mockito','test-mod','slime-launcher')) for p in deps): raise RuntimeError('Foreign packaged runtime library')
-    return [str(java),'-Xmx1G','-Dlog4j.skipJansi=true','-Dlootablebodies.multiplayer.role='+role,
-        '-Dlootablebodies.multiplayer.sync='+str(shared),'-Dlootablebodies.multiplayer.port='+str(port),
-        '-Djava.library.path='+str(natives),'-Dorg.lwjgl.librarypath='+str(natives),
-        '-Dlog4j.configurationFile='+(project/'src/integrationTest/resources/log4j2.xml').as_uri(),
-        '-cp',os.pathsep.join(map(str,[vanilla,root/forge.name]+deps)),
-        'net.minecraft.launchwrapper.Launch','--tweakClass','net.minecraftforge.fml.common.launcher.FMLTweaker',
-        '--username','Container'+role,'--uuid','0000000000004000800000000000010'+('5' if role=='A' else '6'),
-        '--accessToken','0','--version','1.12.2','--userType','legacy','--gameDir',str(root),
-        '--assetsDir',str(project/'.gradle/packaged-assets'),'--assetIndex','1.12','--width','854','--height','480']
+def client_command(project,java,distribution,root,cache,shared,port,role,hidden_agent=None):
+    prepare_client(root,project/'build/libs'/MAIN,project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar')
+    (root/'config').mkdir();(root/'config/lootablebodies.cfg').write_text('options {\n B:local_texture=true\n}\n')
+    extra=['-Dlootablebodies.multiplayer.role='+role,'-Dlootablebodies.multiplayer.sync='+str(shared),
+           '-Dlootablebodies.multiplayer.port='+str(port),
+           '-Dlog4j.configurationFile='+(project/'src/integrationTest/resources/log4j2.xml').as_uri()]
+    if hidden_agent:extra.append('-javaagent:'+str(hidden_agent.resolve()))
+    return native_client_command(java,root,distribution,project_assets(project),username='Container'+role,extra=extra)
 
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--java',type=Path,required=True)
     parser.add_argument('--forge-home',type=Path,required=True)
-    parser.add_argument('--gradle-home',type=Path,required=True)
+    parser.add_argument('--forge-client-home',type=Path,required=True)
+    parser.add_argument('--hidden-agent',type=Path)
     parser.add_argument('--output',type=Path,required=True)
     args=parser.parse_args();project=Path(__file__).resolve().parents[1]
     java=args.java.resolve();distribution=args.forge_home.resolve();root=args.output.resolve();root.mkdir(parents=True,exist_ok=False)
-    if digest(distribution/(FORGE+'-universal.jar'))!='BD8314729D787E35164476D75AFB337AFB9783917E4F6FA1F77F049ADBA22F2D': raise RuntimeError('Forge hash')
     shared=root/'sync';shared.mkdir();server=root/'server'
     jar=project/'build/libs'/MAIN;before=digest(jar)
     prepare(server,distribution,jar,project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar')
@@ -56,11 +40,10 @@ def main():
         reservation.bind(('127.0.0.1',0));port=reservation.getsockname()[1]
     properties=(server/'server.properties').read_text().replace('server-port=0','server-port='+str(port))
     (server/'server.properties').write_text(properties+'view-distance=4\n')
-    prepare_assets(project/'.gradle/packaged-assets')
     commands={'server':[str(java),'-Xmx1G','-Dlootablebodies.multiplayer.server=true',
-        '-Dlootablebodies.multiplayer.sync='+str(shared),'-jar',FORGE+'-universal.jar','nogui']}
+        '-Dlootablebodies.multiplayer.sync='+str(shared),'-jar',FORGE+'.jar','--nogui']}
     for role in ('A','B'):
-        commands['client'+role]=client_command(project,java,distribution,root/('client'+role),args.gradle_home.resolve()/'caches',shared,port,role)
+        commands['client'+role]=client_command(project,java,args.forge_client_home.resolve(),root/('client'+role),None,shared,port,role,args.hidden_agent)
     processes={};logs=[]
     def start(name):
         log=(root/(name+'.log')).open('w',encoding='utf-8');logs.append(log)
@@ -94,7 +77,7 @@ def main():
         raise RuntimeError('Missing multiplayer check result')
     write_receipts(root)
     for name in ('server','clientA','clientB'):
-        audit(root/(name+'.log'),fixture_logins=True);audit(root/name/'logs/latest.log',fixture_logins=True)
+        audit(root/(name+'.log'),native=True);audit(root/name/'logs/latest.log',native=True);audit(root/name/'logs/debug.log',native=True)
         if list((root/name).rglob('crash-reports/*')): raise RuntimeError('Crash report '+name)
         if digest(root/name/'mods'/MAIN)!=before: raise RuntimeError('Candidate mismatch '+name)
     for role in ('A','B'):
@@ -106,7 +89,7 @@ def main():
             if not (home/'screenshots'/shot).is_file(): raise RuntimeError('Missing screenshot '+role+' '+shot)
     (server/'server.properties').write_text(properties.replace('server-port='+str(port),'server-port=0')+'view-distance=4\n')
     archive_live_logs(root)
-    run(java,server,'multiplayer-reload')
+    run(java,server,'multiplayer-reload',message='LOOTABLE_BODIES_RUNTIME_PASS phase=multiplayer-reload')
     if digest(jar)!=before: raise RuntimeError('Candidate changed')
     (root/'result.json').write_text(json.dumps({'candidate_sha256':before,'two_real_tcp_clients':True,
         'checks':(shared/'checks.txt').read_text().splitlines(),'corpse_and_real_player_disk_reload':True},indent=2)+'\n')

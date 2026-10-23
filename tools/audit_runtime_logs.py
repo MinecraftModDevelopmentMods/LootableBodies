@@ -41,7 +41,17 @@ def development_control_lines(lines):
     return accepted
 
 
-def audit(path, development=False, upgrade=False, fixture_logins=False):
+def native_control_line(line):
+    """Exact Forge 25 diagnostics reproduced by the independent platform control."""
+    if line == 'AL lib: (EE) alc_cleanup: 1 device not closed':
+        return True
+    header=r'\[(?:\d{2}[A-Za-z]{3}\d{4} )?\d{2}:\d{2}:\d{2}(?:\.\d{3})?\] \[[^]\r\n]+/FATAL\] '
+    return bool(re.fullmatch(header+r'(?:'
+        r'\[(?:net\.minecraftforge\.fml\.packs\.ModFileResourcePack|ne\.mi\.fm\.pa\.ModFileResourcePack)/?\]: Failed to clean up tempdir [^\r\n]+[\\/]modpacktmp\d+|'
+        r'\[(?:net\.minecraftforge\.common\.ForgeConfig|ne\.mi\.co\.ForgeConfig)(?:/CORE|/)?\]: Forge config just got changed on the file system!)',line))
+
+
+def audit(path, development=False, upgrade=False, fixture_logins=False, native=False):
     if path.name.endswith('.log.gz'):
         with gzip.open(path,'rt',encoding='utf-8',errors='replace') as stream: text=stream.read()
     else: text=path.read_text(encoding='utf-8',errors='replace')
@@ -66,7 +76,7 @@ def audit(path, development=False, upgrade=False, fixture_logins=False):
         known_upgrade_rename = upgrade and any(re.fullmatch(
             r'\[\d{2}:\d{2}:\d{2}\] \[Server thread/ERROR\] ' + re.escape(message), line)
             for message in (FORGE_UPGRADE_RENAME, FORGE_UPGRADE_RENAME.replace(']:', '/]:'), FORGE_UPGRADE_RENAME.replace('FML.ModTracker','fml.ModTracker'), FORGE_UPGRADE_RENAME.replace('FML.ModTracker','fml.ModTracker').replace(']:','/]:')))
-        if re.search(r'/ERROR\]|/FATAL\]|\bERROR (?:Error processing|Unable to locate)',line) and number not in proven and not known_upgrade_rename and not any(message in line for message in platform):
+        if re.search(r'/ERROR\]|/FATAL\]|\bERROR (?:Error processing|Unable to locate)|^AL lib: \(EE\)',line) and number not in proven and not known_upgrade_rename and not (native and native_control_line(line)) and not any(message in line for message in platform):
             failures.append(line)
         if re.search(r'Can.t serialize unregistered packet|AssertionError|NoSuchMethodError|NoSuchFieldError|NoClassDefFoundError|ClassNotFoundException|NullPointerException|OutOfMemoryError|Exception stopping server|Encountered an unexpected exception|Couldn.t render entity|Missing sound for event:|Patcher expecting empty class data|Skipping Entity with id|Unidentified mapping|Unable to load model',line):
             failures.append(line)
@@ -86,6 +96,7 @@ def audit(path, development=False, upgrade=False, fixture_logins=False):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--native',action='store_true',help='Allow only independently reproduced Forge 25 platform diagnostics')
     parser.add_argument('--development',action='store_true')
     parser.add_argument('--upgrade',action='store_true')
     parser.add_argument('--recursive',action='store_true')
@@ -98,4 +109,4 @@ if __name__=='__main__':
             paths=sorted(p for p in path.rglob('*') if p.is_file() and (p.name.endswith('.log') or p.name.endswith('.log.gz')))
             if not paths: raise RuntimeError('Missing runtime logs: '+str(path))
             if list(path.rglob('crash-reports/*.txt')): raise RuntimeError('Unexpected crash reports: '+str(path))
-        for log in paths: print(audit(log,args.development,args.upgrade,args.fixture_logins))
+        for log in paths: print(audit(log,args.development,args.upgrade,args.fixture_logins,args.native))

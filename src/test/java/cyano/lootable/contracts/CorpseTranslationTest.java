@@ -13,17 +13,17 @@ class CorpseTranslationTest {
     @TestFactory Stream<DynamicTest> everyLocaleTranslatesTheRegisteredEntityName() throws Exception {
         Path folder = Paths.get("build/resources/main/assets/lootablebodies/lang");
         try (Stream<Path> files = Files.list(folder)) {
-            Path[] locales = files.filter(p -> p.toString().endsWith(".lang")).sorted().toArray(Path[]::new);
+            Path[] locales = files.filter(p -> p.toString().endsWith(".json")).sorted().toArray(Path[]::new);
             assertEquals(14, locales.length);
             return Stream.of(locales).map(locale -> DynamicTest.dynamicTest(locale.getFileName().toString(), () -> {
-                Properties language = new Properties();
-                try (Reader reader = Files.newBufferedReader(locale, StandardCharsets.UTF_8)) { language.load(reader); }
-                String original = language.getProperty("entity.lootablebodies.Corpse.name");
+                com.google.gson.JsonObject language;
+                try (Reader reader = Files.newBufferedReader(locale, StandardCharsets.UTF_8)) { language = new com.google.gson.JsonParser().parse(reader).getAsJsonObject(); }
+                String original = language.get("entity.lootablebodies.Corpse.name").getAsString();
                 assertNotNull(original, "Retain the original translation");
-                assertEquals(original, language.getProperty("entity.lootablebodies.corpse.name"));
+                assertEquals(original, language.get("entity.lootablebodies.corpse.name").getAsString());
                 // EntityList.getEntityString returns the registered display name
                 // Corpse; the namespaced registry/save ID is a separate value.
-                assertEquals(original, language.getProperty("entity.Corpse.name"),
+                assertEquals(original, language.get("entity.lootablebodies.corpse").getAsString(),
                         "Nameless corpses and their spawn eggs must resolve the actual runtime key");
             }));
         }

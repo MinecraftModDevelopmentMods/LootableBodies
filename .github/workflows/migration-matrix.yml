@@ -1,10 +1,10 @@
-name: LootableBodies 1.12 world upgrades
+name: LootableBodies 1.13 world upgrades
 
 on:
   push:
-    branches: [master-1.12.2, master-1.12]
+    branches: [master-1.13.2]
   pull_request:
-    branches: [master-1.12.2, master-1.12]
+    branches: [master-1.13.2]
   workflow_dispatch:
 
 permissions:
@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        origin: [original-110, released-110, original-111, recovery-110, released-111, original-112, recovery-111, via111-110]
+        origin: [original-110, released-110, original-111, recovery-110, released-111, original-112, recovery-111, via111-110, released-112, recovery-112, via112-110, via112-111]
         stamps: [normal, stamps]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -42,55 +42,54 @@ jobs:
           echo "LOOTABLEBODIES_JAVA8_HOME=$JAVA_HOME_8_X64" >> "$GITHUB_ENV"
           echo "LOOTABLEBODIES_MAVENIZER_JAVA_HOME=$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
           chmod +x ./gradlew
+      - name: Build historical fixture tools against the released API
+        run: python3 tools/prepare_legacy_tools.py --java17-home "$JAVA_HOME" --java8-home "$JAVA_HOME_8_X64" --java25-home "$JAVA_HOME_25_X64"
       - name: Build candidate and isolated fixture writers
-        run: ./gradlew build upgradeContractTest prepareLegacyWorldFixtures preparePackagedIntegrationProbe preparePackagedForgeControl --no-daemon
+        run: ./gradlew build prepareLegacyWorldFixtures preparePackagedIntegrationProbe preparePackagedForgeControl --no-daemon
       - name: Download and verify historical artifacts
         run: python3 tools/prepare_migration_inputs.py --java "$JAVA_HOME_8_X64/bin/java" --output build/migration-inputs
+      - name: Install the native Forge target
+        run: python3 tools/native_runtime.py --java "$JAVA_HOME_8_X64/bin/java" --output build/native-server-distribution
       - name: Create worlds with historical mod writers
         run: >-
           python3 tools/verify_world_upgrades.py --java "$JAVA_HOME_8_X64/bin/java"
           --forge110-home build/migration-inputs/forge110 --forge111-home build/migration-inputs/forge111 --forge112-home build/migration-inputs/forge112
           --original-110 build/migration-inputs/original-110.jar --released-110 build/migration-inputs/released-110.jar
-          --original-111 build/migration-inputs/original-111.jar --released-111 build/migration-inputs/released-111.jar --original-112 build/migration-inputs/original-112.jar --origins ${{ matrix.origin }}
+          --original-111 build/migration-inputs/original-111.jar --released-111 build/migration-inputs/released-111.jar --original-112 build/migration-inputs/original-112.jar --released-112 build/migration-inputs/released-112.jar --origins ${{ matrix.origin }}
           --seed-only --output build/migration-seeds
-      - name: Reproduce the Forge diagnostic without Lootable Bodies
-        run: >-
-          python3 tools/verify_forge_upgrade_control.py --java "$JAVA_HOME_8_X64/bin/java"
-          --forge110-home build/migration-inputs/forge110 --forge112-home build/migration-inputs/forge112
-          --output build/migration-control
       - name: Verify first load, recovery, deferred dimensions and restarts
         run: >-
           python3 tools/verify_world_upgrades.py --java "$JAVA_HOME_8_X64/bin/java"
           --forge110-home build/migration-inputs/forge110 --forge111-home build/migration-inputs/forge111 --forge112-home build/migration-inputs/forge112
           --original-110 build/migration-inputs/original-110.jar --released-110 build/migration-inputs/released-110.jar
-          --original-111 build/migration-inputs/original-111.jar --released-111 build/migration-inputs/released-111.jar --original-112 build/migration-inputs/original-112.jar --origins ${{ matrix.origin }}
+          --original-111 build/migration-inputs/original-111.jar --released-111 build/migration-inputs/released-111.jar --original-112 build/migration-inputs/original-112.jar --released-112 build/migration-inputs/released-112.jar --origins ${{ matrix.origin }}
           --seeds build/migration-seeds --variants ${{ matrix.stamps }}
-          --control-report build/migration-control/result.json --output build/migration-results
+          --forge113-home build/native-server-distribution --output build/migration-results
       - name: Verify unsafe preservation stops world loading
         run: >-
           python3 tools/verify_upgrade_abort.py --java "$JAVA_HOME_8_X64/bin/java"
-          --forge-home build/migration-inputs/forge112
+          --forge-home build/native-server-distribution
           --source-world build/migration-seeds/${{ matrix.origin }}/world --output build/migration-abort
       - name: Require every report
         run: |
-          for path in build/migration-inputs/inputs.json build/migration-seeds/seed-report.json build/migration-control/result.json build/migration-results/result.json build/migration-abort/result.json; do
+          for path in build/migration-inputs/inputs.json build/migration-seeds/seed-report.json build/migration-results/result.json build/migration-abort/result.json; do
             test -s "$path"
           done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: LootableBodies-1.12.2-upgrade-${{ matrix.origin }}-${{ matrix.stamps }}-${{ github.sha }}
+          name: LootableBodies-1.13.2-upgrade-${{ matrix.origin }}-${{ matrix.stamps }}-${{ github.sha }}
           if-no-files-found: error
           path: |
             build/migration-inputs/inputs.json
             build/migration-seeds/seed-report.json
-            build/migration-control/result.json
+
             build/migration-results/result.json
             build/migration-abort/result.json
       - name: Upload failed run diagnostics
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: LootableBodies-1.12.2-upgrade-failure-${{ matrix.origin }}-${{ matrix.stamps }}-${{ github.sha }}
+          name: LootableBodies-1.13.2-upgrade-failure-${{ matrix.origin }}-${{ matrix.stamps }}-${{ github.sha }}
           if-no-files-found: error
           path: |
             build/reports/**

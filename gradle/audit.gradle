@@ -54,17 +54,20 @@ ext.auditReleaseArchives = { File directory ->
                     manifest.getValue('Implementation-Timestamp') != null || manifest.getValue('Timestamp') != null)
                 throw new GradleException("Incorrect release manifest in ${name}")
             if (index == 0) {
-                ['mcmod.info', 'pack.mcmeta', 'cyano/lootable/LootableBodies.class',
+                ['META-INF/mods.toml', 'pack.mcmeta', 'cyano/lootable/LootableBodies.class',
                  'assets/lootablebodies/textures/gui/corpse.png',
                  'assets/lootablebodies/textures/entity/corpse/corpse.png'].each {
                     if (!names.contains(it)) throw new GradleException("Missing production entry ${it}")
                 }
-                def info = new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('mcmod.info')).getText('UTF-8'))[0]
-                if (info.modid != project.mod_id || info.version != project.version.toString() ||
-                        info.mcversion != project.minecraft_version || info.name != project.mod_name ||
-                        info.url != project.mod_url || info.license != project.mod_license ||
-                        info.authorList != ['Cyanobacterium', 'SkyBlade1978'] || info.dependencies != [])
-                    throw new GradleException('Incorrect production metadata/attribution')
+                String info=zip.getInputStream(zip.getEntry('META-INF/mods.toml')).getText('UTF-8')
+                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.13.2]"'].each {
+                    if(!info.contains(it))throw new GradleException("Incorrect production metadata: ${it}")
+                }
+                if(new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack.pack_format!=4)
+                    throw new GradleException('Native resource pack format must be 4')
+                def languages=names.findAll {it.startsWith('assets/lootablebodies/lang/') && !it.endsWith('/')}
+                if(languages.size()!=14 || languages.any {!it.endsWith('.json') || it!=it.toLowerCase(Locale.ROOT)})
+                    throw new GradleException('Incorrect native language resources')
                 if (names.any { it.endsWith('.java') || it.startsWith('net/') || it.startsWith('org/') })
                     throw new GradleException('Bundled sources or dependencies in main jar')
                 String entity = new String(zip.getInputStream(zip.getEntry(

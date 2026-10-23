@@ -4,14 +4,14 @@ import cyano.lootable.LootableBodies;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.util.ResourceLocation;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 import org.lwjgl.opengl.GL11;
 
 /**
  * Created by Chris on 4/12/2016.
  */
-@SideOnly(Side.CLIENT)
+@OnlyIn(Dist.CLIENT)
 public class CorpseGUIContainer extends net.minecraft.client.gui.inventory.GuiContainer{
 
 	private final ResourceLocation image = new ResourceLocation(LootableBodies.MODID+":textures/gui/corpse.png");
@@ -35,7 +35,7 @@ public class CorpseGUIContainer extends net.minecraft.client.gui.inventory.GuiCo
 		GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
 		int x = (width - xSize) / 2;
 		int y = (height - ySize) / 2;
-		this.mc.renderEngine.bindTexture(image);
+		this.mc.getTextureManager().bindTexture(image);
 		this.drawTexturedModalRect(x, y, 0, 0, this.xSize, this.ySize); // x, y, textureOffsetX, textureOffsetY, width, height)
 	}
 }

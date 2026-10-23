@@ -10,20 +10,20 @@ from audit_runtime_logs import audit
 from fixture_login import LoginMonitor, start_clients, write_receipts, archive_live_logs
 from verify_multiplayer import client_command
 from verify_packaged import prepare, FORGE, MAIN, digest, run
-from verify_packaged_client import prepare_assets
 
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--java',type=Path,required=True)
     parser.add_argument('--forge-home',type=Path,required=True)
-    parser.add_argument('--gradle-home',type=Path,required=True)
+    parser.add_argument('--forge-client-home',type=Path,required=True)
+    parser.add_argument('--hidden-agent',type=Path)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--mode',choices=['visibility','respawn'],required=True)
     parser.add_argument('--source-server',type=Path)
     parser.add_argument('--cases',type=int,default=16)
     parser.add_argument('--simultaneous',action='store_true')
-    parser.add_argument('--drop-spawn',action='store_true')
+    parser.add_argument('--drop-spawn',action='store_true',help='Destructive negative control: discards every owner corpse spawn; expected to fail')
     parser.add_argument('--counter-collision',action='store_true')
     args=parser.parse_args()
     project=Path(__file__).resolve().parents[1]
@@ -43,12 +43,11 @@ def main():
     (home/'server/server.properties').write_text(props)
     commands={'server':[str(java),'-Xmx1G','-Dlootablebodies.'+args.mode+'=true',
         '-Dlootablebodies.multiplayer.sync='+str(shared),'-Dlootablebodies.respawn.cases='+str(args.cases),
-        '-jar',FORGE+'-universal.jar','nogui']}
+        '-jar',FORGE+'.jar','--nogui']}
     if args.source_server: commands['server'].insert(2,'-Dlootablebodies.visibility.reload=true')
     if args.simultaneous: commands['server'].insert(2,'-Dlootablebodies.respawn.simultaneous=true')
-    prepare_assets(project/'.gradle/packaged-assets')
     for role in ['A','B']:
-        command=client_command(project,java,distribution,home/('client'+role),args.gradle_home.resolve()/'caches',shared,port,role)
+        command=client_command(project,java,args.forge_client_home.resolve(),home/('client'+role),None,shared,port,role,args.hidden_agent)
         command.insert(2,'-Dlootablebodies.'+args.mode+'=true')
         if args.simultaneous: command.insert(2,'-Dlootablebodies.respawn.simultaneous=true')
         if args.counter_collision: command.insert(2,'-Dlootablebodies.respawn.counterCollision=true')
@@ -86,7 +85,7 @@ def main():
     write_receipts(home)
     for name in ['server','clientA','clientB']:
         if digest(home/name/'mods'/MAIN)!=before: raise RuntimeError('Candidate copy changed')
-        audit(home/(name+'.log'),fixture_logins=True);audit(home/name/'logs/latest.log',fixture_logins=True)
+        audit(home/(name+'.log'),native=True);audit(home/name/'logs/latest.log',native=True);audit(home/name/'logs/debug.log',native=True)
         if list((home/name).rglob('crash-reports/*.txt')): raise RuntimeError('Crash report')
     for role in ['A','B']:
         if not (home/('client'+role)/(args.mode+'-client.pass')).is_file(): raise RuntimeError('Client did not finish '+role)
