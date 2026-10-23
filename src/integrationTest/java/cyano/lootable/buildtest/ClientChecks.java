@@ -69,9 +69,7 @@ public final class ClientChecks {
                 pending=mc.getIntegratedServer().addScheduledTask(() -> {
                     try { RuntimeChecks.run(mc.getIntegratedServer(),"fresh"); }
                     catch(Exception error) { throw new RuntimeException(error); }
-                    net.minecraft.entity.player.EntityPlayerMP player=mc.getIntegratedServer().getPlayerList().getPlayerByUUID(mc.player.getUniqueID());
-                    player.abilities.isFlying=true;player.sendPlayerAbilities();
-                    player.connection.setPlayerLocation(8.5,80,7.5,0,0);
+                    positionViewer(mc.getIntegratedServer().getPlayerList().getPlayerByUUID(mc.player.getUniqueID()));
                 });
             } else if(stage==2 && pending.isDone()) {
                 pending.get();
@@ -92,9 +90,7 @@ public final class ClientChecks {
                 pending=mc.getIntegratedServer().addScheduledTask(() -> {
                     try { RuntimeChecks.run(mc.getIntegratedServer(),"deferred"); }
                     catch(Exception error) { throw new RuntimeException(error); }
-                    net.minecraft.entity.player.EntityPlayerMP player=mc.getIntegratedServer().getPlayerList().getPlayerByUUID(mc.player.getUniqueID());
-                    player.abilities.isFlying=true;player.sendPlayerAbilities();
-                    player.connection.setPlayerLocation(8.5,80,7.5,0,0);
+                    positionViewer(mc.getIntegratedServer().getPlayerList().getPlayerByUUID(mc.player.getUniqueID()));
                 });
             } else if(stage==6 && pending.isDone()) {
                 pending.get();
@@ -119,6 +115,17 @@ public final class ClientChecks {
                 stage=9; mc.shutdown();
             }
         } catch(Throwable error) { fail(error); }
+    }
+    private static void positionViewer(net.minecraft.entity.player.EntityPlayerMP player) {
+        WorldServer world=player.getServerWorld();
+        RuntimeChecks.awaitChunk(world,0,0);
+        for(int x=7;x<=9;x++)for(int z=6;z<=8;z++)
+            world.setBlockState(new net.minecraft.util.math.BlockPos(x,79,z),net.minecraft.init.Blocks.STONE.getDefaultState());
+        RuntimeChecks.require(world.getBlockState(new net.minecraft.util.math.BlockPos(8,79,7)).getBlock()==net.minecraft.init.Blocks.STONE,
+                "Graphical recovery needs a stable floor below the viewing player");
+        player.setGameType(GameType.CREATIVE);
+        player.abilities.allowFlying=true;player.abilities.isFlying=true;player.sendPlayerAbilities();
+        player.connection.setPlayerLocation(8.5,80,7.5,0,0);
     }
     private void fail(Throwable error) {
         error.printStackTrace();
