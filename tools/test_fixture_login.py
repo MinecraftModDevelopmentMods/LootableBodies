@@ -14,6 +14,27 @@ class FixtureLoginTests(unittest.TestCase):
         self.root=Path(self.temp.name);(self.root/'sync').mkdir()
         self.log=self.root/'server.log';self.log.write_text('')
         self.monitor=LoginMonitor(self.root)
+    def test_planned_owner_and_observer_disconnects_do_not_abort_reconnect(self):
+        for phase,role in [('8','A'),('10','B')]:
+            with self.subTest(phase=phase,role=role):
+                reset=FAILURE.replace("io.netty.handler.codec.EncoderException: java.io.IOException: Can't serialize unregistered packet",'io.netty.channel.unix.Errors$NativeIoException: syscall:read(..) failed: Connection reset by peer').replace('ContainerA','Container'+role)
+                (self.root/('client'+role+'.log')).write_text('VISIBILITY_CLIENT_PHASE '+role+' '+phase+'\n')
+                self.log.write_text('VISIBILITY_PHASE '+phase+'\n'+reset+'VISIBILITY_PHASE '+str(int(phase)+1)+'\n')
+                LoginMonitor(self.root).poll()
+                self.assertFalse((self.root/('sync/login-retry-'+role)).exists())
+    def test_planned_disconnect_rejects_wrong_player_or_missing_client_phase(self):
+        reset=FAILURE.replace("io.netty.handler.codec.EncoderException: java.io.IOException: Can't serialize unregistered packet",'io.netty.channel.unix.Errors$NativeIoException: syscall:read(..) failed: Connection reset by peer')
+        self.log.write_text('VISIBILITY_PHASE 8\n'+reset)
+        with self.assertRaises(RuntimeError):LoginMonitor(self.root).poll()
+        (self.root/'clientA.log').write_text('VISIBILITY_CLIENT_PHASE A 8\n')
+        self.log.write_text('VISIBILITY_PHASE 10\n'+reset)
+        with self.assertRaises(RuntimeError):LoginMonitor(self.root).poll()
+    def test_old_disconnect_phase_cannot_explain_a_later_active_reset(self):
+        reset=FAILURE.replace("io.netty.handler.codec.EncoderException: java.io.IOException: Can't serialize unregistered packet",'io.netty.channel.unix.Errors$NativeIoException: syscall:read(..) failed: Connection reset by peer')
+        (self.root/'clientA.log').write_text('VISIBILITY_CLIENT_PHASE A 8\n')
+        self.log.write_text('VISIBILITY_PHASE 8\nVISIBILITY_PHASE 12\n'+reset)
+        with self.assertRaises(RuntimeError):LoginMonitor(self.root).poll()
+
     def test_completed_respawn_client_may_close_its_transport(self):
         reset=FAILURE.replace("io.netty.handler.codec.EncoderException: java.io.IOException: Can't serialize unregistered packet",'io.netty.channel.unix.Errors$NativeIoException: syscall:read(..) failed: Connection reset by peer')
         self.log.write_text(reset)

@@ -2,10 +2,8 @@ name: Validate release workflow
 on:
   push:
     branches: ['feature/**', 'master-1.12', 'master-1.12.2']
-    paths: ['.github/workflows/**', '.github/scripts/**']
   pull_request:
     branches: ['master-1.12']
-    paths: ['.github/workflows/**', '.github/scripts/**']
 permissions:
   contents: read
 jobs:

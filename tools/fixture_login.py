@@ -27,13 +27,24 @@ def completed_client(home, role):
         if any(line==marker or line.endswith(': '+marker) for line in lines):return True
     return False
 
+def planned_disconnect(home, role, phase):
+    expected={'8':'A','10':'B'}
+    if expected.get(phase)!=role:return False
+    log=home/('client'+role+'.log')
+    if not log.is_file():return False
+    marker='VISIBILITY_CLIENT_PHASE '+role+' '+phase
+    return any(line==marker or line.endswith(': '+marker)
+               for line in log.read_text(encoding='utf-8',errors='replace').splitlines())
+
 class LoginMonitor:
     def __init__(self, home):
-        self.home=Path(home);self.seen=0;self.counts={'A':0,'B':0}
+        self.home=Path(home);self.seen=0;self.counts={'A':0,'B':0};self.visibility_phase=None
     def poll(self):
         text=(self.home/'server.log').read_text(encoding='utf-8',errors='replace')
         lines=text[:text.rfind('\n')+1].splitlines()
         for line in lines[self.seen:]:
+            phase=re.search(r'(?:^|: )VISIBILITY_PHASE ([0-9]+)$',line)
+            if phase:self.visibility_phase=phase[1]
             joined=JOIN.fullmatch(line)
             if joined and joined[1]=='A' and joined[2]=='joined':
                 (self.home/'sync/client-A-joined').touch()
@@ -44,7 +55,7 @@ class LoginMonitor:
                 (self.home/'sync'/('login-retry-'+role)).write_text(str(self.counts[role]))
             elif 'lost connection: Internal Exception:' in line:
                 reset=RESET.fullmatch(line)
-                if not reset or not completed_client(self.home,reset[1]):
+                if not reset or not (completed_client(self.home,reset[1]) or planned_disconnect(self.home,reset[1],self.visibility_phase)):
                     raise RuntimeError('Unrecognised connection failure: '+line)
         self.seen=len(lines)
 
