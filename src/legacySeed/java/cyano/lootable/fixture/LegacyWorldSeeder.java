@@ -53,7 +53,7 @@ public final class LegacyWorldSeeder {
                 for(int slot=0;slot<48;slot++)body.setInventorySlotContents(slot,item(slot));
                 for(int slot=70;slot<73;slot++)body.addItem(item(slot));
                 if(Boolean.getBoolean("lootablebodies.fixture.recovery")) {
-                    if(!version.equals("2.4.1.110021") && !version.equals("2.4.2.111021")) throw new AssertionError("Recovery fixtures require a checksum-pinned maintained writer");
+                    if(!version.equals("2.4.1.110021") && !version.equals("2.4.2.111021") && !version.equals("2.4.3.112021")) throw new AssertionError("Recovery fixtures require a checksum-pinned maintained writer");
                     NBTTagCompound damaged=new NBTTagCompound();body.writeToNBTOptional(damaged);
                     NBTTagList equipment=damaged.getTagList("Equipment",10);
                     equipment.getCompoundTagAt(20).setString("id","lootablebodiesbuildtest:returning_item");

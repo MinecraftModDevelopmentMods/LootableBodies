@@ -17,8 +17,8 @@ import net.minecraft.server.management.PlayerProfileCache;
 import net.minecraft.tileentity.TileEntitySkull;
 import net.minecraft.world.World;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.fml.common.FMLCommonHandler;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 /** Respawns on the death notification, without waiting for a corpse spawn. */
@@ -31,9 +31,9 @@ final class RespawnPacketClientChecks {
     private final Set<String> completed=new HashSet<>();
     private File observations;
     private World profileWorld;
-    void register(){if(Boolean.getBoolean("lootablebodies.respawn")&&role!=null){FMLCommonHandler.instance().bus().register(this);MinecraftForge.EVENT_BUS.register(this);}}
-    @SubscribeEvent public void mouse(net.minecraftforge.client.event.GuiScreenEvent.MouseInputEvent.Pre e){e.setCanceled(true);}
-    @SubscribeEvent public void key(net.minecraftforge.client.event.GuiScreenEvent.KeyboardInputEvent.Pre e){e.setCanceled(true);}
+    void register(){if(Boolean.getBoolean("lootablebodies.respawn")&&role!=null){net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);MinecraftForge.EVENT_BUS.register(this);}}
+    @SubscribeEvent public void mouse(net.minecraftforge.client.event.GuiScreenEvent.MouseClickedEvent.Pre e){e.setCanceled(true);}
+    @SubscribeEvent public void key(net.minecraftforge.client.event.GuiScreenEvent.KeyboardKeyPressedEvent.Pre e){e.setCanceled(true);}
     private void respawn(Minecraft mc) {
         if((!role.equals("A")&&!Boolean.getBoolean("lootablebodies.respawn.simultaneous"))||mc.player==null)return;
         if(mc.currentScreen instanceof GuiGameOver) {
@@ -41,16 +41,16 @@ final class RespawnPacketClientChecks {
             if(!requested&&deathTicks>=delay){
                 if(Boolean.getBoolean("lootablebodies.respawn.counterCollision")&&kind==2) {
                     if(phase!=2)return;
-                    try {java.lang.reflect.Field counter=net.minecraftforge.fml.relauncher.ReflectionHelper.findField(Entity.class,"nextEntityID","field_70152_a");counter.setInt(null,entityId);}
+                    try {net.minecraftforge.fml.common.ObfuscationReflectionHelper.setPrivateValue(Entity.class,null,entityId,"field_70152_a");}
                     catch(Exception error){throw new RuntimeException(error);}
                     observe(mc,"SEEDED_CLIENT_COUNTER_COLLISION next_id="+entityId);
                 }
                 requested=true;mc.player.respawnPlayer();observe(mc,"REQUEST_RESPAWN without_corpse_barrier delay="+delay);
             }
-        } else if(mc.player.isEntityAlive()){requested=false;deathTicks=0;}
+        } else if(mc.player.isAlive()){requested=false;deathTicks=0;}
     }
     @SubscribeEvent public void tick(TickEvent.ClientTickEvent e) {
-        Minecraft mc=Minecraft.getMinecraft();
+        Minecraft mc=Minecraft.getInstance();
         if(e.phase==TickEvent.Phase.START) {
             if(mc.world!=null&&mc.world!=profileWorld) {
                 profileWorld=mc.world;
@@ -68,7 +68,7 @@ final class RespawnPacketClientChecks {
             }
             return;
         }
-        if(mc.inGameHasFocus)mc.setIngameNotInFocus();net.minecraft.client.settings.KeyBinding.unPressAllKeys();
+        if(mc.isGameFocused())mc.mouseHelper.ungrabMouse();net.minecraft.client.settings.KeyBinding.unPressAllKeys();
         try {
             if(finished){mc.shutdown();return;}
             RuntimeChecks.require(++ticks<20000,"Respawn client total timeout");RuntimeChecks.require(!RespawnPacketChecks.file("abort").exists(),"Respawn runner aborted");
@@ -99,17 +99,17 @@ final class RespawnPacketClientChecks {
                 File expected=RespawnPacketChecks.file("expected-"+index+"-"+role+".txt");if(!expected.isFile())return;
                 for(String line:Files.readAllLines(expected.toPath(),StandardCharsets.UTF_8)) {
                     String[] pair=line.split(" ");Entity tracked=mc.world.getEntityByID(Integer.parseInt(pair[0]));
-                    if(!(tracked instanceof EntityLootableBody)||!tracked.getUniqueID().equals(UUID.fromString(pair[1]))||tracked.isDead||!mc.world.loadedEntityList.contains(tracked))return;
+                    if(!(tracked instanceof EntityLootableBody)||!tracked.getUniqueID().equals(UUID.fromString(pair[1]))||tracked.removed||!mc.world.loadedEntityList.contains(tracked))return;
                 }
                 Entity entity=mc.world.getEntityByID(entityId);
-                if(!(entity instanceof EntityLootableBody)||!entity.getUniqueID().equals(uuid)||!mc.world.loadedEntityList.contains(entity)||entity.isDead)return;
+                if(!(entity instanceof EntityLootableBody)||!entity.getUniqueID().equals(uuid)||!mc.world.loadedEntityList.contains(entity)||entity.removed)return;
                 if(role.equals("A")) {
                     if(!(mc.currentScreen instanceof CorpseGUIContainer)){mc.playerController.interactWithEntity(mc.player,entity,EnumHand.MAIN_HAND);return;}
                     boolean found=false;for(int slot=0;slot<48;slot++)if(RuntimeChecks.sameStack(mc.player.openContainer.getSlot(slot).getStack(),RuntimeChecks.stack(520+index)))found=true;
                     if(!found||++guiFrames<10)return;
                 }
                 observe(mc,"VERIFIED owner_or_observer exact_uuid_loaded_after_respawn");
-                if(index%8==0||index%8==7)ScreenShotHelper.saveScreenshot(mc.gameDir,"respawn-case-"+index+".png",mc.displayWidth,mc.displayHeight,mc.getFramebuffer());
+                if(index%8==0||index%8==7)ScreenShotHelper.saveScreenshot(mc.gameDir,"respawn-case-"+index+".png",mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
                 ack(key);
             } else if(phase==9) {
                 new File(mc.gameDir,"respawn-client.pass").createNewFile();System.out.println("LOOTABLE_BODIES_RESPAWN_CLIENT_PASS "+role);
@@ -125,9 +125,9 @@ final class RespawnPacketClientChecks {
     private void ack(String key) throws Exception {completed.add(key);Files.write(RespawnPacketChecks.file(role+".case-"+key).toPath(),new byte[]{1});}
     private synchronized void observe(Minecraft mc,String event) {
         try(FileWriter out=new FileWriter(observations,true)) {
-            StringBuilder bodies=new StringBuilder();if(mc.world!=null)for(Entity ent:mc.world.loadedEntityList)if(ent instanceof EntityLootableBody)bodies.append(ent.getEntityId()).append(':').append(ent.getUniqueID()).append(':').append(ent.isDead).append(',');
+            StringBuilder bodies=new StringBuilder();if(mc.world!=null)for(Entity ent:mc.world.loadedEntityList)if(ent instanceof EntityLootableBody)bodies.append(ent.getEntityId()).append(':').append(ent.getUniqueID()).append(':').append(ent.removed).append(',');
             Entity mapped=mc.world==null?null:mc.world.getEntityByID(entityId);
-            out.write(System.nanoTime()+" case="+index+" phase="+phase+" "+event+" world="+(mc.world==null?"none":mc.world.provider.getDimension())+" player="+(mc.player==null?"none":mc.player.getEntityId())+" mapped="+(mapped==null?null:mapped.getUniqueID())+" loaded="+bodies+"\n");
+            out.write(System.nanoTime()+" case="+index+" phase="+phase+" "+event+" world="+(mc.world==null?"none":mc.world.dimension.getType().getId())+" player="+(mc.player==null?"none":mc.player.getEntityId())+" mapped="+(mapped==null?null:mapped.getUniqueID())+" loaded="+bodies+"\n");
         } catch(IOException error){throw new RuntimeException(error);}
     }
 }

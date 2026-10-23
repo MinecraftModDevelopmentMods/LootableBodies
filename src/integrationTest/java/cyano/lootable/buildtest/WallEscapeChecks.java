@@ -4,7 +4,7 @@ import cyano.lootable.entities.EntityLootableBody;
 import java.io.*;
 import java.util.*;
 import net.minecraft.block.BlockSnow;
-import net.minecraft.entity.EntityList;
+import net.minecraft.entity.EntityType;
 import net.minecraft.init.Blocks;
 import net.minecraft.nbt.*;
 import net.minecraft.server.MinecraftServer;
@@ -32,7 +32,7 @@ final class WallEscapeChecks {
         check("already_clear_body_does_not_teleport", WallEscapeChecks::alreadyClear);
         check("negative_coordinates_keep_finite_safe_exit", WallEscapeChecks::negative);
         check("suffocation_damage_uses_escape_and_keeps_default_health", WallEscapeChecks::damage);
-        for (EnumFacing direction : EnumFacing.HORIZONTALS)
+        for (EnumFacing direction : EnumFacing.Plane.HORIZONTAL)
             check("unloaded_exit_is_not_generated_" + direction, () -> unloaded(direction));
         check("ticking_sealed_body_waits_then_escapes_opened_wall", WallEscapeChecks::ticking);
         check("escaped_and_sealed_bodies_saved_for_cold_reload", () -> seed(folder));
@@ -76,7 +76,7 @@ final class WallEscapeChecks {
         NBTTagCompound invalid = new NBTTagCompound();
         invalid.setString("Source", "FutureMetadata"); invalid.setTag("Data", new NBTTagByteArray(new byte[]{4,3,2,1}));
         saved.setTag("LootableBodiesInvalidFields", NbtRecoveryChecks.list(invalid));
-        return (EntityLootableBody) EntityList.createEntityFromNBT(saved, world);
+        return (EntityLootableBody) EntityType.create(saved, world);
     }
 
     private static void unchanged(NBTTagCompound before, EntityLootableBody body) {
@@ -88,7 +88,7 @@ final class WallEscapeChecks {
 
     private static void clear(EntityLootableBody body) {
         PositionMotionChecks.finite(body);
-        RuntimeChecks.require(world.getCollisionBoxes(body, body.getEntityBoundingBox()).isEmpty(), "Escape left body intersecting terrain");
+        RuntimeChecks.require(world.isCollisionBoxesEmpty(body,body.getBoundingBox()), "Escape left body intersecting terrain");
     }
 
     private static void centred() {
@@ -96,7 +96,7 @@ final class WallEscapeChecks {
         // A zero-vector lookup previously sampled (0,0,0). Test it as air, too.
         net.minecraft.block.state.IBlockState origin = world.getBlockState(BlockPos.ORIGIN);
         try {
-            world.setBlockToAir(BlockPos.ORIGIN);
+            world.removeBlock(BlockPos.ORIGIN);
             EntityLootableBody body = body(centre); NBTTagCompound before = NameLifetimeChecks.saved(body);
             body.jumpOutOfWall(); clear(body); unchanged(before, body);
             RuntimeChecks.require(body.posY == centre.getY()+1.015625, "Centred body missed the existing upward exit priority");
@@ -104,7 +104,7 @@ final class WallEscapeChecks {
     }
 
     private static void oneExit(EnumFacing direction) {
-        BlockPos centre = site(false); terrain(centre, true); BlockPos exit = centre.offset(direction); world.setBlockToAir(exit);
+        BlockPos centre = site(false); terrain(centre, true); BlockPos exit = centre.offset(direction); world.removeBlock(exit);
         EntityLootableBody body = body(centre); NBTTagCompound before = NameLifetimeChecks.saved(body);
         body.jumpOutOfWall(); clear(body); unchanged(before, body);
         RuntimeChecks.require(body.posX == exit.getX()+.5 && body.posY == exit.getY()+.015625 && body.posZ == exit.getZ()+.5, "Missed sole adjacent exit");
@@ -117,14 +117,14 @@ final class WallEscapeChecks {
     }
 
     private static void snow() {
-        BlockPos centre = site(false); terrain(centre, true); world.setBlockToAir(centre.north());
-        world.setBlockState(centre.up(), Blocks.SNOW_LAYER.getDefaultState().withProperty(BlockSnow.LAYERS, 8), 2);
+        BlockPos centre = site(false); terrain(centre, true); world.removeBlock(centre.north());
+        world.setBlockState(centre.up(), Blocks.SNOW.getDefaultState().with(net.minecraft.block.BlockSnowLayer.LAYERS, 8), 2);
         EntityLootableBody body = body(centre); body.jumpOutOfWall(); clear(body);
         RuntimeChecks.require(body.getPosition().equals(centre.north()), "Snow collision was ignored");
     }
 
     private static void fence() {
-        BlockPos centre = site(false); terrain(centre, true); world.setBlockToAir(centre.north()); world.setBlockToAir(centre.east());
+        BlockPos centre = site(false); terrain(centre, true); world.removeBlock(centre.north()); world.removeBlock(centre.east());
         world.setBlockState(centre.north().down(), Blocks.OAK_FENCE.getDefaultState(), 2);
         EntityLootableBody body = body(centre); body.jumpOutOfWall(); clear(body);
         RuntimeChecks.require(body.getPosition().equals(centre.east()), "Tall collision below destination was ignored");
@@ -145,17 +145,17 @@ final class WallEscapeChecks {
     }
 
     private static void negative() {
-        BlockPos centre = site(true); terrain(centre, true); world.setBlockToAir(centre.west());
+        BlockPos centre = site(true); terrain(centre, true); world.removeBlock(centre.west());
         EntityLootableBody body = body(centre); NBTTagCompound before = NameLifetimeChecks.saved(body);
         body.jumpOutOfWall(); clear(body); unchanged(before, body);
         RuntimeChecks.require(body.getPosition().equals(centre.west()), "Negative coordinate exit was rounded incorrectly");
     }
 
     private static void damage() {
-        BlockPos centre = site(false); terrain(centre, true); world.setBlockToAir(centre.up());
+        BlockPos centre = site(false); terrain(centre, true); world.removeBlock(centre.up());
         EntityLootableBody body = body(centre); float health = body.getHealth();
         body.attackEntityFrom(DamageSource.IN_WALL, 1); clear(body);
-        RuntimeChecks.require(body.isEntityAlive() && body.getHealth() == health, "Default suffocation health rules changed");
+        RuntimeChecks.require(body.isAlive() && body.getHealth() == health, "Default suffocation health rules changed");
     }
 
     private static void unloaded(EnumFacing direction) throws Exception {
@@ -163,11 +163,11 @@ final class WallEscapeChecks {
         int x = centre.getX() >> 4, z = centre.getZ() >> 4;
         centre = new BlockPos(x*16+(direction == EnumFacing.WEST ? 0 : direction == EnumFacing.EAST ? 15 : 8), 80,
                 z*16+(direction == EnumFacing.NORTH ? 0 : direction == EnumFacing.SOUTH ? 15 : 8));
-        terrain(centre, true); world.setBlockToAir(centre.offset(direction));
+        terrain(centre, true); world.removeBlock(centre.offset(direction));
         int nx = x+direction.getXOffset(), nz = z+direction.getZOffset();
         world.getChunkProvider().queueUnload(world.getChunk(nx,nz));
         int attempts = world.getChunkProvider().getLoadedChunks().size()/100+2;
-        for (int i = 0; i < attempts && world.getChunkProvider().chunkExists(nx,nz); i++) world.getChunkProvider().tick();
+        for (int i = 0; i < attempts && world.getChunkProvider().chunkExists(nx,nz); i++) world.getChunkProvider().tick(()->true);
         net.minecraft.world.storage.ThreadedFileIOBase.getThreadedIOInstance().waitForFinish();
         RuntimeChecks.require(!world.getChunkProvider().chunkExists(nx,nz), "Fixture neighbour did not unload");
         EntityLootableBody body = body(centre); NBTTagCompound before = NameLifetimeChecks.saved(body);
@@ -180,24 +180,25 @@ final class WallEscapeChecks {
     private static void ticking() {
         BlockPos centre = site(false); terrain(centre, true); EntityLootableBody body = body(centre);
         NBTTagCompound before = NameLifetimeChecks.saved(body);
-        for (int i = 0; i < 100; i++) body.onUpdate();
-        RuntimeChecks.require(body.posX == centre.getX()+.5 && body.posY == centre.getY()+.015625 && body.posZ == centre.getZ()+.5 && body.isEntityAlive(), "Ticking sealed corpse drifted or died");
+        for (int i = 0; i < 100; i++) body.tick();
+        RuntimeChecks.require(body.posX == centre.getX()+.5 && body.posY == centre.getY()+.015625 && body.posZ == centre.getZ()+.5 && body.isAlive(), "Ticking sealed corpse drifted or died");
         for (String key : new String[]{"Equipment","Aux","LootableBodiesUnresolved","LootableBodiesInvalidFields","DeathTime","DecayTime"})
             RuntimeChecks.require(NameLifetimeChecks.same(before.getTag(key),NameLifetimeChecks.saved(body).getTag(key)), "Ticking escape changed " + key);
-        world.setBlockToAir(centre.up());
-        for (int i = 0; i < 30; i++) body.onUpdate();
+        world.removeBlock(centre.up());
+        for (int i = 0; i < 30; i++) body.tick();
         clear(body); RuntimeChecks.require(body.getPosition().equals(centre.up()), "Ticking corpse did not use newly opened exit");
     }
 
     private static void seed(File folder) throws Exception {
         for (boolean trapped : new boolean[]{false,true}) {
             BlockPos centre = site(false); terrain(centre, true);
-            if (!trapped) world.setBlockToAir(centre.up());
+            if (!trapped) world.removeBlock(centre.up());
             EntityLootableBody body = body(centre);
             body.setUniqueId(UUID.nameUUIDFromBytes(("wall-escape-"+trapped).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
             NBTTagCompound before = NameLifetimeChecks.saved(body); body.jumpOutOfWall(); unchanged(before,body);
             if (!trapped) clear(body);
             else RuntimeChecks.require(NameLifetimeChecks.same(before,NameLifetimeChecks.saved(body)), "Sealed disk fixture moved");
+            RuntimeChecks.awaitChunk(world,body.getPosition().getX()>>4,body.getPosition().getZ()>>4);
             RuntimeChecks.require(world.spawnEntity(body), "Could not save wall fixture");
             CompressedStreamTools.writeCompressed(NameLifetimeChecks.saved(body), new FileOutputStream(new File(folder,"wall-escape-"+trapped+".nbt")));
         }
@@ -208,8 +209,8 @@ final class WallEscapeChecks {
         for (boolean trapped : new boolean[]{false,true}) {
             NBTTagCompound expected;
             try (InputStream in = new FileInputStream(new File(folder,"wall-escape-"+trapped+".nbt"))) { expected = CompressedStreamTools.readCompressed(in); }
-            NBTTagList pos = expected.getTagList("Pos",6);
-            world.getChunk(new BlockPos(pos.getDoubleAt(0),pos.getDoubleAt(1),pos.getDoubleAt(2)));
+            NBTTagList pos = expected.getList("Pos",6);
+            world.getChunk(new BlockPos(pos.getDouble(0),pos.getDouble(1),pos.getDouble(2)));
             EntityLootableBody body = RuntimeChecks.find(world, expected.getUniqueId("UUID"));
             RuntimeChecks.require(NameLifetimeChecks.same(expected,NameLifetimeChecks.saved(body)), "Cold reload changed wall fixture NBT");
             body.jumpOutOfWall();
@@ -221,14 +222,14 @@ final class WallEscapeChecks {
 
     /** The sealed 2.2.0 Nether fixture that originally exposed random wall drift. */
     static void historical(MinecraftServer server, File folder, boolean reload) throws Exception {
-        world = server.getWorld(-1);
+        world = server.getWorld(net.minecraft.world.dimension.DimensionType.getById(-1));
         for (int x = 7; x <= 9; x++) for (int z = 7; z <= 9; z++) world.getChunk(x,z);
         EntityLootableBody body = null;
         for (net.minecraft.entity.Entity entity : world.loadedEntityList)
             if (entity instanceof EntityLootableBody && Math.abs(entity.posX-128.5)<.001 && Math.abs(entity.posZ-128.5)<.001)
                 body = (EntityLootableBody) entity;
         RuntimeChecks.require(body != null, "Original Nether corpse not found at its saved position");
-        RuntimeChecks.require(!world.getCollisionBoxes(body,body.getEntityBoundingBox()).isEmpty(), "Historical buried-body terrain was cleared");
+        RuntimeChecks.require(!world.isCollisionBoxesEmpty(body,body.getBoundingBox()), "Historical buried-body terrain was cleared");
         NBTTagCompound expected = NameLifetimeChecks.saved(body);
         File file = new File(folder,"wall-historical.nbt");
         if (reload) {

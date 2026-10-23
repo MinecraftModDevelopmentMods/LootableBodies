@@ -1,0 +1,22 @@
+modLoader="javafml"
+loaderVersion="[25,)"
+license="${mod_license}"
+[[mods]]
+modId="lootablebodies"
+version="${version}"
+displayName="DrCyano's Lootable Bodies"
+displayURL="${mod_url}"
+authors="Cyanobacterium, SkyBlade1978"
+description="Saves your items on a lootable corpse when you die."
+[[dependencies.lootablebodies]]
+modId="forge"
+mandatory=true
+versionRange="[25.0.223,)"
+ordering="NONE"
+side="BOTH"
+[[dependencies.lootablebodies]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.13.2]"
+ordering="NONE"
+side="BOTH"

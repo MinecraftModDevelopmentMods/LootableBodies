@@ -15,12 +15,14 @@ import net.minecraft.nbt.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.*;
-import net.minecraftforge.fml.common.FMLCommonHandler;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 /** Default-config real deaths and tracking, coordinated with two independent TCP clients. */
 public final class VisibilityChecks {
+    // Match the native flat world's respawn surface instead of an elevated platform.
+    private static final int GROUND_Y=3, PLAYER_Y=4;
     private final MinecraftServer server;
     private int phase,ticks,phaseTicks;
     private long waitStart;
@@ -33,50 +35,56 @@ public final class VisibilityChecks {
         RuntimeChecks.require(!LootableBodies.useLocalSkin && LootableBodies.allowCorpseDecay && LootableBodies.decayOnlyWhenEmpty
             && LootableBodies.ticksPerItemDecay==6000 && LootableBodies.corpseDecayTime==72000
             && !LootableBodies.hurtByEnvironment && !LootableBodies.hurtByAttacks && !LootableBodies.hurtByMisc,"Visibility defaults changed");
-        phase(0);Files.write(file("server.ready").toPath(),new byte[]{1});FMLCommonHandler.instance().bus().register(this);
+        phase(0);Files.write(file("server.ready").toPath(),new byte[]{1});net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);
     }
     static File file(String name){return new File(System.getProperty("lootablebodies.multiplayer.sync"),name);}
     private EntityPlayerMP player(String role){return server.getPlayerList().getPlayerByUsername("Container"+role);}
     private boolean ack(String role,int n){return file(role+".visibility-"+n).isFile();}
     private boolean both(int n){return ack("A",n)&&ack("B",n);}
-    private WorldServer world(){return server.getWorld(0);}
+    private WorldServer world(){return server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));}
     @SubscribeEvent public void tick(TickEvent.ServerTickEvent e) {
         if(e.phase!=TickEvent.Phase.END || finished)return;
         try {
             RuntimeChecks.require(++ticks<14000,"Visibility server timeout phase="+phase);phaseTicks++;
             RuntimeChecks.require(!file("abort").exists(),"Visibility runner aborted");
             EntityPlayerMP a=player("A"),b=player("B");
+            if(phase==3 && a!=null && a.isAlive())
+                RuntimeChecks.require(Math.abs(a.posX-first.posX)<28 && Math.abs(a.posZ-first.posZ)<28 && Math.abs(a.posY-first.posY)<8,
+                    "Visibility fixture respawned outside its corpse viewing area: "+a.getPosition()+" corpse="+first.getPosition());
             if(phaseTicks%100==0 && phase!=12)System.out.println("VISIBILITY_SERVER_STATE phase="+phase+" A="+(a==null?null:a.getPosition())+" B="+(b==null?null:b.getPosition())+" corpse="+(second==null?null:second.getPosition())+" usableA="+(second!=null&&second.isUsableByPlayer(a))+" usableB="+(second!=null&&second.isUsableByPlayer(b)));
             if(phase==0 && resumed && a!=null && b!=null && both(0)) {
                 // Only this disposable tracking fixture moves the world spawn.
                 // The corpse chunk must be eligible to unload when both clients
                 // leave; keeping it inside the spawn area would test no unload.
-                world().setSpawnPoint(new BlockPos(8192,80,8192));
+                world().setSpawnPoint(new BlockPos(8192,PLAYER_Y,8192));
                 NBTTagCompound n;try(FileInputStream in=new FileInputStream(new File(world().getSaveHandler().getWorldDirectory(),"visibility-state.nbt"))){n=CompressedStreamTools.readCompressed(in);}
                 first=loadExpected(world(),"first");second=loadExpected(world(),"second");
                 saveId("first",first);saveId("second",second);verifyInventories();
                 a.connection.setPlayerLocation(first.posX,first.posY,first.posZ-2.5,0,25);b.connection.setPlayerLocation(first.posX+1.5,first.posY,first.posZ-2.5,0,25);phase(19);
             } else if(phase==0 && a!=null && b!=null && both(0)) {
-                WorldServer w=world();w.getGameRules().setOrCreateGameRule("doMobSpawning","false");w.getGameRules().setOrCreateGameRule("keepInventory","false");
-                w.setWorldTime(6000);
-                for(int x=88;x<=170;x++)for(int z=89;z<=103;z++)w.setBlockState(new BlockPos(x,79,z),Blocks.OBSIDIAN.getDefaultState());
-                for(EntityPlayerMP p:new EntityPlayerMP[]{a,b}) {p.setGameType(GameType.SURVIVAL);p.inventory.clear();p.setSpawnPoint(new BlockPos(96,80,93),true);}
-                a.connection.setPlayerLocation(96.5,80,96.5,0,0);b.connection.setPlayerLocation(98.5,80,93.5,0,25);
+                WorldServer w=world();w.getGameRules().setOrCreateGameRule("doMobSpawning","false",null);w.getGameRules().setOrCreateGameRule("keepInventory","false",null);
+                // Forge25's forced player spawn can fall back to world spawn.
+                // Keep this disposable respawn within the intended viewing area.
+                w.setSpawnPoint(new BlockPos(96,PLAYER_Y,93));w.getGameRules().setOrCreateGameRule("spawnRadius","0",null);
+                w.setDayTime(6000);
+                for(int x=88;x<=170;x++)for(int z=89;z<=103;z++)w.setBlockState(new BlockPos(x,GROUND_Y,z),Blocks.OBSIDIAN.getDefaultState());
+                for(EntityPlayerMP p:new EntityPlayerMP[]{a,b}) {p.setGameType(GameType.SURVIVAL);p.inventory.clear();p.setSpawnPoint(new BlockPos(96,PLAYER_Y,93),true);}
+                a.connection.setPlayerLocation(96.5,PLAYER_Y,96.5,0,0);b.connection.setPlayerLocation(98.5,PLAYER_Y,93.5,0,25);
                 a.inventory.mainInventory.set(9,RuntimeChecks.stack(410));a.inventoryContainer.detectAndSendChanges();phase(1);
             } else if(phase==1 && both(1)) {
                 before=new HashSet<>(world().loadedEntityList);a.onKillCommand();first=newCorpse();saveId("first",first);phase(2);
             } else if(phase==2 && both(2)) {mark("both_clients_receive_actual_death_before_respawn");phase(3);
-            } else if(phase==3 && both(3) && a!=null && a.isEntityAlive()) {
-                RuntimeChecks.require(first.isEntityAlive(),"Server lost corpse after respawn");
-                a.connection.setPlayerLocation(96.5,80,93.5,0,25);phase(4);
+            } else if(phase==3 && both(3) && a!=null && a.isAlive()) {
+                RuntimeChecks.require(first.isAlive(),"Server lost corpse after respawn");
+                a.connection.setPlayerLocation(96.5,PLAYER_Y,93.5,0,25);phase(4);
             } else if(phase==4 && both(4)) {
                 RuntimeChecks.require(a.openContainer instanceof cyano.lootable.graphics.CorpseContainer && b.openContainer instanceof cyano.lootable.graphics.CorpseContainer,"GUI ack without server access");
                 mark("both_clients_render_and_open_corpse_after_respawn");phase(5);
             } else if(phase==5 && both(5)) {
-                a.closeScreen();b.closeScreen();a.connection.setPlayerLocation(160.5,80,93.5,0,25);phase(6);
+                a.closeScreen();b.closeScreen();a.connection.setPlayerLocation(160.5,PLAYER_Y,93.5,0,25);phase(6);
             } else if(phase==6 && both(6)) {
                 RuntimeChecks.require(world().getEntityTracker().getTrackingPlayers(first).contains(b) && !world().getEntityTracker().getTrackingPlayers(first).contains(a),"Range assertions differ from tracker");
-                mark("range_exit_removes_only_distant_client");a.connection.setPlayerLocation(96.5,80,93.5,0,25);phase(7);
+                mark("range_exit_removes_only_distant_client");a.connection.setPlayerLocation(96.5,PLAYER_Y,93.5,0,25);phase(7);
             } else if(phase==7 && both(7)) {mark("range_return_respawns_same_uuid");phase(8);
             } else if(phase==8 && a==null) {phase(9);
             } else if(phase==9 && a!=null && both(9)) {
@@ -85,19 +93,19 @@ public final class VisibilityChecks {
             } else if(phase==11 && b!=null && both(11)) {
                 mark("reconnect_observer_with_owner_still_online");waitStart=System.nanoTime();phase(12);
             } else if(phase==12 && phaseTicks>Integer.getInteger("lootablebodies.visibility.waitTicks",6200) && (System.nanoTime()-waitStart)>Long.getLong("lootablebodies.visibility.waitMillis",310000L)*1000000L && both(12)) {
-                RuntimeChecks.require(first.isEntityAlive() && has(first,410),"Default corpse lost before five-minute TNT test");
+                RuntimeChecks.require(first.isAlive() && has(first,410),"Default corpse lost before five-minute TNT test");
                 phase(120);
             } else if(phase==120 && both(120)) {
                 mark(Integer.getInteger("lootablebodies.visibility.waitTicks",6200)==6200?"default_corpse_visible_after_6200_ticks_and_310_seconds":"short_fixture_control_default_corpse_visible");
-                a.connection.setPlayerLocation(100.5,80,96.5,0,0);b.connection.setPlayerLocation(102.5,80,93.5,0,25);
+                a.connection.setPlayerLocation(100.5,PLAYER_Y,96.5,0,0);b.connection.setPlayerLocation(102.5,PLAYER_Y,93.5,0,25);
                 a.inventory.mainInventory.set(9,RuntimeChecks.stack(411));a.inventoryContainer.detectAndSendChanges();phase(13);
             } else if(phase==13 && both(13)) {
                 before=new HashSet<>(world().loadedEntityList);EntityTNTPrimed tnt=new EntityTNTPrimed(world(),a.posX,a.posY,a.posZ,null);tnt.setFuse(0);
                 RuntimeChecks.require(world().spawnEntity(tnt),"TNT fixture spawn");phase(14);
             } else if(phase==14) {
-                if(second==null && a!=null && !a.isEntityAlive()) {second=newCorpse();saveId("second",second);}
-                if(second!=null && both(14)) {RuntimeChecks.require(second.isEntityAlive() && has(second,411),"TNT destroyed default corpse/inventory");mark("tnt_death_after_five_minutes_both_clients_receive_corpse");phase(15);}
-            } else if(phase==15 && both(15) && a!=null && a.isEntityAlive()) {
+                if(second==null && a!=null && !a.isAlive()) {second=newCorpse();saveId("second",second);}
+                if(second!=null && both(14)) {RuntimeChecks.require(second.isAlive() && has(second,411),"TNT destroyed default corpse/inventory");mark("tnt_death_after_five_minutes_both_clients_receive_corpse");phase(15);}
+            } else if(phase==15 && both(15) && a!=null && a.isAlive()) {
                 // TNT can displace both the observer and the death position.
                 a.connection.setPlayerLocation(second.posX,second.posY,second.posZ-2.5,0,25);
                 b.connection.setPlayerLocation(second.posX+1.5,second.posY,second.posZ-2.5,0,25);phase(16);
@@ -107,15 +115,15 @@ public final class VisibilityChecks {
                 RuntimeChecks.require(has(first,410),"Earlier corpse inventory changed during TNT/reconnect checks");
                 a.closeScreen();b.closeScreen();File folder=world().getSaveHandler().getWorldDirectory();
                 RuntimeChecks.saveExpected(folder,"visibility-first",first);RuntimeChecks.saveExpected(folder,"visibility-second",second);
-                NBTTagCompound state=new NBTTagCompound();state.setUniqueId("First",first.getUniqueID());state.setUniqueId("Second",second.getUniqueID());state.setUniqueId("Player",a.getUniqueID());state.setTag("Inventory",a.inventory.writeToNBT(new NBTTagList()));
+                NBTTagCompound state=new NBTTagCompound();state.setUniqueId("First",first.getUniqueID());state.setUniqueId("Second",second.getUniqueID());state.setUniqueId("Player",a.getUniqueID());state.setTag("Inventory",a.inventory.write(new NBTTagList()));
                 try(FileOutputStream out=new FileOutputStream(new File(folder,"visibility-state.nbt"))){CompressedStreamTools.writeCompressed(state,out);}
                 server.getPlayerList().saveAllPlayerData();server.saveAllWorlds(false);mark("tagged_inventory_recovered_and_complete_nbt_saved");phase(18);
             } else if(phase==18 && server.getPlayerList().getCurrentPlayerCount()==0) {
                 Files.write(file("visibility.pass").toPath(),new byte[]{1});System.out.println("LOOTABLE_BODIES_VISIBILITY_PASS");finished=true;server.initiateShutdown();
             } else if(phase==19 && both(19)) {
                 mark("cold_server_restart_both_clients_render_and_open_saved_corpse");a.closeScreen();b.closeScreen();
-                for(int x=397;x<=404;x++)for(int z=397;z<=404;z++)world().setBlockState(new BlockPos(x,79,z),Blocks.OBSIDIAN.getDefaultState());
-                a.connection.setPlayerLocation(400.5,80,400.5,0,25);b.connection.setPlayerLocation(402.5,80,400.5,0,25);phase(20);
+                for(int x=397;x<=404;x++)for(int z=397;z<=404;z++)world().setBlockState(new BlockPos(x,GROUND_Y,z),Blocks.OBSIDIAN.getDefaultState());
+                a.connection.setPlayerLocation(400.5,PLAYER_Y,400.5,0,25);b.connection.setPlayerLocation(402.5,PLAYER_Y,400.5,0,25);phase(20);
             } else if(phase==20 && both(20) && phaseTicks>240 && !world().getChunkProvider().chunkExists(first.chunkCoordX,first.chunkCoordZ) && !world().getChunkProvider().chunkExists(second.chunkCoordX,second.chunkCoordZ)) {
                 mark("both_clients_leave_and_corpse_chunk_really_unloads");
                 net.minecraft.world.storage.ThreadedFileIOBase.getThreadedIOInstance().waitForFinish();
@@ -136,7 +144,7 @@ public final class VisibilityChecks {
         verifySnapshot(world(),"first",first);verifySnapshot(world(),"second",second);
     }
     static void reload(MinecraftServer server) throws Exception {
-        WorldServer w=server.getWorld(0);File folder=w.getSaveHandler().getWorldDirectory();NBTTagCompound n;
+        WorldServer w=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));File folder=w.getSaveHandler().getWorldDirectory();NBTTagCompound n;
         try(FileInputStream in=new FileInputStream(new File(folder,"visibility-state.nbt"))){n=CompressedStreamTools.readCompressed(in);}
         for(String key:new String[]{"First","Second"}) {EntityLootableBody b=loadExpected(w,key.toLowerCase(Locale.ROOT));RuntimeChecks.require(b.getUniqueID().equals(n.getUniqueId(key)),"Saved identity differs");verifySnapshot(w,key.toLowerCase(Locale.ROOT),b);}
         NBTTagCompound p;try(FileInputStream in=new FileInputStream(new File(folder,"playerdata/"+n.getUniqueId("Player")+".dat"))){p=CompressedStreamTools.readCompressed(in);}
@@ -144,15 +152,15 @@ public final class VisibilityChecks {
     }
     private static EntityLootableBody loadExpected(WorldServer w,String name) throws Exception {
         NBTTagCompound n;try(FileInputStream in=new FileInputStream(new File(w.getSaveHandler().getWorldDirectory(),"visibility-"+name+".nbt"))){n=CompressedStreamTools.readCompressed(in);}
-        NBTTagList pos=n.getTagList("Pos",6);w.getChunk((int)Math.floor(pos.getDoubleAt(0)/16),(int)Math.floor(pos.getDoubleAt(2)/16));
+        NBTTagList pos=n.getList("Pos",6);w.getChunk((int)Math.floor(pos.getDouble(0)/16),(int)Math.floor(pos.getDouble(2)/16));
         return RuntimeChecks.find(w,n.getUniqueId("UUID"));
     }
     private static void verifySnapshot(WorldServer w,String name,EntityLootableBody body) throws Exception {
         NBTTagCompound expected;try(FileInputStream in=new FileInputStream(new File(w.getSaveHandler().getWorldDirectory(),"visibility-"+name+".nbt"))){expected=CompressedStreamTools.readCompressed(in);}
-        NBTTagCompound actual=new NBTTagCompound();body.writeToNBTOptional(actual);
+        NBTTagCompound actual=new NBTTagCompound();body.writeUnlessPassenger(actual);
         for(String key:new String[]{"id","UUIDMost","UUIDLeast","Equipment","Aux","Name","CustomName","LootableBodiesUnresolved","LootableBodiesInvalidFields"})RuntimeChecks.require(Objects.equals(expected.getTag(key),actual.getTag(key)),"Reloaded corpse differs: "+name+" "+key);
         // These live-default fixtures keep ticking between the snapshot and logout.
         // Timer equality belongs to the separate frozen-timer persistence tests.
-        for(String key:new String[]{"DeathTime","DecayTime"})RuntimeChecks.require(actual.getLong(key)>=expected.getLong(key)&&actual.getLong(key)<=w.getTotalWorldTime(),"Reloaded live timer out of range: "+key);
+        for(String key:new String[]{"DeathTime","DecayTime"})RuntimeChecks.require(actual.getLong(key)>=expected.getLong(key)&&actual.getLong(key)<=w.getGameTime(),"Reloaded live timer out of range: "+key);
     }
 }

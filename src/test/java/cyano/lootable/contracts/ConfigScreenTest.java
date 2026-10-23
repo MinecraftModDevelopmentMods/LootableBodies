@@ -5,8 +5,8 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
-import net.minecraftforge.common.config.Configuration;
-import net.minecraftforge.common.config.Property;
+import cyano.lootable.config.LegacyConfiguration;
+import cyano.lootable.config.LegacyConfiguration.Property;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
@@ -15,21 +15,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ConfigScreenTest {
     @TempDir Path directory;
-    private Object previousHome;
-    @BeforeEach void prepareForgeConfig() throws Exception {
-        java.lang.reflect.Field home = net.minecraftforge.fml.relauncher.FMLInjectionData.class.getDeclaredField("minecraftHome");
-        home.setAccessible(true); previousHome = home.get(null); home.set(null, directory.toFile());
-    }
-    @AfterEach void restoreForgeConfig() throws Exception {
-        java.lang.reflect.Field home = net.minecraftforge.fml.relauncher.FMLInjectionData.class.getDeclaredField("minecraftHome");
-        home.setAccessible(true); home.set(null, previousHome);
-    }
-
-    private Configuration load(String contents) throws Exception {
+    private LegacyConfiguration load(String contents) throws Exception {
         Path file = directory.resolve("lootablebodies.cfg");
         Files.write(file, contents.getBytes(StandardCharsets.UTF_8));
         LootableBodies.class.getMethod("loadConfiguration", File.class).invoke(null, file.toFile());
-        return (Configuration) LootableBodies.class.getMethod("getConfiguration").invoke(null);
+        return (LegacyConfiguration) LootableBodies.class.getMethod("getConfiguration").invoke(null);
     }
 
     private void save() throws Exception {
@@ -39,7 +29,7 @@ class ConfigScreenTest {
     @Test void modsListUsesAClientOnlyFactory() throws Exception {
         String source = new String(Files.readAllBytes(Paths.get(
                 "src/main/java/cyano/lootable/LootableBodies.java")), StandardCharsets.UTF_8);
-        assertTrue(source.contains("guiFactory = \"cyano.lootable.graphics.CorpseConfigGuiFactory\""));
+        assertTrue(source.contains("DistExecutor.runWhenOn"));
         assertFalse(source.contains("import net.minecraft.client"));
     }
 
@@ -49,7 +39,7 @@ class ConfigScreenTest {
         LootableBodies.hurtByEnvironment = LootableBodies.hurtByAttacks = LootableBodies.hurtByMisc = false;
         LootableBodies.allowCorpseDecay = LootableBodies.decayOnlyWhenEmpty = true;
         LootableBodies.useLocalSkin = false; LootableBodies.displayNameTag = true;
-        Configuration config = load("");
+        LegacyConfiguration config = load("");
         assertEquals(new TreeSet<>(Arrays.asList("options", "corpse damage", "corpse decay", "corpse recovery")), config.getCategoryNames());
         int count = 0;
         for (String category : config.getCategoryNames()) for (Property property : config.getCategory(category).values()) {
@@ -68,7 +58,7 @@ class ConfigScreenTest {
     }
 
     @Test void appearanceSaveDoesNotActivatePendingGameplayChanges() throws Exception {
-        Configuration config = load("options {\n D:corpse_HP=37\n D:item_decay_rate=7\n B:local_texture=false\n B:display_nametag=true\n}\n"
+        LegacyConfiguration config = load("options {\n D:corpse_HP=37\n D:item_decay_rate=7\n B:local_texture=false\n B:display_nametag=true\n}\n"
                 + "\"corpse decay\" {\n S:corpse_decay_time=2:03:04\n}\n");
         config.getCategory("options").get("local_texture").set(true);
         config.getCategory("options").get("display_nametag").set(false);
@@ -80,7 +70,7 @@ class ConfigScreenTest {
         assertEquals(37, LootableBodies.corpseHP);
         assertEquals(8400, LootableBodies.ticksPerItemDecay);
         assertEquals((2 * 3600 + 3 * 60 + 4) * 20, LootableBodies.corpseDecayTime);
-        Configuration disk = new Configuration(directory.resolve("lootablebodies.cfg").toFile()); disk.load();
+        LegacyConfiguration disk = new LegacyConfiguration(directory.resolve("lootablebodies.cfg").toFile()); disk.load();
         assertEquals(99, disk.getCategory("options").get("corpse_HP").getDouble());
         LootableBodies.class.getMethod("loadConfiguration", File.class).invoke(null, directory.resolve("lootablebodies.cfg").toFile());
         assertEquals(99, LootableBodies.corpseHP);
@@ -89,9 +79,9 @@ class ConfigScreenTest {
     }
 
     @Test void savingPreservesUnknownOptionsAndLegacyCategories() throws Exception {
-        Configuration config = load("options {\n S:pack_note=keep this\n}\ncustom {\n I:example=42\n}\n");
+        LegacyConfiguration config = load("options {\n S:pack_note=keep this\n}\ncustom {\n I:example=42\n}\n");
         config.getCategory("options").get("local_texture").set(true); save();
-        Configuration disk = new Configuration(directory.resolve("lootablebodies.cfg").toFile()); disk.load();
+        LegacyConfiguration disk = new LegacyConfiguration(directory.resolve("lootablebodies.cfg").toFile()); disk.load();
         assertEquals("keep this", disk.getCategory("options").get("pack_note").getString());
         assertEquals(42, disk.getCategory("custom").get("example").getInt());
         assertEquals(3, disk.getCategory("corpse damage").size());
@@ -108,13 +98,23 @@ class ConfigScreenTest {
     }
 
     @Test void englishLabelsCoverAllVisibleOptions() throws Exception {
-        Configuration config = load("");
-        Properties language = new Properties();
+        LegacyConfiguration config = load("");
+        com.google.gson.JsonObject language;
         try (java.io.Reader reader = Files.newBufferedReader(Paths.get(
-                "build/resources/main/assets/lootablebodies/lang/en_us.lang"), StandardCharsets.UTF_8)) { language.load(reader); }
+                "build/resources/main/assets/lootablebodies/lang/en_us.json"), StandardCharsets.UTF_8)) { language = new com.google.gson.JsonParser().parse(reader).getAsJsonObject(); }
         for (String category : config.getCategoryNames()) for (Property property : config.getCategory(category).values()) {
-            assertNotNull(language.getProperty(property.getLanguageKey()), property.getName());
-            assertNotNull(language.getProperty(property.getLanguageKey() + ".tooltip"), property.getName());
+            assertNotNull(language.get(property.getLanguageKey()), property.getName());
+            assertNotNull(language.get(property.getLanguageKey() + ".tooltip"), property.getName());
         }
+    }
+    @Test void cancelledChildEditsCannotLeakIntoTheRootDraft()throws Exception {
+        load("");cyano.lootable.graphics.CorpseConfigGui root=new cyano.lootable.graphics.CorpseConfigGui(null);
+        java.lang.reflect.Field pending=root.getClass().getDeclaredField("pending");pending.setAccessible(true);
+        java.lang.reflect.Constructor<?> ctor=root.getClass().getDeclaredConstructor(net.minecraft.client.gui.GuiScreen.class,String.class,Map.class,int.class);ctor.setAccessible(true);
+        @SuppressWarnings("unchecked") Map<String,String> original=(Map<String,String>)pending.get(root);
+        Object child=ctor.newInstance(root,"rules",original,0);
+        @SuppressWarnings("unchecked") Map<String,String> edits=(Map<String,String>)pending.get(child);
+        String health=original.get("corpse_HP");edits.put("corpse_HP","31");
+        assertEquals(health,original.get("corpse_HP"),"Cancelling a child must leave its parent's draft intact");
     }
 }

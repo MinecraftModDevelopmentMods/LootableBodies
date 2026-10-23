@@ -17,6 +17,9 @@ MATRIX112 = [origin + ' / ' + stamps for origin in
              ['original-110', 'released-110', 'original-111', 'recovery-110',
               'released-111', 'original-112', 'recovery-111', 'via111-110']
              for stamps in ['normal', 'stamps']]
+MATRIX113 = MATRIX112 + [origin + ' / ' + stamps for origin in
+             ['released-112', 'recovery-112', 'via112-110', 'via112-111']
+             for stamps in ['normal', 'stamps']]
 MATRIX = [origin + ' / ' + stamps for origin in
           ['original-110', 'released-110', 'original-111', 'recovery-110']
           for stamps in ['normal', 'stamps']]
@@ -49,7 +52,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
         suffix, branch, forge = {
             '1.10.2': ('110021', '1.10.2', '12.18.3.2511'),
             '1.11.2': ('111021', '1.11.2-dev', '13.20.1.2588'),
-            '1.12.2': ('112021', 'master-1.12', '14.23.5.2859')}[minecraft]
+            '1.12.2': ('112021', 'master-1.12', '14.23.5.2859'),
+            '1.13.2': ('113021', 'master-1.13.2', '25.0.223')}[minecraft]
         version = '2.4.2.' + suffix
         values = dict(minecraft_version=minecraft, forge_version=forge, loader_name='forge', loader_code='1',
             java_version='8', java_toolchain_version='8.0.502+7', gradle_java_version='17', mod_id='lootablebodies',
@@ -57,7 +61,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
             curseforge_project_id='240968', mod_version=version)
         if mutation:
             values.update(mutation)
-        checks = CORE + {'1.11.2': MATRIX, '1.12.2': MATRIX112}.get(minecraft, []) if names is None else names
+        checks = CORE + {'1.11.2': MATRIX, '1.12.2': MATRIX112,
+                         '1.13.2': MATRIX113 + ['Validate release workflow']}.get(minecraft, []) if names is None else names
         def command(args, **options):
             if args[0] == 'git':
                 return SHA + '\n'
@@ -81,7 +86,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             exec(compile(code, 'release-preflight', 'exec'), {})
 
     def test_routes_all_supported_versions(self):
-        for suffix, minecraft, branch in [('110021', '1.10.2', '1.10.2'), ('111021', '1.11.2', '1.11.2-dev'), ('112021', '1.12.2', 'master-1.12')]:
+        for suffix, minecraft, branch in [('110021', '1.10.2', '1.10.2'), ('111021', '1.11.2', '1.11.2-dev'), ('112021', '1.12.2', 'master-1.12'), ('113021', '1.13.2', 'master-1.13.2')]:
             with self.subTest(minecraft=minecraft):
                 status, values = self.select('2.4.2.' + suffix)
                 self.assertEqual(0, status)
@@ -89,7 +94,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 self.assertEqual(branch, values['source_branch'])
 
     def test_invalid_versions_are_rejected(self):
-        for version in ['2.4.2', '2.4.2.113021', '02.4.2.111021', '2.4.2.111021;exit 0']:
+        for version in ['2.4.2', '2.4.2.114041', '02.4.2.111021', '2.4.2.111021;exit 0']:
             with self.subTest(version=version):
                 self.assertNotEqual(0, self.select(version)[0])
 
@@ -119,6 +124,17 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_112_requires_an_independent_audit_of_its_exact_artifact(self):
         with self.assertRaises(SystemExit):
             self.validate('1.12.2', audit_success=False)
+
+    def test_113_requires_every_upgrade_case_and_workflow_validation(self):
+        self.validate('1.13.2')
+        required = MATRIX113 + ['Validate release workflow']
+        for missing in required:
+            with self.subTest(missing=missing), self.assertRaises(SystemExit):
+                self.validate('1.13.2', names=CORE + [name for name in required if name != missing])
+
+    def test_113_requires_an_independent_audit_of_its_exact_artifact(self):
+        with self.assertRaises(SystemExit):
+            self.validate('1.13.2', audit_success=False)
 
     def test_identity_changes_are_rejected(self):
         for mutation in [{'mod_id': 'other'}, {'minecraft_version': '1.10.2'}, {'mod_license': 'CC0-1.0'}]:

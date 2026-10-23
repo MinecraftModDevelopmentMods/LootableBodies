@@ -7,18 +7,22 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiDisconnected;
 import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.client.multiplayer.ServerData;
-import net.minecraftforge.fml.client.FMLClientHandler;
+import net.minecraft.client.gui.GuiConnecting;
 
 /** Uses ordinary Forge connection setup; retries only a runner-confirmed pre-login encoding failure. */
 final class FixtureConnections {
     private FixtureConnections() {}
+    static void disconnect(Minecraft mc) {
+        if(mc.player!=null)mc.player.closeScreen();
+        if(mc.world!=null)mc.world.sendQuittingDisconnectingPacket();
+        mc.loadWorld(null);mc.displayGuiScreen(new GuiMainMenu());
+    }
     static boolean ready(String role) {
         return "A".equals(role)||new File(System.getProperty("lootablebodies.multiplayer.sync"),"client-A-joined").isFile();
     }
     static void connect(Minecraft mc) {
         String address="127.0.0.1:"+Integer.parseInt(System.getProperty("lootablebodies.multiplayer.port"));
-        FMLClientHandler.instance().setupServerList();
-        FMLClientHandler.instance().connectToServer(new GuiMainMenu(),new ServerData("Disposable check",address,false));
+        mc.displayGuiScreen(new GuiConnecting(new GuiMainMenu(),mc,new ServerData("Disposable check",address,false)));
     }
     static boolean retry(Minecraft mc,String role) throws Exception {
         if(!(mc.currentScreen instanceof GuiDisconnected)||mc.world!=null)return false;

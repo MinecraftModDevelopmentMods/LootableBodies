@@ -5,8 +5,8 @@ def expectedIdentity = [
         mod_id: 'lootablebodies', mod_artifact: 'LootableBodies',
         mod_group: 'zone.moddev.mc.lootablebodies', mod_vendor: 'Cyanobacterium',
         mod_name: "DrCyano's Lootable Bodies", mod_authors: 'Cyanobacterium,SkyBlade1978',
-        minecraft_version: '1.12.2', forge_version: '14.23.5.2859',
-        mapping_channel: 'stable', mapping_version: '39-1.12',
+        minecraft_version: '1.13.2', forge_version: '25.0.223',
+        mapping_channel: 'snapshot', mapping_version: '20180921-1.13',
         loader_name: 'forge', loader_code: '1', curseforge_project_id: '240968',
         java_version: '8', java_toolchain_version: '8.0.502+7', gradle_java_version: '17',
         mod_license: 'LGPL-2.1-only', mod_license_name: 'GNU Lesser General Public License, Version 2.1',
@@ -37,7 +37,7 @@ tasks.register('verifyReleaseConfiguration') {
     doLast {
         String source = file('src/main/java/cyano/lootable/LootableBodies.java').getText('UTF-8')
         if (!source.contains("VERSION = \"${project.version}\"") || !source.contains('MODID = "lootablebodies"') ||
-                !source.contains('acceptedMinecraftVersions = "[1.12.2]"') || !source.contains('String idName = "Corpse"'))
+                !source.contains('@Mod(LootableBodies.MODID)') || !source.contains('new ResourceLocation("lootablebodies:corpse")'))
             throw new GradleException('Java release version or persistent identity differs from release metadata')
         if (!file('README.md').getText('UTF-8').contains(releaseNames[0]) ||
                 !file('CHANGELOG.txt').getText('UTF-8').contains(project.version.toString()))
@@ -158,6 +158,8 @@ gradle.taskGraph.whenReady { graph ->
         if (graph.allTasks.any { it.name == 'publishToMavenLocal' || it.class.name.contains('PublishToMavenLocal') } ||
                 System.getenv('GITHUB_ACTIONS') != 'true' ||
                 System.getenv('GITHUB_REPOSITORY') != 'MinecraftModDevelopmentMods/LootableBodies' ||
+                System.getenv('GITHUB_WORKFLOW') != 'Release Lootable Bodies' ||
+                System.getenv('GITHUB_REF') != 'refs/heads/master-1.12' ||
                 System.getenv('LOOTABLEBODIES_RELEASE_VERSION') != project.version.toString() ||
                 !(System.getenv('GITHUB_RUN_ID') ==~ /[0-9]+/) || !preparedReleaseDir.isPresent())
             throw new GradleException('Publication is disabled outside the confirmed MMD release workflow')

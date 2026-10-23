@@ -69,6 +69,28 @@ class RuntimeLogAuditTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.check_log(text, upgrade=True)
 
+    def test_native_forge25_control_diagnostics_require_native_mode(self):
+        lines=[
+            '[23Oct2026 05:33:14.287] [Thread-4/FATAL] [net.minecraftforge.fml.packs.ModFileResourcePack/]: Failed to clean up tempdir C:\\Users\\fixture\\AppData\\Local\\Temp\\modpacktmp5761462687549030506',
+            '[05:33:14.287] [Client thread/FATAL] [net.minecraftforge.common.ForgeConfig]: Forge config just got changed on the file system!']
+        lines += [line.replace('05:33:14.287','05:33:14') for line in lines]
+        lines += [lines[1].replace('net.minecraftforge.common.ForgeConfig]', 'ne.mi.co.ForgeConfig/CORE]')]
+        for line in lines:
+            with self.subTest(line=line):
+                self.check_log(line+'\n',native=True)
+                with self.assertRaises(RuntimeError):self.check_log(line+'\n')
+                for changed in [line+' additional failure',line.replace('/FATAL]','/ERROR]'),line.replace('ModFileResourcePack','OtherPack').replace('ForgeConfig','OtherConfig')]:
+                    with self.assertRaises(RuntimeError):self.check_log(changed+'\n',native=True)
+        with self.assertRaises(RuntimeError):
+            self.check_log('[05:33:14.287] [Server thread/ERROR] [net.minecraft.entity.EntityTracker]: Entity is already tracked!\n',native=True)
+
+    def test_native_openal_shutdown_diagnostic_is_exact(self):
+        known='AL lib: (EE) alc_cleanup: 1 device not closed\n'
+        self.check_log(known,native=True)
+        for text in (known,known.replace('1 device','2 devices'),known.replace('alc_cleanup','other_failure')):
+            with self.subTest(text=text), self.assertRaises(RuntimeError):
+                self.check_log(text,native=text!=known)
+
     def forge14_control(self):
         return (Path(__file__).parent / 'fixtures/forge14-bootstrap-diagnostics.txt').read_text(encoding='utf-8')
 

@@ -27,9 +27,9 @@ final class ReportedIssueClientChecks {
     private File report;
     private NBTTagCompound savedBody,savedPlayer;
     static ItemStack original() {
-        ItemStack s=new ItemStack(Items.DIAMOND_SHOVEL,1,17);
-        s.setTagCompound(RuntimeChecks.stack(300).getTagCompound().copy());
-        s.setStackDisplayName("Issue 5 original shovel");return s;
+        ItemStack s=new ItemStack(Items.DIAMOND_SHOVEL);
+        s.setTag(RuntimeChecks.stack(300).getTag().copy());s.setDamage(17);
+        s.setDisplayName(new net.minecraft.util.text.TextComponentString("Issue 5 original shovel"));return s;
     }
     void tick(Minecraft mc) throws Exception {
         frames++;
@@ -39,8 +39,8 @@ final class ReportedIssueClientChecks {
             mc.launchIntegratedServer("issue-fixture","Issue fixture",new WorldSettings(4267321,GameType.SURVIVAL,false,false,WorldType.FLAT).enableCommands());next(1);
         } else if(stage==1 && ready(mc)) {
             schedule(mc,()->{
-                WorldServer w=player(mc).getServerWorld();w.getGameRules().setOrCreateGameRule("keepInventory","false");
-                w.getGameRules().setOrCreateGameRule("doMobSpawning","false");
+                WorldServer w=player(mc).getServerWorld();w.getGameRules().setOrCreateGameRule("keepInventory","false",null);
+                w.getGameRules().setOrCreateGameRule("doMobSpawning","false",null);
                 for(int x=29;x<=36;x++)for(int z=-3;z<=4;z++)w.setBlockState(new BlockPos(x,79,z),Blocks.STONE.getDefaultState());
                 EntityPlayerMP p=player(mc);p.setGameType(GameType.SURVIVAL);p.inventory.clear();p.inventory.currentItem=4;
                 p.inventory.mainInventory.set(4,original());p.inventory.mainInventory.set(9,RuntimeChecks.stack(301));
@@ -49,7 +49,7 @@ final class ReportedIssueClientChecks {
             });next(2);
         } else if(stage==2 && done() && mc.currentScreen instanceof GuiGameOver && frames>10) {
             mc.player.respawnPlayer();next(3);
-        } else if(stage==3 && ready(mc) && mc.player.isEntityAlive() && !(mc.currentScreen instanceof GuiGameOver)) {
+        } else if(stage==3 && ready(mc) && mc.player.isAlive() && !(mc.currentScreen instanceof GuiGameOver)) {
             schedule(mc,()->player(mc).connection.setPlayerLocation(32.5,80,.5,0,0));next(4);
         } else if(stage==4 && done() && open(mc,firstId)) {next(5);
         } else if(stage==5 && gui(mc) && frames>15) {
@@ -67,17 +67,18 @@ final class ReportedIssueClientChecks {
             mark("first_death_respawn_key1_and_shift_recovery");
             mc.player.closeScreen();mc.player.inventory.currentItem=active;
             mc.getConnection().sendPacket(new CPacketHeldItemChange(active));
-            // Same ordered connection: held-item change, then /kill. No inventory open or forced resync.
-            mc.player.sendChatMessage("/kill");next(8);
+            // Same ordered connection: held-item change, then a build-only death signal.
+            // This uses the vanilla death path without native command permissions.
+            MultiplayerChecks.CHANNEL.sendToServer(new MultiplayerChecks.FixtureDeath());next(8);
         } else if(stage==8 && mc.currentScreen instanceof GuiGameOver && frames>10) {
             mc.player.respawnPlayer();next(9);
-        } else if(stage==9 && ready(mc) && mc.player.isEntityAlive() && !(mc.currentScreen instanceof GuiGameOver)) {
+        } else if(stage==9 && ready(mc) && mc.player.isAlive() && !(mc.currentScreen instanceof GuiGameOver)) {
             schedule(mc,()->{
                 EntityPlayerMP p=player(mc);EntityLootableBody second=null;
-                for(Entity e:p.world.loadedEntityList)if(e instanceof EntityLootableBody && !e.getUniqueID().equals(firstId) && p.getName().equals(e.getCustomNameTag()))second=(EntityLootableBody)e;
+                for(Entity e:p.world.loadedEntityList)if(e instanceof EntityLootableBody && !e.getUniqueID().equals(firstId) && p.getGameProfile().getName().equals(((EntityLootableBody)e).getCustomNameTag()))second=(EntityLootableBody)e;
                 RuntimeChecks.require(second!=null,"Second actual death corpse absent");secondId=second.getUniqueID();
                 verifyOriginals(second);equal(second.getStackInSlot(4),RuntimeChecks.stack(301),"Second selected main hand");
-                RuntimeChecks.require(p.inventory.writeToNBT(new NBTTagList()).tagCount()==0,"Second death duplicated player inventory");
+                RuntimeChecks.require(p.inventory.write(new NBTTagList()).size()==0,"Second death duplicated player inventory");
                 p.connection.setPlayerLocation(32.5,80,.5,0,0);
                 mark("second_death_without_inventory_resync_preserves_original_shovel_and_all_tags");
             });next(10);
@@ -121,8 +122,8 @@ final class ReportedIssueClientChecks {
         throw new AssertionError("Actual connected death absent");
     }
     private static void addTagged(Map<String,Integer> result,ItemStack stack) {
-        if((stack == null || stack.isEmpty()) || !stack.hasTagCompound() || !stack.getTagCompound().hasKey("fixture"))return;
-        NBTTagCompound n=stack.writeToNBT(new NBTTagCompound());n.removeTag("Count");result.put(n.toString(),result.getOrDefault(n.toString(),0)+stack.getCount());
+        if((stack == null || stack.isEmpty()) || !stack.hasTag() || !stack.getTag().hasKey("fixture"))return;
+        NBTTagCompound n=stack.write(new NBTTagCompound());n.removeTag("Count");result.put(n.toString(),result.getOrDefault(n.toString(),0)+stack.getCount());
     }
     private static Map<String,Integer> originals(){Map<String,Integer> m=new TreeMap<>();addTagged(m,original());addTagged(m,RuntimeChecks.stack(301));return m;}
     private static void verifyOriginals(EntityLootableBody b) {
@@ -131,16 +132,16 @@ final class ReportedIssueClientChecks {
     }
     private static void verifyClientOriginals(Minecraft mc){Map<String,Integer> n=new TreeMap<>();for(int i=0;i<48;i++)addTagged(n,mc.player.openContainer.getSlot(i).getStack());RuntimeChecks.require(originals().equals(n),"Connected GUI differs from exact originals");}
     private void save(Minecraft mc) throws Exception {
-        savedBody=new NBTTagCompound();body(mc).writeToNBTOptional(savedBody);savedPlayer=new NBTTagCompound();savedPlayer.setTag("Inventory",player(mc).inventory.writeToNBT(new NBTTagList()));
+        savedBody=new NBTTagCompound();body(mc).writeUnlessPassenger(savedBody);savedPlayer=new NBTTagCompound();savedPlayer.setTag("Inventory",player(mc).inventory.write(new NBTTagList()));
         File folder=player(mc).getServerWorld().getSaveHandler().getWorldDirectory();
         try(FileOutputStream out=new FileOutputStream(new File(folder,"issue5-corpse-expected.nbt"))){CompressedStreamTools.writeCompressed(savedBody,out);}
         try(FileOutputStream out=new FileOutputStream(new File(folder,"issue5-player-expected.nbt"))){CompressedStreamTools.writeCompressed(savedPlayer,out);}
         mc.getIntegratedServer().getPlayerList().saveAllPlayerData();mc.getIntegratedServer().saveAllWorlds(false);
     }
     private void verifyDisk(Minecraft mc) {
-        player(mc).getServerWorld().getChunk(2,0);NBTTagCompound actual=new NBTTagCompound();body(mc).writeToNBTOptional(actual);
+        player(mc).getServerWorld().getChunk(2,0);NBTTagCompound actual=new NBTTagCompound();body(mc).writeUnlessPassenger(actual);
         for(String key:Arrays.asList("id","UUIDMost","UUIDLeast","Equipment","Aux","Name"))RuntimeChecks.require(Objects.equals(savedBody.getTag(key),actual.getTag(key)),"Disk corpse differs: "+key);
-        RuntimeChecks.require(savedPlayer.getTagList("Inventory",10).equals(player(mc).inventory.writeToNBT(new NBTTagList())),"Complete player inventory differs after disk reload");
+        RuntimeChecks.require(savedPlayer.getList("Inventory",10).equals(player(mc).inventory.write(new NBTTagList())),"Complete player inventory differs after disk reload");
     }
     private EntityPlayerMP player(Minecraft mc){return mc.getIntegratedServer().getPlayerList().getPlayerByUUID(mc.player.getUniqueID());}
     private EntityLootableBody body(Minecraft mc){return RuntimeChecks.find(player(mc).getServerWorld(),secondId);}
@@ -152,6 +153,6 @@ final class ReportedIssueClientChecks {
     private boolean done() throws Exception {if(!pending.isDone())return false;pending.get();return true;}
     private void next(int n){stage=n;frames=0;System.out.println("ISSUE5_CLIENT_STAGE "+n);}
     private void mark(String name) throws Exception {try(FileWriter out=new FileWriter(report,true)){out.write("PASS "+name+"\n");}System.out.println("ISSUE5_CLIENT_CHECK_PASS "+name);}
-    private static void shot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.displayWidth,mc.displayHeight,mc.getFramebuffer());}
-    private static void quit(Minecraft mc){mc.player.closeScreen();mc.getIntegratedServer().initiateShutdown();}
+    private static void shot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));}
+    private static void quit(Minecraft mc){mc.player.closeScreen();FixtureConnections.disconnect(mc);}
 }

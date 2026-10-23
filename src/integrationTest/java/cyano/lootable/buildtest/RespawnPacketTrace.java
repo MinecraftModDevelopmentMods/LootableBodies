@@ -12,7 +12,7 @@ import net.minecraft.network.PacketBuffer;
 import net.minecraft.network.play.server.*;
 import net.minecraft.network.play.client.CPacketClientStatus;
 import net.minecraftforge.fml.common.network.ByteBufUtils;
-import net.minecraftforge.fml.common.network.internal.FMLProxyPacket;
+import net.minecraftforge.fml.network.ICustomPacket;
 
 /** Observes decoded packets without dropping, delaying, mutating or reordering them. */
 final class RespawnPacketTrace extends ChannelDuplexHandler {
@@ -29,7 +29,7 @@ final class RespawnPacketTrace extends ChannelDuplexHandler {
         String description=describe(packet);if(description!=null)record("IN "+description);
         if(Boolean.getBoolean("lootablebodies.respawn.dropSpawn")&&log.getName().equals("client-packets.txt")
             &&description!=null&&description.startsWith("MOD_SPAWN ")&&description.contains("mod=lootablebodies ")) {
-            record("FAULT_DROPPED "+description);((FMLProxyPacket)packet).payload().release();return;
+            record("FAULT_DROPPED "+description);((ICustomPacket<?>)packet).getData().release();return;
         }
         super.channelRead(context,packet);
         if(description!=null&&after!=null)after.received(description);
@@ -40,11 +40,12 @@ final class RespawnPacketTrace extends ChannelDuplexHandler {
     }
     private synchronized void record(String line) throws IOException {try(FileWriter out=new FileWriter(log,true)){out.write((++sequence)+" "+System.nanoTime()+" "+line+"\n");}}
     static String describe(Object packet) {
-        if(packet instanceof FMLProxyPacket) {
-            FMLProxyPacket f=(FMLProxyPacket)packet;if(!f.channel().equals("FML"))return null;
-            ByteBuf b=f.payload().duplicate();if(b.readableBytes()<6||b.readUnsignedByte()!=2)return null;
-            int id=b.readInt();String mod=ByteBufUtils.readUTF8String(b);int type=b.readInt();
-            return "MOD_SPAWN id="+id+" mod="+mod+" type="+type+" uuid="+new UUID(b.readLong(),b.readLong());
+        if(packet instanceof ICustomPacket) {
+            ICustomPacket<?> f=(ICustomPacket<?>)packet;if(!f.getName().toString().equals("fml:play"))return null;
+            PacketBuffer b=new PacketBuffer(f.getData().duplicate());if(b.readableBytes()<6 || b.readVarInt()!=0)return null;
+            int type=b.readVarInt(),id=b.readInt();net.minecraft.entity.EntityType<?> entityType=net.minecraft.util.registry.IRegistry.field_212629_r.get(type);
+            String name=entityType==null?"unknown":entityType.getRegistryName().getNamespace();
+            return "MOD_SPAWN id="+id+" mod="+name+" type="+type+" uuid="+new UUID(b.readLong(),b.readLong());
         }
         if(!(packet instanceof SPacketRespawn||packet instanceof SPacketDestroyEntities||packet instanceof SPacketUnloadChunk
             ||packet instanceof SPacketChunkData||packet instanceof SPacketCombatEvent||packet instanceof SPacketEntityMetadata||packet instanceof CPacketClientStatus))return null;

@@ -23,27 +23,35 @@ def packagedProbe = renamer.classes(probeJar) {
 }
 tasks.register('preparePackagedIntegrationProbe') { dependsOn packagedProbe, releaseJar }
 
-def legacySeedClasses=layout.buildDirectory.dir('legacy-seed/classes')
-tasks.register('compileLegacySeed',JavaCompile) {
-    source fileTree('src/legacySeed/java'), file('src/integrationTest/java/cyano/lootable/buildtest/FixtureItems.java')
-    classpath=files(sourceSets.main.output,sourceSets.main.compileClasspath)
-    destinationDirectory=legacySeedClasses
-    options.compilerArgs.add('-proc:none')
+// Old writers must run against the old Forge API, never this native classpath.
+// prepare_legacy_tools.py builds the pinned released source in a disposable
+// source snapshot before Gradle starts this project.
+ext.historicalTools=file(providers.gradleProperty('historicalToolsDirectory').getOrElse('.gradle/legacy-tools/released-112'))
+tasks.register('verifyHistoricalTools') {
+    doLast {
+        File manifest=new File(historicalTools,'tools.json')
+        if(!manifest.isFile())throw new GradleException('Run tools/prepare_legacy_tools.py before historical world verification')
+        def record=new groovy.json.JsonSlurper().parse(manifest)
+        if(record.source!='ee8ee733fa091e961f27812ad780d56c35813f30')throw new GradleException('Incorrect historical writer source')
+        record.writer_sources.each {name,hash->
+            if(!file(name).isFile() || releaseDigest(file(name))!=hash)throw new GradleException('Historical fixture writer sources changed; rebuild them separately')
+        }
+        record.artifacts.each {name,hash->
+            File artifact=new File(historicalTools,'source/build/'+name)
+            if(!artifact.isFile() || releaseDigest(artifact)!=hash)throw new GradleException("Missing or changed historical writer: ${name}")
+        }
+    }
 }
-def legacySeedJar=tasks.register('legacySeedJar',Jar) {
-    dependsOn 'compileLegacySeed'
-    from legacySeedClasses
-    archiveFileName='lootablebodies-world-fixtures.jar'
-    destinationDirectory=layout.buildDirectory.dir('legacy-seed')
+tasks.register('prepareLegacyWorldFixtures') {
+    dependsOn 'verifyHistoricalTools'
+    doLast {
+        ['legacy-seed/lootablebodies-world-fixtures-reobf.jar','transition-fixture/lootablebodies-111-transition-reobf.jar'].each {name->
+            copy {from new File(historicalTools,'source/build/'+name);into layout.buildDirectory.dir(name.substring(0,name.indexOf('/')))}
+        }
+    }
 }
-def legacySeedRuntime=renamer.classes(legacySeedJar) {
-    map.from minecraft.dependency.toSrgFile
-    libraries.from(tasks.named('jar'),sourceSets.main.compileClasspath)
-    output=layout.buildDirectory.file('legacy-seed/lootablebodies-world-fixtures-reobf.jar')
-}
-tasks.register('prepareLegacyWorldFixtures') {dependsOn legacySeedRuntime}
 
-def runDirectory = layout.buildDirectory.dir('integration-run')
+def runDirectory = layout.dir(providers.provider { file(providers.gradleProperty('integrationDirectory').getOrElse('build/integration-run')) })
 tasks.register('prepareIntegrationTest') {
     dependsOn probeJar
     doLast {
@@ -162,7 +170,12 @@ tasks.register('clientIntegrationTest') {
         new File(root,'config').mkdirs()
         new File(root,'options.txt').text='realmsNotifications:false\n'
         copy { from probeJar; into new File(root,'mods') }
-        new File(root,'config/lootablebodies.cfg').text = 'options {\n B:local_texture=true\n}\n'
+        new File(root,'config/lootablebodies.cfg').text = tasks.getByName('runClient').systemProperties['lootablebodies.configUiCheck']=='true' ? '' : 'options {\n B:local_texture=true\n}\n'
+        if(providers.gradleProperty('clientIntegrationConfiguration').isPresent()) {
+            File source=file(providers.gradleProperty('clientIntegrationConfiguration').get())
+            if(!source.isFile())throw new GradleException('Missing disposable client config fixture')
+            new File(root,'config/lootablebodies.cfg').bytes=source.bytes
+        }
         JavaExec run = tasks.getByName('runClient')
         def options = minecraft.runs.getByName('client')
         File previousDir = options.workingDir.get().asFile
@@ -208,6 +221,7 @@ tasks.register('compileForgeControl',JavaCompile) {
 def controlJar=tasks.register('forgeControlJar',Jar) {
     dependsOn 'compileForgeControl'
     from controlClasses
+    from 'src/controlTest/resources'
     archiveFileName='forge-platform-control.jar'
     destinationDirectory=layout.buildDirectory.dir('control-test-mod')
 }
@@ -217,57 +231,53 @@ def packagedControl=renamer.classes(controlJar) {
     output=layout.buildDirectory.file('control-test-mod/forge-platform-control-reobf.jar')
 }
 tasks.register('preparePackagedForgeControl') { dependsOn packagedControl }
+// A separate run model keeps the independent control isolated even after
+// Eclipse generation has finalized the production models' environment.
+minecraft.runs.register('platformControl') {
+    client=false
+    args '--nogui'
+    workingDir=layout.buildDirectory.dir('forge-control-run')
+    String root=layout.buildDirectory.dir('forge13-development/control').get().asFile.absolutePath
+    environment.put('MOD_CLASSES',"forgeplatformcontrol%%${root}${File.pathSeparator}forgeplatformcontrol%%${root}")
+}
 tasks.register('forgeControlServer') {
     group='verification'
+    timeout=java.time.Duration.ofMinutes(2)
     dependsOn controlJar
-    dependsOn { def run=tasks.getByName('runServer'); run.taskDependencies.getDependencies(run) }
+    dependsOn { def run=tasks.getByName('runPlatformControl'); run.taskDependencies.getDependencies(run) }
     doLast {
         File root=layout.buildDirectory.dir('forge-control-run').get().asFile
+        if(root.exists()) {
+            File history=layout.buildDirectory.dir('runtime-history/control-'+System.currentTimeMillis()).get().asFile
+            history.parentFile.mkdirs();if(!root.renameTo(history))throw new GradleException('Cannot preserve previous control evidence')
+        }
         new File(root,'mods').mkdirs()
-        copy { from controlJar; into new File(root,'mods') }
+        File controlOutput=layout.buildDirectory.dir('forge13-development/control').get().asFile
+        copy { from controlClasses;from 'src/controlTest/resources';into controlOutput }
         new File(root,'eula.txt').text='eula=true\n'
         new File(root,'server.properties').text='level-name=world\nlevel-type=FLAT\nserver-ip=127.0.0.1\nserver-port=0\nonline-mode=false\n'
         ['ops','whitelist','banned-players','banned-ips'].each { new File(root,"${it}.json").text='[]\n' }
-        JavaExec run=tasks.getByName('runServer')
-        def options = minecraft.runs.getByName('server')
+        JavaExec run=tasks.getByName('runPlatformControl')
+        def options = minecraft.runs.getByName('platformControl')
         File previousDir = options.workingDir.get().asFile
         File previousRunDir = run.workingDir
         def previousProperties = new LinkedHashMap(run.systemProperties)
         def previousClasspath = files(run.classpath)
+        def previousEnvironment = new LinkedHashMap(run.environment)
         try {
             options.workingDir.set(root)
             run.workingDir(root)
             run.systemProperty('log4j.configurationFile',file('src/integrationTest/resources/log4j2.xml').toURI())
-            run.setClasspath(run.classpath.filter { !sourceSets.main.output.files.contains(it) && it != developmentOutput.get().asFile })
+            run.setClasspath(files(controlOutput,run.classpath.filter { !sourceSets.main.output.files.contains(it) && it != developmentOutput.get().asFile }))
             run.exec()
         } finally {
             options.workingDir.set(previousDir)
             run.workingDir(previousRunDir)
             run.setSystemProperties(previousProperties)
             run.setClasspath(previousClasspath)
+            run.setEnvironment(previousEnvironment)
         }
         String text=new File(root,'logs/latest.log').text
         if(!text.contains('FORGE_PLATFORM_CONTROL_PASS') || text.contains('lootablebodies@')) throw new GradleException('Invalid independent platform control')
     }
 }
-
-// The intermediate writer runs with the checksum-locked released 1.11 jar.
-def transitionClasses=layout.buildDirectory.dir('transition-fixture/classes')
-tasks.register('compileTransitionFixture',JavaCompile) {
-    source fileTree('src/transitionFixture/java'),file('src/integrationTest/java/cyano/lootable/buildtest/FixtureItems.java')
-    classpath=files(sourceSets.main.output,sourceSets.main.compileClasspath)
-    destinationDirectory=transitionClasses
-    options.compilerArgs.add('-proc:none')
-}
-def transitionJar=tasks.register('transitionFixtureJar',Jar) {
-    dependsOn 'compileTransitionFixture'
-    from transitionClasses
-    archiveFileName='lootablebodies-111-transition.jar'
-    destinationDirectory=layout.buildDirectory.dir('transition-fixture')
-}
-def transitionRuntime=renamer.classes(transitionJar) {
-    map.from minecraft.dependency.toSrgFile
-    libraries.from(tasks.named('jar'),sourceSets.main.compileClasspath)
-    output=layout.buildDirectory.file('transition-fixture/lootablebodies-111-transition-reobf.jar')
-}
-tasks.named('prepareLegacyWorldFixtures') {dependsOn transitionRuntime}

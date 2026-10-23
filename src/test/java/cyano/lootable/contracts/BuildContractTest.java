@@ -20,7 +20,7 @@ class BuildContractTest {
                 int locales = 0;
                 while (entries.hasMoreElements()) {
                     java.util.zip.ZipEntry entry = entries.nextElement();
-                    if (!entry.getName().endsWith(".lang")) continue;
+                    if (!entry.getName().startsWith("assets/lootablebodies/lang/") || !entry.getName().endsWith(".json")) continue;
                     byte[] bytes;
                     try (java.io.InputStream input = zip.getInputStream(entry); java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
                         byte[] buffer = new byte[1024]; int count;
@@ -41,34 +41,27 @@ class BuildContractTest {
         Properties release = new Properties();
         try (java.io.InputStream input = Files.newInputStream(Paths.get("gradle.properties"))) { release.load(input); }
         assertTrue(source.contains("VERSION = \"" + release.getProperty("mod_version") + "\""));
-        assertTrue(source.contains("String idName = \"Corpse\""));
-        assertTrue(source.contains("new net.minecraft.util.ResourceLocation(\"lootablebodies:corpse\")"));
+        assertTrue(source.contains("new ResourceLocation(\"lootablebodies:corpse\")"));
+        assertTrue(source.contains("new ResourceLocation(\"lootablebodies:corpse\")"));
         assertTrue(text("LICENSE-CC0").startsWith("CC0 1.0 Universal"));
     }
-    @Test void processedResourcesHaveNoTemplatesOrDuplicateMetadata() throws Exception {
-        String info = text("build/resources/main/mcmod.info");
-        assertTrue(info.contains("\"modid\": \"lootablebodies\""));
-        Properties release = new Properties();
-        try (java.io.InputStream input = Files.newInputStream(Paths.get("gradle.properties"))) { release.load(input); }
-        assertTrue(info.contains("\"version\": \"" + release.getProperty("mod_version") + "\""));
-        assertTrue(info.contains("\"mcversion\": \"1.12.2\""));
-        assertTrue(info.contains("Cyanobacterium"));
-        assertFalse(info.contains("${"));
-        assertFalse(Files.exists(Paths.get("mcmod.info")));
-        assertFalse(Files.exists(Paths.get("resources/mcmod.info")));
-        assertTrue(text("build/resources/main/pack.mcmeta").contains("\"pack_format\":3"));
+    @Test void processedResourcesHaveNoTemplatesOrLegacyMetadata() throws Exception {
+        String info=text("build/resources/main/META-INF/mods.toml");
+        assertTrue(info.contains("modId=\"lootablebodies\""));
+        Properties release=new Properties();try(java.io.InputStream input=Files.newInputStream(Paths.get("gradle.properties"))){release.load(input);}
+        assertTrue(info.contains("version=\""+release.getProperty("mod_version")+"\""));
+        assertTrue(info.contains("versionRange=\"[1.13.2]\""));assertTrue(info.contains("Cyanobacterium"));assertFalse(info.contains("${"));
+        assertFalse(Files.exists(Paths.get("build/resources/main/mcmod.info")));
+        assertEquals(4,new com.google.gson.JsonParser().parse(text("build/resources/main/pack.mcmeta")).getAsJsonObject().getAsJsonObject("pack").get("pack_format").getAsInt());
     }
-    @Test void legacyLocalesRetainEntityTranslation() throws Exception {
-        try (DirectoryStream<Path> locales = Files.newDirectoryStream(Paths.get("build/resources/main/assets/lootablebodies/lang"), "*.lang")) {
-            int count = 0;
-            for (Path locale : locales) {
-                assertTrue(locale.getFileName().toString().matches("[a-z]{2}_[a-z]{2}\\.lang"));
-                String value = new String(Files.readAllBytes(locale), StandardCharsets.UTF_8);
-                assertTrue(value.startsWith("entity.lootablebodies.Corpse.name="), locale.toString());
-                assertFalse(value.contains("\uFFFD"));
-                count++;
-            }
-            assertEquals(14, count);
+    @Test void everyOriginalTranslationSurvivesTheNativeJsonFormat() throws Exception {
+        try(DirectoryStream<Path> locales=Files.newDirectoryStream(Paths.get("src/test/resources/legacy-translations"),"*.lang")){
+            int count=0;for(Path original:locales){
+                Properties before=new Properties();try(java.io.Reader reader=Files.newBufferedReader(original,StandardCharsets.UTF_8)){before.load(reader);}
+                Path target=Paths.get("build/resources/main/assets/lootablebodies/lang",original.getFileName().toString().replace(".lang",".json"));
+                com.google.gson.JsonObject after=new com.google.gson.JsonParser().parse(new String(Files.readAllBytes(target),StandardCharsets.UTF_8)).getAsJsonObject();
+                for(String key:before.stringPropertyNames())assertEquals(before.getProperty(key),after.get(key).getAsString(),original+":"+key);count++;
+            }assertEquals(14,count);
         }
     }
     @Test void corpseSaveKeysAndSlotOrderRemainStable() throws Exception {

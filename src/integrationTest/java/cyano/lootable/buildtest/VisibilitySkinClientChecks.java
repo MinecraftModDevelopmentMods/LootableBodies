@@ -31,7 +31,7 @@ final class VisibilitySkinClientChecks {
             });
             mc.displayGuiScreen(new Panel(mc));stage=2;frames=0;
         } else if(stage==2 && ++frames>30) {
-            ScreenShotHelper.saveScreenshot(mc.gameDir,"skin-fallback-models.png",mc.displayWidth,mc.displayHeight,mc.getFramebuffer());
+            ScreenShotHelper.saveScreenshot(mc.gameDir,"skin-fallback-models.png",mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
             skinField.set(mc,original);new File(mc.gameDir,"client.pass").createNewFile();
             System.out.println("LOOTABLE_BODIES_VISIBILITY_SKIN_PASS");mc.shutdown();stage=3;
         }
@@ -39,7 +39,7 @@ final class VisibilitySkinClientChecks {
     private static final class Panel extends GuiScreen {
         private final EntityLootableBody[] bodies=new EntityLootableBody[3];
         Panel(Minecraft mc){for(int i=0;i<3;i++){bodies[i]=new EntityLootableBody(mc.world);bodies[i].setGameProfile(new GameProfile(new UUID(0,512+i),"VisibilityModel"));}}
-        @Override public void drawScreen(int mouseX,int mouseY,float partial) {
+        @Override public void render(int mouseX,int mouseY,float partial) {
             drawRect(0,0,width,height,0xff304050);
             String[] names={"Failed skin: wide arms","Failed skin: slim arms","Local texture"};boolean local=LootableBodies.useLocalSkin;
             try {for(int i=0;i<3;i++) {

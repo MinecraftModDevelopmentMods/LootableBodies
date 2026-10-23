@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 FAILURE = re.compile(r"^\[\d{2}:\d{2}:\d{2}\] \[Server thread/INFO\] \[(?:minecraft/NetHandlerPlayServer|net\.minecraft\.network\.NetHandlerPlayServer)\]: Container([AB]) lost connection: Internal Exception: io\.netty\.handler\.codec\.EncoderException: java\.io\.IOException: Can't serialize unregistered packet$")
-JOIN = re.compile(r'^\[\d{2}:\d{2}:\d{2}\] \[Server thread/INFO\] \[(?:minecraft/DedicatedServer|net\.minecraft\.server\.dedicated\.DedicatedServer)\]: Container([AB]) (joined|left) the game$')
+JOIN = re.compile(r'^\[(?:\d{2}[A-Za-z]{3}\d{4} )?\d{2}:\d{2}:\d{2}(?:\.\d{3})?\] \[Server thread/INFO\] \[(?:minecraft/DedicatedServer|minecraft/MinecraftServer|net\.minecraft\.server\.dedicated\.DedicatedServer|net\.minecraft\.server\.MinecraftServer|ne\.mi\.se\.MinecraftServer)/?\]: Container([AB]) (joined|left) the game$')
 LIMIT = 3
 
 RESET = re.compile(r"^\[\d{2}:\d{2}:\d{2}\] \[Server thread/INFO\] \[(?:minecraft/NetHandlerPlayServer|net\.minecraft\.network\.NetHandlerPlayServer)\]: Container([AB]) lost connection: Internal Exception: io\.netty\.channel\.unix\.Errors\$NativeIoException: syscall:read\(\.\.\) failed: Connection reset by peer$")

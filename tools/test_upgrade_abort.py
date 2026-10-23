@@ -2,7 +2,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
-from verify_upgrade_abort import inject_unsafe_journal
+from verify_upgrade_abort import inject_unsafe_journal, allowed_platform_additions
 
 
 class UpgradeAbortFixtureTests(unittest.TestCase):
@@ -33,6 +33,16 @@ class UpgradeAbortFixtureTests(unittest.TestCase):
                 self.assertEqual(b'original corpse payload', (journal / 'original-corpse.nbt').read_bytes())
             else:
                 self.assertFalse((run / 'original-journal').exists())
+
+    def test_only_the_stock_new_forge_config_is_exempt_from_world_data_comparison(self):
+        with tempfile.TemporaryDirectory() as directory:
+            world=Path(directory);config=world/'serverconfig/forge-server.toml';config.parent.mkdir()
+            stock=(Path(__file__).parent/'fixtures/forge25-server-default.toml').read_bytes();config.write_bytes(stock)
+            self.assertEqual(['serverconfig/forge-server.toml'],allowed_platform_additions({}, {'serverconfig/forge-server.toml':'new'},world))
+            config.write_bytes(stock+b'\nchanged=true\n')
+            self.assertEqual([],allowed_platform_additions({}, {'serverconfig/forge-server.toml':'changed'},world))
+            config.write_bytes(stock)
+            self.assertEqual([],allowed_platform_additions({'serverconfig/forge-server.toml':'old'}, {'serverconfig/forge-server.toml':'new'},world))
 
     def test_existing_journal_damaged_index(self):
         self.check_fixture('damaged-index', True)

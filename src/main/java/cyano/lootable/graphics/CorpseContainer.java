@@ -14,8 +14,8 @@ import net.minecraft.inventory.Slot;
 import net.minecraft.inventory.ClickType;
 import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemStack;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.item.ItemTossEvent;
 
@@ -30,13 +30,11 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 	private boolean dragging;
 	public CorpseContainer(InventoryPlayer playerItems, IInventory entity){
 		this.targetInventory = entity;
-		net.minecraft.inventory.ContainerHorseInventory k;
-		net.minecraft.inventory.ContainerPlayer h;
 		int index = 0;
 		while(index < 4) {
 			// armor
 			final int i = index;
-			this.addSlotToContainer(new net.minecraft.inventory.Slot(targetInventory, i, 8, 8 + 18*i) {
+			this.addSlot(new net.minecraft.inventory.Slot(targetInventory, i, 8, 8 + 18*i) {
 				@Override
 				public int getSlotStackLimit() {
 					return 1;
@@ -44,12 +42,12 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 
 				@Override
 				public boolean isItemValid(ItemStack item) {
-					return !emptyStack(item) && item.getCount() > 0 && super.isItemValid(item) && item.getItem().isValidArmor(item, EQUIPMENT_SLOTS[i], (Entity) targetInventory);
+					return !emptyStack(item) && item.getCount() > 0 && super.isItemValid(item) && item.canEquip(EQUIPMENT_SLOTS[i], (Entity) targetInventory);
 				}
-				@SideOnly(Side.CLIENT)
+				@OnlyIn(Dist.CLIENT)
 				public String getSlotTexture()
 				{
-					return ItemArmor.EMPTY_SLOT_NAMES[3-i];
+					return new String[]{"item/empty_armor_slot_helmet","item/empty_armor_slot_chestplate","item/empty_armor_slot_leggings","item/empty_armor_slot_boots"}[i];
 				}
 			});
 			index++;
@@ -57,11 +55,11 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 		while(index < EQUIPMENT_SLOTS.length){
 			// held items
 			final int i = index;
-			this.addSlotToContainer(new net.minecraft.inventory.Slot(targetInventory, i, 8 + 18 * (i - 4), 98 ) {
-				@SideOnly(Side.CLIENT)
+			this.addSlot(new net.minecraft.inventory.Slot(targetInventory, i, 8 + 18 * (i - 4), 98 ) {
+				@OnlyIn(Dist.CLIENT)
 				public String getSlotTexture()
 				{
-					return "minecraft:items/empty_armor_slot_shield";
+					return "item/empty_armor_slot_shield";
 				}
 			});
 			index++;
@@ -72,7 +70,7 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 			int x = n % 6;
 			int y = n / 6;
 
-			this.addSlotToContainer(new Slot(targetInventory, index, 62 + x * 18, 8 + y * 18));
+			this.addSlot(new Slot(targetInventory, index, 62 + x * 18, 8 + y * 18));
 
 			index++;
 		}
@@ -118,7 +116,7 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 			ItemStack cursor = player.inventory.getItemStack();
 			if(!emptyStack(cursor)) {
 				ItemStack original = cursor.copy();
-				ItemStack removed = cursor.splitStack(button == 0 ? cursor.getCount() : 1);
+				ItemStack removed = cursor.split(button == 0 ? cursor.getCount() : 1);
 				if(cursor.getCount() == 0) player.inventory.setItemStack(ItemStack.EMPTY);
 				if(!tryRelease(player,removed,true)) {
 					player.inventory.setItemStack(original);
@@ -135,7 +133,7 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 			if(!emptyStack(incoming) && !emptyStack(displaced) && slot.canTakeStack(player) && slot.isItemValid(incoming)) {
 				int limit = Math.min(slot.getItemStackLimit(incoming),incoming.getMaxStackSize());
 				if(limit > 0 && incoming.getCount() > limit) {
-					slot.putStack(incoming.splitStack(limit));
+					slot.putStack(incoming.split(limit));
 					slot.onTake(player,displaced);
 					storeInPlayerInventory(player.inventory,displaced);
 					if(displaced.getCount() > 0) releaseOrRetain(player,displaced);
@@ -181,7 +179,7 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
         // priority, without InventoryPlayer's creative overflow discard.
         while(remainder.getCount() > 0) {
             int destination = -1;
-            if(!remainder.isItemDamaged()) {
+            if(!remainder.isDamaged()) {
                 if(canStore(inventory,inventory.currentItem,remainder)) destination = inventory.currentItem;
                 else if(canStore(inventory,40,remainder)) destination = 40;
                 else for(int i = 0; i < inventory.mainInventory.size(); i++) {
@@ -195,7 +193,7 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
             int amount = Math.min(remainder.getCount(),Math.max(0,limit - (emptyStack(current) ? 0 : current.getCount())));
             if(amount == 0) return;
             if(emptyStack(current)) {
-                inventory.setInventorySlotContents(destination,remainder.splitStack(amount));
+                inventory.setInventorySlotContents(destination,remainder.split(amount));
                 current = inventory.getStackInSlot(destination);
             } else {
                 current.grow(amount);
@@ -209,7 +207,6 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
     private boolean canStore(InventoryPlayer inventory, int slot, ItemStack incoming) {
         ItemStack current = inventory.getStackInSlot(slot);
         return !emptyStack(current) && current.isStackable() && current.getItem() == incoming.getItem()
-                && (!current.getHasSubtypes() || current.getMetadata() == incoming.getMetadata())
                 && ItemStack.areItemStackTagsEqual(current,incoming)
                 && current.getCount() < Math.min(current.getMaxStackSize(),inventory.getInventoryStackLimit());
     }
@@ -222,20 +219,19 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 		}
 		// Forge's legacy toss helper clears the caller's captured drops and
 		// ignores spawn rejection. Preserve both ownership and the toss event.
-		boolean capturing = player.captureDrops;
+		java.util.Collection<EntityItem> capturing = player.captureDrops(new java.util.ArrayList<>());
 		EntityItem dropped;
 		try {
-			player.captureDrops = true;
 			dropped = player.dropItem(stack.copy(),false,includeName);
-			if(dropped != null) player.capturedDrops.remove(dropped);
+			if(dropped != null) player.captureDrops().remove(dropped);
 		} finally {
-			player.captureDrops = capturing;
+			player.captureDrops(capturing);
 		}
 		if(dropped == null) return false;
 		ItemTossEvent event = new ItemTossEvent(dropped,player);
 		if(MinecraftForge.EVENT_BUS.post(event)) return false;
-		if(capturing) {
-			player.capturedDrops.add(event.getEntityItem());
+		if(capturing != null) {
+			capturing.add(event.getEntityItem());
 			return true;
 		}
 		return player.world.spawnEntity(event.getEntityItem());
@@ -261,7 +257,7 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 						changed = true;
 					}
 				} else if(pass == 1 && emptyStack(current) && limit > 0) {
-					slot.putStack(stack.splitStack(Math.min(stack.getCount(),limit)));
+					slot.putStack(stack.split(Math.min(stack.getCount(),limit)));
 					changed = true;
 				}
 			}
@@ -308,11 +304,11 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 	protected void bindPlayerInventory(InventoryPlayer playerInv, int yOffset) {
 		for (int row = 0; row < 3; row++) {
 			for (int col = 0; col < 9; col++) {
-				addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, 8 + col * 18, yOffset + row * 18));
+				addSlot(new Slot(playerInv, col + row * 9 + 9, 8 + col * 18, yOffset + row * 18));
 			}
 		}
 		for (int i = 0; i < 9; i++) {
-			addSlotToContainer(new Slot(playerInv, i, 8 + i * 18, yOffset+58));
+			addSlot(new Slot(playerInv, i, 8 + i * 18, yOffset+58));
 		}
 	}
 

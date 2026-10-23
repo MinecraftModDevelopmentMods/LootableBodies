@@ -26,18 +26,18 @@ class UpgradeJournalTest {
         NBTTagCompound body=new NBTTagCompound();body.setString("id","lootablebodies.Corpse");body.setUniqueId("UUID",id);
         body.setDouble("FallDistance",Double.NaN);body.setString("Name","Saved owner");body.setLong("DeathTime",700);
         NBTTagList equipment=new NBTTagList();
-        for(int i=0;i<48;i++) {NBTTagCompound item=new NBTTagCompound();item.setString("id","minecraft:diamond");item.setByte("Count",(byte)(i+1));item.setShort("Damage",(short)i);item.setByte("Slot",(byte)i);NBTTagCompound custom=new NBTTagCompound();custom.setString("keepsake","slot-"+i);item.setTag("tag",custom);equipment.appendTag(item);}
+        for(int i=0;i<48;i++) {NBTTagCompound item=new NBTTagCompound();item.setString("id","minecraft:diamond");item.setByte("Count",(byte)(i+1));item.setShort("Damage",(short)i);item.setByte("Slot",(byte)i);NBTTagCompound custom=new NBTTagCompound();custom.setString("keepsake","slot-"+i);item.setTag("tag",custom);equipment.add(item);}
         body.setTag("Equipment",equipment);
-        NBTTagCompound record=new NBTTagCompound();record.setString("Source","Equipment");record.setTag("Data",equipment.getCompoundTagAt(47).copy());
-        NBTTagList recovery=new NBTTagList();recovery.appendTag(record);body.setTag("LootableBodiesUnresolved",recovery);
+        NBTTagCompound record=new NBTTagCompound();record.setString("Source","Equipment");record.setTag("Data",equipment.getCompound(47).copy());
+        NBTTagList recovery=new NBTTagList();recovery.add(record);body.setTag("LootableBodiesUnresolved",recovery);
         return body;
     }
     private Path region(String dimension,NBTTagCompound... bodies) throws Exception {
         return regionVersion(dimension,512,bodies);
     }
     private Path regionVersion(String dimension,int version,NBTTagCompound... bodies) throws Exception {
-        NBTTagCompound chunk=new NBTTagCompound(),level=new NBTTagCompound();if(version>=0)chunk.setInteger("DataVersion",version);chunk.setTag("Level",level);level.setInteger("xPos",0);level.setInteger("zPos",0);
-        NBTTagList entities=new NBTTagList();for(NBTTagCompound body:bodies)entities.appendTag(body.copy());level.setTag("Entities",entities);
+        NBTTagCompound chunk=new NBTTagCompound(),level=new NBTTagCompound();if(version>=0)chunk.setInt("DataVersion",version);chunk.setTag("Level",level);level.setInt("xPos",0);level.setInt("zPos",0);
+        NBTTagList entities=new NBTTagList();for(NBTTagCompound body:bodies)entities.add(body.copy());level.setTag("Entities",entities);
         ByteArrayOutputStream bytes=new ByteArrayOutputStream();
         try(DataOutputStream compressed=new DataOutputStream(new DeflaterOutputStream(bytes))){CompressedStreamTools.write(chunk,compressed);}
         int sectors=(bytes.size()+5+4095)/4096;byte[] contents=new byte[8192+sectors*4096];
@@ -47,50 +47,77 @@ class UpgradeJournalTest {
     private byte[] encoded(NBTTagCompound nbt) throws Exception {ByteArrayOutputStream bytes=new ByteArrayOutputStream();CompressedStreamTools.write(nbt,new DataOutputStream(bytes));return bytes.toByteArray();}
     @Test void native112VersionIsNotDowngradedTo111() throws Exception {
         NBTTagCompound b=body(ID);b.setString("id","lootablebodies:corpse");regionVersion("",1343,b);
-        assertEquals(1343,original(scan(),ID,0,0).getCompoundTag("SourceVersions").getInteger("DataVersion"));
+        assertEquals(1343,original(scan(),ID,0,0).getCompound("SourceVersions").getInt("DataVersion"));
+    }
+    @Test void native113MarkerAndStampSurvivePreservation() throws Exception {
+        NBTTagCompound b=body(ID);b.setString("id","lootablebodies:corpse");b.setInt("LootableBodiesDataVersion",3);regionVersion("",1631,b);
+        assertEquals(1631,original(scan(),ID,0,0).getCompound("SourceVersions").getInt("DataVersion"));
+        assertNotNull(original(scan(),ID,0,0));
+    }
+    @Test void released112MarkerDoesNotBorrowAFalselyNative113Stamp() throws Exception {
+        NBTTagCompound b=body(ID);b.setString("id","lootablebodies:corpse");b.setInt("LootableBodiesDataVersion",2);regionVersion("",1631,b);
+        assertEquals(1343,original(scan(),ID,0,0).getCompound("SourceVersions").getInt("DataVersion"));
+    }
+    @Test void native113MarkerDisambiguatesMissingMinecraftStamps() throws Exception {
+        NBTTagCompound b=body(ID);b.setString("id","lootablebodies:corpse");b.setInt("LootableBodiesDataVersion",3);regionVersion("",-1,b);
+        NBTTagCompound versions=original(scan(),ID,0,0).getCompound("SourceVersions");
+        assertEquals(1631,versions.getInt("DataVersion"));assertFalse(versions.getBoolean("Ambiguous"));
+    }
+    @Test void actual112WriterMetadataRejectsAFalselyFlattenedStamp() throws Exception {
+        NBTTagCompound b=body(ID);b.setString("id","lootablebodies:corpse");regionVersion("",1631,b);
+        NBTTagCompound root=new NBTTagCompound(),fml=new NBTTagCompound(),mod=new NBTTagCompound();mod.setString("ModId","lootablebodies");mod.setString("ModVersion","2.4.0");NBTTagList mods=new NBTTagList();mods.add(mod);fml.setTag("ModList",mods);root.setTag("FML",fml);root.setTag("Data",new NBTTagCompound());
+        try(OutputStream output=Files.newOutputStream(world.resolve("level.dat"))){CompressedStreamTools.writeCompressed(root,output);}
+        int source=original(scan(),ID,0,0).getCompound("SourceVersions").getInt("DataVersion");assertTrue(source>=1139 && source<=1343);
+    }
+    @Test void corpsesSavedAsVanillaVehiclePassengersArePreserved() throws Exception {
+        NBTTagCompound cart=new NBTTagCompound();cart.setString("id","minecraft:minecart");cart.setUniqueId("UUID",UUID.fromString("00000000-1111-4111-8111-000000000099"));
+        NBTTagList riders=new NBTTagList();riders.add(body(ID));cart.setTag("Passengers",riders);region("",cart);
+        NBTTagCompound saved=original(scan(),ID,0,0);assertNotNull(saved);assertArrayEquals(encoded(body(ID)),encoded(saved.getCompound("Entity")));
+        region("",cart.copy());assertNotNull(original(scan(),ID,0,0));
+        cart.removeTag("Passengers");region("",cart);assertNull(original(scan(),ID,0,0));
     }
     @Test void current112MarkerCanBePreservedAndReloaded() throws Exception {
-        NBTTagCompound b=body(ID);b.setString("id","lootablebodies:corpse");b.setInteger("LootableBodiesDataVersion",2);regionVersion("",1343,b);
+        NBTTagCompound b=body(ID);b.setString("id","lootablebodies:corpse");b.setInt("LootableBodiesDataVersion",2);regionVersion("",1343,b);
         assertNotNull(original(scan(),ID,0,0));assertNotNull(original(scan(),ID,0,0));
     }
     @Test void nativeIdentityWithoutAnyVersionEvidenceIsExplicitlyAmbiguous() throws Exception {
         NBTTagCompound b=body(ID);b.setString("id","lootablebodies:corpse");regionVersion("",-1,b);
-        assertTrue(original(scan(),ID,0,0).getCompoundTag("SourceVersions").getBoolean("Ambiguous"));
+        assertTrue(original(scan(),ID,0,0).getCompound("SourceVersions").getBoolean("Ambiguous"));
     }
     @Test void old111MarkerProvesItsOwnSourceDespiteAnIncorrectNewChunkStamp() throws Exception {
-        NBTTagCompound b=body(ID);b.setString("id","lootablebodies:corpse");b.setInteger("LootableBodiesDataVersion",1);regionVersion("",1343,b);
-        assertEquals(922,original(scan(),ID,0,0).getCompoundTag("SourceVersions").getInteger("DataVersion"));
+        NBTTagCompound b=body(ID);b.setString("id","lootablebodies:corpse");b.setInt("LootableBodiesDataVersion",1);regionVersion("",1343,b);
+        assertEquals(922,original(scan(),ID,0,0).getCompound("SourceVersions").getInt("DataVersion"));
     }
     @Test void rootFmlMetadataDistinguishesAnUnstampedOriginal112World() throws Exception {
         NBTTagCompound b=body(ID);b.setString("id","lootablebodies:corpse");regionVersion("",-1,b);
-        NBTTagCompound root=new NBTTagCompound(),fml=new NBTTagCompound(),mod=new NBTTagCompound();mod.setString("ModId","lootablebodies");mod.setString("ModVersion","2.4.0");NBTTagList mods=new NBTTagList();mods.appendTag(mod);fml.setTag("ModList",mods);root.setTag("FML",fml);root.setTag("Data",new NBTTagCompound());
+        NBTTagCompound root=new NBTTagCompound(),fml=new NBTTagCompound(),mod=new NBTTagCompound();mod.setString("ModId","lootablebodies");mod.setString("ModVersion","2.4.0");NBTTagList mods=new NBTTagList();mods.add(mod);fml.setTag("ModList",mods);root.setTag("FML",fml);root.setTag("Data",new NBTTagCompound());
         try(OutputStream output=Files.newOutputStream(world.resolve("level.dat"))){CompressedStreamTools.writeCompressed(root,output);}
-        NBTTagCompound context=original(scan(),ID,0,0).getCompoundTag("SourceVersions");assertTrue(context.getInteger("DataVersion")>=1139);assertFalse(context.getBoolean("Ambiguous"));assertEquals(fml,context.getCompoundTag("WorldFML"));
+        NBTTagCompound context=original(scan(),ID,0,0).getCompound("SourceVersions");assertTrue(context.getInt("DataVersion")>=1139);assertFalse(context.getBoolean("Ambiguous"));assertEquals(fml,context.getCompound("WorldFML"));
     }
     @Test void unmarkedOriginal111CorpseWithFalselyNewStampStillUses111ItemRules() throws Exception {
         NBTTagCompound b=body(ID);b.setString("id","lootablebodies:corpse");regionVersion("",1343,b);
-        NBTTagCompound root=new NBTTagCompound(),fml=new NBTTagCompound(),mod=new NBTTagCompound();mod.setString("ModId","lootablebodies");mod.setString("ModVersion","2.3.0");NBTTagList mods=new NBTTagList();mods.appendTag(mod);fml.setTag("ModList",mods);root.setTag("FML",fml);root.setTag("Data",new NBTTagCompound());
+        NBTTagCompound root=new NBTTagCompound(),fml=new NBTTagCompound(),mod=new NBTTagCompound();mod.setString("ModId","lootablebodies");mod.setString("ModVersion","2.3.0");NBTTagList mods=new NBTTagList();mods.add(mod);fml.setTag("ModList",mods);root.setTag("FML",fml);root.setTag("Data",new NBTTagCompound());
         try(OutputStream output=Files.newOutputStream(world.resolve("level.dat"))){CompressedStreamTools.writeCompressed(root,output);}
-        assertEquals(922,original(scan(),ID,0,0).getCompoundTag("SourceVersions").getInteger("DataVersion"));
+        assertEquals(922,original(scan(),ID,0,0).getCompound("SourceVersions").getInt("DataVersion"));
     }
     @Test void stampOnlyChangesRetainPreviouslyVerifiedChunkVersion() throws Exception {
         NBTTagCompound b=body(ID);regionVersion("",512,b);scan();
         regionVersion("",-1,b);
-        NBTTagCompound versions=original(scan(),ID,0,0).getCompoundTag("SourceVersions");
-        assertEquals(512,versions.getInteger("VerifiedChunkDataVersion"));
+        NBTTagCompound versions=original(scan(),ID,0,0).getCompound("SourceVersions");
+        assertEquals(512,versions.getInt("VerifiedChunkDataVersion"));
     }
     @Test void changedChunkPayloadCannotReusePreviousVersionEvidence() throws Exception {
         NBTTagCompound b=body(ID);regionVersion("",512,b);scan();
         NBTTagCompound added=new NBTTagCompound();added.setString("id","minecraft:pig");
         regionVersion("",-1,b,added);
-        assertFalse(original(scan(),ID,0,0).getCompoundTag("SourceVersions").hasKey("VerifiedChunkDataVersion"));
+        assertFalse(original(scan(),ID,0,0).getCompound("SourceVersions").hasKey("VerifiedChunkDataVersion"));
     }
     private List<Path> snapshots() throws Exception {try(java.util.stream.Stream<Path> files=Files.walk(world.resolve("data/lootablebodies-upgrade/snapshots"))){List<Path> result=new ArrayList<>();files.filter(p->p.toString().endsWith(".nbt")).forEach(result::add);return result;}}
     @Test void preservesCompleteTypedPayloadWithoutWritingSourceRegions() throws Exception {
         NBTTagCompound body=body(ID);Path region=region("",body);byte[] before=Files.readAllBytes(region);java.nio.file.attribute.FileTime stamp=Files.getLastModifiedTime(region);
         Object journal=scan();NBTTagCompound saved=original(journal,ID,0,0);
-        assertArrayEquals(encoded(body),encoded(saved.getCompoundTag("Entity")));assertEquals(48,saved.getCompoundTag("Entity").getTagList("Equipment",10).tagCount());
-        assertEquals(512,saved.getCompoundTag("SourceVersions").getInteger("DataVersion"));
+        assertArrayEquals(encoded(body),encoded(saved.getCompound("Entity")));assertEquals(48,saved.getCompound("Entity").getList("Equipment",10).size());
+        assertEquals(512,saved.getCompound("SourceVersions").getInt("DataVersion"));
         assertArrayEquals(before,Files.readAllBytes(region));assertEquals(stamp,Files.getLastModifiedTime(region));
     }
     @Test void repeatedScanReusesOriginalBackups() throws Exception {region("",body(ID));scan();List<Path> first=snapshots();scan();assertEquals(first,snapshots());}
@@ -100,8 +127,8 @@ class UpgradeJournalTest {
     }
     @Test void staleIndexCannotOverwriteNewInventory() throws Exception {
         NBTTagCompound body=body(ID);region("",body);scan();Path index=world.resolve("data/lootablebodies-upgrade/index.nbt");byte[] stale=Files.readAllBytes(index);
-        body.getTagList("Equipment",10).getCompoundTagAt(40).setByte("Count",(byte)99);region("",body);scan();Files.write(index,stale);
-        assertArrayEquals(encoded(body),encoded(original(scan(),ID,0,0).getCompoundTag("Entity")));
+        body.getList("Equipment",10).getCompound(40).setByte("Count",(byte)99);region("",body);scan();Files.write(index,stale);
+        assertArrayEquals(encoded(body),encoded(original(scan(),ID,0,0).getCompound("Entity")));
     }
     @Test void interruptedTemporaryWriteIsNeverTrusted() throws Exception {
         region("",body(ID));Path partial=world.resolve("data/lootablebodies-upgrade/.pending-interrupted");Files.createDirectories(partial.getParent());Files.write(partial,new byte[]{31,-117,8});
@@ -112,8 +139,8 @@ class UpgradeJournalTest {
     @Test void readableIndexDamageCannotSilentlyOmitPreservedCorpses() throws Exception {
         region("",body(ID));scan();Path path=world.resolve("data/lootablebodies-upgrade/index.nbt");
         NBTTagCompound index=CompressedStreamTools.readCompressed(Files.newInputStream(path));
-        if(index.hasKey("Payload",7)) {byte[] payload=index.getByteArray("Payload");payload[payload.length/2]^=1;index.setByteArray("Payload",payload);}
-        else index.getTagList("Regions",10).getCompoundTagAt(0).setTag("Snapshots",new NBTTagList());
+        if(index.contains("Payload",7)) {byte[] payload=index.getByteArray("Payload");payload[payload.length/2]^=1;index.setByteArray("Payload",payload);}
+        else index.getList("Regions",10).getCompound(0).setTag("Snapshots",new NBTTagList());
         try(OutputStream output=Files.newOutputStream(path)){CompressedStreamTools.writeCompressed(index,output);}
         assertThrows(IOException.class,()->scan(),"A readable damaged index must not be accepted as a complete scan");
     }
@@ -124,14 +151,19 @@ class UpgradeJournalTest {
     @Test void retainsExactCompressedChunkAsWellAsDecodedCorpse() throws Exception {
         Path region=region("",body(ID));byte[] source=Files.readAllBytes(region);int size=java.nio.ByteBuffer.wrap(source,8192,4).getInt();
         byte[] originalChunk=Arrays.copyOfRange(source,8197,8192+4+size);NBTTagCompound snapshot=original(scan(),ID,0,0);
-        assertTrue(snapshot.hasKey("OriginalChunk",8),"A decoded NBT copy cannot retain every original byte encoding");
-        assertEquals(2,snapshot.getByte("OriginalCompression"));assertEquals(0,snapshot.getInteger("EntityIndex"));
+        assertTrue(snapshot.contains("OriginalChunk",8),"A decoded NBT copy cannot retain every original byte encoding");
+        assertEquals(2,snapshot.getByte("OriginalCompression"));assertEquals(0,snapshot.getInt("EntityIndex"));
         assertArrayEquals(originalChunk,Files.readAllBytes(world.resolve("data/lootablebodies-upgrade/chunks/"+snapshot.getString("OriginalChunk")+".bin")));
     }
     @Test void diskCannotSupplyAProcessedTemporaryPayload() throws Exception {
-        NBTTagCompound body=body(ID),fake=body(ID);fake.setInteger("LootableBodiesDataVersion",1);fake.setTag("Equipment",new NBTTagList());body.setTag("LootableBodiesUpgradePayload",fake);
+        NBTTagCompound body=body(ID),fake=body(ID);fake.setInt("LootableBodiesDataVersion",1);fake.setTag("Equipment",new NBTTagList());body.setTag("LootableBodiesUpgradePayload",fake);
         Path region=region("",body);byte[] before=Files.readAllBytes(region);
         IOException failure=assertThrows(IOException.class,()->scan());assertTrue(failure.getMessage().contains("intermediate"));assertArrayEquals(before,Files.readAllBytes(region));
         assertFalse(snapshots().isEmpty(),"Unsafe input must still have a forensic original");
+    }
+    @Test void unsupportedFutureCorpseFormatsStopBeforeWorldLoading()throws Exception {
+        NBTTagCompound corpse=body(ID);corpse.setString("id","lootablebodies:corpse");corpse.setInt("LootableBodiesDataVersion",99);Path file=region("",corpse);byte[] before=Files.readAllBytes(file);
+        assertThrows(IOException.class,()->scan());assertArrayEquals(before,Files.readAllBytes(file));
+        assertTrue(Files.list(world.resolve("data/lootablebodies-upgrade/snapshots")).findAny().isPresent(),"Original future data must be preserved before stopping");
     }
 }

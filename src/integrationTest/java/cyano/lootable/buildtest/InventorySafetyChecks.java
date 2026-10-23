@@ -24,7 +24,7 @@ import net.minecraft.world.storage.WorldInfo;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.EntityJoinWorldEvent;
 import net.minecraftforge.event.entity.living.*;
-import net.minecraftforge.fml.common.eventhandler.*;
+import net.minecraftforge.eventbus.api.*;
 
 /** Conservation regressions executed in real Forge, never an ordinary runtime. */
 public final class InventorySafetyChecks {
@@ -62,11 +62,11 @@ public final class InventorySafetyChecks {
     }
     private static void check(String name,Check check) {
         List<Entity> before=new ArrayList<>(world.loadedEntityList);
-        String keep=world.getGameRules().getString("keepInventory");
-        String mobLoot=world.getGameRules().getString("doMobLoot");
+        String keep=world.getGameRules().get("keepInventory").getString();
+        String mobLoot=world.getGameRules().get("doMobLoot").getString();
         try {
-            world.getGameRules().setOrCreateGameRule("keepInventory","false");
-            world.getGameRules().setOrCreateGameRule("doMobLoot","false");
+            world.getGameRules().setOrCreateGameRule("keepInventory","false",null);
+            world.getGameRules().setOrCreateGameRule("doMobLoot","false",null);
             check.run(); results.add("PASS "+name);
             System.out.println("INVENTORY_CHECK_PASS "+name);
         } catch(Throwable error) {
@@ -74,8 +74,8 @@ public final class InventorySafetyChecks {
             System.out.println("INVENTORY_CHECK_FAIL "+name+": "+error);
             error.printStackTrace();
         } finally {
-            world.getGameRules().setOrCreateGameRule("keepInventory",keep);
-            world.getGameRules().setOrCreateGameRule("doMobLoot",mobLoot);
+            world.getGameRules().setOrCreateGameRule("keepInventory",keep,null);
+            world.getGameRules().setOrCreateGameRule("doMobLoot",mobLoot,null);
             for(Entity entity:new ArrayList<Entity>(world.loadedEntityList))
                 if(!before.contains(entity)) world.removeEntityDangerously(entity);
         }
@@ -86,13 +86,13 @@ public final class InventorySafetyChecks {
                 new net.minecraft.server.management.PlayerInteractionManager(world));
         player.connection=new net.minecraft.network.NetHandlerPlayServer(server,
                 new net.minecraft.network.NetworkManager(net.minecraft.network.EnumPacketDirection.SERVERBOUND),player);
-        player.setPosition(64.5,80,64.5); world.getChunk(4,4);
+        player.setPosition(64.5,80,64.5); RuntimeChecks.awaitChunk(world,4,4);
         return player;
     }
     private static EntityLootableBody body() {
         EntityLootableBody body=new EntityLootableBody(world);
         body.setPosition(64.5,80,64.5); body.setNoGravity(true);
-        world.getChunk(4,4); RuntimeChecks.disableVacuum(body);
+        RuntimeChecks.awaitChunk(world,4,4); RuntimeChecks.disableVacuum(body);
         return body;
     }
     private static ItemStack item(int id,int count) {
@@ -107,14 +107,14 @@ public final class InventorySafetyChecks {
         handler.entityDropEvent(new LivingDropsEvent(player,DamageSource.OUT_OF_WORLD,drops,0,false));
     }
     private static NBTTagCompound data(EntityLootableBody body) {
-        NBTTagCompound result=new NBTTagCompound(); body.writeEntityToNBT(result); return result;
+        NBTTagCompound result=new NBTTagCompound(); body.writeAdditional(result); return result;
     }
-    private static NBTTagCompound encoded(ItemStack stack) { return stack.writeToNBT(new NBTTagCompound()); }
+    private static NBTTagCompound encoded(ItemStack stack) { return stack.write(new NBTTagCompound()); }
     private static Map<String,Integer> inventory(EntityLootableBody body) {
         Map<String,Integer> result=new TreeMap<>();
         for(int i=0;i<body.getSizeInventory();i++) add(result,body.getStackInSlot(i));
-        NBTTagList aux=data(body).getTagList("Aux",10);
-        for(int i=0;i<aux.tagCount();i++) add(result,new ItemStack(aux.getCompoundTagAt(i)));
+        NBTTagList aux=data(body).getList("Aux",10);
+        for(int i=0;i<aux.size();i++) add(result,ItemStack.read(aux.getCompound(i)));
         return result;
     }
     private static void add(Map<String,Integer> result,ItemStack stack) {
@@ -124,7 +124,7 @@ public final class InventorySafetyChecks {
     }
     private static Map<String,Integer> dropped() {
         Map<String,Integer> result=new TreeMap<>();
-        for(Entity entity:world.loadedEntityList) if(entity instanceof EntityItem && !entity.isDead) add(result,((EntityItem)entity).getItem());
+        for(Entity entity:world.loadedEntityList) if(entity instanceof EntityItem && !entity.removed) add(result,((EntityItem)entity).getItem());
         return result;
     }
     private static EntityLootableBody newest(Set<Entity> before) {
@@ -134,7 +134,7 @@ public final class InventorySafetyChecks {
     private static void failedSpawn() {
         EntityPlayerMP player=player(); RejectingWorld rejected=new RejectingWorld(world);
         player.world=rejected;
-        ItemStack bones=new ItemStack(Items.BONE,9); bones.setStackDisplayName("Saved bones");
+        ItemStack bones=new ItemStack(Items.BONE,9); bones.setDisplayName(new net.minecraft.util.text.TextComponentString("Saved bones"));
         List<EntityItem> drops=drops(player,bones,item(19,23));
         List<NBTTagCompound> before=new ArrayList<>(); for(EntityItem e:drops) before.add(encoded(e.getItem()));
         PlayerDeathEventHandler handler=new PlayerDeathEventHandler();
@@ -186,10 +186,10 @@ public final class InventorySafetyChecks {
         handler.entityDeathEvent(new LivingDeathEvent(player,DamageSource.OUT_OF_WORLD));
         handle(handler,player,drops(player,player.getItemStackFromSlot(EntityEquipmentSlot.HEAD)));
         RuntimeChecks.require(!cache(handler).containsKey(player),"Equipment cache retains completed death");
-        world.getGameRules().setOrCreateGameRule("keepInventory","true");
+        world.getGameRules().setOrCreateGameRule("keepInventory","true",null);
         handler.entityDeathEvent(new LivingDeathEvent(player,DamageSource.OUT_OF_WORLD));
         RuntimeChecks.require(!cache(handler).containsKey(player),"keepInventory death cached equipment");
-        world.getGameRules().setOrCreateGameRule("keepInventory","false");
+        world.getGameRules().setOrCreateGameRule("keepInventory","false",null);
         LivingDeathEvent canceled=new LivingDeathEvent(player,DamageSource.OUT_OF_WORLD); canceled.setCanceled(true);
         handler.entityDeathEvent(canceled);
         RuntimeChecks.require(!cache(handler).containsKey(player),"Cancelled death cached equipment");
@@ -206,7 +206,7 @@ public final class InventorySafetyChecks {
         @SubscribeEvent public void join(EntityJoinWorldEvent event) {
             if(event.getEntity() instanceof EntityItem) {
                 ItemStack stack=((EntityItem)event.getEntity()).getItem();
-                if(rejectAll || stack.hasTagCompound() && rejectFixture.equals(stack.getTagCompound().getString("fixture"))) event.setCanceled(true);
+                if(rejectAll || stack.hasTag() && rejectFixture.equals(stack.getTag().getString("fixture"))) event.setCanceled(true);
             }
         }
     }
@@ -215,13 +215,13 @@ public final class InventorySafetyChecks {
         RuntimeChecks.require(world.spawnEntity(corpse),"Rejected-release owner spawn");
         Map<String,Integer> expected=inventory(corpse);
         RejectItems reject=new RejectItems(); reject.rejectAll=true; MinecraftForge.EVENT_BUS.register(reject);
-        try { corpse.onKillCommand(); for(int i=0;i<25;i++) corpse.onEntityUpdate(); }
+        try { corpse.onKillCommand(); for(int i=0;i<25;i++) corpse.baseTick(); }
         finally { MinecraftForge.EVENT_BUS.unregister(reject); }
         RuntimeChecks.require(expected.equals(inventory(corpse)),"Rejected item spawn erased corpse inventory");
-        RuntimeChecks.require(corpse.isEntityAlive() && world.loadedEntityList.contains(corpse),"Rejected release removed the only inventory owner");
-        NBTTagCompound saved=data(corpse); EntityLootableBody loaded=body();loaded.readEntityFromNBT(saved);
+        RuntimeChecks.require(corpse.isAlive() && world.loadedEntityList.contains(corpse),"Rejected release removed the only inventory owner");
+        NBTTagCompound saved=data(corpse); EntityLootableBody loaded=body();loaded.readAdditional(saved);
         RuntimeChecks.require(expected.equals(inventory(loaded)),"Rejected items do not survive NBT reload");
-        corpse.onKillCommand();for(int i=0;i<12;i++)corpse.onEntityUpdate();
+        corpse.onKillCommand();for(int i=0;i<12;i++)corpse.baseTick();
         RuntimeChecks.require(expected.equals(dropped()),"Retry did not drop exact saved stacks once");
     }
     private static void partialRelease() {
@@ -229,20 +229,20 @@ public final class InventorySafetyChecks {
         RuntimeChecks.require(world.spawnEntity(corpse),"Partial-release owner spawn");
         Map<String,Integer> expected=inventory(corpse);
         RejectItems reject=new RejectItems();reject.rejectFixture="slot-20";MinecraftForge.EVENT_BUS.register(reject);
-        try { corpse.onKillCommand();for(int i=0;i<12;i++)corpse.onEntityUpdate(); }
+        try { corpse.onKillCommand();for(int i=0;i<12;i++)corpse.baseTick(); }
         finally { MinecraftForge.EVENT_BUS.unregister(reject); }
         Map<String,Integer> combined=new TreeMap<>(dropped());inventory(corpse).forEach((k,v)->combined.put(k,combined.getOrDefault(k,0)+v));
         RuntimeChecks.require(expected.equals(combined),"Partial release lost/duplicated a stack");
         RuntimeChecks.require((corpse.getStackInSlot(6)).isEmpty() && RuntimeChecks.sameStack(corpse.getStackInSlot(7),item(20,11)),"Partial release did not retain only rejected slot");
-        corpse.onKillCommand();for(int i=0;i<12;i++)corpse.onEntityUpdate();
+        corpse.onKillCommand();for(int i=0;i<12;i++)corpse.baseTick();
         RuntimeChecks.require(expected.equals(dropped()),"Partial retry duplicated previously accepted drops");
     }
     private static void vanillaEquipment() {
-        world.getGameRules().setOrCreateGameRule("doMobLoot","true");
+        world.getGameRules().setOrCreateGameRule("doMobLoot","true",null);
         EntityLootableBody corpse=body();corpse.setInventorySlotContents(0,item(0,1));corpse.setDropChance(EntityEquipmentSlot.HEAD,2F);
         RuntimeChecks.require(world.spawnEntity(corpse),"Equipment-release owner spawn");
         Map<String,Integer> expected=inventory(corpse);
-        corpse.onKillCommand();for(int i=0;i<12;i++)corpse.onEntityUpdate();
+        corpse.onKillCommand();for(int i=0;i<12;i++)corpse.baseTick();
         RuntimeChecks.require(expected.equals(dropped()),"Vanilla mob equipment path duplicates corpse inventory");
     }
     private static void vacuumOnce() {
@@ -251,7 +251,7 @@ public final class InventorySafetyChecks {
         catch(Exception error){throw new AssertionError(error);}
         EntityItem entity=new EntityItem(world,64.5,80,64.5,item(19,23));RuntimeChecks.require(world.spawnEntity(entity),"Vacuum input spawn");
         Map<String,Integer> expected=new TreeMap<>();add(expected,entity.getItem().copy());
-        first.onEntityUpdate();second.onEntityUpdate();
+        first.baseTick();second.baseTick();
         Map<String,Integer> all=inventory(first);inventory(second).forEach((k,v)->all.put(k,all.getOrDefault(k,0)+v));
         RuntimeChecks.require(expected.equals(all),"Two corpses claimed the same dying item entity");
     }
@@ -267,10 +267,10 @@ public final class InventorySafetyChecks {
     private static void repeatedRead() {
         EntityLootableBody source=body();for(int i=6;i<48;i++)source.setInventorySlotContents(i,item(i,1));source.addItem(item(70,7));
         NBTTagCompound input=data(source),immutable=input.copy();
-        EntityLootableBody target=body(); target.readEntityFromNBT(input); target.readEntityFromNBT(input);
+        EntityLootableBody target=body(); target.readAdditional(input); target.readAdditional(input);
         RuntimeChecks.require(data(target).getTag("Equipment").equals(input.getTag("Equipment")) && data(target).getTag("Aux").equals(input.getTag("Aux")),"Repeated read appended overflow or changed slots");
-        NBTTagCompound sparse=new NBTTagCompound();NBTTagList list=new NBTTagList();NBTTagCompound slot=encoded(item(19,23));slot.setByte("Slot",(byte)47);list.appendTag(slot);sparse.setTag("Equipment",list);
-        target.readEntityFromNBT(sparse);
+        NBTTagCompound sparse=new NBTTagCompound();NBTTagList list=new NBTTagList();NBTTagCompound slot=encoded(item(19,23));slot.setByte("Slot",(byte)47);list.add(slot);sparse.setTag("Equipment",list);
+        target.readAdditional(sparse);
         RuntimeChecks.require((target.getStackInSlot(6)).isEmpty() && RuntimeChecks.sameStack(target.getStackInSlot(47),item(19,23)) && !data(target).hasKey("Aux"),"Sparse reread kept stale inventory/overflow");
         RuntimeChecks.require(immutable.equals(input),"Reader mutated source NBT");
     }
@@ -278,28 +278,28 @@ public final class InventorySafetyChecks {
         EntityPlayerMP player=player();EntityLootableBody corpse=body();CorpseContainer container=new CorpseContainer(player.inventory,corpse);
         RuntimeChecks.require(container.canInteractWith(player),"Near living access failed");
         player.setPosition(100,80,100);RuntimeChecks.require(!container.canInteractWith(player),"Distant container remained accessible");
-        player.setPosition(64.5,80,64.5);corpse.setDead();RuntimeChecks.require(!container.canInteractWith(player),"Removed corpse remained accessible");
+        player.setPosition(64.5,80,64.5);corpse.remove();RuntimeChecks.require(!container.canInteractWith(player),"Removed corpse remained accessible");
         corpse=body();container=new CorpseContainer(player.inventory,corpse);player.world=new RejectingWorld(world);
         RuntimeChecks.require(!container.canInteractWith(player),"Cross-world container remained accessible");
         player.world=world;player.setHealth(0);
         RuntimeChecks.require(!container.canInteractWith(player),"Dead player retained container access");
-        player.setHealth(player.getMaxHealth());corpse.onKillCommand();corpse.onEntityUpdate();
+        player.setHealth(player.getMaxHealth());corpse.onKillCommand();corpse.baseTick();
         RuntimeChecks.require(!container.canInteractWith(player),"Dying corpse remained accessible");
     }
     private static void overflow() {
         EntityLootableBody corpse=body();for(int i=6;i<48;i++)corpse.setInventorySlotContents(i,item(i,1));corpse.addItem(item(70,7));
-        NBTTagCompound before=data(corpse);corpse.onEntityUpdate();
+        NBTTagCompound before=data(corpse);corpse.baseTick();
         RuntimeChecks.require(before.getTag("Equipment").equals(data(corpse).getTag("Equipment")),"Full inventory overwritten by overflow");
-        corpse.removeStackFromSlot(47);corpse.onEntityUpdate();RuntimeChecks.require(RuntimeChecks.sameStack(corpse.getStackInSlot(47),item(70,7)),"Overflow did not fill free slot");
+        corpse.removeStackFromSlot(47);corpse.baseTick();RuntimeChecks.require(RuntimeChecks.sameStack(corpse.getStackInSlot(47),item(70,7)),"Overflow did not fill free slot");
         EntityLootableBody large=body();large.addItem(item(19,100));
         Map<String,Integer> expected=new TreeMap<>();add(expected,item(19,100));
         RuntimeChecks.require(expected.equals(inventory(large)),"Oversized incoming stack lost items");
         for(int i=6;i<48;i++) RuntimeChecks.require((large.getStackInSlot(i)).isEmpty() || large.getStackInSlot(i).getCount()<=64,"Oversized input bypassed slot capacity");
         EntityLootableBody queued=body();for(int i=6;i<48;i++)queued.setInventorySlotContents(i,item(i,1));
         queued.addItem(item(70,100));queued.removeStackFromSlot(47);expected=inventory(queued);
-        queued.onEntityUpdate();
+        queued.baseTick();
         RuntimeChecks.require(expected.equals(inventory(queued)) && queued.getStackInSlot(47).getCount()==64,"Overflow transfer lost items or exceeded slot capacity");
-        queued.removeStackFromSlot(46);queued.onEntityUpdate();
+        queued.removeStackFromSlot(46);queued.baseTick();
         RuntimeChecks.require(RuntimeChecks.sameStack(queued.getStackInSlot(46),item(70,36)) && !data(queued).hasKey("Aux"),"Overflow remainder changed count or custom NBT");
     }
     private static void twoViewers() {
@@ -317,7 +317,7 @@ public final class InventorySafetyChecks {
     }
     private static net.minecraft.world.chunk.Chunk cleanChunk(EntityLootableBody corpse) {
         net.minecraft.world.chunk.Chunk chunk=world.getChunk(corpse.getPosition());
-        chunk.setLastSaveTime(world.getTotalWorldTime());chunk.setModified(false);
+        chunk.setLastSaveTime(world.getGameTime());chunk.setModified(false);
         RuntimeChecks.require(!chunk.needsSaving(false),"Dirty-chunk test precondition");
         return chunk;
     }
@@ -341,27 +341,33 @@ public final class InventorySafetyChecks {
         EntityLootableBody corpse=new EntityLootableBody(target);
         corpse.setUniqueId(UUID.fromString("00000000-0000-4000-8000-000000000105"));
         corpse.setPosition(48.5,80,8.5);corpse.setNoGravity(true);corpse.setUserName("BlockedRelease");
-        target.getChunk(3,0);
+        RuntimeChecks.awaitChunk(target,3,0);
         for(int i=0;i<48;i++)corpse.setInventorySlotContents(i,RuntimeChecks.stack(i));
         corpse.addItem(RuntimeChecks.stack(70));corpse.addItem(RuntimeChecks.stack(71));RuntimeChecks.disableVacuum(corpse);
         RuntimeChecks.require(target.spawnEntity(corpse),"Blocked-release fixture spawn");
         Map<String,Integer> expected=inventory(corpse);
         RejectItems reject=new RejectItems();reject.rejectAll=true;MinecraftForge.EVENT_BUS.register(reject);
-        try {corpse.onKillCommand();for(int i=0;i<25;i++)corpse.onEntityUpdate();}
+        try {corpse.onKillCommand();for(int i=0;i<25;i++)corpse.baseTick();}
         finally {MinecraftForge.EVENT_BUS.unregister(reject);}
-        RuntimeChecks.require(corpse.isEntityAlive() && target.loadedEntityList.contains(corpse) && expected.equals(inventory(corpse)),"Blocked-release fixture lost inventory/owner");
+        RuntimeChecks.require(corpse.isAlive() && target.loadedEntityList.contains(corpse) && expected.equals(inventory(corpse)),"Blocked-release fixture lost inventory/owner");
         RuntimeChecks.saveExpected(folder,"rejected-release",corpse);
     }
     /** Controlled false-return seam; no dimension registration, disk writes or chunks of its own. */
     private static final class RejectingWorld extends World {
         private final WorldServer delegate; int attempts;
         RejectingWorld(WorldServer target) {
-            super(target.getSaveHandler(),new WorldInfo(target.getWorldInfo()),new WorldProviderSurface(),new Profiler(),false);
+            super(target.getSaveHandler(),target.getMapStorage(),target.getWorldInfo(),target.dimension.getType().create(),new Profiler(),false);
             delegate=target;
         }
         @Override protected IChunkProvider createChunkProvider(){return delegate.getChunkProvider();}
-        @Override protected boolean isChunkLoaded(int x,int z,boolean empty){return true;}
-        @Override public long getTotalWorldTime(){return delegate==null?0:delegate.getTotalWorldTime();}
+        @Override public boolean isChunkLoaded(int x,int z,boolean empty){return true;}
+        @Override public net.minecraft.world.ITickList<net.minecraft.block.Block> getPendingBlockTicks(){return delegate.getPendingBlockTicks();}
+        @Override public net.minecraft.world.ITickList<net.minecraft.fluid.Fluid> getPendingFluidTicks(){return delegate.getPendingFluidTicks();}
+        @Override public net.minecraft.item.crafting.RecipeManager getRecipeManager(){return delegate.getRecipeManager();}
+        @Override public net.minecraft.scoreboard.Scoreboard getScoreboard(){return delegate.getScoreboard();}
+        @Override public net.minecraft.tags.NetworkTagManager getTags(){return delegate.getTags();}
+        @Override public net.minecraft.server.MinecraftServer getServer(){return delegate.getServer();}
+        @Override public long getGameTime(){return delegate==null?0:delegate.getGameTime();}
         @Override public boolean spawnEntity(Entity entity){attempts++;return false;}
     }
 }

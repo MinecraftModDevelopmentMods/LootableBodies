@@ -10,7 +10,7 @@ import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
 import net.minecraft.entity.EntityLiving;
-import net.minecraft.entity.EnumCreatureAttribute;
+import net.minecraft.entity.CreatureAttribute;
 import net.minecraft.entity.SharedMonsterAttributes;
 import net.minecraft.entity.ai.attributes.AttributeModifier;
 import net.minecraft.entity.ai.attributes.IAttributeInstance;
@@ -21,7 +21,7 @@ import net.minecraft.inventory.IInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemSpade;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NBTBase;
+import net.minecraft.nbt.INBTBase;
 import net.minecraft.nbt.NBTPrimitive;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
@@ -37,8 +37,8 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import net.minecraftforge.fml.common.FMLLog;
-import net.minecraftforge.fml.common.network.internal.FMLNetworkHandler;
+import cyano.lootable.ModLog;
+import cyano.lootable.graphics.GUIHandler;
 import org.apache.commons.lang3.ObjectUtils;
 
 import java.util.*;
@@ -50,7 +50,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.RejectedExecutionException;
 
 
-public class EntityLootableBody extends EntityLiving implements IInventory{
+public class EntityLootableBody extends EntityLiving implements IInventory, net.minecraft.world.IInteractionObject{
 
 
 	public static final EntityEquipmentSlot[] EQUIPMENT_SLOTS = new EntityEquipmentSlot[] {EntityEquipmentSlot.HEAD, EntityEquipmentSlot.CHEST, EntityEquipmentSlot.LEGS, EntityEquipmentSlot.FEET, EntityEquipmentSlot.MAINHAND, EntityEquipmentSlot.OFFHAND};
@@ -72,7 +72,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	private byte vacuumTime = 0;
 	private boolean positionNeedsChunk;
 	private boolean malformedPosition;
-	private NBTBase loadedPosition;
+	private INBTBase loadedPosition;
 	private boolean missingPositionX, missingPositionZ;
 	private long deathTimestamp;
 	private long decayTimestamp;
@@ -91,7 +91,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 
 
 	public EntityLootableBody(World w) {
-		super(w);
+		super(LootableBodies.CORPSE,w);
 		// Keep EntityLiving's actual defaults (including follow range 16 and
 		// configured corpse health), rather than the generic attribute defaults.
 		for(IAttributeInstance attribute : getAttributeMap().getAllAttributes()) {
@@ -99,11 +99,11 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 			defaultAttributeBases.put(name,attribute.getBaseValue());
 			defaultAttributeModifiers.put(name,new ArrayList<>(attribute.getModifiers()));
 		}
-		deathTimestamp = w.getTotalWorldTime();
+		deathTimestamp = w.getGameTime();
 		decayTimestamp = deathTimestamp;
         // Local display preferences must not become world/server entity state.
         // Existing saved visibility flags are still read unchanged by vanilla.
-		this.setAlwaysRenderNameTag(true);
+		this.setCustomNameVisible(true);
 		this.setSize(0.85F, 0.75F);
 
 		this.isImmuneToFire = LootableBodies.completelyInvulnerable || (!LootableBodies.hurtByEnvironment);
@@ -127,33 +127,33 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 
 
 	private void log(String format, Object... o){
-		FMLLog.info("%s: %s",getClass().getSimpleName(), String.format(format, o));
+		ModLog.info("%s: %s",getClass().getSimpleName(), String.format(format, o));
 	}
 
 	private void log(Object o){
-		FMLLog.info("%s: %s",getClass().getSimpleName(),String.valueOf(o));
+		ModLog.info("%s: %s",getClass().getSimpleName(),String.valueOf(o));
 	}
 
 	private String oldName = null;
 	@Override
-	public void onUpdate() {
+	public void tick() {
 		if(!getEntityWorld().isRemote) {
 			// A Forge ticket can tick our centre chunk while neighbouring support
 			// terrain is absent. Never treat those missing collision boxes as air.
-			AxisAlignedBB bounds = getEntityBoundingBox();
+			AxisAlignedBB bounds = getBoundingBox();
 			BlockPos from = new BlockPos(bounds.minX + Math.min(0D,motionX), 0,
 					bounds.minZ + Math.min(0D,motionZ));
 			BlockPos to = new BlockPos(bounds.maxX + Math.max(0D,motionX), 0,
 					bounds.maxZ + Math.max(0D,motionZ));
 			if(!getEntityWorld().isAreaLoaded(from,to)) return;
 		}
-		super.onUpdate();
+		super.tick();
 	}
 
 	@Override
-	public void onEntityUpdate(){
+	public void baseTick(){
 		//log("position=%s; terminate=%s; time=%s; age=%s; deathTimestamp=%s; decayTimestamp=%s; Health=%s; isDead=%s" ,getPosition(),terminate,getEntityWorld().getTotalWorldTime(),getEntityWorld().getTotalWorldTime() - deathTimestamp, deathTimestamp, decayTimestamp, getHealth(), isDead);
-		super.onEntityUpdate();
+		super.baseTick();
 		final boolean isClient = getEntityWorld().isRemote;
 		final boolean isServer = !isClient;
 
@@ -172,7 +172,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 			}
 			return;
 		}
-		if(isServer && terminate < 0 && (this.getHealth() <= 0 || this.isDead)){
+		if(isServer && terminate < 0 && (this.getHealth() <= 0 || this.removed)){
 			terminate = DEATH_COUNTDOWN;
 		}
 
@@ -192,7 +192,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		}
 
 		// handle decay time
-		final long currentTime = Math.max(0L,getEntityWorld().getTotalWorldTime());
+		final long currentTime = Math.max(0L,getEntityWorld().getGameTime());
 		if(isServer) {
 			// A clock rollback must not suspend decay indefinitely or overflow age.
 			deathTimestamp = checkedTimestamp("DeathTime",deathTimestamp,currentTime);
@@ -238,7 +238,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 					posX - VACUUM_RADIUS, posY - VACUUM_RADIUS, posZ - VACUUM_RADIUS,
 					posX + VACUUM_RADIUS, posY + VACUUM_RADIUS, posZ + VACUUM_RADIUS));
 			for(EntityItem item : items){
-				if(item.isDead) continue;
+				if(item.removed) continue;
 				ItemStack stack = item.getItem();
 				this.addItem(stack);
 				getEntityWorld().removeEntity(item);
@@ -259,7 +259,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 
 	@Override
 	public boolean handleWaterMovement() {
-		if (this.world.handleMaterialAcceleration(this.getEntityBoundingBox().grow(0.0D, -0.4000000059604645D, 0.0D).shrink(0.001D), Material.WATER, this)) 		{
+		if (this.handleFluidAcceleration(net.minecraft.tags.FluidTags.WATER)) 		{
 			this.fallDistance = 0.0F;
 			this.inWater = true;
 			this.extinguish();
@@ -274,7 +274,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		World world = this.world;
 		BlockPos testPos = new BlockPos((int)this.posX, 0, (int)this.posZ);
 		
-		IBlockState platformBlockstate = getPlatformBlock(this.dimension);
+		IBlockState platformBlockstate = getPlatformBlock(this.dimension.getId());
 		
 		for(int j = -1; j <= 1; j++) {
 			for(int k = -1; k <= 1; k++)	{
@@ -307,9 +307,9 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	private ItemStack decayItem(ItemStack item, int amount) {
 		if(!emptyStack(item)
 				&& item.getCount() == 1
-				&& item.isItemStackDamageable()
+				&& item.isDamageable()
 				&& item.getItem().isDamageable()){
-			int durabilityRemaining = item.getMaxDamage() - item.getItemDamage() - 1;
+			int durabilityRemaining = item.getMaxDamage() - item.getDamage() - 1;
 			if(durabilityRemaining > 0){
 				item.damageItem(Math.min(durabilityRemaining,amount),this);
 			}
@@ -329,7 +329,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	/** Retain an item whose container release was rejected. Uses the existing Aux format. */
 	public void retainItem(ItemStack stack) {
 		if(emptyStack(stack) || stack.getCount() <= 0) return;
-		if(terminate >= 0 || !isEntityAlive()) cancelRemoval();
+		if(terminate >= 0 || !isAlive()) cancelRemoval();
 		addItem(stack);
 	}
 
@@ -337,7 +337,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		terminate = -1;
 		deathTime = 0;
 		dead = false;
-		isDead = false;
+		removed = false;
 		setHealth(getMaxHealth());
 		vacuumTime = VACUUM_TIMELIMIT;
 		markDirty();
@@ -369,7 +369,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		final int inventorySizeLimit = Math.min(stack.getMaxStackSize(),this.getInventoryStackLimit());
 		if(emptyStack(current)){
 			int amount = Math.min(stack.getCount(),inventorySizeLimit);
-			if(amount > 0) this.setInventorySlotContents(slot,stack.splitStack(amount));
+			if(amount > 0) this.setInventorySlotContents(slot,stack.split(amount));
 			return stack.getCount() > 0 ? stack : ItemStack.EMPTY;
 		} else if(current.getCount() < inventorySizeLimit
 				&& ItemStack.areItemsEqual(stack,current)
@@ -392,7 +392,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 			EntityPlayer player = (EntityPlayer)src.getTrueSource();
 			ItemStack item = player.getHeldItem(EnumHand.MAIN_HAND);
 			if(!emptyStack(item)) {
-				if (item.getItem() instanceof ItemSpade || item.getItem().getToolClasses(item).contains("shovel")) {
+				if (item.getItem() instanceof ItemSpade || item.getItem().getToolTypes(item).contains(net.minecraftforge.common.ToolType.SHOVEL)) {
 					this.onKillCommand();
 				}
 			}
@@ -435,6 +435,9 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		gpSwap.set(gp);
 	}
     /** Refreshes an existing client body after enabling player skins in the GUI. */
+    public String getCustomNameTag(){return getCustomName()==null?"":getCustomName().getString();}
+    public void setCustomNameTag(String name){setCustomName(name==null || name.isEmpty()?null:new net.minecraft.util.text.TextComponentString(name));}
+
     public void refreshClientSkin() {
         GameProfile profile = gpSwap.get();
         if (getEntityWorld().isRemote && !LootableBodies.useLocalSkin && profile != null && profile.getId() == null)
@@ -448,12 +451,12 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 					// A rename, reload or explicit profile update wins over a late lookup.
 					if(resolved != null) gpSwap.compareAndSet(initial,resolved);
 				} catch(RuntimeException unavailable) {
-					FMLLog.fine("Corpse profile lookup unavailable; using default skin");
+					ModLog.fine("Corpse profile lookup unavailable; using default skin");
 				}
 			});
 		} catch(RejectedExecutionException busy) {
 			// Keep the already installed default profile when the bounded queue is full.
-			FMLLog.fine("Corpse profile lookup busy; using default skin");
+			ModLog.fine("Corpse profile lookup busy; using default skin");
 		}
 	}
 	public void setUserName(String name){
@@ -469,10 +472,10 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 
 
 	@Override
-	protected void applyEntityAttributes() {
+	protected void registerAttributes() {
 		// called during constructor of EntityLivingBase
-		super.applyEntityAttributes();
-		this.getEntityAttribute(SharedMonsterAttributes.MAX_HEALTH).setBaseValue(LootableBodies.corpseHP);
+		super.registerAttributes();
+		this.getAttribute(SharedMonsterAttributes.MAX_HEALTH).setBaseValue(LootableBodies.corpseHP);
 	}
 
 	public float getRotation(){
@@ -485,16 +488,16 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 
 
 	@Override
-	protected boolean canDespawn() {
+	public boolean canDespawn() {
 		return false;
 	}
 
 	public void jumpOutOfWall(){
 		if(world.isRemote) return;
-		AxisAlignedBB bounds = getEntityBoundingBox();
+		AxisAlignedBB bounds = getBoundingBox();
 		// Collision queries omit unloaded chunks. They cannot establish an exit
 		// until the complete local terrain (including tall neighbour shapes) exists.
-		if(!escapeTerrainLoaded(bounds) || world.getCollisionBoxes(this,bounds).isEmpty()) return;
+		if(!escapeTerrainLoaded(bounds) || world.isCollisionBoxesEmpty(this,bounds)) return;
 		BlockPos currentCoord = getPosition();
 		double x = currentCoord.getX()+0.5 - posX;
 		double z = currentCoord.getZ()+0.5 - posZ;
@@ -518,10 +521,10 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	}
 
 	private boolean tryWallExit(double x,double y,double z) {
-		AxisAlignedBB bounds = getEntityBoundingBox().offset(x-posX,y-posY,z-posZ);
+		AxisAlignedBB bounds = getBoundingBox().offset(x-posX,y-posY,z-posZ);
 		if(bounds.minY < 0 || bounds.maxY > world.getHeight() ||
 				!world.getWorldBorder().contains(bounds) || !escapeTerrainLoaded(bounds) ||
-				!world.getCollisionBoxes(this,bounds).isEmpty()) return false;
+				!world.isCollisionBoxesEmpty(this,bounds)) return false;
 		setPosition(x,y,z);
 		return true;
 	}
@@ -540,7 +543,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		return 1200;
 	}
 	@Override
-	public void playLivingSound() {
+	public void playAmbientSound() {
 		// do nothing
 	}
 
@@ -656,7 +659,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	public ItemStack decrStackSize(int index, int count) {
 		ItemStack i = this.getStackInSlot(index);
 		if(emptyStack(i) || count <= 0) return ItemStack.EMPTY;
-		ItemStack result = i.splitStack(count);
+		ItemStack result = i.split(count);
 		if (i.getCount() <= 0) {
 			i = ItemStack.EMPTY;
 		}
@@ -690,7 +693,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	 */
 	@Override
 	public boolean isUsableByPlayer(EntityPlayer player) {
-		return player != null && player.isEntityAlive() && this.isEntityAlive()
+		return player != null && player.isAlive() && this.isAlive()
 				&& terminate < 0 && player.getEntityWorld() == getEntityWorld()
 				&& player.getPosition().distanceSq(this.getPosition()) < 25;
 	}
@@ -698,11 +701,14 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	@Override
 	public boolean processInteract(EntityPlayer player, EnumHand hand){
 		if(isUsableByPlayer(player)) {
-			FMLNetworkHandler.openGui(player, LootableBodies.getInstance(), 0, getEntityWorld(), this.getEntityId(), 0, 0);
+			GUIHandler.open(player,this);
 			return true;
 		}
 		return false;
 	}
+
+    @Override public net.minecraft.inventory.Container createContainer(net.minecraft.entity.player.InventoryPlayer inventory, EntityPlayer player){return new cyano.lootable.graphics.CorpseContainer(inventory,this);}
+    @Override public String getGuiID(){return "lootablebodies:corpse";}
 
 	@Override
 	public void openInventory(EntityPlayer player) {
@@ -722,7 +728,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	public boolean isItemValidForSlot(int index, ItemStack stack) {
 		if(emptyStack(stack) || stack.getCount() <= 0) return false;
 		if(index < 4){
-			return stack.getItem().isValidArmor (stack, EQUIPMENT_SLOTS[index], this);
+			return stack.canEquip(EQUIPMENT_SLOTS[index], this);
 		} else {
 			return true;
 		}
@@ -789,28 +795,28 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 	}
 
 	@Override
-	public EnumCreatureAttribute getCreatureAttribute()
+	public CreatureAttribute getCreatureAttribute()
 	{
-		return EnumCreatureAttribute.UNDEAD;
+		return CreatureAttribute.UNDEAD;
 	}
 
 
 	@Override
-	public void writeEntityToNBT(final NBTTagCompound root) {
+	public void writeAdditional(final NBTTagCompound root) {
 		UpgradePreservation.clearTransient(root);
-		root.setInteger(UpgradePreservation.VERSION,UpgradePreservation.DATA_VERSION);
+		root.setInt(UpgradePreservation.VERSION,UpgradePreservation.DATA_VERSION);
 		if(sourceVersions.isEmpty()) root.removeTag(UpgradePreservation.SOURCES);
 		else root.setTag(UpgradePreservation.SOURCES,sourceVersions.copy());
 		root.removeTag("ActiveEffects");
-		super.writeEntityToNBT(root);
+		super.writeAdditional(root);
 		final NBTTagList equipmentListTag = new NBTTagList();
 		for (int i = 0; i < this.getSizeInventory(); i++) {
 			ItemStack item = this.getStackInSlot(i);
 			if (!emptyStack(item)) {
 				NBTTagCompound slotTag = new NBTTagCompound();
 				slotTag.setByte("Slot", (byte)i);
-				item.writeToNBT(slotTag);
-				equipmentListTag.appendTag(slotTag);
+				item.write(slotTag);
+				equipmentListTag.add(slotTag);
 			}
 		}
 		root.setTag("Equipment", equipmentListTag);
@@ -823,21 +829,21 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 				ItemStack i = iter.next();
 				if(emptyStack(i)) continue;
 				final NBTTagCompound nbttagcompound1 = new NBTTagCompound();
-				i.writeToNBT(nbttagcompound1);
-				nbtauxtaglist.appendTag(nbttagcompound1);
+				i.write(nbttagcompound1);
+				nbtauxtaglist.add(nbttagcompound1);
 			}
 			root.setTag("Aux", nbtauxtaglist);
 		}
 		root.removeTag(UNRESOLVED_ITEMS_TAG);
 		if(!unresolvedInventory.isEmpty()) {
 			NBTTagList retained = new NBTTagList();
-			for(NBTTagCompound record : unresolvedInventory) retained.appendTag(record.copy());
+			for(NBTTagCompound record : unresolvedInventory) retained.add(record.copy());
 			root.setTag(UNRESOLVED_ITEMS_TAG,retained);
 		}
 		root.removeTag(INVALID_FIELDS_TAG);
 		if(!invalidFields.isEmpty()) {
 			NBTTagList retained = new NBTTagList();
-			for(NBTTagCompound record : invalidFields) retained.appendTag(record.copy());
+			for(NBTTagCompound record : invalidFields) retained.add(record.copy());
 			root.setTag(INVALID_FIELDS_TAG,retained);
 		}
 		root.removeTag("Vac");
@@ -852,7 +858,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 
 
 	@Override
-	public void readFromNBT(final NBTTagCompound supplied) {
+	public void read(final NBTTagCompound supplied) {
 		final NBTTagCompound root=UpgradePreservation.restore(supplied);
 		// Entity reads geometry before our inventory helper. Sanitize a copy
 		// before it builds bounding boxes or derives previous-tick positions.
@@ -864,8 +870,13 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		clean.setTag("Rotation",readRotation(root.getTag("Rotation"),badRotation));
 		Float distance = finiteFloat(root.getTag("FallDistance"));
 		boolean badFall = root.hasKey("FallDistance") && (distance == null || distance < 0F);
-		clean.setFloat("FallDistance",distance != null && distance >= 0F ? distance : 0F);
-		super.readFromNBT(clean);
+        clean.setFloat("FallDistance",distance != null && distance >= 0F ? distance : 0F);
+        // Vanilla expects JSON here. Our attribution reader owns compatibility
+        // and retains malformed input without sending it to vanilla's parser.
+        clean.removeTag("CustomName");
+        super.read(clean);
+        String fallback=readName(root,"CustomName"),owner=readName(root,"Name");
+        setUserName(owner!=null?owner:fallback!=null?fallback:"");
 		// A repeated load must not interpolate from obsolete head/body angles.
 		prevRotationYaw = rotationYaw; prevRotationPitch = rotationPitch;
 		setRotationYawHead(rotationYaw); prevRotationYawHead = rotationYaw;
@@ -880,23 +891,23 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		if(badFall) retainInvalid("FallDistance",root.getTag("FallDistance"));
 	}
 
-	private static Float finiteFloat(NBTBase raw) {
+	private static Float finiteFloat(INBTBase raw) {
 		Double number = finiteNumber(raw);
 		if(number == null) return null;
 		float value = number.floatValue();
 		return Float.isFinite(value) && (number == 0D || value != 0F) ? value : null;
 	}
 
-	private static NBTTagList readRotation(NBTBase raw, boolean[] invalid) {
+	private static NBTTagList readRotation(INBTBase raw, boolean[] invalid) {
 		NBTTagList list = raw instanceof NBTTagList ? (NBTTagList)raw : null;
-		invalid[2] = list == null || list.tagCount() != 2 || list.getTagType() < 1 || list.getTagType() > 6;
+		invalid[2] = list == null || list.size() != 2 || list.getTagType() < 1 || list.getTagType() > 6;
 		NBTTagList clean = new NBTTagList();
 		for(int axis = 0; axis < 2; axis++) {
-			Float angle = list != null && axis < list.tagCount() ? finiteFloat(list.get(axis)) : null;
+			Float angle = list != null && axis < list.size() ? finiteFloat(list.get(axis)) : null;
 			if(angle == null) { invalid[axis] = true; angle = 0F; }
 			// Preserve the legacy float remainder and the corpse's existing
 			// flat pitch before vanilla copies angles into head/render state.
-			clean.appendTag(new net.minecraft.nbt.NBTTagFloat(axis == 0 ? angle % 360F : 0F));
+			clean.add(new net.minecraft.nbt.NBTTagFloat(axis == 0 ? angle % 360F : 0F));
 		}
 		return clean;
 	}
@@ -906,18 +917,18 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		return false;
 	}
 
-	private static NBTTagList readVector(NBTBase raw, boolean motion, boolean[] invalid) {
+	private static NBTTagList readVector(INBTBase raw, boolean motion, boolean[] invalid) {
 		NBTTagList list = raw instanceof NBTTagList ? (NBTTagList)raw : null;
-		invalid[3] = list == null || list.tagCount() != 3 || list.getTagType() < 1 || list.getTagType() > 6;
+		invalid[3] = list == null || list.size() != 3 || list.getTagType() < 1 || list.getTagType() > 6;
 		NBTTagList clean = new NBTTagList();
 		for(int axis = 0; axis < 3; axis++) {
-			Double value = list != null && axis < list.tagCount() ? finiteNumber(list.get(axis)) : null;
+			Double value = list != null && axis < list.size() ? finiteNumber(list.get(axis)) : null;
 			if(value == null || Math.abs(value) > (motion ? 10D : 3.0E7D)) {
 				invalid[axis] = true;
 				// A lost height must not put recoverable inventory in the void.
 				value = !motion && axis == 1 ? 64D : 0D;
 			}
-			clean.appendTag(new net.minecraft.nbt.NBTTagDouble(value));
+			clean.add(new net.minecraft.nbt.NBTTagDouble(value));
 		}
 		return clean;
 	}
@@ -936,15 +947,15 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		// Chunk.addEntity flags a location mismatch dead immediately before
 		// EnteringChunk. Only the first pending NBT admission may undo that
 		// flag; saved zero health and normal later removals remain effective.
-		if(wrongX || wrongZ) isDead = false;
+		if(wrongX || wrongZ) removed = false;
 		setLocationAndAngles(x,posY,z,rotationYaw,rotationPitch);
-		FMLLog.warning("Lootable Bodies recovered malformed corpse position in chunk %s,%s",chunkX,chunkZ);
+		ModLog.warning("Lootable Bodies recovered malformed corpse position in chunk %s,%s",chunkX,chunkZ);
 	}
 
 	@Override
-	public void readEntityFromNBT(final NBTTagCompound supplied) {
+	public void readAdditional(final NBTTagCompound supplied) {
 		final NBTTagCompound root=UpgradePreservation.restore(supplied);
-		sourceVersions=root.hasKey(UpgradePreservation.SOURCES,10) ? root.getCompoundTag(UpgradePreservation.SOURCES).copy() : new NBTTagCompound();
+		sourceVersions=root.contains(UpgradePreservation.SOURCES,10) ? root.getCompound(UpgradePreservation.SOURCES).copy() : new NBTTagCompound();
 		// Persisted Equipment/Aux are already current after the first save.
 		// Only the transient protected original and retained raw records use old versions.
 		inventoryVersions=root.getBoolean(UpgradePreservation.ITEMS_PENDING) ? sourceVersions : new NBTTagCompound();
@@ -954,16 +965,16 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		// load; its new Health still decides whether normal death handling starts.
 		terminate = -1;
 		dead = false;
-		isDead = false;
+		removed = false;
 		// Item readers may update their input tags; the caller's saved data is immutable.
 		NBTTagCompound vanilla = root.copy();
 		// Our historical DeathTime is a world timestamp, not vanilla's animation.
 		vanilla.setShort("DeathTime",(short)0);
 		invalidFields.clear();
-		NBTBase metadata = root.getTag(INVALID_FIELDS_TAG);
+		INBTBase metadata = root.getTag(INVALID_FIELDS_TAG);
 		if(isInventoryList(metadata)) {
 			NBTTagList records = (NBTTagList)metadata;
-			for(int i = 0; i < records.tagCount(); i++) invalidFields.add(records.getCompoundTagAt(i).copy());
+			for(int i = 0; i < records.size(); i++) invalidFields.add(records.getCompound(i).copy());
 		} else if(metadata != null) retainInvalid("Recovery",metadata);
 		// NBT replaces state. Clear the old map without effect callbacks: saved
 		// attributes and absorption are restored below, just as on a fresh entity.
@@ -975,17 +986,17 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		// Health must be checked against the loaded, validated effective maximum.
 		vanilla.removeTag("Health");
 		vanilla.setFloat("AbsorptionAmount",readLivingFloat(root,"AbsorptionAmount",0F,Float.MAX_VALUE));
-		super.readEntityFromNBT(vanilla);
+		super.readAdditional(vanilla);
 		updatePotionMetadata();
 		for(IAttributeInstance attribute : getAttributeMap().getAllAttributes()) {
-			if(!Double.isFinite(attribute.getAttributeValue())) {
+			if(!Double.isFinite(attribute.getValue())) {
 				// Also protect against engine ordering/parent-attribute arithmetic.
 				if(root.hasKey("Attributes")) retainInvalid("Attributes",root.getTag("Attributes"));
 				restoreAttribute(attribute);
 			}
 		}
 		setHealth(readLivingFloat(root,"Health",getMaxHealth(),getMaxHealth()));
-		NBTBase equipment = root.getTag("Equipment");
+		INBTBase equipment = root.getTag("Equipment");
 		if(isInventoryList(equipment)) {
 			// Vanilla ArmorItems/HandItems mirror these six slots. The custom
 			// list is authoritative when present, so do not load both copies.
@@ -993,23 +1004,23 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		}
 		readInventoryTag("Equipment",equipment);
 		readInventoryTag("Aux",root.getTag("Aux"));
-		NBTBase recovery = root.getTag(UNRESOLVED_ITEMS_TAG);
+		INBTBase recovery = root.getTag(UNRESOLVED_ITEMS_TAG);
 		if(isInventoryList(recovery)) {
 			NBTTagList records = (NBTTagList)recovery;
-			for(int i = 0; i < records.tagCount(); i++) {
-				NBTTagCompound record = records.getCompoundTagAt(i);
+			for(int i = 0; i < records.size(); i++) {
+				NBTTagCompound record = records.getCompound(i);
 				String source = record.getString("Source");
-				if((record.getKeySet().size() == 2 || (record.getKeySet().size() == 3 && record.hasKey("SourceVersions",10)))
-						&& record.hasKey("Source",8) && record.hasKey("Data",10)
+				if((record.keySet().size() == 2 || (record.keySet().size() == 3 && record.contains("SourceVersions",10)))
+						&& record.contains("Source",8) && record.contains("Data",10)
 						&& (source.equals("Equipment") || source.equals("Aux"))) {
-					readInventoryEntry(source,record.getCompoundTag("Data"),record);
+					readInventoryEntry(source,record.getCompound("Data"),record);
 				} else unresolvedInventory.add(record.copy());
 			}
 		} else if(recovery != null) retainRaw("Recovery",recovery);
-		if(!unresolvedInventory.isEmpty()) FMLLog.warning(
+		if(!unresolvedInventory.isEmpty()) ModLog.warning(
 				"Lootable Bodies retained %s unreadable inventory records for later recovery",unresolvedInventory.size());
 
-		long now = Math.max(0L,getEntityWorld().getTotalWorldTime());
+		long now = Math.max(0L,getEntityWorld().getGameTime());
 		this.vacuumTime = (byte)readTimer(root,"Vac",VACUUM_TIMELIMIT,VACUUM_TIMELIMIT);
 		this.setDeathTimestamp(readTimer(root,"DeathTime",now,now));
 		this.decayTimestamp = readTimer(root,"DecayTime",now,now);
@@ -1021,7 +1032,7 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		this.setRotation(this.rotationYaw, 0);
 	}
 
-	private void retainInvalid(String source, NBTBase data) {
+	private void retainInvalid(String source, INBTBase data) {
 		NBTTagCompound record = new NBTTagCompound();
 		record.setString("Source",source);
 		record.setTag("Data",data.copy());
@@ -1036,15 +1047,15 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		if(defaults != null) for(AttributeModifier modifier : defaults) attribute.applyModifier(modifier);
 	}
 
-	private NBTTagList readEffects(NBTBase raw) {
+	private NBTTagList readEffects(INBTBase raw) {
 		NBTTagList clean = new NBTTagList();
 		if(raw == null) return clean;
 		if(!isInventoryList(raw)) { retainInvalid("ActiveEffects",raw); return clean; }
 		Set<Potion> seen = new HashSet<>();
 		NBTTagList list = (NBTTagList)raw;
-		for(int i = 0; i < list.tagCount(); i++) {
-			NBTTagCompound record = list.getCompoundTagAt(i);
-			NBTBase rawId = record.getTag("Id"), rawAmplifier = record.getTag("Amplifier");
+		for(int i = 0; i < list.size(); i++) {
+			NBTTagCompound record = list.getCompound(i);
+			INBTBase rawId = record.getTag("Id"), rawAmplifier = record.getTag("Amplifier");
 			Long id = integral(rawId);
 			// IDs are unsigned bytes on disk. Amplifiers are read as signed
 			// bytes by this engine; preserve all canonical byte encodings.
@@ -1058,43 +1069,43 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 				retainInvalid("ActiveEffect",record); continue;
 			}
 			NBTTagCompound accepted = new NBTTagCompound();
-			accepted.setByte("Id",id.byteValue()); accepted.setInteger("Duration",duration.intValue());
+			accepted.setByte("Id",id.byteValue()); accepted.setInt("Duration",duration.intValue());
 			accepted.setByte("Amplifier",amplifier.byteValue());
-			boolean changed = !Arrays.asList("Id","Duration","Amplifier","Ambient","ShowParticles","CurativeItems").containsAll(record.getKeySet());
+			boolean changed = !Arrays.asList("Id","Duration","Amplifier","Ambient","ShowParticles","ShowIcon","CurativeItems").containsAll(record.keySet());
 			// Forge 1.11 persists curative stacks. Preserve their complete custom
 			// data; an unreadable list uses Forge's defaults and stays recoverable.
 			if(record.hasKey("CurativeItems")) {
-				NBTBase rawCuratives = record.getTag("CurativeItems");
+				INBTBase rawCuratives = record.getTag("CurativeItems");
 				boolean valid = isInventoryList(rawCuratives);
 				if(valid) {
 					NBTTagList items = (NBTTagList)rawCuratives;
-					for(int c=0; c<items.tagCount(); c++)
-						if(decodeInventoryItem(items.getCompoundTagAt(c)) == null) { valid=false; break; }
+					for(int c=0; c<items.size(); c++)
+						if(decodeInventoryItem(items.getCompound(c)) == null) { valid=false; break; }
 				}
 				if(valid) accepted.setTag("CurativeItems",rawCuratives.copy());
 				else changed = true;
 			}
-			for(String key : Arrays.asList("Ambient","ShowParticles")) {
-				boolean fallback = key.equals("ShowParticles");
+			for(String key : Arrays.asList("Ambient","ShowParticles","ShowIcon")) {
+				boolean fallback = key.equals("ShowIcon") ? accepted.getBoolean("ShowParticles") : key.equals("ShowParticles");
 				Long flag = integral(record.getTag(key));
 				if(!record.hasKey(key)) accepted.setBoolean(key,fallback);
 				else if(flag != null && flag >= 0 && flag <= 1) accepted.setBoolean(key,flag == 1);
 				else { accepted.setBoolean(key,fallback); changed = true; }
 			}
 			if(changed) retainInvalid("ActiveEffect",record);
-			clean.appendTag(accepted);
+			clean.add(accepted);
 		}
 		return clean;
 	}
 
-	private static Double finiteNumber(NBTBase raw) {
+	private static Double finiteNumber(INBTBase raw) {
 		if(!(raw instanceof NBTPrimitive) || raw.getId() < 1 || raw.getId() > 6) return null;
 		double value = ((NBTPrimitive)raw).getDouble();
 		return Double.isFinite(value) ? value : null;
 	}
 
 	private float readLivingFloat(NBTTagCompound root, String key, float fallback, float maximum) {
-		NBTBase raw = root.getTag(key);
+		INBTBase raw = root.getTag(key);
 		if(raw == null) return fallback;
 		Double value = finiteNumber(raw);
 		if(value != null && value >= 0 && value <= maximum) {
@@ -1105,15 +1116,15 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		return fallback;
 	}
 
-	private NBTTagList readAttributes(NBTBase raw) {
+	private NBTTagList readAttributes(INBTBase raw) {
 		NBTTagList clean = new NBTTagList();
 		if(raw == null) return clean;
 		if(!isInventoryList(raw)) { retainInvalid("Attributes",raw); return clean; }
 		Set<String> seen = new HashSet<>();
 		NBTTagList list = (NBTTagList)raw;
-		for(int i = 0; i < list.tagCount(); i++) {
-			NBTTagCompound record = list.getCompoundTagAt(i);
-			IAttributeInstance attribute = record.hasKey("Name",8)
+		for(int i = 0; i < list.size(); i++) {
+			NBTTagCompound record = list.getCompound(i);
+			IAttributeInstance attribute = record.contains("Name",8)
 					? getAttributeMap().getAttributeInstanceByName(record.getString("Name")) : null;
 			Double base = finiteNumber(record.getTag("Base"));
 			if(attribute == null || base == null) { retainInvalid("Attribute",record); continue; }
@@ -1126,22 +1137,22 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 					&& !configuredHealth && !base.equals(defaultAttributeBases.get(name))) || !seen.add(name)) {
 				retainInvalid("Attribute",record); continue;
 			}
-			boolean changed = !Arrays.asList("Name","Base","Modifiers").containsAll(record.getKeySet());
+			boolean changed = !Arrays.asList("Name","Base","Modifiers").containsAll(record.keySet());
 			NBTTagCompound accepted = new NBTTagCompound();
 			accepted.setString("Name",name); accepted.setDouble("Base",base);
-			NBTBase rawModifiers = record.getTag("Modifiers");
+			INBTBase rawModifiers = record.getTag("Modifiers");
 			if(rawModifiers != null) {
 				NBTTagList modifiers = new NBTTagList();
 				if(!isInventoryList(rawModifiers)) changed = true;
 				else {
 					Set<UUID> ids = new HashSet<>();
 					NBTTagList entries = (NBTTagList)rawModifiers;
-					for(int m = 0; m < entries.tagCount(); m++) {
-						NBTTagCompound entry = entries.getCompoundTagAt(m);
+					for(int m = 0; m < entries.size(); m++) {
+						NBTTagCompound entry = entries.getCompound(m);
 						Long operation = integral(entry.getTag("Operation"));
 						Long most = integral(entry.getTag("UUIDMost")), least = integral(entry.getTag("UUIDLeast"));
 						Double amount = finiteNumber(entry.getTag("Amount"));
-						if(!entry.hasKey("Name",8) || entry.getString("Name").isEmpty() || operation == null
+						if(!entry.contains("Name",8) || entry.getString("Name").isEmpty() || operation == null
 								|| operation < 0 || operation > 2 || most == null || least == null || amount == null) {
 							changed = true; continue;
 						}
@@ -1149,43 +1160,43 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 						if(ids.contains(id)) { changed = true; continue; }
 						NBTTagCompound modifier = new NBTTagCompound();
 						modifier.setString("Name",entry.getString("Name")); modifier.setDouble("Amount",amount);
-						modifier.setInteger("Operation",operation.intValue()); modifier.setUniqueId("UUID",id);
-						NBTTagList candidate = modifiers.copy(); candidate.appendTag(modifier);
+						modifier.setInt("Operation",operation.intValue()); modifier.setUniqueId("UUID",id);
+						NBTTagList candidate = modifiers.copy(); candidate.add(modifier);
 						if(!finiteAttributeValue(base,candidate)) { changed = true; continue; }
-						ids.add(id); modifiers.appendTag(modifier);
-						if(!Arrays.asList("Name","Amount","Operation","UUIDMost","UUIDLeast").containsAll(entry.getKeySet())) changed = true;
+						ids.add(id); modifiers.add(modifier);
+						if(!Arrays.asList("Name","Amount","Operation","UUIDMost","UUIDLeast").containsAll(entry.keySet())) changed = true;
 					}
 				}
 				accepted.setTag("Modifiers",modifiers);
 			}
 			if(changed) retainInvalid("Attribute",record);
-			clean.appendTag(accepted);
+			clean.add(accepted);
 		}
 		return clean;
 	}
 
 	private static boolean finiteAttributeValue(double base, NBTTagList modifiers) {
 		double value = base;
-		for(int i = 0; i < modifiers.tagCount(); i++) {
-			NBTTagCompound m = modifiers.getCompoundTagAt(i);
-			if(m.getInteger("Operation") == 0) value += m.getDouble("Amount");
+		for(int i = 0; i < modifiers.size(); i++) {
+			NBTTagCompound m = modifiers.getCompound(i);
+			if(m.getInt("Operation") == 0) value += m.getDouble("Amount");
 		}
 		if(!Double.isFinite(value)) return false;
 		double additive = value;
-		for(int i = 0; i < modifiers.tagCount(); i++) {
-			NBTTagCompound m = modifiers.getCompoundTagAt(i);
-			if(m.getInteger("Operation") == 1) value += additive * m.getDouble("Amount");
+		for(int i = 0; i < modifiers.size(); i++) {
+			NBTTagCompound m = modifiers.getCompound(i);
+			if(m.getInt("Operation") == 1) value += additive * m.getDouble("Amount");
 		}
 		if(!Double.isFinite(value)) return false;
-		for(int i = 0; i < modifiers.tagCount(); i++) {
-			NBTTagCompound m = modifiers.getCompoundTagAt(i);
-			if(m.getInteger("Operation") == 2) value *= 1D + m.getDouble("Amount");
+		for(int i = 0; i < modifiers.size(); i++) {
+			NBTTagCompound m = modifiers.getCompound(i);
+			if(m.getInt("Operation") == 2) value *= 1D + m.getDouble("Amount");
 		}
 		return Double.isFinite(value);
 	}
 
 	private long readTimer(NBTTagCompound root, String key, long maximum, long fallback) {
-		NBTBase raw = root.getTag(key);
+		INBTBase raw = root.getTag(key);
 		if(raw == null) return fallback;
 		Long value = integral(raw);
 		if(value != null && value >= 0 && value <= maximum) return value;
@@ -1200,26 +1211,30 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		return now;
 	}
 
-	private String readName(NBTTagCompound root, String key) {
-		NBTBase raw = root.getTag(key);
-		if(raw == null) return null;
-		// Entity metadata packets accept at most 32767 UTF-8 bytes. Preserve display
-		// names, Unicode and formatting; do not impose an account-name pattern.
-		if(raw.getId() == 8 && root.getString(key).length() <= 32767
-				&& root.getString(key).getBytes(StandardCharsets.UTF_8).length <= 32767) {
-			String name = root.getString(key);
-			return name.trim().isEmpty() ? "" : name;
-		}
-		retainInvalid(key,raw);
-		return null;
+    private String readName(NBTTagCompound root,String key) {
+        INBTBase raw=root.getTag(key);if(raw==null)return null;
+        if(raw.getId()==8) {
+            String name=root.getString(key);
+            if(key.equals("CustomName") && root.getInt(UpgradePreservation.VERSION)>=3) {
+                try {
+                    net.minecraft.util.text.ITextComponent text=net.minecraft.util.text.ITextComponent.Serializer.fromJson(name);
+                    if(text==null){retainInvalid(key,raw);return null;}name=text.getString();
+                }catch(RuntimeException malformed){retainInvalid(key,raw);return null;}
+            }
+            String packet=net.minecraft.util.text.ITextComponent.Serializer.toJson(new net.minecraft.util.text.TextComponentString(name));
+            if(name.length()<=32767 && name.getBytes(StandardCharsets.UTF_8).length<=32767
+                    && packet.getBytes(StandardCharsets.UTF_8).length<=32767)return name.trim().isEmpty()?"":name;
+        }
+        retainInvalid(key,raw);return null;
+    }
+
+
+
+	private static boolean isInventoryList(INBTBase data) {
+		return data instanceof NBTTagList && (((NBTTagList)data).size() == 0 || ((NBTTagList)data).getTagType() == 10);
 	}
 
-
-	private static boolean isInventoryList(NBTBase data) {
-		return data instanceof NBTTagList && (((NBTTagList)data).tagCount() == 0 || ((NBTTagList)data).getTagType() == 10);
-	}
-
-	private void retainRaw(String source, NBTBase data) {
+	private void retainRaw(String source, INBTBase data) {
 		NBTTagCompound record = new NBTTagCompound();
 		record.setString("Source",source);
 		record.setTag("Data",data.copy());
@@ -1227,47 +1242,50 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 		unresolvedInventory.add(record);
 	}
 
-	private void readInventoryTag(String source, NBTBase data) {
+	private void readInventoryTag(String source, INBTBase data) {
 		if(data == null) return;
 		if(!isInventoryList(data)) { retainRaw(source + "List",data); return; }
 		NBTTagList list = (NBTTagList)data;
-		for(int i = 0; i < list.tagCount(); i++) readInventoryEntry(source,list.getCompoundTagAt(i),null);
+		for(int i = 0; i < list.size(); i++) readInventoryEntry(source,list.getCompound(i),null);
 	}
 
-	private static Long integral(NBTBase data) {
+	private static Long integral(INBTBase data) {
 		return data instanceof NBTPrimitive && data.getId() >= 1 && data.getId() <= 4 ? ((NBTPrimitive)data).getLong() : null;
 	}
 
 	private ItemStack decodeInventoryItem(NBTTagCompound raw) {
 		// Ambiguous fields, unavailable IDs and unhandled capability data stay
 		// verbatim. Never guess an item, truncate a count or erase custom data.
-		for(String key : raw.getKeySet()) if(!Arrays.asList("id","Count","Damage","tag","ForgeCaps","Slot").contains(key)) return null;
-		if(!raw.hasKey("id",8)) return null;
+		for(String key : raw.keySet()) if(!Arrays.asList("id","Count","Damage","tag","ForgeCaps","Slot").contains(key)) return null;
+		if(!raw.contains("id",8)) return null;
 		Long count = integral(raw.getTag("Count"));
-		Long damage = raw.hasKey("Damage") ? integral(raw.getTag("Damage")) : Long.valueOf(0L);
+		Long legacyDamage = raw.hasKey("Damage") ? integral(raw.getTag("Damage")) : Long.valueOf(0L);
+        Long damage = raw.getCompound("tag").hasKey("Damage") ? integral(raw.getCompound("tag").getTag("Damage")) : legacyDamage;
+        if(legacyDamage == null || legacyDamage < 0 || legacyDamage > 32767
+                || (raw.hasKey("Damage") && (damage==null || legacyDamage.longValue()!=damage.longValue())))return null;
 		if(count == null || count <= 0 || count > 127 || damage == null || damage < 0 || damage > 32767) return null;
-		if((raw.hasKey("tag") && !raw.hasKey("tag",10)) || (raw.hasKey("ForgeCaps") && !raw.hasKey("ForgeCaps",10))) return null;
+		if((raw.hasKey("tag") && !raw.contains("tag",10)) || (raw.hasKey("ForgeCaps") && !raw.contains("ForgeCaps",10))) return null;
 		try {
 			ResourceLocation id = new ResourceLocation(raw.getString("id"));
-			if(!Item.REGISTRY.containsKey(id)) return null;
-			Item registered = Item.REGISTRY.getObject(id);
+			if(!net.minecraftforge.registries.ForgeRegistries.ITEMS.containsKey(id)) return null;
+			Item registered = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(id);
 			if(registered == null || Item.getIdFromItem(registered) == 0) return null;
 			NBTTagCompound input = raw.copy();
 			input.setString("id",id.toString());
 			input.setByte("Count",count.byteValue());
-			input.setShort("Damage",damage.shortValue());
-			ItemStack stack = new ItemStack(input);
+			if(raw.hasKey("Damage"))input.setShort("Damage",legacyDamage.shortValue());
+			ItemStack stack = ItemStack.read(input);
 			if(emptyStack(stack) || stack.getItem() != registered || stack.getCount() != count.intValue()
-					|| stack.getItemDamage() != damage.intValue() || stack.getMaxStackSize() <= 0) return null;
-			NBTTagCompound encoded = stack.writeToNBT(new NBTTagCompound());
-			if(!Objects.equals(raw.getTag("tag"),encoded.getTag("tag"))
-					|| !Objects.equals(raw.getTag("ForgeCaps"),encoded.getTag("ForgeCaps"))) return null;
+					|| stack.getDamage() != damage.intValue() || stack.getMaxStackSize() <= 0) return null;
+			NBTTagCompound encoded = stack.write(new NBTTagCompound());
+            if(!Objects.equals(raw.getTag("tag"),encoded.getTag("tag"))
+                    || !Objects.equals(raw.getTag("ForgeCaps"),encoded.getTag("ForgeCaps"))) return null;
 			return stack;
 		} catch(RuntimeException unreadable) { return null; }
 	}
 
 	private void readInventoryEntry(String source, NBTTagCompound raw, NBTTagCompound retained) {
-		NBTTagCompound context=retained!=null && retained.hasKey("SourceVersions",10) ? retained.getCompoundTag("SourceVersions") : inventoryVersions;
+		NBTTagCompound context=retained!=null && retained.contains("SourceVersions",10) ? retained.getCompound("SourceVersions") : inventoryVersions;
 		NBTTagCompound converted=ItemMigration.convert(raw,context);
 		ItemStack stack = converted==null ? null : decodeInventoryItem(converted);
 		if(emptyStack(stack)) {
@@ -1285,13 +1303,13 @@ public class EntityLootableBody extends EntityLiving implements IInventory{
 			if(number != null && number >= 0 && number < getSizeInventory()) {
 				int slot = number.intValue();
 				if(emptyStack(getStackInSlot(slot)) && isItemValidForSlot(slot,stack)) {
-					setInventorySlotContents(slot,stack.splitStack(Math.min(stack.getCount(),slot < 4 ? 1 : limit)));
+					setInventorySlotContents(slot,stack.split(Math.min(stack.getCount(),slot < 4 ? 1 : limit)));
 				}
 			}
 		}
 		// Keep each record, including identical duplicates. Existing overflow
 		// handles later GUI recovery without overwriting any indexed slot.
-		while(stack.getCount() > 0) auxInventory.addLast(stack.splitStack(Math.min(stack.getCount(),limit)));
+		while(stack.getCount() > 0) auxInventory.addLast(stack.split(Math.min(stack.getCount(),limit)));
 	}
 
 	public boolean useThinArms() {

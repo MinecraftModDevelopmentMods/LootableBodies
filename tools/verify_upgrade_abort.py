@@ -4,13 +4,24 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
-from verify_world_upgrades import prepare, fingerprint, digest, FORGE
+from native_runtime import prepare_server as prepare, fingerprint, digest, FORGE
 from release_identity import MAIN_JAR
 
 
 def source_files(world):
     return {name: value for name, value in fingerprint(world).items()
             if not name.startswith('data/lootablebodies-upgrade')}
+
+
+def allowed_platform_additions(before, after, world):
+    # Forge writes its stock server config before the about-to-start event.
+    # Only an exact, newly created default is allowed; existing config is data.
+    name = 'serverconfig/forge-server.toml'
+    if name in before or name not in after:
+        return []
+    expected = (Path(__file__).parent / 'fixtures/forge25-server-default.toml').read_bytes()
+    actual = (world / name).read_bytes()
+    return [name] if actual.replace(b'\r\n', b'\n') == expected.replace(b'\r\n', b'\n') else []
 
 
 def inject_unsafe_journal(world, case):
@@ -52,7 +63,7 @@ def main():
     report = {'candidate_sha256': digest(candidate), 'cases': {}}
     for case in ['damaged-index', 'blocked-journal']:
         home = root / case
-        prepare(home, args.forge_home.resolve(), '1.12.2', candidate, probe)
+        prepare(home, args.forge_home.resolve(), candidate, probe)
         shutil.copytree(source, home / 'world')
         world = home / 'world'
         inject_unsafe_journal(world, case)
@@ -60,7 +71,7 @@ def main():
         log = home / 'abort.log'
         with log.open('w', encoding='utf-8') as output:
             result = subprocess.run([str(args.java.resolve()), '-Xmx1G', '-jar',
-                                     FORGE['1.12.2'] + '-universal.jar', 'nogui'],
+                                     FORGE + '.jar', '--nogui'],
                                     cwd=home, stdout=output, stderr=subprocess.STDOUT, timeout=180)
         text = log.read_text(encoding='utf-8', errors='replace')
         if "Lootable Bodies could not preserve this world's corpses" not in text:
@@ -68,10 +79,15 @@ def main():
         if any(token in text for token in ['Preparing start region', 'Preparing spawn area',
                                            'LOOTABLE_BODIES_RUNTIME_PASS', 'Done (']):
             raise RuntimeError('World loading continued after unsafe preservation')
-        if before != source_files(world) or fingerprint(source) != sealed:
+        after = source_files(world)
+        platform_additions = allowed_platform_additions(before, after, world)
+        for name in platform_additions:
+            del after[name]
+        if before != after or fingerprint(source) != sealed:
             raise RuntimeError('A failed preflight changed source world data')
         report['cases'][case] = {'exit': result.returncode, 'source_unchanged': True,
-                                 'world_data_unchanged': True, 'world_loading_started': False}
+                                 'world_data_unchanged': True, 'world_loading_started': False,
+                                 'stock_forge_config_created': platform_additions}
         print('UPGRADE_ABORT_PASS', case, flush=True)
     (root / 'result.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
 

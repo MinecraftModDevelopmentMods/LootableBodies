@@ -30,7 +30,7 @@ def main():
     else:
         # Reusing the same path for both inputs installs exactly one production jar.
         prepare(home,args.forge_home.resolve(),jar,jar)
-        command=[str(args.java.resolve()),'-Xmx1G','-jar',FORGE+'-universal.jar','nogui'];cwd=home
+        command=[str(args.java.resolve()),'-Xmx1G','-jar',FORGE+'.jar','--nogui'];cwd=home
     results=[]
     for phase in ['fresh','reload']:
         log=root/(phase+'.log')
@@ -45,10 +45,15 @@ def main():
             finally:
                 if process.poll() is None: process.terminate();process.wait(timeout=15)
         text=log.read_text(encoding='utf-8',errors='replace')
-        if process.returncode or 'Stopping server' not in text or 'Forge Mod Loader has identified 5 mods to load' not in text:
+        if process.returncode or 'Stopping server' not in text:
             raise RuntimeError('Ordinary server failed clean startup/stop: '+str(log))
         if 'lootablebodiesbuildtest' in text or list((home/'crash-reports').glob('*')): raise RuntimeError('Probe leak or crash')
-        audit(log,development=args.development)
+        audit(log,development=args.development,native=True)
+        for name in ('latest.log','debug.log'):
+            complete=home/'logs'/name
+            if not complete.is_file():raise FileNotFoundError(complete)
+            audit(complete,development=args.development,native=True)
+            if 'lootablebodiesbuildtest' in complete.read_text():raise RuntimeError('Probe in ordinary runtime')
         if not args.development and (len(list((home/'mods').glob('*.jar')))!=1 or digest(home/'mods'/MAIN)!=digest(jar)):
             raise RuntimeError('Ordinary packaged mod set changed')
         results.append(phase);print('ORDINARY_SERVER_PASS',phase,'development='+str(args.development),flush=True)
