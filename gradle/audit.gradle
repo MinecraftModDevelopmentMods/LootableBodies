@@ -1,0 +1,110 @@
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+import java.util.jar.Manifest
+import java.util.zip.ZipFile
+
+ext.releaseNames = ['', '-sources', '-javadoc'].collect { "${base.archivesName.get()}-${version}${it}.jar".toString() }
+ext.releasePomName = "${base.archivesName.get()}-${version}.pom".toString()
+ext.releaseDigest = { File candidate ->
+    MessageDigest.getInstance('SHA-256').digest(candidate.bytes).encodeHex().toString().toUpperCase()
+}
+
+// Apply identical archive checks to newly built jars and immutable input bundles.
+ext.auditReleaseArchives = { File directory ->
+    Set<String> actual = (directory.listFiles() ?: [] as File[]).findAll { it.name.endsWith('.jar') }*.name as Set
+    if (actual != releaseNames as Set) throw new GradleException("Unexpected/missing artifacts: ${actual}")
+    releaseNames.eachWithIndex { name, index ->
+        File candidate = new File(directory, name)
+        if (!candidate.isFile() || candidate.length() == 0L) throw new GradleException("Empty artifact ${name}")
+        new ZipFile(candidate).withCloseable { zip ->
+            Set<String> names = zip.entries().collect { it.name } as Set
+            if (names.size() != zip.size()) throw new GradleException("Duplicate zip entries in ${name}")
+            ['LICENSE', 'LICENSE-CC0', 'NOTICE'].each { noticeName ->
+                def entry = zip.getEntry("META-INF/${noticeName}")
+                if (!entry || zip.getInputStream(entry).getText('UTF-8').replace('\r\n','\n') !=
+                        file(noticeName).getText('UTF-8').replace('\r\n','\n'))
+                    throw new GradleException("Missing/changed licence or attribution ${noticeName} in ${name}")
+            }
+            zip.entries().each { entry ->
+                String path = entry.name
+                if (path =~ /(?i)(agent|\.codex|\.git\/|test|probe|junit|mockito|bytebuddy|credentials|\.launch$)/)
+                    throw new GradleException("Forbidden archive entry ${path}")
+                if (path.endsWith('.class')) {
+                    if (!path.startsWith('cyano/lootable/')) throw new GradleException("Foreign production class ${path}")
+                    byte[] bytes = zip.getInputStream(entry).bytes
+                    int major = ((bytes[6] & 255) << 8) | (bytes[7] & 255)
+                    if (major != 52) throw new GradleException("${path} is class major ${major}")
+                }
+                if (path.endsWith('.lang')) {
+                    java.nio.charset.StandardCharsets.UTF_8.newDecoder().decode(
+                            java.nio.ByteBuffer.wrap(zip.getInputStream(entry).bytes))
+                }
+                String content = new String(zip.getInputStream(entry).bytes, 'ISO-8859-1')
+                if (content =~ /(?i)([a-z]:[\\\/]users[\\\/]|[a-z]:[\\\/]LootableBodies|\/home\/runner|\/Users\/|gh[pousr]_[A-Za-z0-9]{20}|-----BEGIN .*PRIVATE KEY-----)/)
+                    throw new GradleException("Private path/credential in ${name}: ${path}")
+            }
+            def manifestEntry = zip.getEntry('META-INF/MANIFEST.MF')
+            def manifest = manifestEntry ? new Manifest(zip.getInputStream(manifestEntry)).mainAttributes : null
+            String classifier = index == 0 ? '' : index == 1 ? ':sources' : ':javadoc'
+            if (manifest == null || manifest.getValue('Implementation-Version') != project.version.toString() ||
+                    manifest.getValue('Implementation-Title') != project.mod_name ||
+                    manifest.getValue('Implementation-Vendor') != project.mod_vendor ||
+                    manifest.getValue('Implementation-License') != project.mod_license ||
+                    manifest.getValue('Maven-Artifact') != "${project.group}:${base.archivesName.get()}:${project.version}${classifier}" ||
+                    manifest.getValue('Implementation-Timestamp') != null || manifest.getValue('Timestamp') != null)
+                throw new GradleException("Incorrect release manifest in ${name}")
+            if (index == 0) {
+                ['mcmod.info', 'pack.mcmeta', 'cyano/lootable/LootableBodies.class',
+                 'assets/lootablebodies/textures/gui/corpse.png',
+                 'assets/lootablebodies/textures/entity/corpse/corpse.png'].each {
+                    if (!names.contains(it)) throw new GradleException("Missing production entry ${it}")
+                }
+                def info = new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('mcmod.info')).getText('UTF-8'))[0]
+                if (info.modid != project.mod_id || info.version != project.version.toString() ||
+                        info.mcversion != project.minecraft_version || info.name != project.mod_name ||
+                        info.url != project.mod_url || info.license != project.mod_license ||
+                        info.authorList != ['Cyanobacterium', 'SkyBlade1978'] || info.dependencies != [])
+                    throw new GradleException('Incorrect production metadata/attribution')
+                if (names.any { it.endsWith('.java') || it.startsWith('net/') || it.startsWith('org/') })
+                    throw new GradleException('Bundled sources or dependencies in main jar')
+                String entity = new String(zip.getInputStream(zip.getEntry(
+                        'cyano/lootable/entities/EntityLootableBody.class')).bytes, 'ISO-8859-1')
+                if (!entity.contains('func_70037_a') || !entity.contains('func_70014_b'))
+                    throw new GradleException('Production jar does not have runtime SRG mappings')
+            } else if (index == 1 && !names.contains('cyano/lootable/LootableBodies.java')) {
+                throw new GradleException('Sources jar does not contain production sources')
+            } else if (index == 2 && !names.contains('index.html')) {
+                throw new GradleException('Javadoc jar has no index')
+            }
+        }
+    }
+}
+
+tasks.register('verifyReleaseArtifacts') {
+    group = 'verification'
+    dependsOn 'assemble', 'verifyJavaSetup', 'verifyReleaseConfiguration'
+    doLast {
+        File libs = layout.buildDirectory.dir('libs').get().asFile
+        Set<String> actual = (libs.listFiles() ?: [] as File[])*.name as Set
+        if (actual != releaseNames as Set) throw new GradleException('Release output must contain exactly the three declared jars')
+        auditReleaseArchives(libs)
+        new ZipFile(new File(libs, releaseNames[0])).withCloseable { zip ->
+            new ZipFile(tasks.jar.archiveFile.get().asFile).withCloseable { dev ->
+                String cls = 'cyano/lootable/entities/EntityLootableBody.class'
+                if (Arrays.equals(zip.getInputStream(zip.getEntry(cls)).bytes, dev.getInputStream(dev.getEntry(cls)).bytes))
+                    throw new GradleException('Production jar was not reobfuscated')
+            }
+        }
+    }
+}
+tasks.register('writeReleaseChecksums') {
+    group = 'verification'
+    dependsOn 'verifyReleaseArtifacts'
+    doLast {
+        File output = layout.buildDirectory.file('release/SHA256SUMS').get().asFile
+        output.parentFile.mkdirs()
+        output.setText(releaseNames.sort(false).collect { name ->
+            "${releaseDigest(layout.buildDirectory.file("libs/${name}").get().asFile)}  ${name}"
+        }.join('\n') + '\n', 'UTF-8')
+    }
+}

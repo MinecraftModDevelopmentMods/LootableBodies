@@ -1,0 +1,273 @@
+// Build-only legacy runtime verification, separate from production classpaths.
+def probeClasses = layout.buildDirectory.dir('integration-test-mod/classes')
+tasks.register('compileIntegrationTestMod', JavaCompile) {
+    group = 'verification'
+    dependsOn 'classes'
+    source fileTree('src/integrationTest/java')
+    classpath = files(sourceSets.main.output, sourceSets.main.compileClasspath)
+    destinationDirectory = probeClasses
+    options.compilerArgs.add('-proc:none')
+}
+def probeJar = tasks.register('integrationTestModJar', Jar) {
+    group = 'verification'
+    dependsOn 'compileIntegrationTestMod'
+    archiveFileName = 'lootablebodies-build-tests.jar'
+    destinationDirectory = layout.buildDirectory.dir('integration-test-mod')
+    from probeClasses
+    from 'src/integrationTest/resources'
+}
+def packagedProbe = renamer.classes(probeJar) {
+    map.from minecraft.dependency.toSrgFile
+    libraries.from(tasks.named('jar'), sourceSets.main.compileClasspath)
+    output = layout.buildDirectory.file('integration-test-mod/lootablebodies-build-tests-reobf.jar')
+}
+tasks.register('preparePackagedIntegrationProbe') { dependsOn packagedProbe, releaseJar }
+
+def legacySeedClasses=layout.buildDirectory.dir('legacy-seed/classes')
+tasks.register('compileLegacySeed',JavaCompile) {
+    source fileTree('src/legacySeed/java'), file('src/integrationTest/java/cyano/lootable/buildtest/FixtureItems.java')
+    classpath=files(sourceSets.main.output,sourceSets.main.compileClasspath)
+    destinationDirectory=legacySeedClasses
+    options.compilerArgs.add('-proc:none')
+}
+def legacySeedJar=tasks.register('legacySeedJar',Jar) {
+    dependsOn 'compileLegacySeed'
+    from legacySeedClasses
+    archiveFileName='lootablebodies-world-fixtures.jar'
+    destinationDirectory=layout.buildDirectory.dir('legacy-seed')
+}
+def legacySeedRuntime=renamer.classes(legacySeedJar) {
+    map.from minecraft.dependency.toSrgFile
+    libraries.from(tasks.named('jar'),sourceSets.main.compileClasspath)
+    output=layout.buildDirectory.file('legacy-seed/lootablebodies-world-fixtures-reobf.jar')
+}
+tasks.register('prepareLegacyWorldFixtures') {dependsOn legacySeedRuntime}
+
+def runDirectory = layout.buildDirectory.dir('integration-run')
+tasks.register('prepareIntegrationTest') {
+    dependsOn probeJar
+    doLast {
+        File root = runDirectory.get().asFile
+        if (root.exists()) {
+            File history = layout.buildDirectory.dir('runtime-history/' + System.currentTimeMillis()).get().asFile
+            history.parentFile.mkdirs()
+            if (!root.renameTo(history)) throw new GradleException('Cannot preserve previous runtime evidence')
+        }
+        new File(root,'mods').mkdirs()
+        copy { from probeJar; into new File(root,'mods') }
+        new File(root,'eula.txt').text = 'eula=true\n'
+        ['ops','whitelist','banned-players','banned-ips'].each { new File(root,"${it}.json").text='[]\n' }
+        new File(root,'server.properties').text = '''level-name=world
+level-seed=4267321
+level-type=FLAT
+online-mode=false
+server-ip=127.0.0.1
+server-port=0
+generate-structures=false
+spawn-animals=false
+spawn-monsters=false
+spawn-protection=0
+max-tick-time=120000
+'''
+    }
+}
+
+// Reuse FG7's actual bootstrap, mappings, natives and pinned Java launcher.
+def phaseTask = { String phase, Object prerequisite ->
+    tasks.register("integration${phase.capitalize()}Process", JavaExec) {
+        group = 'verification'
+        dependsOn prerequisite
+        dependsOn { def run = tasks.getByName('runServer'); run.taskDependencies.getDependencies(run) }
+        actions.clear()
+        doLast {
+            JavaExec run = tasks.getByName('runServer')
+            def options = minecraft.runs.getByName('server')
+            File previousDir = options.workingDir.get().asFile
+            def previousProperties = new LinkedHashMap(run.systemProperties)
+            def previousClasspath = files(run.classpath)
+            try {
+                options.workingDir.set(runDirectory)
+                run.workingDir(runDirectory)
+                run.systemProperty('lootablebodies.phase', phase)
+                run.systemProperty('log4j.configurationFile', file('src/integrationTest/resources/log4j2.xml').toURI())
+                run.executable = productionLauncher.get().executablePath.asFile.path
+                run.setClasspath(files(developmentOutput, run.classpath.filter { !sourceSets.main.output.files.contains(it) }))
+                run.exec()
+            } finally {
+                options.workingDir.set(previousDir)
+                run.workingDir(previousDir)
+                run.setSystemProperties(previousProperties)
+                run.setClasspath(previousClasspath)
+            }
+            File marker = new File(runDirectory.get().asFile,"world/${phase}.pass")
+            if (!marker.isFile()) throw new GradleException("Missing ${phase} corpse preservation marker")
+            File logs = new File(runDirectory.get().asFile,'logs/latest.log')
+            if (!logs.isFile() || logs.text =~ /(?i)(AssertionError|Encountered an unexpected exception|Exception stopping server)/)
+                throw new GradleException("Runtime failure in ${logs}")
+            copy { from logs; into runDirectory; rename { "${phase}.log" } }
+            if (!fileTree(new File(runDirectory.get().asFile,'crash-reports')).isEmpty())
+                throw new GradleException('Runtime crash reports found')
+        }
+    }
+}
+def fresh = phaseTask('fresh','prepareIntegrationTest')
+def upgrades = phaseTask('upgrade-contracts','prepareIntegrationTest')
+tasks.register('upgradeContractTest') { group='verification'; dependsOn upgrades }
+def inventory = phaseTask('inventory','prepareIntegrationTest')
+tasks.register('inventoryRegressionTest') { group='verification'; dependsOn inventory }
+
+def nbt = phaseTask('nbt','prepareIntegrationTest')
+tasks.register('nbtRecoveryTest') { group='verification'; dependsOn nbt }
+
+def scalars = phaseTask('scalars','prepareIntegrationTest')
+tasks.register('nameLifetimeTest') { group='verification'; dependsOn scalars }
+
+def health = phaseTask('health','prepareIntegrationTest')
+tasks.register('healthAttributeTest') { group='verification'; dependsOn health }
+
+def effects = phaseTask('effects','prepareIntegrationTest')
+
+tasks.register('effectHurtTest') { group='verification'; dependsOn effects }
+
+def geometry = phaseTask('geometry','prepareIntegrationTest')
+
+tasks.register('positionMotionTest') { group='verification'; dependsOn geometry }
+
+def rotation = phaseTask('rotation','prepareIntegrationTest')
+
+tasks.register('rotationFallTest') { group='verification'; dependsOn rotation }
+
+def wallEscape = phaseTask('wall-escape','prepareIntegrationTest')
+def wallEscapeReload = phaseTask('wall-escape-reload',wallEscape)
+tasks.register('wallEscapeTest') { group='verification'; dependsOn wallEscapeReload }
+
+def drops = phaseTask('drops','prepareIntegrationTest')
+tasks.register('dropCreativeInteractionTest') { group='verification'; dependsOn drops }
+
+def interactions = phaseTask('interactions','prepareIntegrationTest')
+tasks.register('containerInteractionTest') { group='verification'; dependsOn interactions }
+def reload = phaseTask('reload',fresh)
+def deferred = phaseTask('deferred',reload)
+tasks.register('integrationTest') { group = 'verification'; dependsOn deferred }
+tasks.named('check') { dependsOn 'integrationTest' }
+
+tasks.register('clientIntegrationTest') {
+    group = 'verification'
+    dependsOn probeJar
+    dependsOn { def run = tasks.getByName('runClient'); run.taskDependencies.getDependencies(run) }
+    doLast {
+        File root = file(providers.gradleProperty('clientIntegrationDirectory').getOrElse('build/client-integration-run'))
+        if(root.exists()) throw new GradleException('Preserve the previous client evidence before rerunning')
+        new File(root,'mods').mkdirs()
+        new File(root,'config').mkdirs()
+        new File(root,'options.txt').text='realmsNotifications:false\n'
+        copy { from probeJar; into new File(root,'mods') }
+        new File(root,'config/lootablebodies.cfg').text = 'options {\n B:local_texture=true\n}\n'
+        JavaExec run = tasks.getByName('runClient')
+        def options = minecraft.runs.getByName('client')
+        File previousDir = options.workingDir.get().asFile
+        File previousRunDir = run.workingDir
+        def previousProperties = new LinkedHashMap(run.systemProperties)
+        def previousClasspath = files(run.classpath)
+        String previousExecutable = run.executable
+        try {
+            options.workingDir.set(root)
+            run.workingDir(root)
+            run.systemProperty('lootablebodies.clientCheck','true')
+            run.systemProperty('log4j.configurationFile',file('src/integrationTest/resources/log4j2.xml').toURI())
+            run.executable = productionLauncher.get().executablePath.asFile.path
+            run.setClasspath(files(developmentOutput,run.classpath.filter { !sourceSets.main.output.files.contains(it) }))
+            run.exec()
+        } finally {
+            options.workingDir.set(previousDir)
+            run.workingDir(previousRunDir)
+            run.setSystemProperties(previousProperties)
+            run.setClasspath(previousClasspath)
+            run.executable = previousExecutable
+        }
+        if(!new File(root,'client.pass').isFile()) throw new GradleException('Client did not preserve/reopen/render the corpse GUI')
+        if(!fileTree(new File(root,'crash-reports')).isEmpty()) throw new GradleException('Client crash report')
+    }
+}
+tasks.register('exportRuntimeClasspath') {
+    group='verification'
+    doLast {
+        File output=layout.buildDirectory.file('runtime-classpath.json').get().asFile
+        output.parentFile.mkdirs()
+        output.text=groovy.json.JsonOutput.toJson(configurations.runtimeClasspath.files*.absolutePath)
+    }
+}
+
+def controlClasses = layout.buildDirectory.dir('control-test-mod/classes')
+tasks.register('compileForgeControl',JavaCompile) {
+    source fileTree('src/controlTest/java')
+    classpath=sourceSets.main.compileClasspath
+    destinationDirectory=controlClasses
+    options.compilerArgs.add('-proc:none')
+}
+def controlJar=tasks.register('forgeControlJar',Jar) {
+    dependsOn 'compileForgeControl'
+    from controlClasses
+    archiveFileName='forge-platform-control.jar'
+    destinationDirectory=layout.buildDirectory.dir('control-test-mod')
+}
+def packagedControl=renamer.classes(controlJar) {
+    map.from minecraft.dependency.toSrgFile
+    libraries.from(sourceSets.main.compileClasspath)
+    output=layout.buildDirectory.file('control-test-mod/forge-platform-control-reobf.jar')
+}
+tasks.register('preparePackagedForgeControl') { dependsOn packagedControl }
+tasks.register('forgeControlServer') {
+    group='verification'
+    dependsOn controlJar
+    dependsOn { def run=tasks.getByName('runServer'); run.taskDependencies.getDependencies(run) }
+    doLast {
+        File root=layout.buildDirectory.dir('forge-control-run').get().asFile
+        new File(root,'mods').mkdirs()
+        copy { from controlJar; into new File(root,'mods') }
+        new File(root,'eula.txt').text='eula=true\n'
+        new File(root,'server.properties').text='level-name=world\nlevel-type=FLAT\nserver-ip=127.0.0.1\nserver-port=0\nonline-mode=false\n'
+        ['ops','whitelist','banned-players','banned-ips'].each { new File(root,"${it}.json").text='[]\n' }
+        JavaExec run=tasks.getByName('runServer')
+        def options = minecraft.runs.getByName('server')
+        File previousDir = options.workingDir.get().asFile
+        File previousRunDir = run.workingDir
+        def previousProperties = new LinkedHashMap(run.systemProperties)
+        def previousClasspath = files(run.classpath)
+        try {
+            options.workingDir.set(root)
+            run.workingDir(root)
+            run.systemProperty('log4j.configurationFile',file('src/integrationTest/resources/log4j2.xml').toURI())
+            run.setClasspath(run.classpath.filter { !sourceSets.main.output.files.contains(it) && it != developmentOutput.get().asFile })
+            run.exec()
+        } finally {
+            options.workingDir.set(previousDir)
+            run.workingDir(previousRunDir)
+            run.setSystemProperties(previousProperties)
+            run.setClasspath(previousClasspath)
+        }
+        String text=new File(root,'logs/latest.log').text
+        if(!text.contains('FORGE_PLATFORM_CONTROL_PASS') || text.contains('lootablebodies@')) throw new GradleException('Invalid independent platform control')
+    }
+}
+
+// The intermediate writer runs with the checksum-locked released 1.11 jar.
+def transitionClasses=layout.buildDirectory.dir('transition-fixture/classes')
+tasks.register('compileTransitionFixture',JavaCompile) {
+    source fileTree('src/transitionFixture/java'),file('src/integrationTest/java/cyano/lootable/buildtest/FixtureItems.java')
+    classpath=files(sourceSets.main.output,sourceSets.main.compileClasspath)
+    destinationDirectory=transitionClasses
+    options.compilerArgs.add('-proc:none')
+}
+def transitionJar=tasks.register('transitionFixtureJar',Jar) {
+    dependsOn 'compileTransitionFixture'
+    from transitionClasses
+    archiveFileName='lootablebodies-111-transition.jar'
+    destinationDirectory=layout.buildDirectory.dir('transition-fixture')
+}
+def transitionRuntime=renamer.classes(transitionJar) {
+    map.from minecraft.dependency.toSrgFile
+    libraries.from(tasks.named('jar'),sourceSets.main.compileClasspath)
+    output=layout.buildDirectory.file('transition-fixture/lootablebodies-111-transition-reobf.jar')
+}
+tasks.named('prepareLegacyWorldFixtures') {dependsOn transitionRuntime}

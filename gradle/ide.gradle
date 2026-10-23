@@ -1,0 +1,111 @@
+eclipse {
+    jdt.javaRuntimeName = 'JavaSE-1.8'
+    classpath {
+        downloadSources = true
+        downloadJavadoc = true
+        file.whenMerged { model ->
+            model.entries.findAll { it.kind == 'src' && it.path == 'src/main/resources' }.each {
+                // Eclipse must not overwrite expanded metadata with raw templates.
+                it.path = 'build/resources/main'
+            }
+            Set<String> sourcePaths = new HashSet<>()
+            model.entries.removeAll { it.kind == 'src' && !sourcePaths.add(it.path) }
+        }
+    }
+    synchronizationTasks 'genEclipseRuns'
+}
+tasks.register('prepareEclipseResources') {
+    group = 'ide'
+    dependsOn 'processResources'
+    doLast { copy { from layout.buildDirectory.dir('resources/main'); into 'bin/main' } }
+}
+tasks.register('configureEclipseBuildship') {
+    group = 'ide'
+    dependsOn 'verifyJavaSetup'
+    doLast {
+        File target = file('.settings/org.eclipse.buildship.core.prefs')
+        Properties prefs = new Properties()
+        if (target.isFile()) target.withInputStream { prefs.load(it) }
+        ['eclipse.preferences.version': '1', 'connection.gradle.distribution': 'GRADLE_DISTRIBUTION(WRAPPER)',
+         'connection.gradle.user.home': gradle.gradleUserHomeDir.canonicalPath,
+         'connection.project.dir': '', 'gradle.user.home': gradle.gradleUserHomeDir.canonicalPath,
+         'override.workspace.settings': 'true', 'java.home': System.getProperty('java.home')
+        ].each { k, v -> prefs.setProperty(k, v) }
+        target.parentFile.mkdirs()
+        target.withOutputStream { prefs.store(it, 'Local Buildship settings') }
+        File localJavaSetup = file('gradle-local.properties')
+        Properties toolchains = new Properties()
+        if (localJavaSetup.isFile()) localJavaSetup.withInputStream { toolchains.load(it) }
+        toolchains.setProperty('lootablebodies.java8.home',
+                productionLauncher.get().metadata.installationPath.asFile.canonicalPath)
+        toolchains.setProperty('lootablebodies.mavenizer.java.home',
+                mavenizerLauncher.get().metadata.installationPath.asFile.canonicalPath)
+        localJavaSetup.withOutputStream { toolchains.store(it, 'Local production Java toolchain') }
+    }
+}
+tasks.register('isolateEclipseProductionRuns') {
+    group = 'ide'
+    dependsOn 'prepareEclipseResources', 'configureEclipseBuildship'
+    doLast {
+        ['runClient.launch', 'runServer.launch'].each { name ->
+            File launch = file(name)
+            if (!launch.isFile()) throw new GradleException("Generate ${name} with genEclipseRuns first")
+            String contents = launch.getText('UTF-8')
+            contents = contents.replace('/JavaSE-8', '/JavaSE-1.8')
+            contents = contents.replace('key="MC_VERSION" value="${MC_VERSION}"', 'key="MC_VERSION" value="1.12.2"')
+            contents = contents.replaceAll(/<booleanAttribute key="org.eclipse.jdt.launching.ATTR_EXCLUDE_TEST_CODE" value="[^"]*"\/>/, '')
+            contents = contents.replace('</launchConfiguration>',
+                    '  <booleanAttribute key="org.eclipse.jdt.launching.ATTR_EXCLUDE_TEST_CODE" value="true"/>\n</launchConfiguration>')
+            ['--cache', '--metadata', '--to-srg', '--to-obf'].each { option ->
+                int start = contents.indexOf(option + ' ')
+                if (start >= 0) {
+                    start += option.length() + 1
+                    int end = contents.indexOf(' --', start)
+                    if (end > start) {
+                        String value = contents.substring(start, end)
+                        if (value.find(/\s/) && !value.startsWith('&quot;'))
+                            contents = contents.substring(0, start) + '&quot;' + value + '&quot;' + contents.substring(end)
+                    }
+                }
+            }
+            launch.setText(contents.replace('\r\n', '\n'), 'UTF-8')
+        }
+    }
+}
+tasks.named('genEclipseRuns') { finalizedBy 'isolateEclipseProductionRuns' }
+tasks.register('verifyEclipseProductionClasspath') {
+    group = 'verification'
+    dependsOn 'genEclipseRuns', 'eclipse'
+    doLast {
+        String classpathXml = file('.classpath').text
+        if (!classpathXml.contains('path="build/resources/main"') || classpathXml.contains('path="src/main/resources"'))
+            throw new GradleException('Eclipse must use Gradle-processed resources')
+        def classpathModel = new groovy.xml.XmlSlurper().parseText(classpathXml)
+        if (classpathModel.classpathentry.findAll { it.@path.text() == 'build/resources/main' }.size() != 1)
+            throw new GradleException('Duplicate Eclipse production resource roots')
+        classpathModel.classpathentry.findAll { it.@path.text() =~ /(?i)(junit|opentest4j|apiguardian)/ }.each { entry ->
+            if (!entry.attributes.attribute.any { it.@name.text() == 'test' && it.@value.text() == 'true' })
+                throw new GradleException('Eclipse testing library is not marked test-only')
+        }
+        def metadata = new groovy.json.JsonSlurper().parse(file('bin/main/mcmod.info'))[0]
+        if (metadata.modid != project.mod_id || metadata.version != project.version.toString() || metadata.mcversion != project.minecraft_version)
+            throw new GradleException('Eclipse resources are not processed production resources')
+        ['runClient.launch', 'runServer.launch'].each { name ->
+            String xml = file(name).text.replace('\\', '/')
+            if (!xml.contains('ATTR_EXCLUDE_TEST_CODE" value="true"') ||
+                    xml =~ /(?i)(src\/test|bin\/test|junit-|integration-test|mockito|byte-buddy)/ ||
+                    !xml.contains('PROJECT_ATTR" value="LootableBodies"'))
+                throw new GradleException("${name} has the wrong project or exposes tests")
+            if (!xml.contains('key="MC_VERSION" value="1.12.2"'))
+                throw new GradleException('Eclipse Minecraft version is unresolved')
+            def launchModel = new groovy.xml.XmlSlurper().parseText(xml)
+            String directory = launchModel.stringAttribute.find {
+                it.@key.text() == 'org.eclipse.jdt.launching.WORKING_DIRECTORY'
+            }.@value.text()
+            if (file(directory).canonicalFile != file(providers.gradleProperty('gameRunDirectory').getOrElse('run')).canonicalFile)
+                throw new GradleException("${name} must use the production run directory, found ${directory}")
+            if (name == 'runServer.launch' && (!xml.contains('nogui') || xml.contains('--nogui')))
+                throw new GradleException('Legacy dedicated server needs bare nogui')
+        }
+    }
+}

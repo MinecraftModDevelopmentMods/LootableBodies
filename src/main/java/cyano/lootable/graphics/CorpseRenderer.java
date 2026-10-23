@@ -2,7 +2,6 @@ package cyano.lootable.graphics;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.minecraft.MinecraftProfileTexture;
-import com.mojang.authlib.minecraft.MinecraftProfileTexture.Type;
 import cyano.lootable.LootableBodies;
 import cyano.lootable.entities.EntityLootableBody;
 import net.minecraft.client.Minecraft;
@@ -82,20 +81,28 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 	}
 
 	public static ResourceLocation getSkin(GameProfile profile) {
+		ResourceLocation fallback = profile == null || profile.getId() == null
+				? DefaultPlayerSkin.getDefaultSkinLegacy() : DefaultPlayerSkin.getDefaultSkin(profile.getId());
+		if(profile == null || profile.getId() == null) return fallback;
+		try {
 		final Minecraft minecraft = Minecraft.getMinecraft();
-		final Map<Type, MinecraftProfileTexture> loadSkinFromCache = minecraft.getSkinManager().loadSkinFromCache(profile); // returned map may or may not be typed
+		final Map loadSkinFromCache = minecraft.getSkinManager().loadSkinFromCache(profile); // returned map may or may not be typed
 		if (loadSkinFromCache.containsKey(MinecraftProfileTexture.Type.SKIN)) {
 			ResourceLocation skin = minecraft.getSkinManager().loadSkin((MinecraftProfileTexture) loadSkinFromCache.get(MinecraftProfileTexture.Type.SKIN), MinecraftProfileTexture.Type.SKIN);
 			return skin;
 		} else {
-			return DefaultPlayerSkin.getDefaultSkin(profile.getId());
+			return fallback;
+		}
+		} catch(RuntimeException unavailable) {
+			// A service/cache failure must not abort renderModel and hide the body.
+			return fallback;
 		}
 	}
 
 
 	@Override
 	public void doRender(EntityLootableBody entity, double x, double y, double z, float yaw, float partialTick) {
-		if (net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.RenderLivingEvent.Pre<EntityLootableBody>(entity, this, partialTick, x, y, z)))
+		if (net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.RenderLivingEvent.Pre<EntityLootableBody>(entity, this, x, y, z)))
 			return;
 
 		this.setModel(entity.useThinArms());
@@ -175,7 +182,7 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 			this.renderName(entity, x, y, z);
 		}
 
-		net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.RenderLivingEvent.Post<EntityLootableBody>(entity, this, partialTick, x, y, z));
+		net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.RenderLivingEvent.Post<EntityLootableBody>(entity, this, x, y, z));
 
 		this.setModel(true);
 	}

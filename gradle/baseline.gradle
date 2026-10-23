@@ -1,0 +1,23 @@
+// A separate probe can exercise the historical jar without compiling the port.
+def baselineClasses=layout.buildDirectory.dir('baseline-test/classes')
+tasks.register('compileOriginal112Checks',JavaCompile) {
+    source fileTree('src/baselineTest/java'),
+        file('src/integrationTest/java/cyano/lootable/buildtest/UpgradeChecks.java'),
+        file('src/integrationTest/java/cyano/lootable/buildtest/TypedNbt.java')
+    classpath=files(sourceSets.main.output,sourceSets.main.compileClasspath)
+    destinationDirectory=baselineClasses
+    dependsOn 'classes'
+    options.compilerArgs.add('-proc:none')
+}
+def baselineJar=tasks.register('original112ChecksJar',Jar) {
+    dependsOn 'compileOriginal112Checks'
+    from baselineClasses
+    archiveFileName='lootablebodies-original-112-checks.jar'
+    destinationDirectory=layout.buildDirectory.dir('baseline-test')
+}
+def baselineRuntime=renamer.classes(baselineJar) {
+    map.from minecraft.dependency.toSrgFile
+    libraries.from(sourceSets.main.output,sourceSets.main.compileClasspath)
+    output=layout.buildDirectory.file('baseline-test/lootablebodies-original-112-checks-reobf.jar')
+}
+tasks.register('prepareOriginal112Checks') {dependsOn baselineRuntime}

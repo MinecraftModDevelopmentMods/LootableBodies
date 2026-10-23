@@ -1,23 +1,25 @@
-# DrCyano's Lootable Bodies
+# Lootable Bodies for Minecraft 1.12.2
 
-When a player dies, a corpse holds their dropped items. Right-click the corpse
-to recover them.
+Your items stay on a corpse when you die. Right-click the body to recover them.
 
-The maintained versions are:
+Use Forge 14.23.5.2859 and Java 8. Install `LootableBodies-2.4.3.112021.jar`
+in the client and server mods folders. Back up your world before upgrading.
 
-- [Minecraft 1.10.2](https://github.com/MinecraftModDevelopmentMods/LootableBodies/tree/1.10.2)
-- [Minecraft 1.11.2](https://github.com/MinecraftModDevelopmentMods/LootableBodies/tree/1.11.2-dev)
+Created by Cyanobacterium (DrCyano), maintained by SkyBlade1978.
+Licensed under LGPLv2.1; the original CC0 dedication is included in LICENSE-CC0.
 
-Each version's README covers installation, settings and saved-item recovery.
+Open Mods, select Lootable Bodies and click Config to change its settings.
+Appearance changes apply straight away on your client. World and server rules
+take effect after restarting Minecraft or the server.
 
-This default branch contains the older Minecraft 1.12.2 source. It has not
-received the maintained build and inventory updates. It requires Forge
-1.12.2-14.23.4.2705 or later.
+This version adds upgrade protection for existing 1.10.2, 1.11.2 and 1.12.2 corpses,
+including bodies in chunks you visit later. Keep the whole world backup,
+including its `data` folder. If preservation cannot finish safely, world loading
+stops with an explanation in the log. Items from missing mods are retained for
+recovery when those mods return.
 
-Download the file for your Minecraft version from
-[Releases](https://github.com/MinecraftModDevelopmentMods/LootableBodies/releases)
-and place it in the client and server `mods` folders after installing Forge.
-Keep a backup before changing an existing modpack or world.
+It cannot recover items an older build already lost. Downgrading an upgraded
+world is unsupported.
 
-Created by Cyanobacterium (DrCyano, also known as Synechocystis).
-Maintained by [SkyBlade1978](https://github.com/SkyBlade1978) and Minecraft Mod Development.
+The existing float-in-fluids and void-platform settings are also available under
+Config. Their defaults are unchanged.

@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: Complete version from gradle.properties, ending in 110021 or 111021.
+        description: Complete version from gradle.properties, ending in 110021, 111021 or 112021.
         required: true
         type: string
       curseforge_release_level:
@@ -48,10 +48,11 @@ jobs:
           set -euo pipefail
           [[ "$GITHUB_REPOSITORY" == 'MinecraftModDevelopmentMods/LootableBodies' ]]
           [[ "$GITHUB_REF" == 'refs/heads/master-1.12' ]]
-          [[ "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(110021|111021)$ ]]
+          [[ "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(110021|111021|112021)$ ]]
           case "$RELEASE_VERSION" in
             *.110021) minecraft_version=1.10.2; source_branch=1.10.2 ;;
             *.111021) minecraft_version=1.11.2; source_branch=1.11.2-dev ;;
+            *.112021) minecraft_version=1.12.2; source_branch=master-1.12 ;;
             *) exit 1 ;;
           esac
           echo "minecraft_version=$minecraft_version" >> "$GITHUB_OUTPUT"
@@ -77,7 +78,8 @@ jobs:
                         if line.strip() and not line.lstrip().startswith('#') and '=' in line)
           minecraft = os.environ['MINECRAFT_VERSION']
           targets = {'1.10.2': ('1.10.2', '12.18.3.2511', '110021'),
-                     '1.11.2': ('1.11.2-dev', '13.20.1.2588', '111021')}
+                     '1.11.2': ('1.11.2-dev', '13.20.1.2588', '111021'),
+                     '1.12.2': ('master-1.12', '14.23.5.2859', '112021')}
           branch, forge, suffix = targets[minecraft]
           if os.environ['SOURCE_BRANCH'] != branch:
               raise SystemExit('The selected branch does not match its Minecraft version')
@@ -96,18 +98,21 @@ jobs:
           repo = os.environ['GITHUB_REPOSITORY']
           checks = json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/commits/{sha}/check-runs?per_page=100'], text=True))['check_runs']
           required = {'Cold Forge bootstrap', 'Build, test, and audit', 'Analyze Java', 'Validation'}
-          if minecraft == '1.11.2':
-              required.update(origin + ' / ' + stamps
-                              for origin in ['original-110', 'released-110', 'original-111', 'recovery-110']
+          origins = ['original-110', 'released-110', 'original-111', 'recovery-110']
+          if minecraft == '1.12.2':
+              origins += ['released-111', 'original-112', 'recovery-111', 'via111-110']
+          if minecraft in ('1.11.2', '1.12.2'):
+              required.update(origin + ' / ' + stamps for origin in origins
                               for stamps in ['normal', 'stamps'])
           for name in required:
               matching = [check for check in checks if check['name'] == name]
               if not matching or max(matching, key=lambda c: c['id'])['conclusion'] != 'success':
                   raise SystemExit(f'The selected commit has no successful {name} check')
-          if minecraft == '1.11.2':
+          if minecraft in ('1.11.2', '1.12.2'):
+              target = '1.11' if minecraft == '1.11.2' else '1.12'
               audits = json.loads(subprocess.check_output(['gh', 'api',
-                  f'repos/{repo}/actions/workflows/artifact-audit-1.11.yml/runs?event=workflow_run&per_page=100'], text=True))['workflow_runs']
-              matching = [run for run in audits if run['display_title'] == f'Audit 1.11.2 artifacts from {sha}']
+                  f'repos/{repo}/actions/workflows/artifact-audit-{target}.yml/runs?event=workflow_run&per_page=100'], text=True))['workflow_runs']
+              matching = [run for run in audits if run['display_title'] == f'Audit {minecraft} artifacts from {sha}']
               if not matching or max(matching, key=lambda run: run['id'])['conclusion'] != 'success':
                   raise SystemExit('The selected commit has no successful independent artifact audit')
           release = subprocess.run(['gh', 'api', f'repos/{repo}/releases/tags/{version}'], capture_output=True, text=True)
