@@ -147,6 +147,6 @@ final class NamelessCorpseClientChecks {
             ScreenShotHelper.saveScreenshot(mc.gameDir,"name-english-inventory.png",mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
             new File(mc.gameDir,"client.pass").createNewFile();System.out.println("LOOTABLE_BODIES_NAME_TRANSLATION_PASS locales="+LOCALES.length);
             mc.player.closeScreen();FixtureConnections.disconnect(mc);stage=6;
-        } else if(stage==6 && mc.world==null && !mc.isIntegratedServerRunning()) {mc.shutdown();stage=7;}
+        } else if(stage==6 && FixtureConnections.stopped(mc)) {mc.shutdown();stage=7;}
     }
 }

@@ -87,7 +87,7 @@ final class ReportedIssueClientChecks {
             verifyClientOriginals(mc);shot(mc,"issue5-second-corpse.png");
             mc.player.closeScreen();schedule(mc,()->save(mc));next(12);
         } else if(stage==12 && done()) {quit(mc);next(13);
-        } else if(stage==13 && mc.world==null && !mc.isIntegratedServerRunning()) {
+        } else if(stage==13 && FixtureConnections.stopped(mc)) {
             mc.launchIntegratedServer("issue-fixture","Issue fixture",null);next(14);
         } else if(stage==14 && ready(mc) && frames>25) {
             schedule(mc,()->{verifyDisk(mc);verifyOriginals(body(mc));mark("first_disk_reload_complete_corpse_inventory");});next(15);
@@ -107,14 +107,14 @@ final class ReportedIssueClientChecks {
                 save(mc);mark("second_corpse_recovery_exact_counts_damage_and_nested_nbt");
             });next(18);
         } else if(stage==18 && done()) {quit(mc);next(19);
-        } else if(stage==19 && mc.world==null && !mc.isIntegratedServerRunning()) {
+        } else if(stage==19 && FixtureConnections.stopped(mc)) {
             mc.launchIntegratedServer("issue-fixture","Issue fixture",null);next(20);
         } else if(stage==20 && ready(mc) && frames>25) {
             schedule(mc,()->{verifyDisk(mc);mark("second_disk_reload_complete_player_and_corpse_inventory");});next(21);
         } else if(stage==21 && done()) {
             new File(mc.gameDir,"client.pass").createNewFile();
             System.out.println("LOOTABLE_BODIES_ISSUE5_CLIENT_PASS");quit(mc);next(22);
-        } else if(stage==22 && mc.world==null && !mc.isIntegratedServerRunning()) {mc.shutdown();next(23);}
+        } else if(stage==22 && FixtureConnections.stopped(mc)) {mc.shutdown();next(23);}
     }
     private EntityLootableBody die(EntityPlayerMP p,UUID skip) {
         Set<Entity> before=new HashSet<>(p.world.loadedEntityList);p.onKillCommand();

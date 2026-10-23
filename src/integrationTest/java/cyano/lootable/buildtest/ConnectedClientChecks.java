@@ -67,7 +67,7 @@ final class ConnectedClientChecks {
             verifyGui(mc); checkPlayer(mc.player.inventory,19);
             screenshot(mc,"connected-corpse-after-shift-recovery.png");
             quit(mc); next(7);
-        } else if(stage==7 && mc.world==null && !mc.isIntegratedServerRunning()) {
+        } else if(stage==7 && FixtureConnections.stopped(mc)) {
             mc.launchIntegratedServer("build-fixture","Build fixture",null); next(8);
         } else if(stage==8 && ready(mc) && frames>30) {
             schedule(mc,() -> {
@@ -98,7 +98,7 @@ final class ConnectedClientChecks {
             RuntimeChecks.require((mc.player.inventory.getItemStack()).isEmpty(),"Client cursor retained a duplicate");
             screenshot(mc,"connected-corpse-after-normal-recovery.png");
             quit(mc); next(13);
-        } else if(stage==13 && mc.world==null && !mc.isIntegratedServerRunning()) {
+        } else if(stage==13 && FixtureConnections.stopped(mc)) {
             mc.launchIntegratedServer("build-fixture","Build fixture",null); next(14);
         } else if(stage==14 && ready(mc) && frames>30) {
             schedule(mc,() -> {

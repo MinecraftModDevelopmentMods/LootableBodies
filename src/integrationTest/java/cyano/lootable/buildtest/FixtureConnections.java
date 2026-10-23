@@ -11,11 +11,16 @@ import net.minecraft.client.gui.GuiConnecting;
 
 /** Uses ordinary Forge connection setup; retries only a runner-confirmed pre-login encoding failure. */
 final class FixtureConnections {
+    private static Thread retiringServer;
     private FixtureConnections() {}
     static void disconnect(Minecraft mc) {
+        if(mc.getIntegratedServer()!=null)retiringServer=mc.getIntegratedServer().getServerThread();
         if(mc.player!=null)mc.player.closeScreen();
         if(mc.world!=null)mc.world.sendQuittingDisconnectingPacket();
         mc.loadWorld(null);mc.displayGuiScreen(new GuiMainMenu());
+    }
+    static boolean stopped(Minecraft mc) {
+        return ServerStopGate.ready(mc.world==null,mc.isIntegratedServerRunning(),retiringServer);
     }
     static boolean ready(String role) {
         return "A".equals(role)||new File(System.getProperty("lootablebodies.multiplayer.sync"),"client-A-joined").isFile();

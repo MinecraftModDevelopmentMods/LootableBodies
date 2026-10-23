@@ -57,7 +57,7 @@ final class ConfigClientChecks {
             screenshot(mc,"05-world-rules-disabled.png");click(root,1);CorpseConfigGui appearance=(CorpseConfigGui)mc.currentScreen;click(appearance,20);click(appearance,21);click(appearance,200);click(root,200);
             check(!LootableBodies.useLocalSkin && LootableBodies.displayNameTag,"appearance_changes_while_world_open");
             FixtureConnections.disconnect(mc);stage=5;
-        } else if(stage==5 && mc.world==null && !mc.isIntegratedServerRunning())finish(mc);
+        } else if(stage==5 && FixtureConnections.stopped(mc))finish(mc);
     }
     private void openMods(Minecraft mc)throws Exception {
         mods=new GuiModList(new GuiMainMenu());mc.displayGuiScreen(mods);List<?> list=(List<?>)get(mods,"mods");

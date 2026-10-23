@@ -85,7 +85,7 @@ public final class ClientChecks {
                 ScreenShotHelper.saveScreenshot(mc.gameDir,"corpse-gui-fresh.png",mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
                 mc.player.closeScreen(); stage=4;
                 FixtureConnections.disconnect(mc);
-            } else if(stage==4 && mc.world==null && !mc.isIntegratedServerRunning()) {
+            } else if(stage==4 && FixtureConnections.stopped(mc)) {
                 stage=5; mc.launchIntegratedServer("build-fixture","Build fixture",null);
             } else if(stage==5 && mc.player!=null && mc.world!=null && mc.getIntegratedServer()!=null) {
                 stage=6;
@@ -115,7 +115,7 @@ public final class ClientChecks {
                 }
                 System.out.println("LOOTABLE_BODIES_CLIENT_PASS");
                 stage=8; mc.player.closeScreen(); FixtureConnections.disconnect(mc);
-            } else if(stage==8 && mc.world==null && !mc.isIntegratedServerRunning()) {
+            } else if(stage==8 && FixtureConnections.stopped(mc)) {
                 stage=9; mc.shutdown();
             }
         } catch(Throwable error) { fail(error); }

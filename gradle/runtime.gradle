@@ -1,9 +1,11 @@
 // Build-only legacy runtime verification, separate from production classpaths.
 def probeClasses = layout.buildDirectory.dir('integration-test-mod/classes')
+sourceSets.test.java.srcDir 'src/testSupport/java'
 tasks.register('compileIntegrationTestMod', JavaCompile) {
     group = 'verification'
     dependsOn 'classes'
     source fileTree('src/integrationTest/java')
+    source fileTree('src/testSupport/java')
     classpath = files(sourceSets.main.output, sourceSets.main.compileClasspath)
     destinationDirectory = probeClasses
     options.compilerArgs.add('-proc:none')

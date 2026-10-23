@@ -37,7 +37,7 @@ final class NbtClientChecks {
             NbtWorldChecks.seed(p.getServerWorld(),bodyId,160,folder(mc),"graphical");
         });next(1);}
         else if(stage==1 && done() && frames>20){quit(mc);next(2);}
-        else if(stage==2 && mc.world==null && !mc.isIntegratedServerRunning()){mc.launchIntegratedServer("build-fixture","Build fixture",null);next(3);}
+        else if(stage==2 && FixtureConnections.stopped(mc)){mc.launchIntegratedServer("build-fixture","Build fixture",null);next(3);}
         else if(stage==3 && ready(mc) && frames>20){schedule(mc,()->player(mc).connection.setPlayerLocation(168.5,80,159.5,0,0));next(30);}
         else if(stage==30 && done() && frames>20){schedule(mc,()->{
             EntityLootableBody b=body(mc);for(int i=0;i<8;i++)b.baseTick();NbtWorldChecks.verify(b,false);
@@ -54,7 +54,7 @@ final class NbtClientChecks {
             mc.getIntegratedServer().getPlayerList().saveAllPlayerData();mc.getIntegratedServer().saveAllWorlds(false);mark(mc,"malformed_network_recovery_preserves_raw_records");
         });next(7);}
         else if(stage==7 && done()){checkPlayer(mc.player.inventory);quit(mc);next(8);}
-        else if(stage==8 && mc.world==null && !mc.isIntegratedServerRunning()){mc.launchIntegratedServer("build-fixture","Build fixture",null);next(9);}
+        else if(stage==8 && FixtureConnections.stopped(mc)){mc.launchIntegratedServer("build-fixture","Build fixture",null);next(9);}
         else if(stage==9 && ready(mc) && frames>20){schedule(mc,()->player(mc).connection.setPlayerLocation(168.5,80,159.5,0,0));next(90);}
         else if(stage==90 && done() && frames>20){schedule(mc,()->{
             body(mc).baseTick();RuntimeChecks.verifyExpected(folder(mc),"nbt-client-after",body(mc));
