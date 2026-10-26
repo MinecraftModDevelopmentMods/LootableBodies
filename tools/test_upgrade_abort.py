@@ -50,6 +50,38 @@ class UpgradeAbortFixtureTests(unittest.TestCase):
             stock=(Path(__file__).parent/'fixtures/forge28-server-default.toml').read_bytes();config.write_bytes(stock)
             self.assertEqual(['serverconfig/forge-server.toml'],allowed_platform_additions({}, {'serverconfig/forge-server.toml':'new'},world))
 
+    def test_new_stock_config_accepts_platform_order_and_format_only(self):
+        import tomllib
+        with tempfile.TemporaryDirectory() as directory:
+            world = Path(directory)
+            config = world / 'serverconfig/forge-server.toml'
+            config.parent.mkdir()
+            stock = tomllib.loads((Path(__file__).parent / 'fixtures/forge28-server-default.toml').read_text())['server']
+            lines = ['# Linux may write these entries in a different order', '[server]']
+            for name, value in reversed(list(stock.items())):
+                lines.append(name + ' = ' + (str(value).lower() if isinstance(value, bool) else str(value)))
+            config.write_text('\n'.join(lines) + '\n')
+            self.assertEqual(['serverconfig/forge-server.toml'], allowed_platform_additions(
+                {}, {'serverconfig/forge-server.toml': 'new'}, world))
+
+    def test_config_values_and_types_must_match_exactly(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as directory:
+            world = Path(directory)
+            config = world / 'serverconfig/forge-server.toml'
+            config.parent.mkdir()
+            stock = (Path(__file__).parent / 'fixtures/forge28-server-default.toml').read_bytes()
+            before = {'serverconfig/forge-server.toml': hashlib.sha256(stock).hexdigest().upper()}
+            after = {'serverconfig/forge-server.toml': 'changed'}
+            for old, new in [(b'clumpingThreshold = 64', b'clumpingThreshold = 65'),
+                             (b'clumpingThreshold = 64', b'clumpingThreshold = 64.0'),
+                             (b'fixAdvancementLoading = true', b'fixAdvancementLoading = 1'),
+                             (b'dimensionUnloadQueueDelay = 0', b'dimensionUnloadQueueDelay = false')]:
+                with self.subTest(replacement=new):
+                    config.write_bytes(stock.replace(old, new))
+                    self.assertEqual([], allowed_platform_additions({}, after, world))
+                    self.assertEqual([], allowed_platform_additions(before, after, world, stock))
+
     def test_only_proven_native_defaults_can_be_added_to_an_existing_config(self):
         import hashlib
         with tempfile.TemporaryDirectory() as directory:

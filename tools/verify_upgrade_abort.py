@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import tomllib
 from native_runtime import prepare_server as prepare, fingerprint, digest, FORGE
 from release_identity import MAIN_JAR
 
@@ -13,9 +14,21 @@ def source_files(world):
             if not name.startswith('data/lootablebodies-upgrade')}
 
 
+def same_typed_values(expected, actual):
+    if type(expected) is not type(actual):
+        return False
+    if isinstance(expected, dict):
+        return expected.keys() == actual.keys() and all(
+            same_typed_values(value, actual[name]) for name, value in expected.items())
+    if isinstance(expected, list):
+        return len(expected) == len(actual) and all(
+            same_typed_values(left, right) for left, right in zip(expected, actual))
+    return expected == actual
+
+
 def allowed_platform_additions(before, after, world, original_config=None):
     # Forge writes its stock server config before the about-to-start event.
-    # Only an exact, newly created default is allowed; existing config is data.
+    # Require every default value and its type; Forge's entry order varies by JVM.
     name = 'serverconfig/forge-server.toml'
     if name not in after:
         return []
@@ -27,16 +40,19 @@ def allowed_platform_additions(before, after, world, original_config=None):
         # The pinned Forge itself upgrades its own config before our preflight.
         # Require proof that every existing value survives and only its two new
         # target defaults are added. Original bytes remain in the sealed source.
-        import tomllib
         try:
             previous = tomllib.loads(original_config.decode('utf-8'))
             upgraded = tomllib.loads(actual.decode('utf-8'))
             previous['server'].setdefault('treatEmptyTagsAsAir', False)
             previous['server'].setdefault('fixAdvancementLoading', True)
-            return [name] if previous == upgraded else []
+            return [name] if same_typed_values(previous, upgraded) else []
         except (ValueError, KeyError, UnicodeError):
             return []
-    return [name] if actual.replace(b'\r\n', b'\n') == expected.replace(b'\r\n', b'\n') else []
+    try:
+        return [name] if same_typed_values(tomllib.loads(expected.decode('utf-8')),
+                                          tomllib.loads(actual.decode('utf-8'))) else []
+    except (ValueError, UnicodeError):
+        return []
 
 
 def inject_unsafe_journal(world, case):
