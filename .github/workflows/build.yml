@@ -170,6 +170,8 @@ jobs:
           PY
 
       - name: Verify two-player inventory, death and visibility
+        env:
+          JAVA_TOOL_OPTIONS: -Dlootablebodies.visibility.offsetFirstDeath=true
         run: |
           xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 tools/verify_multiplayer.py --java "$JAVA_HOME_8_X64/bin/java" --forge-home build/native-server-distribution --forge-client-home build/native-client-distribution --output build/packaged-multiplayer
           xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 tools/verify_visibility.py --java "$JAVA_HOME_8_X64/bin/java" --forge-home build/native-server-distribution --forge-client-home build/native-client-distribution --output build/packaged-visibility --mode visibility

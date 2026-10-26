@@ -54,10 +54,13 @@ public final class VisibilityChecks {
             RuntimeChecks.require(++ticks<14000,"Visibility server timeout phase="+phase);phaseTicks++;
             RuntimeChecks.require(!file("abort").exists(),"Visibility runner aborted");
             ServerPlayerEntity a=player("A"),b=player("B");
+            if(phase==4 && Boolean.getBoolean("lootablebodies.visibility.offsetFirstDeath"))
+                RuntimeChecks.require(first.isUsableByPlayer(a) && first.isUsableByPlayer(b),
+                    "Offset death fixture left a viewer outside corpse reach: first="+first.getPosition()+" A="+a.getPosition()+" B="+b.getPosition());
             if(phase==3 && a!=null && a.isAlive())
                 RuntimeChecks.require(Math.abs(a.posX-first.posX)<28 && Math.abs(a.posZ-first.posZ)<28 && Math.abs(a.posY-first.posY)<8,
                     "Visibility fixture respawned outside its corpse viewing area: "+a.getPosition()+" corpse="+first.getPosition());
-            if(phaseTicks%100==0 && phase!=12)System.out.println("VISIBILITY_SERVER_STATE phase="+phase+" A="+(a==null?null:a.getPosition())+" B="+(b==null?null:b.getPosition())+" corpse="+(second==null?null:second.getPosition())+" usableA="+(second!=null&&second.isUsableByPlayer(a))+" usableB="+(second!=null&&second.isUsableByPlayer(b)));
+            if(phaseTicks%100==0 && phase!=12)System.out.println("VISIBILITY_SERVER_STATE phase="+phase+" A="+(a==null?null:a.getPosition())+" B="+(b==null?null:b.getPosition())+" first="+(first==null?null:first.getPosition())+" firstUsableA="+(first!=null&&first.isUsableByPlayer(a))+" firstUsableB="+(first!=null&&first.isUsableByPlayer(b))+" corpse="+(second==null?null:second.getPosition())+" usableA="+(second!=null&&second.isUsableByPlayer(a))+" usableB="+(second!=null&&second.isUsableByPlayer(b)));
             if(phase==0 && resumed && a!=null && b!=null && both(0)) {
                 // Only this disposable tracking fixture moves the world spawn.
                 // The corpse chunk must be eligible to unload when both clients
@@ -78,11 +81,15 @@ public final class VisibilityChecks {
                 a.connection.setPlayerLocation(96.5,PLAYER_Y,96.5,0,0);b.connection.setPlayerLocation(98.5,PLAYER_Y,93.5,0,25);
                 a.inventory.mainInventory.set(9,RuntimeChecks.stack(410));a.container.detectAndSendChanges();phase(1);
             } else if(phase==1 && both(1)) {
+                // A real death offset exposes assumptions about the corpse's coordinates.
+                if(Boolean.getBoolean("lootablebodies.visibility.offsetFirstDeath"))
+                    a.connection.setPlayerLocation(96.5,PLAYER_Y,98.5,0,0);
                 before=new HashSet<>(FixtureApi.entities(world()));a.onKillCommand();first=newCorpse();saveId("first",first);phase(2);
             } else if(phase==2 && both(2)) {mark("both_clients_receive_actual_death_before_respawn");phase(3);
             } else if(phase==3 && both(3) && a!=null && a.isAlive()) {
                 RuntimeChecks.require(first.isAlive(),"Server lost corpse after respawn");
-                a.connection.setPlayerLocation(96.5,PLAYER_Y,93.5,0,25);phase(4);
+                a.connection.setPlayerLocation(first.posX,first.posY,first.posZ-2.5,0,25);
+                b.connection.setPlayerLocation(first.posX+1.5,first.posY,first.posZ-2.5,0,25);phase(4);
             } else if(phase==4 && both(4)) {
                 RuntimeChecks.require(a.openContainer instanceof cyano.lootable.graphics.CorpseContainer && b.openContainer instanceof cyano.lootable.graphics.CorpseContainer,"GUI ack without server access");
                 mark("both_clients_render_and_open_corpse_after_respawn");phase(5);
@@ -142,7 +149,17 @@ public final class VisibilityChecks {
     }
     private EntityLootableBody newCorpse(){for(Entity e:FixtureApi.entities(world()))if(e instanceof EntityLootableBody&&!before.contains(e))return (EntityLootableBody)e;throw new AssertionError("No server corpse for real death");}
     private void saveId(String name,EntityLootableBody b) throws Exception {Files.write(file(name+".uuid").toPath(),b.getUniqueID().toString().getBytes(StandardCharsets.UTF_8));}
-    private void phase(int n) throws Exception {phase=n;phaseTicks=0;File tmp=file("phase.tmp");Files.write(tmp.toPath(),Integer.toString(n).getBytes(StandardCharsets.UTF_8));Files.move(tmp.toPath(),file("phase").toPath(),StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);System.out.println("VISIBILITY_PHASE "+n);}
+    private void phase(int n) throws Exception {
+        phase=n;phaseTicks=0;File tmp=file("phase.tmp");
+        Files.write(tmp.toPath(),Integer.toString(n).getBytes(StandardCharsets.UTF_8));
+        // Windows readers can briefly hold this verifier IPC file without delete sharing.
+        // Keep atomic publication; every other I/O failure and a persistent lock still fail.
+        for(int attempt=0;;attempt++) {
+            try {Files.move(tmp.toPath(),file("phase").toPath(),StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);break;}
+            catch(AccessDeniedException busy) {if(attempt>=20)throw busy;Thread.sleep(5L);}
+        }
+        System.out.println("VISIBILITY_PHASE "+n);
+    }
     private void mark(String n) throws Exception {try(FileWriter out=new FileWriter(file("checks.txt"),true)){out.write("PASS "+n+"\n");}System.out.println("VISIBILITY_CHECK_PASS "+n);}
     static boolean has(EntityLootableBody b,int i){for(int s=0;s<48;s++)if(RuntimeChecks.sameStack(b.getStackInSlot(s),RuntimeChecks.stack(i)))return true;return false;}
     private static boolean playerHas(ServerPlayerEntity p,int i){int count=0;for(int s=0;s<p.inventory.getSizeInventory();s++)if(RuntimeChecks.sameStack(p.inventory.getStackInSlot(s),RuntimeChecks.stack(i)))count++;return count==1;}

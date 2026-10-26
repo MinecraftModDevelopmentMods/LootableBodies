@@ -71,7 +71,7 @@ final class VisibilityClientChecks {
                 EntityLootableBody b=body(mc,phase==16?"second":"first");if(b==null)return;
                 if(!(mc.currentScreen instanceof CorpseGUIContainer)) {
                     if(!rendered.contains(b.getUniqueID()))return;
-                    mc.playerController.interactWithEntity(mc.player,b,Hand.MAIN_HAND);return;
+                    if(frames%10==0)mc.playerController.interactWithEntity(mc.player,b,Hand.MAIN_HAND);return;
                 }
                 int index=phase==16?411:410;boolean found=false;
                 for(int slot=0;slot<48;slot++)if(RuntimeChecks.sameStack(mc.player.openContainer.getSlot(slot).getStack(),RuntimeChecks.stack(index)))found=true;
