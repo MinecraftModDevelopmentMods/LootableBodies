@@ -17,6 +17,28 @@ public final class ForgeControl {
             else {System.out.println("FORGE_PLATFORM_CONTROL_PASS");event.getServer().initiateShutdown(false);}
         }
     }
+    private int checkTicks,checkDeaths;
+    @SubscribeEvent public void deathTick(TickEvent.ServerTickEvent event) {
+        if(event.phase!=TickEvent.Phase.END || !Boolean.getBoolean("lootablebodies.control.deaths"))return;
+        net.minecraft.server.MinecraftServer server=net.minecraftforge.fml.server.ServerLifecycleHooks.getCurrentServer();
+        net.minecraft.entity.player.ServerPlayerEntity p=server.getPlayerList().getPlayerByUsername("ControlOnly");
+        if(p==null || !p.isAlive())return;
+        if(++checkTicks==1) {
+            p.setGameType(net.minecraft.world.GameType.SURVIVAL);
+            double x=checkDeaths%2==0?96.5:-.4,z=checkDeaths%2==0?96.5:-.4;
+            for(int a=-6;a<=6;a++)for(int b=-6;b<=6;b++)p.world.setBlockState(new net.minecraft.util.math.BlockPos(x+a,80,z+b),net.minecraft.block.Blocks.OBSIDIAN.getDefaultState());
+            p.setSpawnPoint(new net.minecraft.util.math.BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),true);
+            p.connection.setPlayerLocation(x,81,z,0,0);
+        }
+        if(checkTicks==50){
+            int px=(int)Math.floor(p.posX),pz=(int)Math.floor(p.posZ);
+            for(int ax=-6;ax<=6;ax++)for(int az=-6;az<=6;az++){
+                p.world.setBlockState(new net.minecraft.util.math.BlockPos(px+ax,77,pz+az),net.minecraft.block.Blocks.OBSIDIAN.getDefaultState());
+                p.world.removeBlock(new net.minecraft.util.math.BlockPos(px+ax,79,pz+az),false);
+                p.world.removeBlock(new net.minecraft.util.math.BlockPos(px+ax,80,pz+az),false);
+            }
+            p.onKillCommand();checkTicks=0;System.out.println("NATIVE_DEATH "+(++checkDeaths));}
+    }
     public static final class ClientControl {
         private int stage,ticks;
         @SubscribeEvent public void tick(TickEvent.ClientTickEvent event) {
@@ -37,7 +59,31 @@ public final class ForgeControl {
                 mc.world.sendQuittingDisconnectingPacket();mc.func_213254_o();stage=2;
             }else if(stage==2 && mc.world==null && !mc.isIntegratedServerRunning())finish(mc);
         }
-        private int connections,wait;
+        private int connections,wait,deathTicks,respawns;
+        private volatile boolean hold;
+        private boolean installed;
+        private io.netty.channel.ChannelHandlerContext delayContext;
+        private final java.util.List<Object[]> delayed=new java.util.ArrayList<>();
+        private void delayNativePackets(net.minecraft.client.Minecraft mc) {
+            if(!installed) {
+                installed=true;
+                mc.getConnection().getNetworkManager().channel().pipeline().addBefore("packet_handler","native_latency_control",new io.netty.channel.ChannelOutboundHandlerAdapter(){
+                    @Override public void handlerAdded(io.netty.channel.ChannelHandlerContext ctx){delayContext=ctx;}
+                    @Override public void write(io.netty.channel.ChannelHandlerContext ctx,Object message,io.netty.channel.ChannelPromise promise) throws Exception {
+                        if(hold || !delayed.isEmpty()){delayed.add(new Object[]{message,promise});return;}
+                        super.write(ctx,message,promise);
+                    }
+                });
+            }
+            boolean next=mc.currentScreen instanceof net.minecraft.client.gui.screen.DeathScreen && deathTicks<40;
+            boolean release=hold && !next;hold=next;
+            if(release)delayContext.executor().execute(()->{
+                if(hold)return;
+                System.out.println("NATIVE_FIFO_DELAY_RELEASE packets="+delayed.size());
+                for(Object[] pending:delayed)delayContext.write(pending[0],(io.netty.channel.ChannelPromise)pending[1]);
+                delayed.clear();delayContext.flush();
+            });
+        }
         private net.minecraft.client.network.ServerPinger pinger;
         private net.minecraft.client.multiplayer.ServerData destination;
         private void tcp(net.minecraft.client.Minecraft mc) {
@@ -67,6 +113,14 @@ public final class ForgeControl {
                 pinger.pingPendingNetworks();
                 if(destination.pingToServer>=0){pinger.clearPendingNetworks();mc.displayGuiScreen(new net.minecraft.client.gui.screen.ConnectingScreen(new net.minecraft.client.gui.screen.MainMenuScreen(),mc,destination));stage=1;wait=0;}
             }else if(stage==1 && mc.world!=null && mc.player!=null) {
+                if(Boolean.getBoolean("lootablebodies.control.deaths")) {
+                    delayNativePackets(mc);
+                    if(mc.currentScreen instanceof net.minecraft.client.gui.screen.DeathScreen) {
+                        if(++deathTicks==60){mc.player.respawnPlayer();System.out.println("NATIVE_RESPAWN "+(++respawns));}
+                    }else if(mc.player.isAlive())deathTicks=0;
+                    if(respawns>=8){finish(mc);return;}
+                    wait=0;return;
+                }
                 System.out.println("NATIVE_FORGE_TCP_JOIN "+(++connections));
                 mc.world.sendQuittingDisconnectingPacket();mc.func_213254_o();mc.displayGuiScreen(new net.minecraft.client.gui.screen.MainMenuScreen());stage=0;wait=0;
             }else if(stage==1 && mc.currentScreen instanceof net.minecraft.client.gui.screen.DisconnectedScreen) {

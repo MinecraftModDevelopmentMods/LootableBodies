@@ -6,6 +6,36 @@ from audit_runtime_logs import audit, FORGE_UPGRADE_RENAME
 
 
 class RuntimeLogAuditTests(unittest.TestCase):
+    def dead_player_movement(self):
+        return (Path(__file__).parent/'fixtures/forge28-dead-player-movement.txt').read_text()
+
+    def test_native_dead_player_movement_matches_the_complete_control_stack(self):
+        known=self.dead_player_movement()
+        for stack in (known,known.replace('func_213161_c(SourceFile:127)','func_213160_bf(SourceFile:103)').replace('MinecraftServer.java:681','MinecraftServer.java:680')):
+            with self.subTest(stack=stack):
+                self.assertEqual(1,self.check_log(stack,native=True)['known_forge28_dead_player_movement_failures'])
+        self.assertEqual(2,self.check_log(known+known,native=True)['known_forge28_dead_player_movement_failures'])
+
+    def test_native_dead_player_movement_requires_native_mode(self):
+        for options in ({},{'development':True},{'upgrade':True}):
+            with self.subTest(options=options),self.assertRaises(RuntimeError):
+                self.check_log(self.dead_player_movement(),**options)
+
+    def test_native_dead_player_movement_rejects_changed_or_additional_failures(self):
+        known=self.dead_player_movement()
+        variants=[known.replace('SourceFile:208','SourceFile:209'),
+            known.replace('CPlayerPacket$PositionPacket','CPlayerPacket$RotationPacket'),
+            known.replace('java.lang.NullPointerException: null','java.lang.IllegalStateException: null'),
+            known.replace('/FATAL]','/ERROR]'),known.replace('Server thread','Netty Server IO #1'),
+            known.replace('minecraft/ThreadTaskExecutor','minecraft/OtherExecutor'),
+            known+'\tat cyano.lootable.Other.hook(Other.java:12)\n',
+            known+'Caused by: java.lang.IllegalStateException: new failure\n',
+            known+'Suppressed: java.lang.IllegalStateException: new failure\n',
+            known.rsplit('\n\tat java.lang.Thread.run',1)[0]+'\n',
+            known+'[12:00:01] [Server thread/INFO] Next task\njava.lang.NullPointerException: null\n']
+        for changed in variants:
+            with self.subTest(changed=changed),self.assertRaises(RuntimeError):self.check_log(changed,native=True)
+
     def check_log(self, text, **options):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'runtime.log'

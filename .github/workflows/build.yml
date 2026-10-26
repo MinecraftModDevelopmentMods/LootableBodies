@@ -141,6 +141,9 @@ jobs:
           python3 tools/native_runtime.py --java "$JAVA_HOME_8_X64/bin/java" --output build/native-server-distribution
           python3 tools/native_runtime.py --java "$JAVA_HOME_8_X64/bin/java" --output build/native-client-distribution --client
 
+      - name: Verify the independent native respawn control
+        run: xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 tools/verify_native_respawn_control.py --java "$JAVA_HOME_8_X64/bin/java" --forge-home build/native-server-distribution --forge-client-home build/native-client-distribution --output build/native-respawn-control
+
       - name: Verify packaged servers and malformed inventory recovery
         run: |
           python3 tools/verify_packaged.py --java "$JAVA_HOME_8_X64/bin/java" --forge-home build/native-server-distribution --output build/packaged-runtime
@@ -187,7 +190,7 @@ jobs:
           xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 tools/verify_visibility.py --java "$JAVA_HOME_8_X64/bin/java" --forge-home build/native-server-distribution --forge-client-home build/native-client-distribution --output build/packaged-respawn-restart --mode respawn --cases 16 --source-server build/packaged-respawn-ordinary/server --simultaneous --counter-collision
 
       - name: Audit complete runtime logs
-        run: python3 tools/audit_runtime_logs.py --native --recursive build/integration-run build/upgrade-contract-run build/client-integration-run build/packaged-runtime build/packaged-nbt build/ordinary-development build/ordinary-packaged build/packaged-client-default build/packaged-client-config build/packaged-client-skin build/packaged-client-issues build/packaged-client-names build/packaged-multiplayer build/packaged-visibility build/packaged-visibility-restart build/packaged-respawn-ordinary build/packaged-respawn-simultaneous build/packaged-respawn-restart build/packaged-respawn-counter-collision
+        run: python3 tools/audit_runtime_logs.py --native --recursive build/native-respawn-control build/integration-run build/upgrade-contract-run build/client-integration-run build/packaged-runtime build/packaged-nbt build/ordinary-development build/ordinary-packaged build/packaged-client-default build/packaged-client-config build/packaged-client-skin build/packaged-client-issues build/packaged-client-names build/packaged-multiplayer build/packaged-visibility build/packaged-visibility-restart build/packaged-respawn-ordinary build/packaged-respawn-simultaneous build/packaged-respawn-restart build/packaged-respawn-counter-collision
 
       - name: Compare a second complete build
         run: |
@@ -205,12 +208,24 @@ jobs:
 
       - name: Require all declared reports and artifacts
         run: |
-          for path in build/libs/LootableBodies-2.4.5.114041.jar build/libs/LootableBodies-2.4.5.114041-sources.jar build/libs/LootableBodies-2.4.5.114041-javadoc.jar build/release/SHA256SUMS build/publications/mavenJava/pom-default.xml CHANGELOG.txt build/packaged-runtime/result.json build/packaged-nbt/result.json build/ordinary-development/result.json build/ordinary-packaged/result.json build/packaged-client-default/result.json build/packaged-client-config/result.json build/packaged-client-skin/result.json build/packaged-client-issues/result.json build/packaged-client-names/result.json build/packaged-multiplayer/result.json build/packaged-visibility/result.json build/packaged-visibility-restart/result.json build/packaged-respawn-ordinary/result.json build/packaged-respawn-simultaneous/result.json build/packaged-respawn-restart/result.json build/packaged-respawn-counter-collision/result.json build/release-contracts/result.json; do
+          for path in build/native-respawn-control/result.json build/libs/LootableBodies-2.4.5.114041.jar build/libs/LootableBodies-2.4.5.114041-sources.jar build/libs/LootableBodies-2.4.5.114041-javadoc.jar build/release/SHA256SUMS build/publications/mavenJava/pom-default.xml CHANGELOG.txt build/packaged-runtime/result.json build/packaged-nbt/result.json build/ordinary-development/result.json build/ordinary-packaged/result.json build/packaged-client-default/result.json build/packaged-client-config/result.json build/packaged-client-skin/result.json build/packaged-client-issues/result.json build/packaged-client-names/result.json build/packaged-multiplayer/result.json build/packaged-visibility/result.json build/packaged-visibility-restart/result.json build/packaged-respawn-ordinary/result.json build/packaged-respawn-simultaneous/result.json build/packaged-respawn-restart/result.json build/packaged-respawn-counter-collision/result.json build/release-contracts/result.json; do
             test -s "$path"
           done
           test -s build/test-results/test/TEST-cyano.lootable.contracts.NativeUpgradeBoundaryTest.xml
           test -s build/test-results/test/TEST-cyano.lootable.network.LoginReadGuardTest.xml
           test -s build/upgrade-contract-run/world/upgrade-contracts.pass
+
+      - name: Keep native control evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: Native-Forge-28-control-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            build/native-respawn-control/result.json
+            build/native-respawn-control/*.log
+            build/native-respawn-control/server/logs/*.log
+            build/native-respawn-control/client/logs/*.log
 
       - name: Upload audited local candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
