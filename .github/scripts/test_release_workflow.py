@@ -20,6 +20,9 @@ MATRIX112 = [origin + ' / ' + stamps for origin in
 MATRIX113 = MATRIX112 + [origin + ' / ' + stamps for origin in
              ['released-112', 'recovery-112', 'via112-110', 'via112-111']
              for stamps in ['normal', 'stamps']]
+MATRIX114 = MATRIX113 + [origin + ' / ' + stamps for origin in
+             ['released-113', 'recovery-113', 'via113-110', 'via113-111', 'via113-112']
+             for stamps in ['normal', 'stamps']]
 MATRIX = [origin + ' / ' + stamps for origin in
           ['original-110', 'released-110', 'original-111', 'recovery-110']
           for stamps in ['normal', 'stamps']]
@@ -53,7 +56,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
             '1.10.2': ('110021', '1.10.2', '12.18.3.2511'),
             '1.11.2': ('111021', '1.11.2-dev', '13.20.1.2588'),
             '1.12.2': ('112021', 'master-1.12', '14.23.5.2859'),
-            '1.13.2': ('113021', 'master-1.13.2', '25.0.223')}[minecraft]
+            '1.13.2': ('113021', 'master-1.13.2', '25.0.223'),
+            '1.14.4': ('114041', 'master-1.14.4', '28.2.26')}[minecraft]
         version = '2.4.2.' + suffix
         values = dict(minecraft_version=minecraft, forge_version=forge, loader_name='forge', loader_code='1',
             java_version='8', java_toolchain_version='8.0.502+7', gradle_java_version='17', mod_id='lootablebodies',
@@ -62,7 +66,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
         if mutation:
             values.update(mutation)
         checks = CORE + {'1.11.2': MATRIX, '1.12.2': MATRIX112,
-                         '1.13.2': MATRIX113 + ['Validate release workflow']}.get(minecraft, []) if names is None else names
+                         '1.13.2': MATRIX113 + ['Validate release workflow'],
+                         '1.14.4': MATRIX114 + ['Validate release workflow']}.get(minecraft, []) if names is None else names
         def command(args, **options):
             if args[0] == 'git':
                 return SHA + '\n'
@@ -85,8 +90,13 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 patch('subprocess.check_output', side_effect=command), patch('subprocess.run', side_effect=existing):
             exec(compile(code, 'release-preflight', 'exec'), {})
 
+    def test_future_115_candidate_cannot_dispatch_publication(self):
+        code, values = self.select('2.4.6.115021')
+        self.assertNotEqual(0, code)
+        self.assertEqual({}, values)
+
     def test_routes_all_supported_versions(self):
-        for suffix, minecraft, branch in [('110021', '1.10.2', '1.10.2'), ('111021', '1.11.2', '1.11.2-dev'), ('112021', '1.12.2', 'master-1.12'), ('113021', '1.13.2', 'master-1.13.2')]:
+        for suffix, minecraft, branch in [('110021', '1.10.2', '1.10.2'), ('111021', '1.11.2', '1.11.2-dev'), ('112021', '1.12.2', 'master-1.12'), ('113021', '1.13.2', 'master-1.13.2'), ('114041', '1.14.4', 'master-1.14.4')]:
             with self.subTest(minecraft=minecraft):
                 status, values = self.select('2.4.2.' + suffix)
                 self.assertEqual(0, status)
@@ -94,7 +104,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 self.assertEqual(branch, values['source_branch'])
 
     def test_invalid_versions_are_rejected(self):
-        for version in ['2.4.2', '2.4.2.114041', '02.4.2.111021', '2.4.2.111021;exit 0']:
+        for version in ['2.4.2', '2.4.2.114021', '02.4.2.111021', '2.4.2.111021;exit 0']:
             with self.subTest(version=version):
                 self.assertNotEqual(0, self.select(version)[0])
 
@@ -140,6 +150,23 @@ class ReleaseWorkflowTests(unittest.TestCase):
         # GitHub registers this shared workflow under its default-branch name,
         # even when the run uses another Minecraft branch's workflow contents.
         audit = WORKFLOW.with_name('artifact-audit-1.13.yml').read_text(encoding='utf-8')
+        event_names = audit.split('workflows: [', 1)[1].split(']', 1)[0].split(',')
+        self.assertIn('LootableBodies 1.12 CI', [name.strip() for name in event_names])
+
+    def test_114_requires_every_upgrade_case_and_workflow_validation(self):
+        self.validate('1.14.4')
+        required = MATRIX114 + ['Validate release workflow']
+        self.assertEqual(34, len(MATRIX114))
+        for missing in required:
+            with self.subTest(missing=missing), self.assertRaises(SystemExit):
+                self.validate('1.14.4', names=CORE + [name for name in required if name != missing])
+
+    def test_114_requires_an_independent_audit_of_its_exact_artifact(self):
+        with self.assertRaises(SystemExit):
+            self.validate('1.14.4', audit_success=False)
+
+    def test_114_audit_receives_the_registered_shared_ci_completion(self):
+        audit = WORKFLOW.with_name('artifact-audit-1.14.yml').read_text(encoding='utf-8')
         event_names = audit.split('workflows: [', 1)[1].split(']', 1)[0].split(',')
         self.assertIn('LootableBodies 1.12 CI', [name.strip() for name in event_names])
 
