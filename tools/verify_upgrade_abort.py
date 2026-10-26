@@ -97,12 +97,25 @@ def main():
                                            'LOOTABLE_BODIES_RUNTIME_PASS', 'Done (']):
             raise RuntimeError('World loading continued after unsafe preservation')
         after = source_files(world)
+        raw_after = dict(after)
         platform_additions = allowed_platform_additions(before, after, world, original_config)
         for name in platform_additions:
             if name in before: after[name] = before[name]
             else: del after[name]
-        if before != after or fingerprint(source) != sealed:
-            raise RuntimeError('A failed preflight changed source world data')
+        source_after = fingerprint(source)
+        comparison = {
+            'before': before, 'after': raw_after,
+            'allowed_stock_config_files': platform_additions,
+            'world_added': sorted(set(after) - set(before)),
+            'world_removed': sorted(set(before) - set(after)),
+            'world_changed': sorted(name for name in set(before) & set(after) if before[name] != after[name]),
+            'sealed_source_unchanged': source_after == sealed,
+            'original_forge_config': original_config.decode('utf-8', errors='replace') if original_config else None,
+            'resulting_forge_config': config.read_text(encoding='utf-8') if config.is_file() else None,
+        }
+        (home / 'comparison.json').write_text(json.dumps(comparison, indent=2) + '\n', encoding='utf-8')
+        if before != after or source_after != sealed:
+            raise RuntimeError('A failed preflight changed source world data: ' + str(home / 'comparison.json'))
         report['cases'][case] = {'exit': result.returncode, 'source_unchanged': True,
                                  'world_data_unchanged': True, 'world_loading_started': False,
                                  'stock_forge_config_created': [name for name in platform_additions if name not in before],

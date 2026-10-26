@@ -97,3 +97,5 @@ jobs:
             build/reports/**
             build/migration-*/**/*.log
             build/migration-*/**/crash-reports/**
+            build/migration-abort/**/comparison.json
+            build/native-server-distribution/**/*.log
