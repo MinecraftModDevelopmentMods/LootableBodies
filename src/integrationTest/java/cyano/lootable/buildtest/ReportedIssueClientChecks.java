@@ -33,6 +33,7 @@ import net.minecraft.world.*;
 final class ReportedIssueClientChecks {
     private interface Action {void run() throws Exception;}
     private int stage,frames,active;
+    private boolean distantViewerObserved,approachPending;
     private Future<?> pending;
     private UUID firstId,secondId;
     private File report;
@@ -91,11 +92,23 @@ final class ReportedIssueClientChecks {
                 verifyOriginals(second);equal(second.getStackInSlot(4),RuntimeChecks.stack(301),"Second selected main hand");
                 RuntimeChecks.require(p.inventory.write(new ListNBT()).size()==0,"Second death duplicated player inventory");
                 if(Boolean.getBoolean("lootablebodies.issueClient.offsetViewer"))
-                    p.connection.setPlayerLocation(48.5,4,32.5,0,0);
+                    p.connection.setPlayerLocation(64.5,4,64.5,0,0);
                 else p.connection.setPlayerLocation(32.5,80,.5,0,0);
                 mark("second_death_without_inventory_resync_preserves_original_shovel_and_all_tags");
             });next(10);
-        } else if(stage==10 && done() && open(mc,secondId)) {next(11);
+        } else if(stage==10 && done()) {
+            if(Boolean.getBoolean("lootablebodies.issueClient.offsetViewer") && !distantViewerObserved) {
+                if(frames<40)return;
+                boolean present=false;
+                for(Entity e:FixtureApi.entities(mc.world))if(e.getUniqueID().equals(secondId))present=true;
+                if(present) {
+                    RuntimeChecks.require(frames<200,"Distant viewer did not leave corpse tracking range");
+                    return;
+                }
+                distantViewerObserved=true;
+                System.out.println("ISSUE5_DISTANT_VIEWER_CONFIRMED corpse="+secondId);
+            }
+            if(open(mc,secondId))next(11);
         } else if(stage==11 && gui(mc) && frames>20) {
             verifyClientOriginals(mc);shot(mc,"issue5-second-corpse.png");
             mc.player.closeScreen();schedule(mc,()->save(mc));next(12);
@@ -163,14 +176,16 @@ final class ReportedIssueClientChecks {
     private static boolean gui(Minecraft mc){return mc.currentScreen instanceof CorpseGUIContainer;}
     private boolean open(Minecraft mc,UUID id) throws Exception {
         // Sending an interaction does not mean the server has opened its GUI.
-        if(gui(mc))return true;
+        if(gui(mc)){approachPending=false;return true;}
         if(frames%10!=0)return false;
-        for(Entity e:FixtureApi.entities(mc.world))if(e instanceof EntityLootableBody && e.getUniqueID().equals(id)){
-            if(mc.player.getDistanceSq(e)>9) {
-                if(pending!=null && !done())return false;
-                schedule(mc,()->{
-                    ServerPlayerEntity p=player(mc);
-                    EntityLootableBody corpse=RuntimeChecks.find(p.getServerWorld(),id);
+        if(!approachPending) {
+            // A distant client legitimately has no entity to approach yet.
+            // Resolve the fixture's UUID on the server, move the viewer back
+            // into range, then wait for normal tracking and interaction.
+            schedule(mc,()->{
+                ServerPlayerEntity p=player(mc);
+                EntityLootableBody corpse=RuntimeChecks.find(p.getServerWorld(),id);
+                if(p.getDistanceSq(corpse)>9) {
                     double x=corpse.posX,z=corpse.posZ-2;
                     int y=net.minecraft.util.math.MathHelper.floor(corpse.posY);
                     // A respawn can leave the viewer far from the original
@@ -181,9 +196,14 @@ final class ReportedIssueClientChecks {
                     p.setMotion(0,0,0);
                     p.connection.setPlayerLocation(x,y,z,0,0);
                     System.out.println("ISSUE5_VIEWER_APPROACH corpse="+id);
-                });
-                return false;
-            }
+                }
+            });
+            approachPending=true;
+            return false;
+        }
+        if(!done())return false;
+        approachPending=false;
+        for(Entity e:FixtureApi.entities(mc.world))if(e instanceof EntityLootableBody && e.getUniqueID().equals(id) && mc.player.getDistanceSq(e)<=9){
             System.out.println("ISSUE5_GUI_OPEN_REQUEST corpse="+id+" distance_sq="+mc.player.getDistanceSq(e));
             mc.playerController.interactWithEntity(mc.player,e,Hand.MAIN_HAND);
             break;

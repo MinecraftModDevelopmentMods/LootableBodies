@@ -170,6 +170,7 @@ jobs:
           log = Path('build/packaged-client-rejected-interaction/client.log').read_text()
           assert log.count('CORPSE_GUI_FIRST_INTERACTION_REJECTED_CONTROL') == 1
           assert 'ISSUE5_VIEWER_APPROACH corpse=' in log
+          assert 'ISSUE5_DISTANT_VIEWER_CONFIRMED corpse=' in log
           assert 'LOOTABLE_BODIES_ISSUE5_CLIENT_PASS' in log
           PY
 
