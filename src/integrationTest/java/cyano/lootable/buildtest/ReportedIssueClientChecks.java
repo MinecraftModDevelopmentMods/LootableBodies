@@ -159,7 +159,17 @@ final class ReportedIssueClientChecks {
     private static void equal(ItemStack a,ItemStack b,String reason){RuntimeChecks.require(RuntimeChecks.sameStack(a == null ? ItemStack.EMPTY : a,b == null ? ItemStack.EMPTY : b),reason);}
     private static boolean ready(Minecraft mc){return mc.world!=null && mc.player!=null && mc.getIntegratedServer()!=null;}
     private static boolean gui(Minecraft mc){return mc.currentScreen instanceof CorpseGUIContainer;}
-    private static boolean open(Minecraft mc,UUID id){for(Entity e:FixtureApi.entities(mc.world))if(e instanceof EntityLootableBody && e.getUniqueID().equals(id)){mc.playerController.interactWithEntity(mc.player,e,Hand.MAIN_HAND);return true;}return false;}
+    private boolean open(Minecraft mc,UUID id){
+        // Sending an interaction does not mean the server has opened its GUI.
+        if(gui(mc))return true;
+        if(frames%10!=0)return false;
+        for(Entity e:FixtureApi.entities(mc.world))if(e instanceof EntityLootableBody && e.getUniqueID().equals(id)){
+            System.out.println("ISSUE5_GUI_OPEN_REQUEST corpse="+id+" distance_sq="+mc.player.getDistanceSq(e));
+            mc.playerController.interactWithEntity(mc.player,e,Hand.MAIN_HAND);
+            break;
+        }
+        return false;
+    }
     private void schedule(Minecraft mc,Action a){pending=mc.getIntegratedServer().runAsync(()->{try{a.run();}catch(Exception e){throw new RuntimeException(e);}});}
     private boolean done() throws Exception {if(!pending.isDone())return false;pending.get();return true;}
     private void next(int n){stage=n;frames=0;System.out.println("ISSUE5_CLIENT_STAGE "+n);}

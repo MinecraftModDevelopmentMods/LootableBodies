@@ -157,6 +157,18 @@ jobs:
             xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 tools/verify_packaged_client.py --java "$JAVA_HOME_8_X64/bin/java" --forge-client-home build/native-client-distribution --output "build/packaged-client-$mode" --mode "$mode"
           done
 
+      - name: Verify recovery after a rejected first interaction
+        env:
+          JAVA_TOOL_OPTIONS: -Dlootablebodies.rejectFirstCorpseOpen=true
+        run: |
+          xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 tools/verify_packaged_client.py --java "$JAVA_HOME_8_X64/bin/java" --forge-client-home build/native-client-distribution --output build/packaged-client-rejected-interaction --mode issues
+          python3 - <<'PY'
+          from pathlib import Path
+          log = Path('build/packaged-client-rejected-interaction/client.log').read_text()
+          assert log.count('CORPSE_GUI_FIRST_INTERACTION_REJECTED_CONTROL') == 1
+          assert 'LOOTABLE_BODIES_ISSUE5_CLIENT_PASS' in log
+          PY
+
       - name: Verify two-player inventory, death and visibility
         run: |
           xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 tools/verify_multiplayer.py --java "$JAVA_HOME_8_X64/bin/java" --forge-home build/native-server-distribution --forge-client-home build/native-client-distribution --output build/packaged-multiplayer
@@ -227,3 +239,7 @@ jobs:
             build/**/screenshots/*.png
             build/**/result.json
             build/**/*checks.txt
+            build/packaged-client-issues/config/*.toml
+            build/packaged-client-issues/saves/issue-fixture/level.dat
+            build/packaged-client-issues/saves/issue-fixture/region/*.mca
+            build/packaged-client-issues/saves/issue-fixture/playerdata/*.dat

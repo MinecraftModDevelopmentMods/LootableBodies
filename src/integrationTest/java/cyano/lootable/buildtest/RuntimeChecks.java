@@ -38,6 +38,7 @@ public final class RuntimeChecks {
     static final UUID DEATH = UUID.fromString("00000000-0000-4000-8000-000000000103");
     public static volatile Throwable failure;
     private static boolean defaultsChecked;
+    private boolean rejectedFirstCorpseOpen;
     public RuntimeChecks() {
         MultiplayerChecks.registerChannel();
         net.minecraftforge.eventbus.api.IEventBus bus=net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus();
@@ -46,6 +47,14 @@ public final class RuntimeChecks {
         net.minecraftforge.fml.DistExecutor.runWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,()->()->{
             new ClientChecks().register();new MultiplayerClientChecks().register();new VisibilityClientChecks().register();new RespawnPacketClientChecks().register();
         });
+    }
+    @SubscribeEvent public void rejectFirstCorpseOpen(net.minecraftforge.event.entity.player.PlayerInteractEvent.EntityInteract event) {
+        if(Boolean.getBoolean("lootablebodies.rejectFirstCorpseOpen") && !rejectedFirstCorpseOpen
+                && !event.getWorld().isRemote && event.getTarget() instanceof EntityLootableBody) {
+            rejectedFirstCorpseOpen=true;
+            event.setCanceled(true);
+            System.out.println("CORPSE_GUI_FIRST_INTERACTION_REJECTED_CONTROL");
+        }
     }
     @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.LOWEST) public void fixtureAdmission(net.minecraftforge.event.entity.EntityJoinWorldEvent event) {
         if(Boolean.getBoolean("lootablebodies.assertFixtureAdmission") && event.getEntity() instanceof EntityLootableBody && !event.getWorld().isRemote && !event.getEntity().addedToChunk) {
