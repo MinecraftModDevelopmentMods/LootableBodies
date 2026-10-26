@@ -50,11 +50,11 @@ def native_control_line(line):
         return True
     clock=r'\[(?:\d{2}[A-Za-z]{3}\d{4} )?\d{2}:\d{2}:\d{2}(?:\.\d{3})?\] '
     arguments=r'\[(?:minecraft/ArgumentTypes|net\.minecraft\.command\.arguments\.ArgumentTypes)/?\]: '
-    if re.fullmatch(clock+r'\[Netty Server IO #[0-9]+/ERROR\] '+arguments+
+    if re.fullmatch(clock+r'\[Netty(?: Epoll)? Server IO #[0-9]+/ERROR\] '+arguments+
                     r'Could not serialize net\.minecraftforge\.server\.command\.(?P<argument>ModIdArgument|EnumArgument)@[0-9a-f]{1,8} '
                     r'\(class net\.minecraftforge\.server\.command\.(?P=argument)\) - will not be sent to client!',line):
         return True
-    if re.fullmatch(clock+r'\[Netty Client IO #[0-9]+/ERROR\] '+arguments+r'Could not deserialize minecraft:',line):
+    if re.fullmatch(clock+r'\[Netty(?: Epoll)? Client IO #[0-9]+/ERROR\] '+arguments+r'Could not deserialize minecraft:',line):
         return True
     header=r'\[(?:\d{2}[A-Za-z]{3}\d{4} )?\d{2}:\d{2}:\d{2}(?:\.\d{3})?\] \[[^]\r\n]+/FATAL\] '
     return bool(re.fullmatch(header+r'(?:'

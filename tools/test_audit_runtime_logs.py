@@ -113,12 +113,17 @@ class RuntimeLogAuditTests(unittest.TestCase):
             '[16:19:28.111] [Netty Server IO #2/ERROR] [net.minecraft.command.arguments.ArgumentTypes/]: Could not serialize net.minecraftforge.server.command.EnumArgument@d8352c6 (class net.minecraftforge.server.command.EnumArgument) - will not be sent to client!',
             '[16:19:28] [Netty Client IO #1/ERROR] [net.minecraft.command.arguments.ArgumentTypes]: Could not deserialize minecraft:',
             '[16:19:30] [Server thread/ERROR] [ne.mi.fm.ne.si.IndexedMessageCodec/SIMPLENET]: Received empty payload on channel fml:handshake']
+        lines += [line.replace('Netty Server', 'Netty Epoll Server').replace('Netty Client', 'Netty Epoll Client')
+                  for line in lines if 'Netty' in line]
         for line in lines:
             with self.subTest(line=line):
                 self.check_log(line+'\n',native=True)
                 with self.assertRaises(RuntimeError):self.check_log(line+'\n')
                 for changed in [line+' extra failure',line.replace('ModIdArgument','OtherArgument').replace('EnumArgument','OtherArgument').replace('deserialize minecraft:','deserialize other:').replace('fml:handshake','other:channel')]:
                     with self.assertRaises(RuntimeError):self.check_log(changed+'\n',native=True)
+                if 'Netty Epoll' in line:
+                    with self.assertRaises(RuntimeError):
+                        self.check_log(line.replace('Netty Epoll', 'Netty Unknown')+'\n',native=True)
 
     def forge14_control(self):
         return (Path(__file__).parent / 'fixtures/forge14-bootstrap-diagnostics.txt').read_text(encoding='utf-8')
