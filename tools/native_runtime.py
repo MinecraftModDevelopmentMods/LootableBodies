@@ -229,7 +229,8 @@ def prepare_client(home, candidate=None, probe=None):
             if not artifact.is_file():
                 raise FileNotFoundError(artifact)
             shutil.copy2(artifact, home / 'mods' / artifact.name)
-    (home / 'options.txt').write_text('realmsNotifications:false\npauseOnLostFocus:false\nrenderDistance:4\nmaxFps:30\n', encoding='utf-8')
+    # These owned clients exercise graphics and inventory, not audio playback.
+    (home / 'options.txt').write_text('realmsNotifications:false\npauseOnLostFocus:false\nrenderDistance:4\nmaxFps:30\nsoundCategory_master:0.0\n', encoding='utf-8')
 
 
 def client_command(java, home, runtime, assets, *, username='LootableTest', extra=()):

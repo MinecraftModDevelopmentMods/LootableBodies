@@ -182,7 +182,7 @@ tasks.register('clientIntegrationTest') {
         if(root.exists()) throw new GradleException('Preserve the previous client evidence before rerunning')
         new File(root,'mods').mkdirs()
         new File(root,'config').mkdirs()
-        new File(root,'options.txt').text='realmsNotifications:false\n'
+        new File(root,'options.txt').text='realmsNotifications:false\nsoundCategory_master:0.0\n'
         copy { from probeJar; into new File(root,'mods') }
         new File(root,'config/lootablebodies.cfg').text = tasks.getByName('runClient').systemProperties['lootablebodies.configUiCheck']=='true' ? '' : 'options {\n B:local_texture=true\n}\n'
         if(providers.gradleProperty('clientIntegrationConfiguration').isPresent()) {
