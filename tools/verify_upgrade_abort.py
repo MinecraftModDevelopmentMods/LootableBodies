@@ -13,14 +13,29 @@ def source_files(world):
             if not name.startswith('data/lootablebodies-upgrade')}
 
 
-def allowed_platform_additions(before, after, world):
+def allowed_platform_additions(before, after, world, original_config=None):
     # Forge writes its stock server config before the about-to-start event.
     # Only an exact, newly created default is allowed; existing config is data.
     name = 'serverconfig/forge-server.toml'
-    if name in before or name not in after:
+    if name not in after:
         return []
-    expected = (Path(__file__).parent / 'fixtures/forge25-server-default.toml').read_bytes()
+    expected = (Path(__file__).parent / 'fixtures/forge28-server-default.toml').read_bytes()
     actual = (world / name).read_bytes()
+    if name in before:
+        if original_config is None or before[name] != __import__('hashlib').sha256(original_config).hexdigest().upper():
+            return []
+        # The pinned Forge itself upgrades its own config before our preflight.
+        # Require proof that every existing value survives and only its two new
+        # target defaults are added. Original bytes remain in the sealed source.
+        import tomllib
+        try:
+            previous = tomllib.loads(original_config.decode('utf-8'))
+            upgraded = tomllib.loads(actual.decode('utf-8'))
+            previous['server'].setdefault('treatEmptyTagsAsAir', False)
+            previous['server'].setdefault('fixAdvancementLoading', True)
+            return [name] if previous == upgraded else []
+        except (ValueError, KeyError, UnicodeError):
+            return []
     return [name] if actual.replace(b'\r\n', b'\n') == expected.replace(b'\r\n', b'\n') else []
 
 
@@ -68,6 +83,8 @@ def main():
         world = home / 'world'
         inject_unsafe_journal(world, case)
         before = source_files(world)
+        config = world/'serverconfig/forge-server.toml'
+        original_config = config.read_bytes() if config.is_file() else None
         log = home / 'abort.log'
         with log.open('w', encoding='utf-8') as output:
             result = subprocess.run([str(args.java.resolve()), '-Xmx1G', '-jar',
@@ -80,14 +97,16 @@ def main():
                                            'LOOTABLE_BODIES_RUNTIME_PASS', 'Done (']):
             raise RuntimeError('World loading continued after unsafe preservation')
         after = source_files(world)
-        platform_additions = allowed_platform_additions(before, after, world)
+        platform_additions = allowed_platform_additions(before, after, world, original_config)
         for name in platform_additions:
-            del after[name]
+            if name in before: after[name] = before[name]
+            else: del after[name]
         if before != after or fingerprint(source) != sealed:
             raise RuntimeError('A failed preflight changed source world data')
         report['cases'][case] = {'exit': result.returncode, 'source_unchanged': True,
                                  'world_data_unchanged': True, 'world_loading_started': False,
-                                 'stock_forge_config_created': platform_additions}
+                                 'stock_forge_config_created': [name for name in platform_additions if name not in before],
+                                 'stock_forge_config_updated': [name for name in platform_additions if name in before]}
         print('UPGRADE_ABORT_PASS', case, flush=True)
     (root / 'result.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
 

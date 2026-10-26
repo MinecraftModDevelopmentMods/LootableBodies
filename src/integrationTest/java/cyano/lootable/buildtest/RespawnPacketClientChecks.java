@@ -1,4 +1,9 @@
 package cyano.lootable.buildtest;
+import net.minecraft.client.gui.screen.MainMenuScreen;
+import net.minecraft.client.gui.screen.DeathScreen;
+import net.minecraft.inventory.container.Container;
+import net.minecraft.entity.boss.dragon.phase.Phase;
+import net.minecraft.util.text.StringTextComponent;
 
 import cyano.lootable.entities.EntityLootableBody;
 import cyano.lootable.graphics.CorpseGUIContainer;
@@ -10,16 +15,19 @@ import java.nio.file.Files;
 import java.util.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.*;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.widget.button.Button;
+import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.entity.Entity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.*;
 import net.minecraft.server.management.PlayerProfileCache;
-import net.minecraft.tileentity.TileEntitySkull;
+import net.minecraft.tileentity.SkullTileEntity;
 import net.minecraft.world.World;
 import net.minecraftforge.common.MinecraftForge;
 
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
+import net.minecraftforge.event.TickEvent;
 
 /** Respawns on the death notification, without waiting for a corpse spawn. */
 final class RespawnPacketClientChecks {
@@ -36,13 +44,21 @@ final class RespawnPacketClientChecks {
     @SubscribeEvent public void key(net.minecraftforge.client.event.GuiScreenEvent.KeyboardKeyPressedEvent.Pre e){e.setCanceled(true);}
     private void respawn(Minecraft mc) {
         if((!role.equals("A")&&!Boolean.getBoolean("lootablebodies.respawn.simultaneous"))||mc.player==null)return;
-        if(mc.currentScreen instanceof GuiGameOver) {
+        if(mc.currentScreen instanceof DeathScreen) {
             int kind=index%8,delay=kind==1?1:kind==2?20:kind==3?60:0;
             if(!requested&&deathTicks>=delay){
                 if(Boolean.getBoolean("lootablebodies.respawn.counterCollision")&&kind==2) {
                     if(phase!=2)return;
-                    try {net.minecraftforge.fml.common.ObfuscationReflectionHelper.setPrivateValue(Entity.class,null,entityId,"field_70152_a");}
-                    catch(Exception error){throw new RuntimeException(error);}
+                    try {
+                        java.lang.reflect.Field counter=null;
+                        for(java.lang.reflect.Field field:Entity.class.getDeclaredFields())
+                            if(java.lang.reflect.Modifier.isStatic(field.getModifiers())&&field.getType()==java.util.concurrent.atomic.AtomicInteger.class) {
+                                RuntimeChecks.require(counter==null,"Ambiguous native entity counter");counter=field;
+                            }
+                        RuntimeChecks.require(counter!=null,"Missing native entity counter");counter.setAccessible(true);
+                        // Native 1.14 increments before assigning the new entity ID.
+                        ((java.util.concurrent.atomic.AtomicInteger)counter.get(null)).set(entityId-1);
+                    } catch(ReflectiveOperationException error){throw new RuntimeException(error);}
                     observe(mc,"SEEDED_CLIENT_COUNTER_COLLISION next_id="+entityId);
                 }
                 requested=true;mc.player.respawnPlayer();observe(mc,"REQUEST_RESPAWN without_corpse_barrier delay="+delay);
@@ -54,9 +70,9 @@ final class RespawnPacketClientChecks {
         if(e.phase==TickEvent.Phase.START) {
             if(mc.world!=null&&mc.world!=profileWorld) {
                 profileWorld=mc.world;
-                // Packet tests use cached synthetic profiles, never real accounts or
+                // IPacket tests use cached synthetic profiles, never real accounts or
                 // live profile-service availability. The local_texture default stays false.
-                TileEntitySkull.setProfileCache(new PlayerProfileCache(null,new File(mc.gameDir,"fixture-usercache.json")) {
+                SkullTileEntity.setProfileCache(new PlayerProfileCache(null,new File(mc.gameDir,"fixture-usercache.json")) {
                     @Override public GameProfile getGameProfileForUsername(String name) {
                         RuntimeChecks.require(name.matches("Container[AB]"),"Unexpected packet fixture profile");
                         UUID id=UUID.nameUUIDFromBytes(("OfflinePlayer:"+name).getBytes(StandardCharsets.UTF_8));
@@ -77,16 +93,16 @@ final class RespawnPacketClientChecks {
             if(nextIndex!=index||nextPhase!=phase){index=nextIndex;phase=nextPhase;frames=0;guiFrames=0;System.out.println("RESPAWN_CLIENT_PHASE "+role+" "+index+" "+phase);}
             uuid=state[2].equals("none")?null:UUID.fromString(state[2]);entityId=Integer.parseInt(state[3]);frames++;
             if(FixtureConnections.retry(mc,role))connecting=false;
-            if(!connecting&&FixtureConnections.ready(role)&&mc.currentScreen instanceof GuiMainMenu) {
-                connecting=true;mc.gameSettings.pauseOnLostFocus=false;mc.gameSettings.limitFramerate=30;mc.gameSettings.renderDistanceChunks=4;
+            if(!connecting&&FixtureConnections.ready(role)&&mc.currentScreen instanceof MainMenuScreen) {
+                connecting=true;mc.gameSettings.pauseOnLostFocus=false;mc.gameSettings.framerateLimit=30;mc.gameSettings.renderDistanceChunks=4;
                 FixtureConnections.connect(mc);
             }
             if(mc.world==null||mc.player==null)return;
             if(!traced) {
                 traced=true;observations=new File(mc.gameDir,"main-packet-observations.txt");
-                RespawnPacketTrace.install(mc.getConnection().getNetworkManager(),new File(mc.gameDir,"client-packets.txt"),packet->mc.addScheduledTask(()->{observe(mc,"AFTER "+packet);respawn(mc);}));
+                RespawnPacketTrace.install(mc.getConnection().getNetworkManager(),new File(mc.gameDir,"client-packets.txt"),packet->mc.runAsync(()->{observe(mc,"AFTER "+packet);respawn(mc);}));
             }
-            if(mc.currentScreen instanceof GuiGameOver)deathTicks++;
+            if(mc.currentScreen instanceof DeathScreen)deathTicks++;
             respawn(mc);
             if(frames%100==0)observe(mc,"TICK phase="+phase+" frame="+frames);
             RuntimeChecks.require(frames<450,"Client corpse missing case="+index+" phase="+phase+" role="+role);
@@ -99,12 +115,12 @@ final class RespawnPacketClientChecks {
                 File expected=RespawnPacketChecks.file("expected-"+index+"-"+role+".txt");if(!expected.isFile())return;
                 for(String line:Files.readAllLines(expected.toPath(),StandardCharsets.UTF_8)) {
                     String[] pair=line.split(" ");Entity tracked=mc.world.getEntityByID(Integer.parseInt(pair[0]));
-                    if(!(tracked instanceof EntityLootableBody)||!tracked.getUniqueID().equals(UUID.fromString(pair[1]))||tracked.removed||!mc.world.loadedEntityList.contains(tracked))return;
+                    if(!(tracked instanceof EntityLootableBody)||!tracked.getUniqueID().equals(UUID.fromString(pair[1]))||tracked.removed||!FixtureApi.entities(mc.world).contains(tracked))return;
                 }
                 Entity entity=mc.world.getEntityByID(entityId);
-                if(!(entity instanceof EntityLootableBody)||!entity.getUniqueID().equals(uuid)||!mc.world.loadedEntityList.contains(entity)||entity.removed)return;
+                if(!(entity instanceof EntityLootableBody)||!entity.getUniqueID().equals(uuid)||!FixtureApi.entities(mc.world).contains(entity)||entity.removed)return;
                 if(role.equals("A")) {
-                    if(!(mc.currentScreen instanceof CorpseGUIContainer)){mc.playerController.interactWithEntity(mc.player,entity,EnumHand.MAIN_HAND);return;}
+                    if(!(mc.currentScreen instanceof CorpseGUIContainer)){mc.playerController.interactWithEntity(mc.player,entity,Hand.MAIN_HAND);return;}
                     boolean found=false;for(int slot=0;slot<48;slot++)if(RuntimeChecks.sameStack(mc.player.openContainer.getSlot(slot).getStack(),RuntimeChecks.stack(520+index)))found=true;
                     if(!found||++guiFrames<10)return;
                 }
@@ -117,7 +133,7 @@ final class RespawnPacketClientChecks {
                 // Close the transport before clearing the world. The next main
                 // loop drains already queued destroy packets against that world;
                 // clearing it here races vanilla 1.11's unguarded packet handler.
-                mc.getConnection().getNetworkManager().closeChannel(new net.minecraft.util.text.TextComponentString("Disposable check complete"));
+                mc.getConnection().getNetworkManager().closeChannel(new net.minecraft.util.text.StringTextComponent("Disposable check complete"));
                 finished=true;
             }
         } catch(Throwable failure){failure.printStackTrace();try{Files.write(RespawnPacketChecks.file(role+".failure").toPath(),failure.toString().getBytes(StandardCharsets.UTF_8));}catch(IOException ignored){}finished=true;mc.shutdown();}
@@ -125,7 +141,7 @@ final class RespawnPacketClientChecks {
     private void ack(String key) throws Exception {completed.add(key);Files.write(RespawnPacketChecks.file(role+".case-"+key).toPath(),new byte[]{1});}
     private synchronized void observe(Minecraft mc,String event) {
         try(FileWriter out=new FileWriter(observations,true)) {
-            StringBuilder bodies=new StringBuilder();if(mc.world!=null)for(Entity ent:mc.world.loadedEntityList)if(ent instanceof EntityLootableBody)bodies.append(ent.getEntityId()).append(':').append(ent.getUniqueID()).append(':').append(ent.removed).append(',');
+            StringBuilder bodies=new StringBuilder();if(mc.world!=null)for(Entity ent:FixtureApi.entities(mc.world))if(ent instanceof EntityLootableBody)bodies.append(ent.getEntityId()).append(':').append(ent.getUniqueID()).append(':').append(ent.removed).append(',');
             Entity mapped=mc.world==null?null:mc.world.getEntityByID(entityId);
             out.write(System.nanoTime()+" case="+index+" phase="+phase+" "+event+" world="+(mc.world==null?"none":mc.world.dimension.getType().getId())+" player="+(mc.player==null?"none":mc.player.getEntityId())+" mapped="+(mapped==null?null:mapped.getUniqueID())+" loaded="+bodies+"\n");
         } catch(IOException error){throw new RuntimeException(error);}

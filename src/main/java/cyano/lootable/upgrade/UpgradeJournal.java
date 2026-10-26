@@ -18,7 +18,7 @@ public final class UpgradeJournal {
     private static final Pattern REGION=Pattern.compile("r\\.(-?[0-9]+)\\.(-?[0-9]+)\\.mca");
     private final Path world, directory, snapshots, chunks;
     private final Map<UUID,Path> active=new HashMap<>();
-    private NBTTagCompound worldContext=new NBTTagCompound();
+    private CompoundNBT worldContext=new CompoundNBT();
 
     private UpgradeJournal(Path world) throws IOException {
         this.world=world.toRealPath();
@@ -33,7 +33,7 @@ public final class UpgradeJournal {
         UpgradeJournal journal=new UpgradeJournal(world);
         journal.inspect();
         for(Path original:journal.active.values()) {
-            NBTTagCompound corpse=journal.readSnapshot(original).getCompound("Entity");
+            CompoundNBT corpse=journal.readSnapshot(original).getCompound("Entity");
             if(corpse.contains(UpgradePreservation.VERSION,3) && corpse.getInt(UpgradePreservation.VERSION)>UpgradePreservation.DATA_VERSION)
                 throw new IOException("This world contains a newer Lootable Bodies corpse format; originals have been preserved");
         }
@@ -41,39 +41,39 @@ public final class UpgradeJournal {
     }
 
     public int size() { return active.size(); }
-    NBTTagCompound worldVersions(){return worldContext.copy();}
+    CompoundNBT worldVersions(){return worldContext.copy();}
 
     /** Only an entity already present in this chunk may consume its original. */
-    public NBTTagCompound originalFor(UUID id,int chunkX,int chunkZ) throws IOException {
+    public CompoundNBT originalFor(UUID id,int chunkX,int chunkZ) throws IOException {
         Path path=active.get(id);
         if(path==null) return null;
-        NBTTagCompound original=readSnapshot(path);
+        CompoundNBT original=readSnapshot(path);
         return original.getInt("ChunkX")==chunkX && original.getInt("ChunkZ")==chunkZ ? original : null;
     }
 
-    NBTTagCompound originalFor(UUID id) throws IOException {
+    CompoundNBT originalFor(UUID id) throws IOException {
         Path path=active.get(id);
         return path==null ? null : readSnapshot(path);
     }
 
-    static boolean corpse(NBTTagCompound entity) {
+    static boolean corpse(CompoundNBT entity) {
         String id=entity.getString("id");
         return id.equals("lootablebodies:corpse") || id.equals("lootablebodies.Corpse");
     }
 
     static final class LocatedCorpse {
-        final NBTTagCompound entity;final int root;final int[] passengers;
-        LocatedCorpse(NBTTagCompound entity,int root,int[] passengers){this.entity=entity;this.root=root;this.passengers=passengers;}
+        final CompoundNBT entity;final int root;final int[] passengers;
+        LocatedCorpse(CompoundNBT entity,int root,int[] passengers){this.entity=entity;this.root=root;this.passengers=passengers;}
     }
-    static List<LocatedCorpse> corpses(NBTTagList roots) {
+    static List<LocatedCorpse> corpses(ListNBT roots) {
         List<LocatedCorpse> result=new ArrayList<>();
         for(int root=0;root<roots.size();root++)collect(roots.getCompound(root),root,new int[0],result);
         return result;
     }
-    private static void collect(NBTTagCompound entity,int root,int[] path,List<LocatedCorpse> result) {
+    private static void collect(CompoundNBT entity,int root,int[] path,List<LocatedCorpse> result) {
         if(path.length>512)throw new IllegalArgumentException("Corpse passenger tree is too deep");
         if(corpse(entity))result.add(new LocatedCorpse(entity,root,path));
-        NBTTagList passengers=entity.getList("Passengers",10);
+        ListNBT passengers=entity.getList("Passengers",10);
         for(int i=0;i<passengers.size();i++){int[] nested=Arrays.copyOf(path,path.length+1);nested[path.length]=i;collect(passengers.getCompound(i),root,nested,result);}
     }
 
@@ -99,23 +99,23 @@ public final class UpgradeJournal {
         try(DirectoryStream<Path> files=Files.newDirectoryStream(snapshots,"*.nbt")) {
             for(Path path:files) readSnapshot(path);
         }
-        Map<String,NBTTagCompound> previous=readIndex();
-        NBTTagCompound worldVersions=readWorldVersions();worldContext=worldVersions.copy();
-        NBTTagList updated=new NBTTagList();
+        Map<String,CompoundNBT> previous=readIndex();
+        CompoundNBT worldVersions=readWorldVersions();worldContext=worldVersions.copy();
+        ListNBT updated=new ListNBT();
         for(Path region:regions) {
             String relative=world.relativize(region).toString().replace('\\','/');
             String hash=fileDigest(region);
-            NBTTagCompound record=previous.get(relative);
+            CompoundNBT record=previous.get(relative);
             if(record==null || !hash.equals(record.getString("Digest")))
                 record=scanRegion(region,relative,hash,worldVersions,record);
             else record=record.copy();
-            NBTTagList originals=record.getList("Snapshots",8);
+            ListNBT originals=record.getList("Snapshots",8);
             for(int i=0;i<originals.size();i++) {
                 Path path=snapshotPath(originals.getString(i));
-                NBTTagCompound original=readSnapshot(path);
+                CompoundNBT original=readSnapshot(path);
                 if(!relative.equals(original.getString("Region")) || !hash.equals(original.getString("RegionDigest")))
                     throw new IOException("Recovery index does not match its source region");
-                NBTTagCompound entity=original.getCompound("Entity");
+                CompoundNBT entity=original.getCompound("Entity");
                 UUID uuid=uuid(entity);
                 if(active.put(uuid,path)!=null) throw new IOException("Duplicate corpse UUID across saved chunks: "+uuid);
             }
@@ -123,35 +123,35 @@ public final class UpgradeJournal {
             if(!hash.equals(fileDigest(region))) throw new IOException("Region changed during corpse preservation: "+relative);
             updated.add(record);
         }
-        NBTTagCompound index=new NBTTagCompound();index.setInt("Format",FORMAT);index.setTag("Regions",updated);
+        CompoundNBT index=new CompoundNBT();index.putInt("Format",FORMAT);index.put("Regions",updated);
         byte[] payload=compressed(index);
-        NBTTagCompound envelope=new NBTTagCompound();envelope.setInt("Format",FORMAT);
-        envelope.setString("Digest",digest(payload));envelope.setByteArray("Payload",payload);
+        CompoundNBT envelope=new CompoundNBT();envelope.putInt("Format",FORMAT);
+        envelope.putString("Digest",digest(payload));envelope.putByteArray("Payload",payload);
         atomic(directory.resolve("index.nbt"),compressed(envelope),true);
     }
 
-    private Map<String,NBTTagCompound> readIndex() throws IOException {
-        Map<String,NBTTagCompound> records=new HashMap<>();
+    private Map<String,CompoundNBT> readIndex() throws IOException {
+        Map<String,CompoundNBT> records=new HashMap<>();
         Path index=directory.resolve("index.nbt");
         if(!Files.exists(index)) return records;
-        NBTTagCompound envelope=readCompressed(index);
+        CompoundNBT envelope=readCompressed(index);
         byte[] payload=envelope.getByteArray("Payload");
         if(!envelope.contains("Format",3) || envelope.getInt("Format")!=FORMAT
                 || !envelope.contains("Digest",8) || !envelope.contains("Payload",7)
                 || !digest(payload).equals(envelope.getString("Digest")))
             throw new IOException("Lootable Bodies upgrade index checksum mismatch");
-        NBTTagCompound nbt;
+        CompoundNBT nbt;
         try(DataInputStream input=new DataInputStream(new GZIPInputStream(new ByteArrayInputStream(payload)))) {
             nbt=CompressedStreamTools.read(input,new NBTSizeTracker(MAX_NBT));
         }
-        if(!nbt.contains("Format",3) || nbt.getInt("Format")!=FORMAT || !compoundList(nbt.getTag("Regions")))
+        if(!nbt.contains("Format",3) || nbt.getInt("Format")!=FORMAT || !compoundList(nbt.get("Regions")))
             throw new IOException("Invalid Lootable Bodies upgrade index");
-        NBTTagList regions=nbt.getList("Regions",10);
+        ListNBT regions=nbt.getList("Regions",10);
         for(int i=0;i<regions.size();i++) {
-            NBTTagCompound record=regions.getCompound(i);
+            CompoundNBT record=regions.getCompound(i);
             if(!record.contains("Path",8) || !record.contains("Digest",8) || !record.getString("Digest").matches("[a-f0-9]{64}")
-                    || !(record.getTag("Snapshots") instanceof NBTTagList)) throw new IOException("Invalid recovery region record");
-            NBTTagList list=(NBTTagList)record.getTag("Snapshots");
+                    || !(record.get("Snapshots") instanceof ListNBT)) throw new IOException("Invalid recovery region record");
+            ListNBT list=(ListNBT)record.get("Snapshots");
             if(list.size()>0 && list.getTagType()!=8) throw new IOException("Invalid recovery snapshot list");
             if(records.put(record.getString("Path"),record)!=null) throw new IOException("Duplicate recovery region record");
             for(int j=0;j<list.size();j++) readSnapshot(snapshotPath(list.getString(j)));
@@ -159,23 +159,23 @@ public final class UpgradeJournal {
         return records;
     }
 
-    private NBTTagCompound scanRegion(Path file,String relative,String hash,NBTTagCompound worldVersions,NBTTagCompound previous) throws IOException {
+    private CompoundNBT scanRegion(Path file,String relative,String hash,CompoundNBT worldVersions,CompoundNBT previous) throws IOException {
         Matcher name=REGION.matcher(file.getFileName().toString());
         if(!name.matches()) throw new IOException("Invalid region name");
         long rx=Long.parseLong(name.group(1)),rz=Long.parseLong(name.group(2));
         if(rx<Integer.MIN_VALUE/32 || rx>Integer.MAX_VALUE/32 || rz<Integer.MIN_VALUE/32 || rz>Integer.MAX_VALUE/32)
             throw new IOException("Region coordinates out of range");
-        NBTTagList preserved=new NBTTagList();
-        Map<Long,NBTTagCompound> prior=new HashMap<>();
-        Map<String,NBTTagCompound> priorLevels=new HashMap<>();
+        ListNBT preserved=new ListNBT();
+        Map<Long,CompoundNBT> prior=new HashMap<>();
+        Map<String,CompoundNBT> priorLevels=new HashMap<>();
         Map<Long,Boolean> matchingChunks=new HashMap<>();
         if(previous!=null) {
-            NBTTagList originals=previous.getList("Snapshots",8);
+            ListNBT originals=previous.getList("Snapshots",8);
             for(int i=0;i<originals.size();i++) {
-                NBTTagCompound original=readSnapshot(snapshotPath(originals.getString(i))),versions=original.getCompound("SourceVersions");
+                CompoundNBT original=readSnapshot(snapshotPath(originals.getString(i))),versions=original.getCompound("SourceVersions");
                 if(versions.getBoolean("Ambiguous"))continue;
                 long key=chunkKey(original.getInt("ChunkX"),original.getInt("ChunkZ"));
-                NBTTagCompound selected=prior.get(key);
+                CompoundNBT selected=prior.get(key);
                 if(selected==null || UpgradePreservation.chunkSourceVersion(versions)>UpgradePreservation.chunkSourceVersion(selected.getCompound("SourceVersions")))prior.put(key,original);
             }
         }
@@ -195,32 +195,32 @@ public final class UpgradeJournal {
                 InputStream stream=compression==1 ? new GZIPInputStream(new ByteArrayInputStream(payload)) :
                         compression==2 ? new InflaterInputStream(new ByteArrayInputStream(payload)) : null;
                 if(stream==null) throw new IOException("Unknown chunk compression: "+relative);
-                NBTTagCompound chunk;
+                CompoundNBT chunk;
                 try(DataInputStream nbt=new DataInputStream(stream)) { chunk=CompressedStreamTools.read(nbt,new NBTSizeTracker(MAX_NBT)); }
                 catch(RuntimeException damaged) { throw new IOException("Unreadable chunk in "+relative,damaged); }
                 if(!chunk.contains("Level",10)) throw new IOException("Missing chunk Level: "+relative);
-                NBTTagCompound level=chunk.getCompound("Level");int x=(int)rx*32+(i%32),z=(int)rz*32+(i/32);
+                CompoundNBT level=chunk.getCompound("Level");int x=(int)rx*32+(i%32),z=(int)rz*32+(i/32);
                 if(!level.contains("xPos",3) || !level.contains("zPos",3) || level.getInt("xPos")!=x || level.getInt("zPos")!=z)
                     throw new IOException("Chunk coordinate mismatch in "+relative);
-                if(!level.hasKey("Entities")) continue;
-                if(!compoundList(level.getTag("Entities"))) throw new IOException("Unreadable entity list in "+relative);
-                NBTTagList entities=level.getList("Entities",10);
+                if(!level.contains("Entities")) continue;
+                if(!compoundList(level.get("Entities"))) throw new IOException("Unreadable entity list in "+relative);
+                ListNBT entities=level.getList("Entities",10);
                 String originalChunk=digest(payload);
                 for(LocatedCorpse located:corpses(entities)) {
-                    NBTTagCompound entity=located.entity;int e=located.root;
+                    CompoundNBT entity=located.entity;int e=located.root;
                     uuid(entity); // An ambiguous identity cannot safely select a backup.
-                    NBTTagCompound snapshot=new NBTTagCompound();snapshot.setInt("Format",FORMAT);snapshot.setString("Region",relative);snapshot.setString("RegionDigest",hash);
+                    CompoundNBT snapshot=new CompoundNBT();snapshot.putInt("Format",FORMAT);snapshot.putString("Region",relative);snapshot.putString("RegionDigest",hash);
                     Path chunkFile=chunks.resolve(originalChunk+".bin");
                     if(!Files.exists(chunkFile)) atomic(chunkFile,payload,false);
                     else if(!Arrays.equals(payload,Files.readAllBytes(chunkFile))) throw new IOException("Original chunk checksum collision");
-                    snapshot.setString("OriginalChunk",originalChunk);snapshot.setByte("OriginalCompression",(byte)compression);snapshot.setInt("EntityIndex",e);
-                    if(located.passengers.length>0)snapshot.setIntArray("PassengerPath",located.passengers);
-                    snapshot.setString("Dimension",world.relativize(file.getParent().getParent()).toString().replace('\\','/'));
-                    snapshot.setInt("ChunkX",x);snapshot.setInt("ChunkZ",z);snapshot.setTag("Entity",entity.copy());
-                    NBTTagCompound versions=sourceVersions(chunk,worldVersions,entity),priorSnapshot=prior.get(chunkKey(x,z));
+                    snapshot.putString("OriginalChunk",originalChunk);snapshot.putByte("OriginalCompression",(byte)compression);snapshot.putInt("EntityIndex",e);
+                    if(located.passengers.length>0)snapshot.putIntArray("PassengerPath",located.passengers);
+                    snapshot.putString("Dimension",world.relativize(file.getParent().getParent()).toString().replace('\\','/'));
+                    snapshot.putInt("ChunkX",x);snapshot.putInt("ChunkZ",z);snapshot.put("Entity",entity.copy());
+                    CompoundNBT versions=sourceVersions(chunk,worldVersions,entity),priorSnapshot=prior.get(chunkKey(x,z));
                     if(priorSnapshot!=null) {
                         String savedChunk=priorSnapshot.getString("OriginalChunk");
-                        NBTTagCompound oldLevel=priorLevels.get(savedChunk);
+                        CompoundNBT oldLevel=priorLevels.get(savedChunk);
                         if(oldLevel==null) {
                             byte[] originalBytes=Files.readAllBytes(chunks.resolve(savedChunk+".bin"));
                             InputStream originalStream=priorSnapshot.getByte("OriginalCompression")==1?new GZIPInputStream(new ByteArrayInputStream(originalBytes)):new InflaterInputStream(new ByteArrayInputStream(originalBytes));
@@ -231,40 +231,40 @@ public final class UpgradeJournal {
                         // journal replace changed terrain, inventory or live entities.
                         long key=chunkKey(x,z);Boolean same=matchingChunks.get(key);
                         if(same==null){same=sameNbt(oldLevel,level);matchingChunks.put(key,same);}
-                        if(same)versions.setInt("VerifiedChunkDataVersion",UpgradePreservation.chunkSourceVersion(priorSnapshot.getCompound("SourceVersions")));
+                        if(same)versions.putInt("VerifiedChunkDataVersion",UpgradePreservation.chunkSourceVersion(priorSnapshot.getCompound("SourceVersions")));
                     }
-                    snapshot.setTag("SourceVersions",versions);
+                    snapshot.put("SourceVersions",versions);
                     byte[] original=compressed(snapshot);String filename=digest(original)+".nbt";Path destination=snapshotPath(filename);
                     if(Files.exists(destination)) {if(!Arrays.equals(original,Files.readAllBytes(destination))) throw new IOException("Recovery snapshot collision");}
                     else atomic(destination,original,false);
-                    if(entity.hasKey("LootableBodiesUpgradePayload") || entity.hasKey("LootableBodiesInventorySource"))
+                    if(entity.contains("LootableBodiesUpgradePayload") || entity.contains("LootableBodiesInventorySource"))
                         throw new IOException("Unexpected intermediate corpse migration data on disk; original chunk has been preserved");
-                    preserved.add(new NBTTagString(filename));
+                    preserved.add(new StringNBT(filename));
                 }
             }
         } catch(RuntimeException damaged) { throw new IOException("Cannot safely preserve "+relative,damaged); }
-        NBTTagCompound record=new NBTTagCompound();record.setString("Path",relative);record.setString("Digest",hash);record.setTag("Snapshots",preserved);return record;
+        CompoundNBT record=new CompoundNBT();record.putString("Path",relative);record.putString("Digest",hash);record.put("Snapshots",preserved);return record;
     }
 
-    private NBTTagCompound readWorldVersions() throws IOException {
-        NBTTagCompound context=new NBTTagCompound();
+    private CompoundNBT readWorldVersions() throws IOException {
+        CompoundNBT context=new CompoundNBT();
         Path level=world.resolve("level.dat");
         if(Files.isRegularFile(level)) {
-            NBTTagCompound root=readCompressed(level),data=root.getCompound("Data");
-            if(data.hasKey("DataVersion")) context.setTag("WorldDataVersion",data.getTag("DataVersion").copy());
-            if(data.hasKey("Version"))context.setTag("WorldVersion",data.getTag("Version").copy());
-            if(root.hasKey("FML")) context.setTag("WorldFML",root.getTag("FML").copy());
-            else if(data.hasKey("FML")) context.setTag("WorldFML",data.getTag("FML").copy());
+            CompoundNBT root=readCompressed(level),data=root.getCompound("Data");
+            if(data.contains("DataVersion")) context.put("WorldDataVersion",data.get("DataVersion").copy());
+            if(data.contains("Version"))context.put("WorldVersion",data.get("Version").copy());
+            if(root.contains("FML")) context.put("WorldFML",root.get("FML").copy());
+            else if(data.contains("FML")) context.put("WorldFML",data.get("FML").copy());
         }
         return context;
     }
 
-    private static NBTTagCompound sourceVersions(NBTTagCompound chunk,NBTTagCompound world,NBTTagCompound entity) {
-        NBTTagCompound context=world.copy();
-        if(chunk.hasKey("DataVersion")) context.setTag("ChunkDataVersion",chunk.getTag("DataVersion").copy());
-        if(chunk.hasKey("ForgeDataVersion")) context.setTag("ForgeDataVersion",chunk.getTag("ForgeDataVersion").copy());
+    private static CompoundNBT sourceVersions(CompoundNBT chunk,CompoundNBT world,CompoundNBT entity) {
+        CompoundNBT context=world.copy();
+        if(chunk.contains("DataVersion")) context.put("ChunkDataVersion",chunk.get("DataVersion").copy());
+        if(chunk.contains("ForgeDataVersion")) context.put("ForgeDataVersion",chunk.get("ForgeDataVersion").copy());
         int version=chunk.contains("DataVersion",3) ? chunk.getInt("DataVersion") : -1;
-        if(version<512 || version>1631) version=world.contains("WorldDataVersion",3) ? world.getInt("WorldDataVersion") : -1;
+        if(version<512 || version>UpgradePreservation.MINECRAFT_VERSION) version=world.contains("WorldDataVersion",3) ? world.getInt("WorldDataVersion") : -1;
         // Dotted IDs and our own per-corpse markers identify known source families.
         // A lowercase ID alone cannot distinguish original 1.11 and 1.12 saves.
         boolean legacy=entity.getString("id").equals("lootablebodies.Corpse");
@@ -272,46 +272,48 @@ public final class UpgradeJournal {
         if(marker==1) version=922;
         else if(marker==2)version=1343;
         else if(marker==3)version=1631;
-        if(legacy) {if(version!=512)context.setBoolean("Inferred",true);version=512;}
+        else if(marker==4)version=1976;
+        if(legacy) {if(version!=512)context.putBoolean("Inferred",true);version=512;}
         int family=-1;
-        NBTTagList mods=world.getCompound("WorldFML").getList("ModList",10);
+        ListNBT mods=world.getCompound("WorldFML").getList("ModList",10);
         for(int i=0;i<mods.size();i++) {
-            NBTTagCompound mod=mods.getCompound(i);if(!mod.getString("ModId").equals("lootablebodies"))continue;
+            CompoundNBT mod=mods.getCompound(i);if(!mod.getString("ModId").equals("lootablebodies"))continue;
             String release=mod.getString("ModVersion");
-            if(release.endsWith(".113021"))family=1631;
+            if(release.endsWith(".114041"))family=1976;
+            else if(release.endsWith(".113021"))family=1631;
             else if(release.endsWith(".112021") || release.equals("2.4.0"))family=1139;
             else if(release.endsWith(".111021") || release.equals("2.3.0"))family=922;
             else if(release.endsWith(".110021") || release.equals("2.2.0"))family=512;
         }
-        if(version<512 || version>1631) {
-            version=family;context.setBoolean("Inferred",true);
+        if(version<512 || version>UpgradePreservation.MINECRAFT_VERSION) {
+            version=family;context.putBoolean("Inferred",true);
         } else if(marker==0 && !legacy && family>=512 && ((family<1125 && version>family) || (family<1451 && version>=1451))) {
             // An original older writer cannot have emitted a newer item format.
             // Its retained FML metadata disambiguates a falsely current stamp.
-            version=family;context.setBoolean("Inferred",true);
+            version=family;context.putBoolean("Inferred",true);
         }
-        if(version<512 || version>1631) {
+        if(version<512 || version>UpgradePreservation.MINECRAFT_VERSION) {
             // Keep ambiguous records retriable without guessing a bed colour or
             // discarding known items whose conversion agrees in both families.
-            context.setBoolean("Ambiguous",true);context.setIntArray("CandidateDataVersions",new int[]{922,1343,1631});version=922;
+            context.putBoolean("Ambiguous",true);context.putIntArray("CandidateDataVersions",new int[]{922,1343,1631,1976});version=922;
         }
-        context.setInt("DataVersion",version);return context;
+        context.putInt("DataVersion",version);return context;
     }
 
     private static long chunkKey(int x,int z){return ((long)x<<32)|(z&0xffffffffL);}
-    private static boolean sameNbt(INBTBase a,INBTBase b) {
+    private static boolean sameNbt(INBT a,INBT b) {
         if(a==null || b==null)return a==b;
         if(a.getId()!=b.getId())return false;
-        if(a instanceof NBTTagDouble)return Double.doubleToRawLongBits(((NBTTagDouble)a).getDouble())==Double.doubleToRawLongBits(((NBTTagDouble)b).getDouble());
-        if(a instanceof NBTTagFloat)return Float.floatToRawIntBits(((NBTTagFloat)a).getFloat())==Float.floatToRawIntBits(((NBTTagFloat)b).getFloat());
-        if(a instanceof NBTTagCompound) {
-            NBTTagCompound x=(NBTTagCompound)a,y=(NBTTagCompound)b;
+        if(a instanceof DoubleNBT)return Double.doubleToRawLongBits(((DoubleNBT)a).getDouble())==Double.doubleToRawLongBits(((DoubleNBT)b).getDouble());
+        if(a instanceof FloatNBT)return Float.floatToRawIntBits(((FloatNBT)a).getFloat())==Float.floatToRawIntBits(((FloatNBT)b).getFloat());
+        if(a instanceof CompoundNBT) {
+            CompoundNBT x=(CompoundNBT)a,y=(CompoundNBT)b;
             if(!x.keySet().equals(y.keySet()))return false;
-            for(String key:x.keySet())if(!sameNbt(x.getTag(key),y.getTag(key)))return false;
+            for(String key:x.keySet())if(!sameNbt(x.get(key),y.get(key)))return false;
             return true;
         }
-        if(a instanceof NBTTagList) {
-            NBTTagList x=(NBTTagList)a,y=(NBTTagList)b;
+        if(a instanceof ListNBT) {
+            ListNBT x=(ListNBT)a,y=(ListNBT)b;
             if(x.getTagType()!=y.getTagType() || x.size()!=y.size())return false;
             for(int i=0;i<x.size();i++)if(!sameNbt(x.get(i),y.get(i)))return false;
             return true;
@@ -323,9 +325,9 @@ public final class UpgradeJournal {
         if(!filename.matches("[a-f0-9]{64}\\.nbt")) throw new IOException("Invalid recovery snapshot filename");
         return snapshots.resolve(filename);
     }
-    private NBTTagCompound readSnapshot(Path path) throws IOException {
+    private CompoundNBT readSnapshot(Path path) throws IOException {
         if(!path.getFileName().toString().equals(digest(Files.readAllBytes(path))+".nbt")) throw new IOException("Corpse recovery checksum mismatch");
-        NBTTagCompound nbt=readCompressed(path);
+        CompoundNBT nbt=readCompressed(path);
         if(!nbt.contains("Format",3) || nbt.getInt("Format")!=FORMAT || !nbt.contains("Entity",10) || !nbt.contains("SourceVersions",10)
                 || !nbt.contains("ChunkX",3) || !nbt.contains("ChunkZ",3) || !nbt.contains("Region",8) || !nbt.contains("RegionDigest",8)
                 || !nbt.contains("Dimension",8) || !nbt.contains("OriginalChunk",8) || !nbt.contains("OriginalCompression",1) || !nbt.contains("EntityIndex",3)
@@ -336,16 +338,16 @@ public final class UpgradeJournal {
             throw new IOException("Original compressed chunk checksum mismatch");
         uuid(nbt.getCompound("Entity"));return nbt;
     }
-    private static UUID uuid(NBTTagCompound entity) throws IOException {
+    private static UUID uuid(CompoundNBT entity) throws IOException {
         if(!entity.contains("UUIDMost",4) || !entity.contains("UUIDLeast",4)) throw new IOException("Corpse UUID is missing or malformed; original region has not been changed");
         return entity.getUniqueId("UUID");
     }
-    private static boolean compoundList(INBTBase value) {return value instanceof NBTTagList && (((NBTTagList)value).size()==0 || ((NBTTagList)value).getTagType()==10);}
-    private static NBTTagCompound readCompressed(Path path) throws IOException {
+    private static boolean compoundList(INBT value) {return value instanceof ListNBT && (((ListNBT)value).size()==0 || ((ListNBT)value).getTagType()==10);}
+    private static CompoundNBT readCompressed(Path path) throws IOException {
         try(DataInputStream input=new DataInputStream(new GZIPInputStream(Files.newInputStream(path)))) {return CompressedStreamTools.read(input,new NBTSizeTracker(MAX_NBT));}
         catch(RuntimeException damaged) {throw new IOException("Unreadable preservation data: "+path.getFileName(),damaged);}
     }
-    private static byte[] compressed(NBTTagCompound nbt) throws IOException {
+    private static byte[] compressed(CompoundNBT nbt) throws IOException {
         ByteArrayOutputStream bytes=new ByteArrayOutputStream();
         try(DataOutputStream out=new DataOutputStream(new GZIPOutputStream(bytes))) {CompressedStreamTools.write(nbt,out);}
         return bytes.toByteArray();

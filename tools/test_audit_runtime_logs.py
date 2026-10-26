@@ -91,6 +91,35 @@ class RuntimeLogAuditTests(unittest.TestCase):
             with self.subTest(text=text), self.assertRaises(RuntimeError):
                 self.check_log(text,native=text!=known)
 
+    def test_native_terminal_colours_do_not_change_log_classification(self):
+        known='[15:16:49] [Thread-1/FATAL] [ne.mi.co.ForgeConfig/CORE]: Forge config just got changed on the file system!'
+        self.check_log('\x1b[m\x1b[1;31m'+known+'\x1b[m\n',native=True)
+        for text in [known+' extra failure',known.replace('ForgeConfig','OtherConfig'),
+                     '[15:16:49] [Server thread/ERROR] Unexpected error']:
+            with self.subTest(text=text),self.assertRaises(RuntimeError):
+                self.check_log('\x1b[1;31m'+text+'\x1b[m\n',native=True)
+
+    def test_native_forge28_empty_handshake_control_is_narrow(self):
+        known='[15:49:16] [Client thread/ERROR] [net.minecraftforge.fml.network.simple.IndexedMessageCodec]: Received empty payload on channel fml:handshake'
+        self.check_log(known+'\n',native=True)
+        for text in [known, known+' extra failure', known.replace('fml:handshake','other:channel'),
+                     known.replace('IndexedMessageCodec','OtherCodec')]:
+            with self.subTest(text=text),self.assertRaises(RuntimeError):
+                self.check_log(text+'\n',native=text!=known)
+
+    def test_native_forge28_tcp_command_tree_diagnostics_are_exact(self):
+        lines=[
+            '[16:19:28] [Netty Server IO #1/ERROR] [minecraft/ArgumentTypes]: Could not serialize net.minecraftforge.server.command.ModIdArgument@62e9cbe6 (class net.minecraftforge.server.command.ModIdArgument) - will not be sent to client!',
+            '[16:19:28.111] [Netty Server IO #2/ERROR] [net.minecraft.command.arguments.ArgumentTypes/]: Could not serialize net.minecraftforge.server.command.EnumArgument@d8352c6 (class net.minecraftforge.server.command.EnumArgument) - will not be sent to client!',
+            '[16:19:28] [Netty Client IO #1/ERROR] [net.minecraft.command.arguments.ArgumentTypes]: Could not deserialize minecraft:',
+            '[16:19:30] [Server thread/ERROR] [ne.mi.fm.ne.si.IndexedMessageCodec/SIMPLENET]: Received empty payload on channel fml:handshake']
+        for line in lines:
+            with self.subTest(line=line):
+                self.check_log(line+'\n',native=True)
+                with self.assertRaises(RuntimeError):self.check_log(line+'\n')
+                for changed in [line+' extra failure',line.replace('ModIdArgument','OtherArgument').replace('EnumArgument','OtherArgument').replace('deserialize minecraft:','deserialize other:').replace('fml:handshake','other:channel')]:
+                    with self.assertRaises(RuntimeError):self.check_log(changed+'\n',native=True)
+
     def forge14_control(self):
         return (Path(__file__).parent / 'fixtures/forge14-bootstrap-diagnostics.txt').read_text(encoding='utf-8')
 

@@ -1,4 +1,11 @@
 package cyano.lootable.buildtest;
+import net.minecraft.network.play.server.SEntityMetadataPacket;
+import net.minecraft.network.play.server.SRespawnPacket;
+import net.minecraft.network.play.server.SDestroyEntitiesPacket;
+import net.minecraft.network.play.server.SCombatPacket;
+import net.minecraft.network.play.server.SChunkDataPacket;
+import net.minecraft.network.play.server.SUnloadChunkPacket;
+import net.minecraft.util.registry.Registry;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -7,10 +14,10 @@ import java.io.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.network.NetworkManager;
-import net.minecraft.network.Packet;
+import net.minecraft.network.IPacket;
 import net.minecraft.network.PacketBuffer;
 import net.minecraft.network.play.server.*;
-import net.minecraft.network.play.client.CPacketClientStatus;
+import net.minecraft.network.play.client.CClientStatusPacket;
 import net.minecraftforge.fml.common.network.ByteBufUtils;
 import net.minecraftforge.fml.network.ICustomPacket;
 
@@ -29,7 +36,7 @@ final class RespawnPacketTrace extends ChannelDuplexHandler {
         String description=describe(packet);if(description!=null)record("IN "+description);
         if(Boolean.getBoolean("lootablebodies.respawn.dropSpawn")&&log.getName().equals("client-packets.txt")
             &&description!=null&&description.startsWith("MOD_SPAWN ")&&description.contains("mod=lootablebodies ")) {
-            record("FAULT_DROPPED "+description);((ICustomPacket<?>)packet).getData().release();return;
+            record("FAULT_DROPPED "+description);if(packet instanceof ICustomPacket)((ICustomPacket<?>)packet).getInternalData().release();return;
         }
         super.channelRead(context,packet);
         if(description!=null&&after!=null)after.received(description);
@@ -42,25 +49,52 @@ final class RespawnPacketTrace extends ChannelDuplexHandler {
     static String describe(Object packet) {
         if(packet instanceof ICustomPacket) {
             ICustomPacket<?> f=(ICustomPacket<?>)packet;if(!f.getName().toString().equals("fml:play"))return null;
-            PacketBuffer b=new PacketBuffer(f.getData().duplicate());if(b.readableBytes()<6 || b.readVarInt()!=0)return null;
-            int type=b.readVarInt(),id=b.readInt();net.minecraft.entity.EntityType<?> entityType=net.minecraft.util.registry.IRegistry.field_212629_r.get(type);
+            PacketBuffer b=new PacketBuffer(f.getInternalData().duplicate());if(b.readableBytes()<6 || b.readVarInt()!=0)return null;
+            int type=b.readVarInt(),id=b.readInt();net.minecraft.entity.EntityType<?> entityType=net.minecraft.util.registry.Registry.ENTITY_TYPE.getByValue(type);
             String name=entityType==null?"unknown":entityType.getRegistryName().getNamespace();
             return "MOD_SPAWN id="+id+" mod="+name+" type="+type+" uuid="+new UUID(b.readLong(),b.readLong());
         }
-        if(!(packet instanceof SPacketRespawn||packet instanceof SPacketDestroyEntities||packet instanceof SPacketUnloadChunk
-            ||packet instanceof SPacketChunkData||packet instanceof SPacketCombatEvent||packet instanceof SPacketEntityMetadata||packet instanceof CPacketClientStatus))return null;
+        if(!(packet instanceof SSpawnMobPacket||packet instanceof SRespawnPacket||packet instanceof SDestroyEntitiesPacket||packet instanceof SUnloadChunkPacket
+            ||packet instanceof SChunkDataPacket||packet instanceof SCombatPacket||packet instanceof SEntityMetadataPacket||packet instanceof CClientStatusPacket))return null;
+        if(packet instanceof SSpawnMobPacket) {
+            // MobEntity uses vanilla spawn packets in 1.14. Received packets
+            // have entries rather than a live dataManager, so cannot be written
+            // again. Read the two mapped scalar fields and unique UUID only.
+            int id=net.minecraftforge.fml.common.ObfuscationReflectionHelper.getPrivateValue(SSpawnMobPacket.class,(SSpawnMobPacket)packet,"field_149042_a");
+            int type=net.minecraftforge.fml.common.ObfuscationReflectionHelper.getPrivateValue(SSpawnMobPacket.class,(SSpawnMobPacket)packet,"field_149040_b");
+            UUID uuid=null;
+            try {for(java.lang.reflect.Field field:SSpawnMobPacket.class.getDeclaredFields())if(field.getType()==UUID.class) {field.setAccessible(true);uuid=(UUID)field.get(packet);}}
+            catch(ReflectiveOperationException invalid) {throw new AssertionError("Fixture spawn observation",invalid);}
+            net.minecraft.entity.EntityType<?> entityType=Registry.ENTITY_TYPE.getByValue(type);
+            String name=entityType==null?"unknown":entityType.getRegistryName().getNamespace();
+            return "MOD_SPAWN id="+id+" mod="+name+" type="+type+" uuid="+uuid;
+        }
+        if(packet instanceof SRespawnPacket) {
+            // Native 1.14 reads dimensionInt and leaves dimensionID null until
+            // the client handles the packet. Re-serializing it here disconnects
+            // the transport. Observe both representations without calling the
+            // client-only accessor or mutating the packet.
+            try {
+                net.minecraft.world.dimension.DimensionType dimension=null;int id=0;
+                for(java.lang.reflect.Field field:SRespawnPacket.class.getDeclaredFields()) {
+                    if(field.getType()==net.minecraft.world.dimension.DimensionType.class) {
+                        field.setAccessible(true);dimension=(net.minecraft.world.dimension.DimensionType)field.get(packet);
+                    } else if(field.getType()==int.class) {field.setAccessible(true);id=field.getInt(packet);}
+                }
+                return "RESPAWN dimension="+(dimension==null?id:dimension.getId());
+            } catch(ReflectiveOperationException invalid) {throw new AssertionError("Fixture respawn observation",invalid);}
+        }
         // Vanilla strips receiving-side accessors from a dedicated distribution.
         // Read an independent serialization, never its live reader index/fields.
         PacketBuffer b=new PacketBuffer(Unpooled.buffer());
         try {
-            ((Packet<?>)packet).writePacketData(b);
-            if(packet instanceof SPacketRespawn)return "RESPAWN dimension="+b.readInt();
-            if(packet instanceof SPacketDestroyEntities){int[] ids=new int[b.readVarInt()];for(int i=0;i<ids.length;i++)ids[i]=b.readVarInt();return "DESTROY ids="+Arrays.toString(ids);}
-            if(packet instanceof SPacketUnloadChunk)return "UNLOAD chunk="+b.readInt()+","+b.readInt();
-            if(packet instanceof SPacketChunkData)return "CHUNK chunk="+b.readInt()+","+b.readInt()+" full="+b.readBoolean();
-            if(packet instanceof SPacketCombatEvent){SPacketCombatEvent.Event type=b.readEnumValue(SPacketCombatEvent.Event.class);return "COMBAT event="+type+(type==SPacketCombatEvent.Event.ENTITY_DIED?" player="+b.readVarInt():"");}
-            if(packet instanceof SPacketEntityMetadata)return "METADATA id="+b.readVarInt();
-            if(packet instanceof CPacketClientStatus)return "CLIENT_STATUS action="+b.readEnumValue(CPacketClientStatus.State.class);
+            ((IPacket<?>)packet).writePacketData(b);
+            if(packet instanceof SDestroyEntitiesPacket){int[] ids=new int[b.readVarInt()];for(int i=0;i<ids.length;i++)ids[i]=b.readVarInt();return "DESTROY ids="+Arrays.toString(ids);}
+            if(packet instanceof SUnloadChunkPacket)return "UNLOAD chunk="+b.readInt()+","+b.readInt();
+            if(packet instanceof SChunkDataPacket)return "CHUNK chunk="+b.readInt()+","+b.readInt()+" full="+b.readBoolean();
+            if(packet instanceof SCombatPacket){SCombatPacket.Event type=b.readEnumValue(SCombatPacket.Event.class);return "COMBAT event="+type+(type==SCombatPacket.Event.ENTITY_DIED?" player="+b.readVarInt():"");}
+            if(packet instanceof SEntityMetadataPacket)return "METADATA id="+b.readVarInt();
+            if(packet instanceof CClientStatusPacket)return "CLIENT_STATUS action="+b.readEnumValue(CClientStatusPacket.State.class);
         } catch(IOException invalid){throw new AssertionError("Fixture packet serialization",invalid);}finally{b.release();}
         return null;
     }

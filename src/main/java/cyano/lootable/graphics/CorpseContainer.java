@@ -4,15 +4,15 @@ import static cyano.lootable.ItemStacks.emptyStack;
 
 import cyano.lootable.entities.EntityLootableBody;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.item.EntityItem;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.entity.player.InventoryPlayer;
-import net.minecraft.inventory.EntityEquipmentSlot;
+import net.minecraft.entity.item.ItemEntity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.player.ServerPlayerEntity;
+import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.inventory.EquipmentSlotType;
 import net.minecraft.inventory.IInventory;
-import net.minecraft.inventory.Slot;
-import net.minecraft.inventory.ClickType;
-import net.minecraft.item.ItemArmor;
+import net.minecraft.inventory.container.Slot;
+import net.minecraft.inventory.container.ClickType;
+import net.minecraft.item.ArmorItem;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -22,19 +22,21 @@ import net.minecraftforge.event.entity.item.ItemTossEvent;
 /**
  * Created by Chris on 4/12/2016.
  */
-public class CorpseContainer extends net.minecraft.inventory.Container {
+public class CorpseContainer extends net.minecraft.inventory.container.Container {
 
-	private static final EntityEquipmentSlot[] EQUIPMENT_SLOTS = EntityLootableBody.EQUIPMENT_SLOTS;
+	private static final EquipmentSlotType[] EQUIPMENT_SLOTS = EntityLootableBody.EQUIPMENT_SLOTS;
 
 	private final IInventory targetInventory;
 	private boolean dragging;
-	public CorpseContainer(InventoryPlayer playerItems, IInventory entity){
+	public CorpseContainer(PlayerInventory playerItems, IInventory entity){this(0,playerItems,entity);}
+	public CorpseContainer(int windowId, PlayerInventory playerItems, IInventory entity){
+        super(cyano.lootable.LootableBodies.CORPSE_CONTAINER,windowId);
 		this.targetInventory = entity;
 		int index = 0;
 		while(index < 4) {
 			// armor
 			final int i = index;
-			this.addSlot(new net.minecraft.inventory.Slot(targetInventory, i, 8, 8 + 18*i) {
+			this.addSlot(new net.minecraft.inventory.container.Slot(targetInventory, i, 8, 8 + 18*i) {
 				@Override
 				public int getSlotStackLimit() {
 					return 1;
@@ -55,7 +57,7 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 		while(index < EQUIPMENT_SLOTS.length){
 			// held items
 			final int i = index;
-			this.addSlot(new net.minecraft.inventory.Slot(targetInventory, i, 8 + 18 * (i - 4), 98 ) {
+			this.addSlot(new net.minecraft.inventory.container.Slot(targetInventory, i, 8 + 18 * (i - 4), 98 ) {
 				@OnlyIn(Dist.CLIENT)
 				public String getSlotTexture()
 				{
@@ -81,12 +83,12 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 
 
 	@Override
-	public boolean canInteractWith(EntityPlayer entityplayer) {
+	public boolean canInteractWith(PlayerEntity entityplayer) {
 		return targetInventory.isUsableByPlayer(entityplayer);
 	}
 
 	@Override
-	public ItemStack slotClick(int slotId, int button, ClickType type, EntityPlayer player) {
+	public ItemStack slotClick(int slotId, int button, ClickType type, PlayerEntity player) {
 		// A click can arrive before the next player tick closes a stale window.
 		if(!canInteractWith(player)) {
 			resetDrag();
@@ -145,7 +147,7 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 	}
 
 	@Override
-	public void onContainerClosed(EntityPlayer player) {
+	public void onContainerClosed(PlayerEntity player) {
 		ItemStack cursor = player.inventory.getItemStack();
 		if(!emptyStack(cursor)) {
 			releaseOrRetain(player,cursor);
@@ -159,24 +161,24 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 		super.resetDrag();
 	}
 
-	private void resync(EntityPlayer player) {
+	private void resync(PlayerEntity player) {
 		// Accepted transaction replies assume client prediction succeeded. A
 		// rejected toss needs an explicit source/cursor correction as well.
-		if(player instanceof EntityPlayerMP) ((EntityPlayerMP)player).sendContainerToPlayer(this);
+		if(player instanceof ServerPlayerEntity) ((ServerPlayerEntity)player).sendContainerToPlayer(this);
 	}
 
-	private void releaseOrRetain(EntityPlayer player, ItemStack stack) {
+	private void releaseOrRetain(PlayerEntity player, ItemStack stack) {
 		if(emptyStack(stack) || stack.getCount() <= 0 || tryRelease(player,stack,false)) return;
 		ItemStack remainder = stack.copy();
-		// InventoryPlayer discards overflow in creative mode. Retain real
+		// PlayerInventory discards overflow in creative mode. Retain real
 		// corpse/cursor items even when every player slot is full.
 		storeInPlayerInventory(player.inventory,remainder);
 		if(remainder.getCount() > 0) ((EntityLootableBody)targetInventory).retainItem(remainder);
 	}
 
-    private void storeInPlayerInventory(InventoryPlayer inventory, ItemStack remainder) {
+    private void storeInPlayerInventory(PlayerInventory inventory, ItemStack remainder) {
         // Keep vanilla's selected-slot, off-hand, main-slot and first-empty
-        // priority, without InventoryPlayer's creative overflow discard.
+        // priority, without PlayerInventory's creative overflow discard.
         while(remainder.getCount() > 0) {
             int destination = -1;
             if(!remainder.isDamaged()) {
@@ -204,14 +206,14 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
         }
     }
 
-    private boolean canStore(InventoryPlayer inventory, int slot, ItemStack incoming) {
+    private boolean canStore(PlayerInventory inventory, int slot, ItemStack incoming) {
         ItemStack current = inventory.getStackInSlot(slot);
         return !emptyStack(current) && current.isStackable() && current.getItem() == incoming.getItem()
                 && ItemStack.areItemStackTagsEqual(current,incoming)
                 && current.getCount() < Math.min(current.getMaxStackSize(),inventory.getInventoryStackLimit());
     }
 
-	private boolean tryRelease(EntityPlayer player, ItemStack stack, boolean includeName) {
+	private boolean tryRelease(PlayerEntity player, ItemStack stack, boolean includeName) {
 		if(emptyStack(stack) || stack.getCount() <= 0) return false;
 		if(player.world.isRemote) {
 			player.dropItem(stack.copy(),includeName);
@@ -219,8 +221,8 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 		}
 		// Forge's legacy toss helper clears the caller's captured drops and
 		// ignores spawn rejection. Preserve both ownership and the toss event.
-		java.util.Collection<EntityItem> capturing = player.captureDrops(new java.util.ArrayList<>());
-		EntityItem dropped;
+		java.util.Collection<ItemEntity> capturing = player.captureDrops(new java.util.ArrayList<>());
+		ItemEntity dropped;
 		try {
 			dropped = player.dropItem(stack.copy(),false,includeName);
 			if(dropped != null) player.captureDrops().remove(dropped);
@@ -234,7 +236,7 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 			capturing.add(event.getEntityItem());
 			return true;
 		}
-		return player.world.spawnEntity(event.getEntityItem());
+		return player.world.addEntity(event.getEntityItem());
 	}
 
 	@Override
@@ -267,7 +269,7 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 
 
 	@Override
-	public ItemStack transferStackInSlot(EntityPlayer player, int slot) {
+	public ItemStack transferStackInSlot(PlayerEntity player, int slot) {
 		int hostSize = targetInventory.getSizeInventory();
 		ItemStack stack = ItemStack.EMPTY;
 		Slot slotObject = (Slot) inventorySlots.get(slot);
@@ -301,7 +303,7 @@ public class CorpseContainer extends net.minecraft.inventory.Container {
 		return stack;
 	}
 
-	protected void bindPlayerInventory(InventoryPlayer playerInv, int yOffset) {
+	protected void bindPlayerInventory(PlayerInventory playerInv, int yOffset) {
 		for (int row = 0; row < 3; row++) {
 			for (int col = 0; col < 9; col++) {
 				addSlot(new Slot(playerInv, col + row * 9 + 9, 8 + col * 18, yOffset + row * 18));

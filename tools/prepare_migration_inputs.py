@@ -18,6 +18,8 @@ MODS = {
                          'C82CC329BA53A218CADB681D646F64A9C457341577BC4F9AA07E2F9926434CCF'),
 }
 MODS.update({
+    'released-113.jar': ('https://github.com/MinecraftModDevelopmentMods/LootableBodies/releases/download/2.4.4.113021/LootableBodies-2.4.4.113021.jar',
+                         '464CC1CDDA6C04CD72F5F1A2A504EB8A665E6E48AC255918437262DB2A22A4C1'),
     'released-112.jar': ('https://github.com/MinecraftModDevelopmentMods/LootableBodies/releases/download/2.4.3.112021/LootableBodies-2.4.3.112021.jar',
                          'A9F4B115828834F60C5905526A8A99794B1DFE4802AB4D48858F2D597F3FCBCA'),
     'released-111.jar': ('https://github.com/MinecraftModDevelopmentMods/LootableBodies/releases/download/2.4.2.111021/LootableBodies-2.4.2.111021.jar',
@@ -50,7 +52,7 @@ def fetch(url, path, expected):
     for address in [url, url + '?source=lootablebodies-migration', url + '?source=lootablebodies111']:
         try:
             print('MIGRATION_INPUT_FETCH',path.name,flush=True)
-            request = urllib.request.Request(address, headers={'User-Agent': 'LootableBodiesMigrationTests/2.4.4.113021'})
+            request = urllib.request.Request(address, headers={'User-Agent': 'LootableBodiesMigrationTests/2.4.5.114041'})
             with urllib.request.urlopen(request, timeout=30) as response:
                 chunks=[]; started=time.monotonic()
                 while True:
@@ -100,6 +102,10 @@ def main():
         if sha(universal) != universal_sha or hashlib.sha1(server.read_bytes()).hexdigest() != server_sha:
             raise RuntimeError('Installed Forge/Minecraft artifact checksum mismatch')
         report[name] = {'installer_sha256': installer_sha, 'universal_sha256': universal_sha, 'server_sha1': server_sha}
+    from prepare_native113_tools import historical_runtime
+    runtime = historical_runtime(Path(__file__).resolve().parents[1])
+    runtime.install(args.java.resolve(), root/'forge113')
+    report['forge113'] = json.loads((root/'forge113/runtime-inputs.json').read_text())
     (root / 'inputs.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     print('MIGRATION_INPUTS_VERIFIED', flush=True)
 

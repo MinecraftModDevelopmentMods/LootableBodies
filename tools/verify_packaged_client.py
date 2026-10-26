@@ -1,4 +1,4 @@
-"""Run the exact production jar and isolated verifier in official Forge 25."""
+"""Run the exact production jar and isolated verifier in official Forge 28."""
 import argparse
 import hashlib
 import json

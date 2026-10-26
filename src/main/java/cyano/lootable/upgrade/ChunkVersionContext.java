@@ -3,10 +3,10 @@ import com.mojang.datafixers.DataFixer;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.function.UnaryOperator;
-import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.CompoundNBT;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.WorldServer;
-import net.minecraft.world.chunk.storage.AnvilChunkLoader;
+import net.minecraft.world.server.ServerWorld;
+import net.minecraft.world.chunk.storage.ChunkLoader;
 import net.minecraft.world.gen.feature.structure.LegacyStructureDataUtil;
 /** Installs preservation before native save handlers and chunk readers run. */
 public final class ChunkVersionContext {
@@ -15,13 +15,13 @@ public final class ChunkVersionContext {
         installFixer(server,null);
         installFixer(server.getActiveAnvilConverter(),null);
     }
-    public static void installWorld(WorldServer world) {
-        Object loader=world.getChunkProvider().chunkLoader;
-        if(!(loader instanceof AnvilChunkLoader))throw new IllegalStateException("Unsupported chunk reader; refusing unprotected world loading");
+    public static void installWorld(ServerWorld world) {
+        Object loader=world.getChunkProvider().chunkManager;
+        if(!(loader instanceof ChunkLoader))throw new IllegalStateException("Unsupported chunk reader; refusing unprotected world loading");
         installFixer(world.getSaveHandler(),null);
-        installFixer(loader,chunk->LegacyStructureDataUtil.func_212183_a(world.getDimension().getType(),world.getMapStorage()).func_212181_a(chunk));
+        installFixer(loader,chunk->LegacyStructureDataUtil.func_215130_a(world.getDimension().getType(),world.getServer().getWorld(net.minecraft.world.dimension.DimensionType.OVERWORLD).getSavedData()).func_212181_a(chunk));
     }
-    static void installFixer(Object owner,UnaryOperator<NBTTagCompound> structures) {
+    static void installFixer(Object owner,UnaryOperator<CompoundNBT> structures) {
         List<Field> fields=new ArrayList<>();
         for(Class<?> type=owner.getClass();type!=null;type=type.getSuperclass())for(Field field:type.getDeclaredFields())
             if(!Modifier.isStatic(field.getModifiers()) && field.getType()==DataFixer.class)fields.add(field);

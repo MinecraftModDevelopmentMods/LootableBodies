@@ -1,4 +1,5 @@
 package cyano.lootable.buildtest;
+import net.minecraft.entity.boss.dragon.phase.Phase;
 
 import cyano.lootable.entities.EntityLootableBody;
 import cyano.lootable.graphics.CorpseGUIContainer;
@@ -8,15 +9,15 @@ import java.nio.file.Files;
 import java.util.HashSet;
 import java.util.Set;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiMainMenu;
+import net.minecraft.client.gui.screen.MainMenuScreen;
 import net.minecraft.entity.Entity;
-import net.minecraft.inventory.ClickType;
-import net.minecraft.util.EnumHand;
+import net.minecraft.inventory.container.ClickType;
+import net.minecraft.util.Hand;
 import net.minecraft.util.ScreenShotHelper;
 import net.minecraftforge.common.MinecraftForge;
 
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
+import net.minecraftforge.event.TickEvent;
 
 /** Two independent real Forge clients; no native desktop input or control. */
 final class MultiplayerClientChecks {
@@ -36,8 +37,8 @@ final class MultiplayerClientChecks {
             RuntimeChecks.require(++ticks<6000,"Multiplayer client timeout role="+role+" phase="+lastPhase);
             if(new File(MultiplayerChecks.sync(),"abort").exists())throw new AssertionError("Multiplayer runner abort");
             if(FixtureConnections.retry(mc,role))connecting=false;
-            if(!connecting && FixtureConnections.ready(role) && mc.currentScreen instanceof GuiMainMenu){
-                connecting=true;mc.gameSettings.pauseOnLostFocus=false;mc.gameSettings.limitFramerate=30;mc.gameSettings.renderDistanceChunks=4;
+            if(!connecting && FixtureConnections.ready(role) && mc.currentScreen instanceof MainMenuScreen){
+                connecting=true;mc.gameSettings.pauseOnLostFocus=false;mc.gameSettings.framerateLimit=30;mc.gameSettings.renderDistanceChunks=4;
                 FixtureConnections.connect(mc);
             }
             if(mc.world==null || mc.player==null)return;
@@ -46,11 +47,11 @@ final class MultiplayerClientChecks {
             if(phase==8){
                 try(FileWriter out=new FileWriter(new File(mc.gameDir,"multiplayer-client.pass"))){out.write("two-client packet/GUI checks passed\n");}
                 System.out.println("LOOTABLE_BODIES_MULTIPLAYER_CLIENT_PASS role="+role);
-                finished=true;mc.player.closeScreen();mc.world.sendQuittingDisconnectingPacket();mc.loadWorld(null);mc.displayGuiScreen(new GuiMainMenu());return;
+                finished=true;mc.player.closeScreen();mc.world.sendQuittingDisconnectingPacket();mc.func_213254_o();mc.displayGuiScreen(new MainMenuScreen());return;
             }
             if(frames%100==0)System.out.println("TCP_CLIENT_STATE role="+role+" phase="+phase+" screen="+(mc.currentScreen==null?"world":mc.currentScreen.getClass().getSimpleName())+" container="+mc.player.openContainer.getClass().getSimpleName()+" window="+mc.player.openContainer.windowId+" position="+mc.player.getPosition()+" completed="+completed);
             if(!(mc.currentScreen instanceof CorpseGUIContainer)){
-                if(frames%10==0)for(Entity entity:mc.world.loadedEntityList)if(entity instanceof EntityLootableBody && entity.getUniqueID().equals(MultiplayerChecks.BODY))mc.playerController.interactWithEntity(mc.player,entity,EnumHand.MAIN_HAND);
+                if(frames%10==0)for(Entity entity:FixtureApi.entities(mc.world))if(entity instanceof EntityLootableBody && entity.getUniqueID().equals(MultiplayerChecks.BODY))mc.playerController.interactWithEntity(mc.player,entity,Hand.MAIN_HAND);
                 return;
             }
             if(completed.contains(phase) || frames<15)return;int window=mc.player.openContainer.windowId;

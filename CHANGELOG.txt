@@ -1,10 +1,9 @@
-2.4.4.113021 - Minecraft 1.13.2, Forge
+2.4.5.114041 - Minecraft 1.14.4, Forge
 
-Updated for Minecraft 1.13.2.
+Updated for Minecraft 1.14.4.
 
-Includes the inventory, corpse and config improvements from 1.12.2.
-Fixed occasional stalls when joining a server.
-Protects bodies and their contents when upgrading older 1.10.2, 1.11.2
-and 1.12.2 worlds, including chunks visited later.
+Includes the inventory, corpse and config improvements from 1.13.2.
+Preserves bodies and their contents when upgrading older worlds,
+including bodies in chunks visited later.
 
 Back up the whole world, including its data folder, before upgrading.

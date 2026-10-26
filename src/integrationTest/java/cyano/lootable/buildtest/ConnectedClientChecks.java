@@ -1,4 +1,9 @@
 package cyano.lootable.buildtest;
+import net.minecraft.inventory.container.Slot;
+import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.inventory.Inventory;
+import net.minecraft.nbt.ListNBT;
+import net.minecraft.nbt.CompoundNBT;
 
 import cyano.lootable.entities.EntityLootableBody;
 import cyano.lootable.graphics.CorpseGUIContainer;
@@ -6,16 +11,16 @@ import java.io.*;
 import java.util.*;
 import java.util.concurrent.Future;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGameOver;
-import net.minecraft.client.gui.GuiMainMenu;
+import net.minecraft.client.gui.screen.DeathScreen;
+import net.minecraft.client.gui.screen.MainMenuScreen;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.init.Blocks;
-import net.minecraft.inventory.ClickType;
+import net.minecraft.entity.player.ServerPlayerEntity;
+import net.minecraft.block.Blocks;
+import net.minecraft.inventory.container.ClickType;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.*;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.EnumHand;
+import net.minecraft.util.Hand;
 import net.minecraft.util.ScreenShotHelper;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.GameType;
@@ -26,7 +31,7 @@ final class ConnectedClientChecks {
     private int stage, frames;
     private Future<?> pending;
     private UUID playerId, corpseId;
-    private NBTTagCompound visibleExpected;
+    private CompoundNBT visibleExpected;
     private File report;
 
     void start(Minecraft mc) {
@@ -38,12 +43,12 @@ final class ConnectedClientChecks {
         frames++;
         if(stage==0) {
             schedule(mc,() -> prepareDeath(mc)); next(1);
-        } else if(stage==1 && done() && mc.currentScreen instanceof GuiGameOver && frames>20) {
+        } else if(stage==1 && done() && mc.currentScreen instanceof DeathScreen && frames>20) {
             screenshot(mc,"connected-player-death.png");
             mc.player.respawnPlayer(); next(2);
-        } else if(stage==2 && mc.player!=null && mc.player.isAlive() && !(mc.currentScreen instanceof GuiGameOver)) {
+        } else if(stage==2 && mc.player!=null && mc.player.isAlive() && !(mc.currentScreen instanceof DeathScreen)) {
             schedule(mc,() -> {
-                EntityPlayerMP player=player(mc); EntityLootableBody corpse=corpse(mc);
+                ServerPlayerEntity player=player(mc); EntityLootableBody corpse=corpse(mc);
                 RuntimeChecks.require(player.isAlive(),"Connected respawn failed");
                 player.connection.setPlayerLocation(24.5,80,7.5,0,0);
                 RuntimeChecks.saveExpected(folder(mc),"connected-death-before",corpse);
@@ -117,35 +122,35 @@ final class ConnectedClientChecks {
         return false;
     }
     private void prepareDeath(Minecraft mc) throws Exception {
-        MinecraftServer server=mc.getIntegratedServer(); EntityPlayerMP player=player(mc);
+        MinecraftServer server=mc.getIntegratedServer(); ServerPlayerEntity player=player(mc);
         for(int x=21;x<=27;x++) for(int z=5;z<=11;z++)
             player.world.setBlockState(new BlockPos(x,79,z),Blocks.STONE.getDefaultState());
-        player.world.getGameRules().setOrCreateGameRule("keepInventory","false",null);
-        player.world.getGameRules().setOrCreateGameRule("doMobSpawning","false",null);
+        player.world.getGameRules().get(net.minecraft.world.GameRules.KEEP_INVENTORY).set(false,null);
+        player.world.getGameRules().get(net.minecraft.world.GameRules.DO_MOB_SPAWNING).set(false,null);
         player.setGameType(GameType.SURVIVAL); player.inventory.clear();player.inventory.currentItem=0;
         for(int slot=0;slot<6;slot++)player.setItemStackToSlot(EntityLootableBody.EQUIPMENT_SLOTS[slot],RuntimeChecks.stack(slot));
         for(int slot=9;slot<=11;slot++)player.inventory.mainInventory.set(slot,RuntimeChecks.stack(slot+10));
         player.connection.setPlayerLocation(24.5,80,8.5,0,0);
-        player.inventoryContainer.detectAndSendChanges(); player.onKillCommand();
+        player.container.detectAndSendChanges(); player.onKillCommand();
         RuntimeChecks.require(!player.isAlive(),"Connected player did not die");
         EntityLootableBody corpse=null;
-        for(Entity entity:player.world.loadedEntityList)
+        for(Entity entity:FixtureApi.entities(player.world))
             if(entity instanceof EntityLootableBody && player.getGameProfile().getName().equals(((EntityLootableBody)entity).getCustomNameTag())) corpse=(EntityLootableBody)entity;
         RuntimeChecks.require(corpse!=null,"Connected death did not create a corpse");
-        corpseId=corpse.getUniqueID();corpse.setNoGravity(true);corpse.motionX=0;corpse.motionY=0;corpse.motionZ=0;
+        corpseId=corpse.getUniqueID();corpse.setNoGravity(true);corpse.setNoAI(true);corpse.setMotion(0,corpse.getMotion().y,corpse.getMotion().z);corpse.setMotion(corpse.getMotion().x,0,corpse.getMotion().z);corpse.setMotion(corpse.getMotion().x,corpse.getMotion().y,0);
         RuntimeChecks.disableVacuum(corpse);
         for(int slot=0;slot<6;slot++)RuntimeChecks.require(RuntimeChecks.sameStack(corpse.getStackInSlot(slot),RuntimeChecks.stack(slot)),"Connected death equipment slot "+slot);
         for(int slot=6;slot<=8;slot++)RuntimeChecks.require(RuntimeChecks.sameStack(corpse.getStackInSlot(slot),RuntimeChecks.stack(slot+13)),"Connected death main slot "+slot);
-        RuntimeChecks.require(player.inventory.write(new NBTTagList()).size()==0,"Death retained player inventory alongside corpse");
+        RuntimeChecks.require(player.inventory.write(new ListNBT()).size()==0,"Death retained player inventory alongside corpse");
         System.out.println("CONNECTED_CORPSE_UUID "+corpseId);
     }
     private void verifyRecovery(Minecraft mc,String before,int slot,int item,String after) throws Exception {
         EntityLootableBody corpse=corpse(mc);
         RuntimeChecks.require((corpse.getStackInSlot(slot)).isEmpty(),"Network recovery left source stack");
         checkPlayer(player(mc).inventory,item);
-        NBTTagCompound expected=read(folder(mc),before),actual=new NBTTagCompound();
-        NBTTagList equipment=expected.getList("Equipment",10);
-        for(int i=equipment.size()-1;i>=0;i--)if(equipment.getCompound(i).getByte("Slot")==slot)equipment.removeTag(i);
+        CompoundNBT expected=read(folder(mc),before),actual=new CompoundNBT();
+        ListNBT equipment=expected.getList("Equipment",10);
+        for(int i=equipment.size()-1;i>=0;i--)if(equipment.getCompound(i).getByte("Slot")==slot)equipment.remove(i);
         corpse.writeUnlessPassenger(actual);RuntimeChecks.compare(expected,actual);
         RuntimeChecks.saveExpected(folder(mc),after,corpse);visibleExpected=actual.copy();
     }
@@ -153,23 +158,23 @@ final class ConnectedClientChecks {
         mc.getIntegratedServer().getWorld(net.minecraft.world.dimension.DimensionType.getById(0)).getChunk(1,0);
         EntityLootableBody corpse=corpse(mc);RuntimeChecks.require(corpse.isAlive(),"Saved corpse is no longer accessible");
         corpse.baseTick();RuntimeChecks.verifyExpected(folder(mc),corpseName,corpse);
-        NBTTagCompound expected=read(folder(mc),playerName);
-        RuntimeChecks.require(expected.getTag("Inventory").equals(player(mc).inventory.write(new NBTTagList())),"Recovered player inventory changed on disk reload");
+        CompoundNBT expected=read(folder(mc),playerName);
+        RuntimeChecks.require(expected.get("Inventory").equals(player(mc).inventory.write(new ListNBT())),"Recovered player inventory changed on disk reload");
         player(mc).connection.setPlayerLocation(24.5,80,7.5,0,0);
         visibleExpected=read(folder(mc),corpseName);
     }
     private void savePlayer(Minecraft mc,String name) throws Exception {
-        NBTTagCompound expected=new NBTTagCompound();expected.setTag("Inventory",player(mc).inventory.write(new NBTTagList()));
+        CompoundNBT expected=new CompoundNBT();expected.put("Inventory",player(mc).inventory.write(new ListNBT()));
         try(FileOutputStream out=new FileOutputStream(new File(folder(mc),name+".nbt"))){CompressedStreamTools.writeCompressed(expected,out);}
-        mc.getIntegratedServer().getPlayerList().saveAllPlayerData();mc.getIntegratedServer().saveAllWorlds(false);
+        mc.getIntegratedServer().getPlayerList().saveAllPlayerData();mc.getIntegratedServer().save(false,true,false);
     }
     private void verifyGui(Minecraft mc) {
         RuntimeChecks.require(gui(mc) && mc.player.openContainer.inventorySlots.size()==84,"Connected GUI missing slots");
-        ItemStack[] expected=new ItemStack[48];NBTTagList list=visibleExpected.getList("Equipment",10);
-        for(int i=0;i<list.size();i++){NBTTagCompound tag=list.getCompound(i);expected[tag.getByte("Slot")]=ItemStack.read(tag);}
+        ItemStack[] expected=new ItemStack[48];ListNBT list=visibleExpected.getList("Equipment",10);
+        for(int i=0;i<list.size();i++){CompoundNBT tag=list.getCompound(i);expected[tag.getByte("Slot")]=ItemStack.read(tag);}
         for(int i=0;i<48;i++)RuntimeChecks.require(RuntimeChecks.sameStack(expected[i],mc.player.openContainer.getSlot(i).getStack()),"Client GUI slot differs "+i);
     }
-    private static void checkPlayer(net.minecraft.entity.player.InventoryPlayer inventory,int index) {
+    private static void checkPlayer(net.minecraft.entity.player.PlayerInventory inventory,int index) {
         ItemStack expected=RuntimeChecks.stack(index);int count=0;
         for(int i=0;i<inventory.getSizeInventory();i++){
             ItemStack stack=inventory.getStackInSlot(i);
@@ -179,20 +184,20 @@ final class ConnectedClientChecks {
         }
         RuntimeChecks.require(count==expected.getCount(),"Recovered stack lost/duplicated: "+index+" count="+count);
     }
-    private EntityPlayerMP player(Minecraft mc){return mc.getIntegratedServer().getPlayerList().getPlayerByUUID(playerId);}
+    private ServerPlayerEntity player(Minecraft mc){return mc.getIntegratedServer().getPlayerList().getPlayerByUUID(playerId);}
     private EntityLootableBody corpse(Minecraft mc){return RuntimeChecks.find(mc.getIntegratedServer().getWorld(net.minecraft.world.dimension.DimensionType.getById(0)),corpseId);}
     private File folder(Minecraft mc){return mc.getIntegratedServer().getWorld(net.minecraft.world.dimension.DimensionType.getById(0)).getSaveHandler().getWorldDirectory();}
-    private static NBTTagCompound read(File folder,String name) throws Exception {
+    private static CompoundNBT read(File folder,String name) throws Exception {
         try(FileInputStream in=new FileInputStream(new File(folder,name+".nbt"))){return CompressedStreamTools.readCompressed(in);}
     }
-    private void schedule(Minecraft mc,Action action){pending=mc.getIntegratedServer().addScheduledTask(() -> {try{action.run();}catch(Exception error){throw new RuntimeException(error);}});}
+    private void schedule(Minecraft mc,Action action){pending=mc.getIntegratedServer().runAsync(() -> {try{action.run();}catch(Exception error){throw new RuntimeException(error);}});}
     private boolean done() throws Exception {if(!pending.isDone())return false;pending.get();return true;}
     private void next(int value){stage=value;frames=0;System.out.println("CONNECTED_CLIENT_STAGE "+stage);}
     private static boolean ready(Minecraft mc){return mc.world!=null && mc.player!=null && mc.getIntegratedServer()!=null;}
     private static boolean gui(Minecraft mc){return mc.currentScreen instanceof CorpseGUIContainer;}
     private boolean open(Minecraft mc){
-        for(Entity entity:mc.world.loadedEntityList)if(entity instanceof EntityLootableBody && entity.getUniqueID().equals(corpseId)){
-            mc.playerController.interactWithEntity(mc.player,entity,EnumHand.MAIN_HAND);return true;
+        for(Entity entity:FixtureApi.entities(mc.world))if(entity instanceof EntityLootableBody && entity.getUniqueID().equals(corpseId)){
+            mc.playerController.interactWithEntity(mc.player,entity,Hand.MAIN_HAND);return true;
         }
         return false;
     }

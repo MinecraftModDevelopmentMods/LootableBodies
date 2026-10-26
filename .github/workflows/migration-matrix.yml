@@ -1,10 +1,10 @@
-name: LootableBodies 1.13 world upgrades
+name: LootableBodies 1.14 world upgrades
 
 on:
   push:
-    branches: [master-1.13.2]
+    branches: [master-1.14.4]
   pull_request:
-    branches: [master-1.13.2]
+    branches: [master-1.14.4]
   workflow_dispatch:
 
 permissions:
@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        origin: [original-110, released-110, original-111, recovery-110, released-111, original-112, recovery-111, via111-110, released-112, recovery-112, via112-110, via112-111]
+        origin: [original-110, released-110, original-111, recovery-110, released-111, original-112, recovery-111, via111-110, released-112, recovery-112, via112-110, via112-111, released-113, recovery-113, via113-110, via113-111, via113-112]
         stamps: [normal, stamps]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -44,6 +44,8 @@ jobs:
           chmod +x ./gradlew
       - name: Build historical fixture tools against the released API
         run: python3 tools/prepare_legacy_tools.py --java17-home "$JAVA_HOME" --java8-home "$JAVA_HOME_8_X64" --java25-home "$JAVA_HOME_25_X64"
+      - name: Build the released 1.13 fixture tools
+        run: python3 tools/prepare_native113_tools.py --java17-home "$JAVA_HOME" --java8-home "$JAVA_HOME_8_X64" --java25-home "$JAVA_HOME_25_X64"
       - name: Build candidate and isolated fixture writers
         run: ./gradlew build prepareLegacyWorldFixtures preparePackagedIntegrationProbe preparePackagedForgeControl --no-daemon
       - name: Download and verify historical artifacts
@@ -53,18 +55,18 @@ jobs:
       - name: Create worlds with historical mod writers
         run: >-
           python3 tools/verify_world_upgrades.py --java "$JAVA_HOME_8_X64/bin/java"
-          --forge110-home build/migration-inputs/forge110 --forge111-home build/migration-inputs/forge111 --forge112-home build/migration-inputs/forge112
+          --forge110-home build/migration-inputs/forge110 --forge111-home build/migration-inputs/forge111 --forge112-home build/migration-inputs/forge112 --forge113-home build/migration-inputs/forge113
           --original-110 build/migration-inputs/original-110.jar --released-110 build/migration-inputs/released-110.jar
-          --original-111 build/migration-inputs/original-111.jar --released-111 build/migration-inputs/released-111.jar --original-112 build/migration-inputs/original-112.jar --released-112 build/migration-inputs/released-112.jar --origins ${{ matrix.origin }}
+          --original-111 build/migration-inputs/original-111.jar --released-111 build/migration-inputs/released-111.jar --original-112 build/migration-inputs/original-112.jar --released-112 build/migration-inputs/released-112.jar --released-113 build/migration-inputs/released-113.jar --origins ${{ matrix.origin }}
           --seed-only --output build/migration-seeds
       - name: Verify first load, recovery, deferred dimensions and restarts
         run: >-
           python3 tools/verify_world_upgrades.py --java "$JAVA_HOME_8_X64/bin/java"
-          --forge110-home build/migration-inputs/forge110 --forge111-home build/migration-inputs/forge111 --forge112-home build/migration-inputs/forge112
+          --forge110-home build/migration-inputs/forge110 --forge111-home build/migration-inputs/forge111 --forge112-home build/migration-inputs/forge112 --forge113-home build/migration-inputs/forge113
           --original-110 build/migration-inputs/original-110.jar --released-110 build/migration-inputs/released-110.jar
-          --original-111 build/migration-inputs/original-111.jar --released-111 build/migration-inputs/released-111.jar --original-112 build/migration-inputs/original-112.jar --released-112 build/migration-inputs/released-112.jar --origins ${{ matrix.origin }}
+          --original-111 build/migration-inputs/original-111.jar --released-111 build/migration-inputs/released-111.jar --original-112 build/migration-inputs/original-112.jar --released-112 build/migration-inputs/released-112.jar --released-113 build/migration-inputs/released-113.jar --origins ${{ matrix.origin }}
           --seeds build/migration-seeds --variants ${{ matrix.stamps }}
-          --forge113-home build/native-server-distribution --output build/migration-results
+          --forge114-home build/native-server-distribution --output build/migration-results
       - name: Verify unsafe preservation stops world loading
         run: >-
           python3 tools/verify_upgrade_abort.py --java "$JAVA_HOME_8_X64/bin/java"
@@ -77,7 +79,7 @@ jobs:
           done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: LootableBodies-1.13.2-upgrade-${{ matrix.origin }}-${{ matrix.stamps }}-${{ github.sha }}
+          name: LootableBodies-1.14.4-upgrade-${{ matrix.origin }}-${{ matrix.stamps }}-${{ github.sha }}
           if-no-files-found: error
           path: |
             build/migration-inputs/inputs.json
@@ -89,7 +91,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: LootableBodies-1.13.2-upgrade-failure-${{ matrix.origin }}-${{ matrix.stamps }}-${{ github.sha }}
+          name: LootableBodies-1.14.4-upgrade-failure-${{ matrix.origin }}-${{ matrix.stamps }}-${{ github.sha }}
           if-no-files-found: error
           path: |
             build/reports/**

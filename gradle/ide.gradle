@@ -65,14 +65,14 @@ tasks.register('isolateEclipseProductionRuns') {
             if (!launch.isFile()) throw new GradleException("Generate ${name} with genEclipseRuns first")
             String contents = launch.getText('UTF-8')
             File cache=new File(gradle.gradleUserHomeDir,'caches/forge_gradle')
-            contents=contents.replace('value="{asset_index}"','value="1.13.1"')
+            contents=contents.replace('value="{asset_index}"','value="1.14"')
                 .replace('value="{assets_root}"',"value=\"${minecraftAssets.asFile.absolutePath}\"")
                 .replace('value="{natives}"',"value=\"${new File(cache,"minecraftforge/forgegradle/slime-launcher/cache/net/minecraftforge/forge/${minecraft_version}-${forge_version}/natives").absolutePath}\"")
             String eclipseRoot=file('bin/main').absolutePath
             String eclipseMods="${mod_id}%%${eclipseRoot}${File.pathSeparator}${mod_id}%%${eclipseRoot}"
             contents=contents.replaceAll(/(<mapEntry key="MOD_CLASSES" value=")[^"]*("\/>)/) {whole,start,end -> start+eclipseMods+end}
             contents = contents.replace('/JavaSE-8', '/JavaSE-1.8')
-            contents = contents.replace('key="MC_VERSION" value="${MC_VERSION}"', 'key="MC_VERSION" value="1.13.2"')
+            contents = contents.replace('key="MC_VERSION" value="${MC_VERSION}"', 'key="MC_VERSION" value="1.14.4"')
             contents = contents.replaceAll(/<booleanAttribute key="org.eclipse.jdt.launching.ATTR_EXCLUDE_TEST_CODE" value="[^"]*"\/>/, '')
             contents = contents.replace('</launchConfiguration>',
                     '  <booleanAttribute key="org.eclipse.jdt.launching.ATTR_EXCLUDE_TEST_CODE" value="true"/>\n</launchConfiguration>')
@@ -126,7 +126,7 @@ tasks.register('verifyEclipseProductionClasspath') {
                     xml =~ /(?i)(src\/test|bin\/test|junit-|integration-test|mockito|byte-buddy)/ ||
                     !xml.contains('PROJECT_ATTR" value="LootableBodies"'))
                 throw new GradleException("${name} has the wrong project or exposes tests")
-            if (!xml.contains('key="MC_VERSION" value="1.13.2"'))
+            if (!xml.contains('key="MC_VERSION" value="1.14.4"'))
                 throw new GradleException('Eclipse Minecraft version is unresolved')
             def launchModel = new groovy.xml.XmlSlurper().parseText(xml)
             String classes = launchModel.mapAttribute.mapEntry.find { it.@key.text() == 'MOD_CLASSES' }.@value.text()
@@ -140,7 +140,7 @@ tasks.register('verifyEclipseProductionClasspath') {
             if (file(directory).canonicalFile != file(providers.gradleProperty('gameRunDirectory').getOrElse('run')).canonicalFile)
                 throw new GradleException("${name} must use the production run directory, found ${directory}")
             if (name == 'runServer.launch' && !xml.contains('--nogui'))
-                throw new GradleException('Forge 25 dedicated server needs --nogui')
+                throw new GradleException('Forge 28 dedicated server needs --nogui')
         }
     }
 }

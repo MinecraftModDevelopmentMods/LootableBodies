@@ -17,6 +17,14 @@ def probeJar = tasks.register('integrationTestModJar', Jar) {
     destinationDirectory = layout.buildDirectory.dir('integration-test-mod')
     from probeClasses
     from 'src/integrationTest/resources'
+    // Native 1.14 stitches every registered effect icon, including the isolated
+    // unsigned-ID fixtures. Keep their transparent placeholders inside the probe.
+    (0..<200).each { id ->
+        from('src/integrationTest/resources/assets/lootablebodiesbuildtest/textures/mob_effect/extended_effect.png') {
+            into 'assets/lootablebodiesbuildtest/textures/mob_effect'
+            rename { "padding_${id}.png" }
+        }
+    }
 }
 def packagedProbe = renamer.classes(probeJar) {
     map.from minecraft.dependency.toSrgFile
@@ -95,6 +103,8 @@ def phaseTask = { String phase, Object prerequisite ->
             File previousDir = options.workingDir.get().asFile
             def previousProperties = new LinkedHashMap(run.systemProperties)
             def previousClasspath = files(run.classpath)
+            def previousArgs = new ArrayList(run.args)
+            def previousMain = run.mainClass.orNull
             try {
                 options.workingDir.set(runDirectory)
                 run.workingDir(runDirectory)
@@ -108,6 +118,8 @@ def phaseTask = { String phase, Object prerequisite ->
                 run.workingDir(previousDir)
                 run.setSystemProperties(previousProperties)
                 run.setClasspath(previousClasspath)
+                run.setArgs(previousArgs)
+                run.mainClass.set(previousMain)
             }
             File marker = new File(runDirectory.get().asFile,"world/${phase}.pass")
             if (!marker.isFile()) throw new GradleException("Missing ${phase} corpse preservation marker")
@@ -239,7 +251,7 @@ minecraft.runs.register('platformControl') {
     client=false
     args '--nogui'
     workingDir=layout.buildDirectory.dir('forge-control-run')
-    String root=layout.buildDirectory.dir('forge13-development/control').get().asFile.absolutePath
+    String root=layout.buildDirectory.dir('forge14-development/control').get().asFile.absolutePath
     environment.put('MOD_CLASSES',"forgeplatformcontrol%%${root}${File.pathSeparator}forgeplatformcontrol%%${root}")
 }
 tasks.register('forgeControlServer') {
@@ -254,7 +266,7 @@ tasks.register('forgeControlServer') {
             history.parentFile.mkdirs();if(!root.renameTo(history))throw new GradleException('Cannot preserve previous control evidence')
         }
         new File(root,'mods').mkdirs()
-        File controlOutput=layout.buildDirectory.dir('forge13-development/control').get().asFile
+        File controlOutput=layout.buildDirectory.dir('forge14-development/control').get().asFile
         copy { from controlClasses;from 'src/controlTest/resources';into controlOutput }
         new File(root,'eula.txt').text='eula=true\n'
         new File(root,'server.properties').text='level-name=world\nlevel-type=FLAT\nserver-ip=127.0.0.1\nserver-port=0\nonline-mode=false\n'

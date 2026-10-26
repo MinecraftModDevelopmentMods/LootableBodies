@@ -42,8 +42,19 @@ def development_control_lines(lines):
 
 
 def native_control_line(line):
-    """Exact Forge 25 diagnostics reproduced by the independent platform control."""
+    """Exact Forge 28 diagnostics reproduced by the independent platform control."""
     if line == 'AL lib: (EE) alc_cleanup: 1 device not closed':
+        return True
+    if re.fullmatch(r'\[(?:\d{2}[A-Za-z]{3}\d{4} )?\d{2}:\d{2}:\d{2}(?:\.\d{3})?\] \[(?:Client|Server) thread/ERROR\] '
+                    r'\[(?:net\.minecraftforge\.fml\.network\.simple\.IndexedMessageCodec|ne\.mi\.fm\.ne\.si\.IndexedMessageCodec)(?:/SIMPLENET|/)?\]: Received empty payload on channel fml:handshake',line):
+        return True
+    clock=r'\[(?:\d{2}[A-Za-z]{3}\d{4} )?\d{2}:\d{2}:\d{2}(?:\.\d{3})?\] '
+    arguments=r'\[(?:minecraft/ArgumentTypes|net\.minecraft\.command\.arguments\.ArgumentTypes)/?\]: '
+    if re.fullmatch(clock+r'\[Netty Server IO #[0-9]+/ERROR\] '+arguments+
+                    r'Could not serialize net\.minecraftforge\.server\.command\.(?P<argument>ModIdArgument|EnumArgument)@[0-9a-f]{1,8} '
+                    r'\(class net\.minecraftforge\.server\.command\.(?P=argument)\) - will not be sent to client!',line):
+        return True
+    if re.fullmatch(clock+r'\[Netty Client IO #[0-9]+/ERROR\] '+arguments+r'Could not deserialize minecraft:',line):
         return True
     header=r'\[(?:\d{2}[A-Za-z]{3}\d{4} )?\d{2}:\d{2}:\d{2}(?:\.\d{3})?\] \[[^]\r\n]+/FATAL\] '
     return bool(re.fullmatch(header+r'(?:'
@@ -62,7 +73,9 @@ def audit(path, development=False, upgrade=False, fixture_logins=False, native=F
     platform=['FML appears to be missing any signature data. This is not a good thing']
     if development:
         platform.append('The binary patch set is missing. Either you are in a development environment, or things are not going to work!')
-    lines=text.splitlines()
+    # Forge's native Windows console colours its messages. Parse the same text
+    # as the complete file logs while keeping the original evidence untouched.
+    lines=re.sub(r'\x1b\[[0-9;]*m','',text).splitlines()
     proven=development_control_lines(lines) if development else set()
     version_check_block=False
     for number,line in enumerate(lines):
@@ -96,7 +109,7 @@ def audit(path, development=False, upgrade=False, fixture_logins=False, native=F
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--native',action='store_true',help='Allow only independently reproduced Forge 25 platform diagnostics')
+    parser.add_argument('--native',action='store_true',help='Allow only independently reproduced Forge 28 platform diagnostics')
     parser.add_argument('--development',action='store_true')
     parser.add_argument('--upgrade',action='store_true')
     parser.add_argument('--recursive',action='store_true')

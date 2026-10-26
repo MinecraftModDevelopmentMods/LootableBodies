@@ -5,17 +5,18 @@ import com.mojang.authlib.minecraft.MinecraftProfileTexture;
 import cyano.lootable.LootableBodies;
 import cyano.lootable.entities.EntityLootableBody;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.entity.model.ModelPlayer;
-import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.OpenGlHelper;
-import net.minecraft.client.renderer.entity.RenderLivingBase;
-import net.minecraft.client.renderer.entity.RenderManager;
-import net.minecraft.client.renderer.entity.RenderPigZombie;
-import net.minecraft.client.renderer.entity.RenderPlayer;
-import net.minecraft.client.renderer.entity.layers.LayerArrow;
-import net.minecraft.client.renderer.entity.layers.LayerBipedArmor;
-import net.minecraft.client.renderer.entity.layers.LayerCustomHead;
-import net.minecraft.client.renderer.entity.layers.LayerHeldItem;
+import net.minecraft.client.renderer.entity.model.PlayerModel;
+import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.platform.GLX;
+import net.minecraft.client.renderer.entity.model.BipedModel;
+import net.minecraft.client.renderer.entity.LivingRenderer;
+import net.minecraft.client.renderer.entity.EntityRendererManager;
+import net.minecraft.client.renderer.entity.PigZombieRenderer;
+import net.minecraft.client.renderer.entity.PlayerRenderer;
+import net.minecraft.client.renderer.entity.layers.ArrowLayer;
+import net.minecraft.client.renderer.entity.layers.BipedArmorLayer;
+import net.minecraft.client.renderer.entity.layers.HeadLayer;
+import net.minecraft.client.renderer.entity.layers.HeldItemLayer;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.util.ResourceLocation;
 import cyano.lootable.ModLog;
@@ -31,40 +32,40 @@ import java.util.Map;
 
 
 @OnlyIn(Dist.CLIENT)
-public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
+public class CorpseRenderer extends LivingRenderer<EntityLootableBody,PlayerModel<EntityLootableBody>> {
 
 	private static final ResourceLocation localSkin = new ResourceLocation(LootableBodies.MODID+":textures/entity/corpse/corpse.png");
 
-	protected final ModelPlayer thickArmsModel;
-	protected final ModelPlayer thinArmsModel;
+	protected final PlayerModel<EntityLootableBody> thickArmsModel;
+	protected final PlayerModel<EntityLootableBody> thinArmsModel;
 
-	public CorpseRenderer(RenderManager renderManagerIn) {
-		super(renderManagerIn,  new ModelPlayer(0.0F, true), 0.5F);
-		thinArmsModel = (ModelPlayer)this.mainModel;
-		thickArmsModel =  new ModelPlayer(0.0F, false);
+	public CorpseRenderer(EntityRendererManager renderManagerIn) {
+		super(renderManagerIn,  new PlayerModel(0.0F, true), 0.5F);
+		thinArmsModel = (PlayerModel)this.entityModel;
+		thickArmsModel =  new PlayerModel(0.0F, false);
 		//
-		this.addLayer(new LayerBipedArmor(this));
-		this.addLayer(new LayerHeldItem(this));
-		this.addLayer(new LayerArrow(this));
-		this.addLayer(new LayerCustomHead(this.getMainModel().bipedHead));
-		RenderPlayer k;
-		RenderPigZombie j;
+		this.addLayer(new BipedArmorLayer<>(this,new BipedModel<>(0.5F),new BipedModel<>(1.0F)));
+		this.addLayer(new HeldItemLayer(this));
+		this.addLayer(new ArrowLayer(this));
+		this.addLayer(new HeadLayer<>(this));
+		PlayerRenderer k;
+		PigZombieRenderer j;
 	}
 
-	public ModelPlayer getMainModel()
+	public PlayerModel getMainModel()
 	{
-		return (ModelPlayer)super.getMainModel();
+		return (PlayerModel)super.getEntityModel();
 	}
 
 	public void setModel(boolean thinArms){
 		if(thinArms){
-			this.mainModel = this.thinArmsModel;
+			this.entityModel = this.thinArmsModel;
 		} else {
-			this.mainModel = this.thickArmsModel;
+			this.entityModel = this.thickArmsModel;
 		}
 	}
 	/**
-	 * Returns the location of an entity's texture. Doesn't seem to be called unless you call Render.bindEntityTexture.
+	 * Returns the location of an entity's texture. Doesn't seem to be called unless you call EntityRenderer.bindEntityTexture.
 	 *
 	 * @param entity The entity to be rendered
 	 */
@@ -102,7 +103,7 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 
 	@Override
 	public void doRender(EntityLootableBody entity, double x, double y, double z, float yaw, float partialTick) {
-		if (net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.RenderLivingEvent.Pre<EntityLootableBody>(entity, this, partialTick, x, y, z)))
+		if (net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.RenderLivingEvent.Pre<>(entity, this, partialTick, x, y, z)))
 			return;
 
 		this.setModel(entity.useThinArms());
@@ -110,10 +111,10 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 		// render the model
 		GlStateManager.pushMatrix();
 		GlStateManager.disableCull();
-		this.mainModel.swingProgress = 0;
+		this.entityModel.swingProgress = 0;
 		boolean shouldSit = entity.isPassenger() && (entity.getRidingEntity() != null && entity.getRidingEntity().shouldRiderSit());
-		this.mainModel.isRiding = shouldSit;
-		this.mainModel.isChild = entity.isChild();
+		this.entityModel.isSitting = shouldSit;
+		this.entityModel.isChild = entity.isChild();
 
 		try {
 			float rotationInterpolation = 0F;
@@ -130,14 +131,14 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 
 
 			GlStateManager.enableAlphaTest();
-			this.mainModel.setLivingAnimations(entity, armSwing, armSwingAmount, 0);
-			this.mainModel.setRotationAngles(armSwing, armSwingAmount, age, headYaw, headPitch, scale, entity);
+			this.entityModel.setLivingAnimations(entity, armSwing, armSwingAmount, 0);
+			this.entityModel.setRotationAngles(entity, armSwing, armSwingAmount, age, headYaw, headPitch, scale);
 			// sigh, unable to pose the model
 
 			if (this.renderOutlines) {
 				boolean flag1 = this.setScoreTeamColor(entity);
 				GlStateManager.enableColorMaterial();
-				GlStateManager.enableOutlineMode(this.getTeamColor(entity));
+				GlStateManager.setupSolidRenderingTextureCombine(this.getTeamColor(entity));
 
 				if (!this.renderMarker) {
 					this.renderModel(entity, armSwing, armSwingAmount, age, headYaw, headPitch, scale);
@@ -147,7 +148,7 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 				this.renderLayers(entity, armSwing, armSwingAmount, partialTick, age, headYaw, headPitch, scale);
 
 
-				GlStateManager.disableOutlineMode();
+				GlStateManager.tearDownSolidRenderingTextureCombine();
 				GlStateManager.disableColorMaterial();
 
 				if (flag1) {
@@ -173,16 +174,16 @@ public class CorpseRenderer extends RenderLivingBase<EntityLootableBody> {
 			ModLog.log(Level.ERROR, ex, "Couldn\'t render entity");
 		}
 
-		GlStateManager.activeTexture(OpenGlHelper.GL_TEXTURE1);
-		GlStateManager.enableTexture2D();
-		GlStateManager.activeTexture(OpenGlHelper.GL_TEXTURE0);
+		GlStateManager.activeTexture(GLX.GL_TEXTURE1);
+		GlStateManager.enableTexture();
+		GlStateManager.activeTexture(GLX.GL_TEXTURE0);
 		GlStateManager.enableCull();
 		GlStateManager.popMatrix();
 		if (!this.renderOutlines && LootableBodies.displayNameTag) {
 			this.renderName(entity, x, y, z);
 		}
 
-		net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.RenderLivingEvent.Post<EntityLootableBody>(entity, this, partialTick, x, y, z));
+		net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.RenderLivingEvent.Post<>(entity, this, partialTick, x, y, z));
 
 		this.setModel(true);
 	}

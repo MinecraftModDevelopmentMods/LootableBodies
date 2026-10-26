@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.*;
 import net.minecraft.server.management.PlayerProfileCache;
-import net.minecraft.tileentity.TileEntitySkull;
+import net.minecraft.tileentity.SkullTileEntity;
 import net.minecraft.util.ResourceLocation;
 
 
@@ -39,16 +39,16 @@ final class VisibilitySkinChecks {
                 mark(report,"skin_cache_failure_has_visible_default",true);
             } catch(Throwable failure) {failures.add("skin cache: "+failure);mark(report,"skin_cache_failure_has_visible_default",false);}
         } finally {skinField.set(mc,original);}
-        Field cache=field(TileEntitySkull.class,PlayerProfileCache.class);
-        Field service=field(TileEntitySkull.class,MinecraftSessionService.class);
+        Field cache=field(SkullTileEntity.class,PlayerProfileCache.class);
+        Field service=field(SkullTileEntity.class,MinecraftSessionService.class);
         Object oldCache=cache.get(null),oldService=service.get(null);
         AtomicInteger requests=new AtomicInteger();
         CountDownLatch failedRequest=new CountDownLatch(1);
         try {
-            TileEntitySkull.setProfileCache(new PlayerProfileCache(null,new File(mc.gameDir,"fault-usercache.json")) {
+            SkullTileEntity.setProfileCache(new PlayerProfileCache(null,new File(mc.gameDir,"fault-usercache.json")) {
                 @Override public GameProfile getGameProfileForUsername(String name) {return new GameProfile(profile.getId(),name);}
             });
-            TileEntitySkull.setSessionService((MinecraftSessionService)Proxy.newProxyInstance(MinecraftSessionService.class.getClassLoader(),new Class<?>[]{MinecraftSessionService.class},(proxy,method,args)->{
+            SkullTileEntity.setSessionService((MinecraftSessionService)Proxy.newProxyInstance(MinecraftSessionService.class.getClassLoader(),new Class<?>[]{MinecraftSessionService.class},(proxy,method,args)->{
                 if(method.getName().equals("fillProfileProperties")) {requests.incrementAndGet();failedRequest.countDown();throw new IllegalStateException("injected profile lookup failure");}
                 throw new UnsupportedOperationException(method.getName());
             }));
@@ -57,7 +57,7 @@ final class VisibilitySkinChecks {
             catch(Throwable failure) {failures.add("profile: "+failure);mark(report,"profile_failure_does_not_abort_client_tick",false);}
             RuntimeChecks.require(failedRequest.await(2,TimeUnit.SECONDS),"Profile failure was never injected");
             // Deliberately slow lookup must leave the render/tick thread responsive.
-            TileEntitySkull.setSessionService((MinecraftSessionService)Proxy.newProxyInstance(MinecraftSessionService.class.getClassLoader(),new Class<?>[]{MinecraftSessionService.class},(proxy,method,args)->{
+            SkullTileEntity.setSessionService((MinecraftSessionService)Proxy.newProxyInstance(MinecraftSessionService.class.getClassLoader(),new Class<?>[]{MinecraftSessionService.class},(proxy,method,args)->{
                 if(method.getName().equals("fillProfileProperties")) {requests.incrementAndGet();Thread.sleep(400);return args[0];}
                 throw new UnsupportedOperationException(method.getName());
             }));

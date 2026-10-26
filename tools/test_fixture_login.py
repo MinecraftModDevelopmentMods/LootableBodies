@@ -80,6 +80,19 @@ class FixtureLoginTests(unittest.TestCase):
         self.log.write_text(JOIN);self.monitor.poll()
         self.assertTrue((self.root/'sync/client-A-joined').is_file())
 
+    def test_native_coloured_join_opens_the_second_client_gate(self):
+        self.log.write_text('\x1b[m\x1b[32m'+JOIN+'\x1b[m')
+        self.monitor.poll()
+        self.assertTrue((self.root/'sync/client-A-joined').is_file())
+
+    def test_coloured_retry_keeps_original_bytes_in_the_receipt_hash(self):
+        original='\x1b[32m'+FAILURE+'\x1b[m'+JOIN
+        self.log.write_text(original);self.monitor.poll()
+        self.assertEqual('1',(self.root/'sync/login-retry-A').read_text())
+        (self.root/'sync/login-retried-A').write_text('1')
+        write_receipts(self.root);audit(self.log,fixture_logins=True)
+        self.assertEqual(original,self.log.read_text())
+
     def test_live_log_receipts_survive_the_cold_reload(self):
         self.log.write_text(FAILURE+JOIN);self.monitor.poll()
         (self.root/'sync/login-retried-A').write_text('1')

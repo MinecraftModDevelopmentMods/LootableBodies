@@ -14,8 +14,8 @@ from native_runtime import project_assets,FORGE,digest,prepare_server as prepare
 from release_identity import MAIN_JAR as MAIN
 
 
-def client_command(project,java,distribution,root,cache,shared,port,role,hidden_agent=None):
-    prepare_client(root,project/'build/libs'/MAIN,project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar')
+def client_command(project,java,distribution,root,cache,shared,port,role,hidden_agent=None,probe=None):
+    prepare_client(root,project/'build/libs'/MAIN,probe or project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar')
     (root/'config').mkdir();(root/'config/lootablebodies.cfg').write_text('options {\n B:local_texture=true\n}\n')
     extra=['-Dlootablebodies.multiplayer.role='+role,'-Dlootablebodies.multiplayer.sync='+str(shared),
            '-Dlootablebodies.multiplayer.port='+str(port),
