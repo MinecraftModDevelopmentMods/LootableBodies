@@ -1,4 +1,11 @@
 package cyano.lootable.buildtest;
+import net.minecraft.world.biome.Biomes;
+import net.minecraft.enchantment.Enchantments;
+import net.minecraft.network.play.ServerPlayNetHandler;
+import net.minecraft.util.text.StringTextComponent;
+import net.minecraft.nbt.LongArrayNBT;
+import net.minecraft.nbt.ListNBT;
+import net.minecraft.nbt.CompoundNBT;
 
 import com.mojang.authlib.GameProfile;
 import cyano.lootable.LootableBodies;
@@ -8,15 +15,15 @@ import cyano.lootable.graphics.GUIHandler;
 import java.io.*;
 import java.util.*;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.init.Items;
-import net.minecraft.inventory.EntityEquipmentSlot;
+import net.minecraft.entity.player.ServerPlayerEntity;
+import net.minecraft.item.Items;
+import net.minecraft.inventory.EquipmentSlotType;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.DamageSource;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.WorldServer;
+import net.minecraft.world.server.ServerWorld;
 import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.common.util.FakePlayerFactory;
 import net.minecraftforge.fml.common.*;
@@ -31,6 +38,7 @@ public final class RuntimeChecks {
     static final UUID DEATH = UUID.fromString("00000000-0000-4000-8000-000000000103");
     public static volatile Throwable failure;
     private static boolean defaultsChecked;
+    private boolean rejectedFirstCorpseOpen;
     public RuntimeChecks() {
         MultiplayerChecks.registerChannel();
         net.minecraftforge.eventbus.api.IEventBus bus=net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus();
@@ -40,10 +48,18 @@ public final class RuntimeChecks {
             new ClientChecks().register();new MultiplayerClientChecks().register();new VisibilityClientChecks().register();new RespawnPacketClientChecks().register();
         });
     }
+    @SubscribeEvent public void rejectFirstCorpseOpen(net.minecraftforge.event.entity.player.PlayerInteractEvent.EntityInteract event) {
+        if(Boolean.getBoolean("lootablebodies.rejectFirstCorpseOpen") && !rejectedFirstCorpseOpen
+                && !event.getWorld().isRemote && event.getTarget() instanceof EntityLootableBody) {
+            rejectedFirstCorpseOpen=true;
+            event.setCanceled(true);
+            System.out.println("CORPSE_GUI_FIRST_INTERACTION_REJECTED_CONTROL");
+        }
+    }
     @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.LOWEST) public void fixtureAdmission(net.minecraftforge.event.entity.EntityJoinWorldEvent event) {
         if(Boolean.getBoolean("lootablebodies.assertFixtureAdmission") && event.getEntity() instanceof EntityLootableBody && !event.getWorld().isRemote && !event.getEntity().addedToChunk) {
             EntityLootableBody body=(EntityLootableBody)event.getEntity();
-            require(event.getWorld().getChunk(body.getPosition()).isLoaded(),"Manual corpse fixture spawned before chunk admission: "+body.getPosition()+" name="+body.getCustomNameTag());
+            require(event.getWorld().getChunkProvider().chunkExists(net.minecraft.util.math.MathHelper.floor(body.posX)>>4,net.minecraft.util.math.MathHelper.floor(body.posZ)>>4),"Manual corpse fixture spawned before chunk admission: "+body.getPosition()+" name="+body.getCustomNameTag());
         }
     }
     @SubscribeEvent public void started(FMLServerStartedEvent event) {
@@ -63,7 +79,7 @@ public final class RuntimeChecks {
         } catch (Throwable error) {
             failure = error;
             error.printStackTrace();
-        } finally { server.initiateShutdown(); }
+        } finally { server.initiateShutdown(false); }
     }
     static void require(boolean condition, String message) {
         if (!condition) throw new AssertionError(message);
@@ -72,11 +88,11 @@ public final class RuntimeChecks {
         return ItemStack.areItemStacksEqual(first==null?ItemStack.EMPTY:first,second==null?ItemStack.EMPTY:second);
     }
     public static void run(MinecraftServer server, String phase) throws Exception {
-        WorldServer world = server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));
+        ServerWorld world = server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));
         File folder = world.getSaveHandler().getWorldDirectory();
-        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.4.113021"), "identity/version");
+        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.5.114041"), "identity/version");
         require(net.minecraftforge.fml.ModList.get().getModContainerById("lootablebodies").get().getModInfo().getVersion().toString().equals(phase.equals("seed") ? "2.4.0" : phase.equals("issues") ?
-                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.4.113021") : "2.4.4.113021"), "loaded release version");
+                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.5.114041") : "2.4.5.114041"), "loaded release version");
         if (!defaultsChecked) require(LootableBodies.addBonesToCorpse && LootableBodies.displayNameTag && !LootableBodies.hurtByEnvironment &&
                 !LootableBodies.hurtByAttacks && !LootableBodies.hurtByMisc && LootableBodies.corpseHP == 20 &&
                 LootableBodies.ticksPerItemDecay == 6000 && LootableBodies.corpseDecayTime == 72000 &&
@@ -174,41 +190,33 @@ public final class RuntimeChecks {
                 require(!world.getChunkProvider().chunkExists(256, 256), "deferred chunk opened early");
             }
         } else throw new AssertionError("Unknown phase " + phase);
-        server.saveAllWorlds(false);
+        server.save(false,true,false);
         File marker = new File(folder, phase + ".pass");
         try (FileWriter output = new FileWriter(marker)) { output.write("corpse-inventory-preserved\n"); }
         System.out.println("LOOTABLE_BODIES_RUNTIME_PASS phase=" + phase);
     }
-    static net.minecraft.world.chunk.Chunk emptyChunk(WorldServer world,int x,int z) {
-        net.minecraft.world.biome.Biome[] biomes=new net.minecraft.world.biome.Biome[256];java.util.Arrays.fill(biomes,net.minecraft.init.Biomes.PLAINS);return new net.minecraft.world.chunk.Chunk(world,x,z,biomes,net.minecraft.world.chunk.UpgradeData.EMPTY,world.getPendingBlockTicks(),world.getPendingFluidTicks(),0L);
+    static net.minecraft.world.chunk.Chunk emptyChunk(ServerWorld world,int x,int z) {
+        net.minecraft.world.biome.Biome[] biomes=new net.minecraft.world.biome.Biome[256];java.util.Arrays.fill(biomes,net.minecraft.world.biome.Biomes.PLAINS);return new net.minecraft.world.chunk.Chunk(world,new net.minecraft.util.math.ChunkPos(x,z),biomes);
     }
     static ItemStack stack(int index) {
         ItemStack stack=index<4?new ItemStack(new net.minecraft.item.Item[]{Items.DIAMOND_HELMET,Items.DIAMOND_CHESTPLATE,Items.DIAMOND_LEGGINGS,Items.DIAMOND_BOOTS}[index]):index==4?new ItemStack(Items.DIAMOND_SWORD):index==5?new ItemStack(Items.SHIELD):new ItemStack(Items.LAPIS_LAZULI,1+index%32);
-        NBTTagCompound custom = new NBTTagCompound();
-        custom.setString("fixture", "slot-" + index);
-        custom.setTag("typed_longs",new NBTTagLongArray(new long[]{Long.MIN_VALUE,index,Long.MAX_VALUE}));
-        NBTTagCompound nested = new NBTTagCompound(); nested.setInt("unchanged", index * 17);
-        NBTTagList contents = new NBTTagList();
-        NBTTagCompound item = new NBTTagCompound(); new ItemStack(Items.DIAMOND,3).write(item); contents.add(item);
-        nested.setTag("contents", contents); custom.setTag("nested", nested);
-        stack.setTag(custom);if(index<=5)stack.setDamage(index<4?index+2:index==4?17:9); stack.setDisplayName(new net.minecraft.util.text.TextComponentString("Fixture " + index));
-        if (index == 4) stack.addEnchantment(net.minecraft.init.Enchantments.UNBREAKING, 2);
+        CompoundNBT custom = new CompoundNBT();
+        custom.putString("fixture", "slot-" + index);
+        custom.put("typed_longs",new LongArrayNBT(new long[]{Long.MIN_VALUE,index,Long.MAX_VALUE}));
+        CompoundNBT nested = new CompoundNBT(); nested.putInt("unchanged", index * 17);
+        ListNBT contents = new ListNBT();
+        CompoundNBT item = new CompoundNBT(); new ItemStack(Items.DIAMOND,3).write(item); contents.add(item);
+        nested.put("contents", contents); custom.put("nested", nested);
+        stack.setTag(custom);if(index<=5)stack.setDamage(index<4?index+2:index==4?17:9); stack.setDisplayName(new net.minecraft.util.text.StringTextComponent("Fixture " + index));
+        if (index == 4) stack.addEnchantment(net.minecraft.enchantment.Enchantments.UNBREAKING, 2);
         return stack;
     }
-    static net.minecraft.world.chunk.Chunk awaitChunk(WorldServer world,int x,int z) {
-        net.minecraft.world.chunk.Chunk admitted=world.getChunk(x,z);
-        // Generation completes on a worker, then queues Chunk.onLoad on the
-        // server. Admit this disposable chunk before manually populating it.
-        for(int tasks=0;!admitted.isLoaded();tasks++) {
-            require(tasks<10000,"Native fixture chunk admission did not complete");
-            java.util.concurrent.FutureTask<?> pending=world.getServer().futureTaskQueue.poll();
-            require(pending!=null,"Missing native chunk admission task");pending.run();
-            try{pending.get();}catch(Exception failed){throw new AssertionError("Native fixture admission failed",failed);}
-        }
-        require(admitted.isLoaded(),"Fixture must await native chunk admission before spawning a corpse");
+    static net.minecraft.world.chunk.Chunk awaitChunk(ServerWorld world,int x,int z) {
+        net.minecraft.world.chunk.Chunk admitted=(net.minecraft.world.chunk.Chunk)world.getChunkProvider().getChunk(x,z,net.minecraft.world.chunk.ChunkStatus.FULL,true);
+        require(world.getChunkProvider().chunkExists(x,z),"Fixture must await native chunk admission before spawning a corpse");
         return admitted;
     }
-    static EntityLootableBody fixture(WorldServer world, UUID uuid, int coordinate, boolean full) {
+    static EntityLootableBody fixture(ServerWorld world, UUID uuid, int coordinate, boolean full) {
         awaitChunk(world,coordinate >> 4,coordinate >> 4);
         EntityLootableBody body = new EntityLootableBody(world);
         body.setUniqueId(uuid); body.setPosition(coordinate+0.5, 80, coordinate+0.5);
@@ -217,36 +225,36 @@ public final class RuntimeChecks {
         for (int i=0; i<48; i++) if (full || i % 7 == 0 || i == 47) body.setInventorySlotContents(i,stack(i));
         if (full) { body.addItem(stack(70)); body.addItem(stack(71)); }
         disableVacuum(body);
-        require(world.spawnEntity(body), "fixture spawn");
+        require(world.addEntity(body), "fixture spawn");
         return body;
     }
-    static void verifyRoundTrip(WorldServer world, EntityLootableBody body) {
-        NBTTagCompound before = new NBTTagCompound(); body.writeUnlessPassenger(before);
+    static void verifyRoundTrip(ServerWorld world, EntityLootableBody body) {
+        CompoundNBT before = new CompoundNBT(); body.writeUnlessPassenger(before);
         require(before.getString("id").equals("lootablebodies:corpse"), "persistent entity name: " + before.getString("id"));
-        Entity copy = net.minecraft.entity.EntityType.create(before.copy(), world);
+        Entity copy = FixtureApi.loadEntity(before.copy(), world);
         require(copy instanceof EntityLootableBody, "NBT factory registration");
-        NBTTagCompound after = new NBTTagCompound(); copy.writeUnlessPassenger(after);
+        CompoundNBT after = new CompoundNBT(); copy.writeUnlessPassenger(after);
         compare(before,after);
         if (body.getUniqueID().equals(NEAR)) {
             require(before.getList("Equipment",10).size()==48, "all indexed stacks");
             require(before.getList("Aux",10).size()==2, "ordered overflow");
         }
     }
-    static void death(MinecraftServer server, WorldServer world, File folder) throws Exception {
-        EntityPlayerMP player = new EntityPlayerMP(server, world,
+    static void death(MinecraftServer server, ServerWorld world, File folder) throws Exception {
+        ServerPlayerEntity player = new ServerPlayerEntity(server, world,
                 new GameProfile(UUID.fromString("00000000-0000-4000-8000-000000000104"),"BuildDeath"),
                 new net.minecraft.server.management.PlayerInteractionManager(world));
-        player.connection = new net.minecraft.network.NetHandlerPlayServer(server,
-                new net.minecraft.network.NetworkManager(net.minecraft.network.EnumPacketDirection.SERVERBOUND), player);
-        player.setPosition(32.5,80,0.5); require(world.getChunk(2,0).isLoaded(),"Death fixture must await native chunk admission before spawning its corpse");
-        world.getGameRules().setOrCreateGameRule("keepInventory","false",null);
+        player.connection = new net.minecraft.network.play.ServerPlayNetHandler(server,
+                new net.minecraft.network.NetworkManager(net.minecraft.network.PacketDirection.SERVERBOUND), player);
+        player.setPosition(32.5,80,0.5); awaitChunk(world,2,0); require(world.getChunkProvider().chunkExists(2,0),"Death fixture must await native chunk admission before spawning its corpse");
+        world.getGameRules().get(net.minecraft.world.GameRules.KEEP_INVENTORY).set(false,null);
         player.inventory.mainInventory.set(0,stack(4));
         player.inventory.mainInventory.set(9,stack(19));
-        player.setItemStackToSlot(EntityEquipmentSlot.HEAD,stack(0));
-        player.setItemStackToSlot(EntityEquipmentSlot.OFFHAND,stack(5));
+        player.setItemStackToSlot(EquipmentSlotType.HEAD,stack(0));
+        player.setItemStackToSlot(EquipmentSlotType.OFFHAND,stack(5));
         player.onDeath(DamageSource.OUT_OF_WORLD);
         EntityLootableBody corpse = null;
-        for (Entity entity : new ArrayList<Entity>(world.loadedEntityList))
+        for (Entity entity : new ArrayList<Entity>(FixtureApi.entities(world)))
             if (entity instanceof EntityLootableBody && "BuildDeath".equals(((EntityLootableBody)entity).getCustomNameTag())) corpse=(EntityLootableBody)entity;
         require(corpse != null, "actual player death created corpse");
         require(ItemStack.areItemStacksEqual(corpse.getStackInSlot(0),stack(0)),"death helmet");
@@ -261,12 +269,12 @@ public final class RuntimeChecks {
         require(ItemStack.areItemStacksEqual(recovered,stack(19)),"shift-click recovery");
         require((corpse.getStackInSlot(6)).isEmpty(),"no duplicate in corpse");
         corpse.setUniqueId(DEATH); corpse.setNoGravity(true);
-        corpse.motionX=0; corpse.motionY=0; corpse.motionZ=0;
+        corpse.setMotion(0,corpse.getMotion().y,corpse.getMotion().z); corpse.setMotion(corpse.getMotion().x,0,corpse.getMotion().z); corpse.setMotion(corpse.getMotion().x,corpse.getMotion().y,0);
         disableVacuum(corpse);
         saveExpected(folder,"death",corpse);
     }
-    static EntityLootableBody find(WorldServer world, UUID uuid) {
-        for(Entity entity : world.loadedEntityList) if(entity.getUniqueID().equals(uuid)) return (EntityLootableBody)entity;
+    static EntityLootableBody find(ServerWorld world, UUID uuid) {
+        for(Entity entity : FixtureApi.entities(world)) if(entity.getUniqueID().equals(uuid)) return (EntityLootableBody)entity;
         throw new AssertionError("Saved corpse missing " + uuid);
     }
     static void disableVacuum(EntityLootableBody body) {
@@ -276,16 +284,16 @@ public final class RuntimeChecks {
         } catch (Exception error) { throw new AssertionError(error); }
     }
     static void saveExpected(File folder,String name,EntityLootableBody body) throws Exception {
-        NBTTagCompound data = new NBTTagCompound(); body.writeUnlessPassenger(data);
+        CompoundNBT data = new CompoundNBT(); body.writeUnlessPassenger(data);
         CompressedStreamTools.writeCompressed(data,new FileOutputStream(new File(folder,name+".nbt")));
     }
     static void verifyExpected(File folder,String name,EntityLootableBody body) throws Exception {
-        NBTTagCompound expected = CompressedStreamTools.readCompressed(new FileInputStream(new File(folder,name+".nbt")));
-        NBTTagCompound actual = new NBTTagCompound(); body.writeUnlessPassenger(actual); compare(expected,actual);
+        CompoundNBT expected = CompressedStreamTools.readCompressed(new FileInputStream(new File(folder,name+".nbt")));
+        CompoundNBT actual = new CompoundNBT(); body.writeUnlessPassenger(actual); compare(expected,actual);
     }
-    static void compare(NBTTagCompound expected,NBTTagCompound actual) {
+    static void compare(CompoundNBT expected,CompoundNBT actual) {
         for(String key : Arrays.asList("id","UUIDMost","UUIDLeast","Pos","Rotation","CustomName","Equipment","Aux","DeathTime","DecayTime"))
-            require(Objects.equals(expected.getTag(key),actual.getTag(key)),"Saved field differs " + key + ": " + expected.getTag(key) + " != " + actual.getTag(key));
-        if(expected.hasKey("Name")) require(expected.getString("Name").equals(actual.getString("Name")),"profile name");
+            require(Objects.equals(expected.get(key),actual.get(key)),"Saved field differs " + key + ": " + expected.get(key) + " != " + actual.get(key));
+        if(expected.contains("Name")) require(expected.getString("Name").equals(actual.getString("Name")),"profile name");
     }
 }

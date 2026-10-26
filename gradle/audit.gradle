@@ -60,7 +60,7 @@ ext.auditReleaseArchives = { File directory ->
                     if (!names.contains(it)) throw new GradleException("Missing production entry ${it}")
                 }
                 String info=zip.getInputStream(zip.getEntry('META-INF/mods.toml')).getText('UTF-8')
-                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.13.2]"'].each {
+                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.14.4]"'].each {
                     if(!info.contains(it))throw new GradleException("Incorrect production metadata: ${it}")
                 }
                 if(new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack.pack_format!=4)
@@ -72,7 +72,7 @@ ext.auditReleaseArchives = { File directory ->
                     throw new GradleException('Bundled sources or dependencies in main jar')
                 String entity = new String(zip.getInputStream(zip.getEntry(
                         'cyano/lootable/entities/EntityLootableBody.class')).bytes, 'ISO-8859-1')
-                if (!entity.contains('func_70037_a') || !entity.contains('func_70014_b'))
+                if (!entity.contains('func_70037_a') || !entity.contains('func_213281_b'))
                     throw new GradleException('Production jar does not have runtime SRG mappings')
             } else if (index == 1 && !names.contains('cyano/lootable/LootableBodies.java')) {
                 throw new GradleException('Sources jar does not contain production sources')

@@ -8,7 +8,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import java.io.*;
 import java.net.*;
 import java.util.concurrent.*;
-import net.minecraft.network.EnumConnectionState;
+import net.minecraft.network.ProtocolType;
 import net.minecraft.network.NetworkManager;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -44,7 +44,7 @@ class LoginReadGuardTest {
                     }
                 }).connect(server.getLocalSocketAddress()).sync().channel();
             peer=accepted.get(5,TimeUnit.SECONDS);
-            channel.attr(NetworkManager.PROTOCOL_ATTRIBUTE_KEY).set(EnumConnectionState.LOGIN);
+            channel.attr(NetworkManager.PROTOCOL_ATTRIBUTE_KEY).set(ProtocolType.LOGIN);
             drain();
         }
         void drain()throws Exception {channel.eventLoop().submit(()->{}).get(5,TimeUnit.SECONDS);}
@@ -85,7 +85,7 @@ class LoginReadGuardTest {
         }
     }
     @Test void otherProtocolStatesAreNotChanged()throws Exception {
-        for(EnumConnectionState state:new EnumConnectionState[]{EnumConnectionState.HANDSHAKING,EnumConnectionState.STATUS,EnumConnectionState.PLAY}) {
+        for(ProtocolType state:new ProtocolType[]{ProtocolType.HANDSHAKING,ProtocolType.STATUS,ProtocolType.PLAY}) {
             try(Connection c=new Connection()) {
                 c.stall();c.channel.attr(NetworkManager.PROTOCOL_ATTRIBUTE_KEY).set(state);guard(c.channel);c.drain();
                 assertEquals(0,c.channel.readInterest());assertEquals(state,c.channel.attr(NetworkManager.PROTOCOL_ATTRIBUTE_KEY).get());
@@ -117,9 +117,9 @@ class LoginReadGuardTest {
                 try {if(!resume.await(5,TimeUnit.SECONDS))throw new AssertionError("Fixture synchronization timed out");}
                 catch(InterruptedException failure){throw new AssertionError(failure);}
             });
-            try {assertTrue(entered.await(5,TimeUnit.SECONDS));guard(c.channel);c.channel.attr(NetworkManager.PROTOCOL_ATTRIBUTE_KEY).set(EnumConnectionState.PLAY);}
+            try {assertTrue(entered.await(5,TimeUnit.SECONDS));guard(c.channel);c.channel.attr(NetworkManager.PROTOCOL_ATTRIBUTE_KEY).set(ProtocolType.PLAY);}
             finally {resume.countDown();}
-            c.drain();assertEquals(0,c.channel.readInterest());assertEquals(EnumConnectionState.PLAY,c.channel.attr(NetworkManager.PROTOCOL_ATTRIBUTE_KEY).get());
+            c.drain();assertEquals(0,c.channel.readInterest());assertEquals(ProtocolType.PLAY,c.channel.attr(NetworkManager.PROTOCOL_ATTRIBUTE_KEY).get());
         }
     }
 }

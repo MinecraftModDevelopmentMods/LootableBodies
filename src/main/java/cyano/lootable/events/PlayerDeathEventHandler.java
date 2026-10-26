@@ -5,12 +5,12 @@ import static cyano.lootable.ItemStacks.emptyStack;
 import cyano.lootable.LootableBodies;
 import cyano.lootable.entities.EntityLootableBody;
 
-import net.minecraft.entity.item.EntityItem;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.init.Items;
-import net.minecraft.inventory.EntityEquipmentSlot;
+import net.minecraft.entity.item.ItemEntity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.Items;
+import net.minecraft.inventory.EquipmentSlotType;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.EnumHandSide;
+import net.minecraft.util.HandSide;
 import net.minecraft.world.World;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.EntityEvent;
@@ -31,7 +31,7 @@ import java.util.Map;
 
 public class PlayerDeathEventHandler {
 
-	private static final Map<EntityPlayer,Map<ItemStack,EntityEquipmentSlot>> equipmentCache = new WeakHashMap<>();
+	private static final Map<PlayerEntity,Map<ItemStack,EquipmentSlotType>> equipmentCache = new WeakHashMap<>();
 
 	@SubscribeEvent(priority= EventPriority.HIGHEST)
 	public void corpseEnteringChunk(EntityEvent.EnteringChunk e) {
@@ -41,22 +41,22 @@ public class PlayerDeathEventHandler {
 
 	@SubscribeEvent(priority= EventPriority.LOW, receiveCanceled = true)
 	public void entityDeathEvent(LivingDeathEvent e){
-		if(e.getEntity() instanceof EntityPlayer
+		if(e.getEntity() instanceof PlayerEntity
 				&& !e.getEntity().getEntityWorld().isRemote) {
-			final EntityPlayer player = (EntityPlayer)e.getEntity();
+			final PlayerEntity player = (PlayerEntity)e.getEntity();
 			equipmentCache.remove(player);
 			if(e.isCanceled() || e.getResult() == Event.Result.DENY || player.isSpectator()
-					|| player.getEntityWorld().getGameRules().getBoolean("keepInventory")) return;
-			Map<ItemStack,EntityEquipmentSlot> cache = new IdentityHashMap<>();
-			for(EntityEquipmentSlot slot : EntityLootableBody.EQUIPMENT_SLOTS){
+					|| player.getEntityWorld().getGameRules().getBoolean(net.minecraft.world.GameRules.KEEP_INVENTORY)) return;
+			Map<ItemStack,EquipmentSlotType> cache = new IdentityHashMap<>();
+			for(EquipmentSlotType slot : EntityLootableBody.EQUIPMENT_SLOTS){
 				ItemStack stack = player.getItemStackFromSlot(slot);
 				if(!emptyStack(stack)) cache.put(stack,slot);
 			}
 
-			if(player.getPrimaryHand() == EnumHandSide.LEFT){
+			if(player.getPrimaryHand() == HandSide.LEFT){
 				// swap main and off hand items (easier than messing with the rendering code)
-				cache.put(player.getItemStackFromSlot(EntityEquipmentSlot.MAINHAND),EntityEquipmentSlot.OFFHAND);
-				cache.put(player.getItemStackFromSlot(EntityEquipmentSlot.OFFHAND),EntityEquipmentSlot.MAINHAND);
+				cache.put(player.getItemStackFromSlot(EquipmentSlotType.MAINHAND),EquipmentSlotType.OFFHAND);
+				cache.put(player.getItemStackFromSlot(EquipmentSlotType.OFFHAND),EquipmentSlotType.MAINHAND);
 			}
 			equipmentCache.put(player,cache);
 		}
@@ -64,12 +64,12 @@ public class PlayerDeathEventHandler {
 
 	@SubscribeEvent(priority= EventPriority.LOWEST, receiveCanceled = true)
 	public void entityDropEvent(LivingDropsEvent e){
-		if(e.getEntity() instanceof EntityPlayer
+		if(e.getEntity() instanceof PlayerEntity
 				&& !e.getEntity().getEntityWorld().isRemote) {
-			final EntityPlayer player = (EntityPlayer)e.getEntity();
-			Map<ItemStack,EntityEquipmentSlot> cache = equipmentCache.remove(player);
+			final PlayerEntity player = (PlayerEntity)e.getEntity();
+			Map<ItemStack,EquipmentSlotType> cache = equipmentCache.remove(player);
 			if(e.isCanceled() || e.getResult() == Event.Result.DENY || player.isSpectator()
-					|| player.getEntityWorld().getGameRules().getBoolean("keepInventory")) return;
+					|| player.getEntityWorld().getGameRules().getBoolean(net.minecraft.world.GameRules.KEEP_INVENTORY)) return;
 			if(cache == null) cache = Collections.emptyMap();
 			final World w = player.getEntityWorld();
 
@@ -78,11 +78,11 @@ public class PlayerDeathEventHandler {
 			corpse.setRotation(player.rotationYaw);
 
 			List<ItemStack> items = new ArrayList<>();
-			Set<EntityEquipmentSlot> assignedSlots = EnumSet.noneOf(EntityEquipmentSlot.class);
-			for (EntityItem itemEntity : e.getDrops()) {
+			Set<EquipmentSlotType> assignedSlots = EnumSet.noneOf(EquipmentSlotType.class);
+			for (ItemEntity itemEntity : e.getDrops()) {
 				ItemStack item = itemEntity.getItem();
 				if(emptyStack(item) || item.getCount() <= 0) continue;
-				EntityEquipmentSlot slot = cache.get(item);
+				EquipmentSlotType slot = cache.get(item);
 				// Stage independent stacks so a rejected spawn cannot mutate vanilla drops.
 				if (slot != null && assignedSlots.add(slot)) {
 					corpse.setItemStackToSlot(slot,item.copy());
@@ -97,7 +97,7 @@ public class PlayerDeathEventHandler {
 				corpse.addItem(new ItemStack(Items.ROTTEN_FLESH,1+w.rand.nextInt(3)));
 			}
 
-			if(w.spawnEntity(corpse)) {
+			if(w.addEntity(corpse)) {
 				e.getDrops().clear();
 			} else {
 				ModLog.warning("%s: Corpse spawn rejected; original death drops retained", LootableBodies.MODID);

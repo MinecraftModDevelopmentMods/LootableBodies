@@ -6,6 +6,56 @@ from audit_runtime_logs import audit, FORGE_UPGRADE_RENAME
 
 
 class RuntimeLogAuditTests(unittest.TestCase):
+    def dead_player_movement(self):
+        return (Path(__file__).parent/'fixtures/forge28-dead-player-movement.txt').read_text()
+
+    def test_native_dead_player_movement_matches_the_complete_control_stack(self):
+        known=self.dead_player_movement()
+        for stack in (known,known.replace('func_213161_c(SourceFile:127)','func_213160_bf(SourceFile:103)').replace('MinecraftServer.java:681','MinecraftServer.java:680')):
+            with self.subTest(stack=stack):
+                self.assertEqual(1,self.check_log(stack,native=True)['known_forge28_dead_player_movement_failures'])
+        self.assertEqual(2,self.check_log(known+known,native=True)['known_forge28_dead_player_movement_failures'])
+
+    def test_native_dead_player_movement_requires_native_mode(self):
+        for options in ({},{'development':True},{'upgrade':True}):
+            with self.subTest(options=options),self.assertRaises(RuntimeError):
+                self.check_log(self.dead_player_movement(),**options)
+
+    def test_native_dead_player_position_rotation_matches_independent_control(self):
+        known=self.dead_player_movement().replace('CPlayerPacket$PositionPacket.func_148833_a(SourceFile:57)',
+            'CPlayerPacket$PositionRotationPacket.func_148833_a(SourceFile:18)')
+        for stack in (known,known.replace('func_213161_c(SourceFile:127)','func_213160_bf(SourceFile:103)').replace('MinecraftServer.java:681','MinecraftServer.java:680')):
+            with self.subTest(stack=stack):
+                self.assertEqual(1,self.check_log(stack,native=True)['known_forge28_dead_player_movement_failures'])
+
+    def test_position_rotation_control_still_requires_exact_complete_native_stack(self):
+        known=self.dead_player_movement().replace('CPlayerPacket$PositionPacket.func_148833_a(SourceFile:57)',
+            'CPlayerPacket$PositionRotationPacket.func_148833_a(SourceFile:18)')
+        for options in ({},{'development':True},{'upgrade':True}):
+            with self.subTest(options=options),self.assertRaises(RuntimeError):self.check_log(known,**options)
+        for changed in (known.replace('PositionRotationPacket.func_148833_a(SourceFile:18)',
+                'PositionRotationPacket.func_148833_a(SourceFile:19)'),
+                known.replace('SourceFile:208','SourceFile:209'),
+                known.replace('PositionRotationPacket','RotationPacket'),
+                known+'\tat cyano.lootable.Other.hook(Other.java:12)\n',
+                known+'Caused by: java.lang.IllegalStateException: other failure\n'):
+            with self.subTest(changed=changed),self.assertRaises(RuntimeError):self.check_log(changed,native=True)
+
+    def test_native_dead_player_movement_rejects_changed_or_additional_failures(self):
+        known=self.dead_player_movement()
+        variants=[known.replace('SourceFile:208','SourceFile:209'),
+            known.replace('CPlayerPacket$PositionPacket','CPlayerPacket$RotationPacket'),
+            known.replace('java.lang.NullPointerException: null','java.lang.IllegalStateException: null'),
+            known.replace('/FATAL]','/ERROR]'),known.replace('Server thread','Netty Server IO #1'),
+            known.replace('minecraft/ThreadTaskExecutor','minecraft/OtherExecutor'),
+            known+'\tat cyano.lootable.Other.hook(Other.java:12)\n',
+            known+'Caused by: java.lang.IllegalStateException: new failure\n',
+            known+'Suppressed: java.lang.IllegalStateException: new failure\n',
+            known.rsplit('\n\tat java.lang.Thread.run',1)[0]+'\n',
+            known+'[12:00:01] [Server thread/INFO] Next task\njava.lang.NullPointerException: null\n']
+        for changed in variants:
+            with self.subTest(changed=changed),self.assertRaises(RuntimeError):self.check_log(changed,native=True)
+
     def check_log(self, text, **options):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'runtime.log'
@@ -90,6 +140,40 @@ class RuntimeLogAuditTests(unittest.TestCase):
         for text in (known,known.replace('1 device','2 devices'),known.replace('alc_cleanup','other_failure')):
             with self.subTest(text=text), self.assertRaises(RuntimeError):
                 self.check_log(text,native=text!=known)
+
+    def test_native_terminal_colours_do_not_change_log_classification(self):
+        known='[15:16:49] [Thread-1/FATAL] [ne.mi.co.ForgeConfig/CORE]: Forge config just got changed on the file system!'
+        self.check_log('\x1b[m\x1b[1;31m'+known+'\x1b[m\n',native=True)
+        for text in [known+' extra failure',known.replace('ForgeConfig','OtherConfig'),
+                     '[15:16:49] [Server thread/ERROR] Unexpected error']:
+            with self.subTest(text=text),self.assertRaises(RuntimeError):
+                self.check_log('\x1b[1;31m'+text+'\x1b[m\n',native=True)
+
+    def test_native_forge28_empty_handshake_control_is_narrow(self):
+        known='[15:49:16] [Client thread/ERROR] [net.minecraftforge.fml.network.simple.IndexedMessageCodec]: Received empty payload on channel fml:handshake'
+        self.check_log(known+'\n',native=True)
+        for text in [known, known+' extra failure', known.replace('fml:handshake','other:channel'),
+                     known.replace('IndexedMessageCodec','OtherCodec')]:
+            with self.subTest(text=text),self.assertRaises(RuntimeError):
+                self.check_log(text+'\n',native=text!=known)
+
+    def test_native_forge28_tcp_command_tree_diagnostics_are_exact(self):
+        lines=[
+            '[16:19:28] [Netty Server IO #1/ERROR] [minecraft/ArgumentTypes]: Could not serialize net.minecraftforge.server.command.ModIdArgument@62e9cbe6 (class net.minecraftforge.server.command.ModIdArgument) - will not be sent to client!',
+            '[16:19:28.111] [Netty Server IO #2/ERROR] [net.minecraft.command.arguments.ArgumentTypes/]: Could not serialize net.minecraftforge.server.command.EnumArgument@d8352c6 (class net.minecraftforge.server.command.EnumArgument) - will not be sent to client!',
+            '[16:19:28] [Netty Client IO #1/ERROR] [net.minecraft.command.arguments.ArgumentTypes]: Could not deserialize minecraft:',
+            '[16:19:30] [Server thread/ERROR] [ne.mi.fm.ne.si.IndexedMessageCodec/SIMPLENET]: Received empty payload on channel fml:handshake']
+        lines += [line.replace('Netty Server', 'Netty Epoll Server').replace('Netty Client', 'Netty Epoll Client')
+                  for line in lines if 'Netty' in line]
+        for line in lines:
+            with self.subTest(line=line):
+                self.check_log(line+'\n',native=True)
+                with self.assertRaises(RuntimeError):self.check_log(line+'\n')
+                for changed in [line+' extra failure',line.replace('ModIdArgument','OtherArgument').replace('EnumArgument','OtherArgument').replace('deserialize minecraft:','deserialize other:').replace('fml:handshake','other:channel')]:
+                    with self.assertRaises(RuntimeError):self.check_log(changed+'\n',native=True)
+                if 'Netty Epoll' in line:
+                    with self.assertRaises(RuntimeError):
+                        self.check_log(line.replace('Netty Epoll', 'Netty Unknown')+'\n',native=True)
 
     def forge14_control(self):
         return (Path(__file__).parent / 'fixtures/forge14-bootstrap-diagnostics.txt').read_text(encoding='utf-8')

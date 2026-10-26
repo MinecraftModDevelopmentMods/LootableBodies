@@ -16,10 +16,10 @@ tasks.register('prepareMinecraftAssets') {
                 java.nio.file.Files.move(pending.toPath(),output.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING)
             }
         }
-        File descriptor=new File(root,'1.13.2.json')
-        download('https://piston-meta.mojang.com/v1/packages/fa3ddc22146c46bfeb0e9d322c6f83b937e25005/1.13.2.json','fa3ddc22146c46bfeb0e9d322c6f83b937e25005',descriptor)
+        File descriptor=new File(root,'1.14.4.json')
+        download('https://piston-meta.mojang.com/v1/packages/be146d5f66a3627ed0a87c234c4d8dde8ab35098/1.14.4.json','be146d5f66a3627ed0a87c234c4d8dde8ab35098',descriptor)
         def version=new groovy.json.JsonSlurper().parse(descriptor)
-        File index=new File(root,'indexes/1.13.1.json')
+        File index=new File(root,'indexes/1.14.json')
         download(version.assetIndex.url,version.assetIndex.sha1,index)
         Set<String> hashes=new groovy.json.JsonSlurper().parse(index).objects.values().collect {it.hash} as Set
         hashes.each {hash ->

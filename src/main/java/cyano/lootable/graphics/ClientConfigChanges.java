@@ -11,6 +11,6 @@ public final class ClientConfigChanges {
         boolean wasLocal=LootableBodies.useLocalSkin;LootableBodies.saveClientConfiguration();
         Minecraft mc=Minecraft.getInstance();
         if(wasLocal && !LootableBodies.useLocalSkin && mc.world!=null)
-            for(Entity entity:mc.world.loadedEntityList)if(entity instanceof EntityLootableBody)((EntityLootableBody)entity).refreshClientSkin();
+            for(Entity entity:mc.world.getAllEntities())if(entity instanceof EntityLootableBody)((EntityLootableBody)entity).refreshClientSkin();
     }
 }

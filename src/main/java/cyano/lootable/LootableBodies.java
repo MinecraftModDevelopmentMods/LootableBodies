@@ -9,7 +9,7 @@ import cyano.lootable.upgrade.ChunkVersionContext;
 import net.minecraft.entity.EntityType;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroup;
-import net.minecraft.item.ItemSpawnEgg;
+import net.minecraft.item.SpawnEggItem;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
@@ -26,10 +26,11 @@ import net.minecraftforge.fml.loading.FMLPaths;
 public final class LootableBodies {
     public static final String MODID = "lootablebodies";
     public static final String NAME = "DrCyano's Lootable Bodies";
-    public static final String VERSION = "2.4.4.113021";
+    public static final String VERSION = "2.4.5.114041";
     public static final ResourceLocation CORPSE_ID = new ResourceLocation("lootablebodies:corpse");
     public static EntityType<EntityLootableBody> CORPSE;
     public static Item CORPSE_EGG;
+    public static net.minecraft.inventory.container.ContainerType<cyano.lootable.graphics.CorpseContainer> CORPSE_CONTAINER;
     private static LootableBodies INSTANCE;
     private static LegacyConfiguration configuration;
 
@@ -53,24 +54,39 @@ public final class LootableBodies {
         INSTANCE=this;
         loadConfiguration(FMLPaths.CONFIGDIR.get().resolve("lootablebodies.cfg").toFile());
         net.minecraftforge.eventbus.api.IEventBus bus=FMLJavaModLoadingContext.get().getModEventBus();
+        bus.addListener(cyano.lootable.upgrade.LegacyProfessionRegistry::create);
         bus.addGenericListener(EntityType.class,this::registerEntities);
         bus.addGenericListener(Item.class,this::registerItems);
+        bus.addGenericListener(net.minecraft.inventory.container.ContainerType.class,this::registerContainers);
         MinecraftForge.EVENT_BUS.register(new PlayerDeathEventHandler());
         MinecraftForge.EVENT_BUS.register(this);
         DistExecutor.runWhenOn(Dist.CLIENT,()->ClientProxy::register);
     }
     private static synchronized EntityType<EntityLootableBody> corpseType() {
-        if(CORPSE==null)CORPSE=new EntityType<>(EntityLootableBody.class,EntityLootableBody::new,
-                true,true,null,false,null,true,32,1,true);
+        if(CORPSE==null) {
+            EntityType.Builder<EntityLootableBody> type=EntityType.Builder.<EntityLootableBody>create((entityType,world)->new EntityLootableBody(world),net.minecraft.entity.EntityClassification.MISC)
+                // Native 1.14 expresses tracking range in chunks: two retain 32 blocks.
+                .size(0.85F,0.75F).setTrackingRange(2).setUpdateInterval(1).setShouldReceiveVelocityUpdates(true);
+            if(completelyInvulnerable || !hurtByEnvironment)type.immuneToFire();
+            CORPSE=type.build(CORPSE_ID.toString());
+        }
         return CORPSE;
     }
     private void registerEntities(RegistryEvent.Register<EntityType<?>> event) {
         event.getRegistry().register(corpseType().setRegistryName(CORPSE_ID));
     }
     private void registerItems(RegistryEvent.Register<Item> event) {
-        CORPSE_EGG=new ItemSpawnEgg(corpseType(),1,1,new Item.Properties().group(ItemGroup.MISC))
+        CORPSE_EGG=new SpawnEggItem(corpseType(),1,1,new Item.Properties().group(ItemGroup.MISC))
                 .setRegistryName(MODID,"corpse_spawn_egg");
         event.getRegistry().register(CORPSE_EGG);
+    }
+    private void registerContainers(RegistryEvent.Register<net.minecraft.inventory.container.ContainerType<?>> event) {
+        CORPSE_CONTAINER=net.minecraftforge.common.extensions.IForgeContainerType.create((window,inventory,buffer)-> {
+            net.minecraft.entity.Entity body=inventory.player.world.getEntityByID(buffer.readVarInt());
+            if(!(body instanceof EntityLootableBody))throw new IllegalStateException("Corpse container has no matching entity");
+            return new cyano.lootable.graphics.CorpseContainer(window,inventory,(EntityLootableBody)body);
+        });
+        event.getRegistry().register(CORPSE_CONTAINER.setRegistryName(CORPSE_ID));
     }
     public static LootableBodies getInstance(){return INSTANCE;}
     @SubscribeEvent public void beforeWorldLoading(FMLServerAboutToStartEvent event) {
@@ -86,11 +102,11 @@ public final class LootableBodies {
     }
     @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.HIGHEST)
     public void worldLoaded(net.minecraftforge.event.world.WorldEvent.Load event) {
-        if(event.getWorld() instanceof net.minecraft.world.WorldServer)ChunkVersionContext.installWorld((net.minecraft.world.WorldServer)event.getWorld());
+        if(event.getWorld() instanceof net.minecraft.world.server.ServerWorld)ChunkVersionContext.installWorld((net.minecraft.world.server.ServerWorld)event.getWorld());
     }
     @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.HIGHEST)
     public void beforeSpawn(net.minecraftforge.event.world.WorldEvent.CreateSpawnPosition event) {
-        if(event.getWorld() instanceof net.minecraft.world.WorldServer)ChunkVersionContext.installWorld((net.minecraft.world.WorldServer)event.getWorld());
+        if(event.getWorld() instanceof net.minecraft.world.server.ServerWorld)ChunkVersionContext.installWorld((net.minecraft.world.server.ServerWorld)event.getWorld());
     }
     @SubscribeEvent public void worldStopped(FMLServerStoppedEvent event){UpgradePreservation.close();}
     private static boolean or(boolean... values){for(boolean value:values)if(value)return true;return false;}

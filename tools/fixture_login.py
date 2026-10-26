@@ -8,6 +8,10 @@ FAILURE = re.compile(r"^\[\d{2}:\d{2}:\d{2}\] \[Server thread/INFO\] \[(?:minecr
 JOIN = re.compile(r'^\[(?:\d{2}[A-Za-z]{3}\d{4} )?\d{2}:\d{2}:\d{2}(?:\.\d{3})?\] \[Server thread/INFO\] \[(?:minecraft/DedicatedServer|minecraft/MinecraftServer|net\.minecraft\.server\.dedicated\.DedicatedServer|net\.minecraft\.server\.MinecraftServer|ne\.mi\.se\.MinecraftServer)/?\]: Container([AB]) (joined|left) the game$')
 LIMIT = 3
 
+def plain(text):
+    """Parse native console colours without changing saved evidence or line numbers."""
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
 RESET = re.compile(r"^\[\d{2}:\d{2}:\d{2}\] \[Server thread/INFO\] \[(?:minecraft/NetHandlerPlayServer|net\.minecraft\.network\.NetHandlerPlayServer)\]: Container([AB]) lost connection: Internal Exception: io\.netty\.channel\.unix\.Errors\$NativeIoException: syscall:read\(\.\.\) failed: Connection reset by peer$")
 
 
@@ -15,7 +19,7 @@ def completed_client(home, role):
     """A terminal phase, pass file and exact client log marker must all agree."""
     log=home/('client'+role+'.log')
     if not log.is_file():return False
-    lines=log.read_text(encoding='utf-8',errors='replace').splitlines()
+    lines=plain(log.read_text(encoding='utf-8',errors='replace')).splitlines()
     for mode,phase,marker in [('respawn','9','LOOTABLE_BODIES_RESPAWN_CLIENT_PASS '+role),
                              ('visibility','18','LOOTABLE_BODIES_VISIBILITY_CLIENT_PASS role='+role),
                              ('multiplayer','8','LOOTABLE_BODIES_MULTIPLAYER_CLIENT_PASS role='+role)]:
@@ -34,14 +38,14 @@ def planned_disconnect(home, role, phase):
     if not log.is_file():return False
     marker='VISIBILITY_CLIENT_PHASE '+role+' '+phase
     return any(line==marker or line.endswith(': '+marker)
-               for line in log.read_text(encoding='utf-8',errors='replace').splitlines())
+               for line in plain(log.read_text(encoding='utf-8',errors='replace')).splitlines())
 
 class LoginMonitor:
     def __init__(self, home):
         self.home=Path(home);self.seen=0;self.counts={'A':0,'B':0};self.visibility_phase=None
     def poll(self):
         text=(self.home/'server.log').read_text(encoding='utf-8',errors='replace')
-        lines=text[:text.rfind('\n')+1].splitlines()
+        lines=plain(text[:text.rfind('\n')+1]).splitlines()
         for line in lines[self.seen:]:
             phase=re.search(r'(?:^|: )VISIBILITY_PHASE ([0-9]+)$',line)
             if phase:self.visibility_phase=phase[1]
@@ -70,7 +74,7 @@ def receipt_lines(path, text):
     data=json.loads(receipt.read_text(encoding='utf-8'))
     if data.get('schema')!=1 or data.get('sha256')!=hashlib.sha256(path.read_bytes()).hexdigest():
         raise RuntimeError('Invalid or stale Forge login receipt: '+str(path))
-    lines=text.splitlines();allowed=set(data['lines']);counts={'A':0,'B':0};online=set();pending=set();actual=set()
+    lines=plain(text).splitlines();allowed=set(data['lines']);counts={'A':0,'B':0};online=set();pending=set();actual=set()
     for i,line in enumerate(lines):
         join=JOIN.fullmatch(line)
         if join:
@@ -88,7 +92,7 @@ def write_receipts(home):
     home=Path(home)
     for path in [home/'server.log',home/'server/logs/latest.log',home/'server/logs/debug.log']:
         if not path.is_file():continue
-        text=path.read_text(encoding='utf-8',errors='replace');lines=text.splitlines()
+        text=path.read_text(encoding='utf-8',errors='replace');lines=plain(text).splitlines()
         allowed=[i for i,line in enumerate(lines) if FAILURE.fullmatch(line)]
         if not allowed:continue
         counts={'A':0,'B':0}

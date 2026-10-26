@@ -1,19 +1,23 @@
 package cyano.lootable.buildtest;
+import net.minecraft.block.Blocks;
+import net.minecraft.entity.boss.dragon.phase.Phase;
+import net.minecraft.entity.player.ServerPlayerEntity;
+import net.minecraft.world.server.ServerWorld;
 
 import cyano.lootable.entities.EntityLootableBody;
 import cyano.lootable.graphics.CorpseGUIContainer;
 import java.io.*;
 import java.util.concurrent.Future;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiMainMenu;
+import net.minecraft.client.gui.screen.MainMenuScreen;
 import net.minecraft.entity.Entity;
-import net.minecraft.util.EnumHand;
+import net.minecraft.util.Hand;
 import net.minecraft.util.ScreenShotHelper;
 import net.minecraft.world.*;
 import net.minecraftforge.common.MinecraftForge;
 
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
+import net.minecraftforge.event.TickEvent;
 
 /** Automated real-client world, packet interaction, GUI render and reload check. */
 public final class ClientChecks {
@@ -58,15 +62,15 @@ public final class ClientChecks {
             if(Boolean.getBoolean("lootablebodies.namelessClientCheck")) {namelessNames.tick(mc);return;}
             if(Boolean.getBoolean("lootablebodies.visibilitySkinCheck")) {visibilitySkins.tick(mc);return;}
             if(Boolean.getBoolean("lootablebodies.issueClientCheck")) {reportedIssues.tick(mc);return;}
-            if(stage==0 && mc.currentScreen instanceof GuiMainMenu) {
+            if(stage==0 && mc.currentScreen instanceof MainMenuScreen) {
                 mc.gameSettings.pauseOnLostFocus=false;
-                mc.gameSettings.limitFramerate=30;
+                mc.gameSettings.framerateLimit=30;
                 mc.gameSettings.renderDistanceChunks=4;
                 stage=1;
                 mc.launchIntegratedServer("build-fixture", "Build fixture",new WorldSettings(4267321,GameType.CREATIVE,false,false,WorldType.FLAT));
             } else if(stage==1 && mc.world!=null && mc.player!=null && mc.getIntegratedServer()!=null) {
                 stage=2;
-                pending=mc.getIntegratedServer().addScheduledTask(() -> {
+                pending=mc.getIntegratedServer().runAsync(() -> {
                     try { RuntimeChecks.run(mc.getIntegratedServer(),"fresh"); }
                     catch(Exception error) { throw new RuntimeException(error); }
                     positionViewer(mc.getIntegratedServer().getPlayerList().getPlayerByUUID(mc.player.getUniqueID()));
@@ -74,12 +78,12 @@ public final class ClientChecks {
             } else if(stage==2 && pending.isDone()) {
                 pending.get();
                 NamelessCorpseClientChecks.englishContract(mc);
-                for(Entity entity : mc.world.loadedEntityList) if(entity instanceof EntityLootableBody && entity.getUniqueID().equals(RuntimeChecks.NEAR)) {
-                    mc.playerController.interactWithEntity(mc.player,entity,EnumHand.MAIN_HAND);
+                for(Entity entity : FixtureApi.entities(mc.world)) if(entity instanceof EntityLootableBody && entity.getUniqueID().equals(RuntimeChecks.NEAR)) {
+                    mc.playerController.interactWithEntity(mc.player,entity,Hand.MAIN_HAND);
                     stage=3; break;
                 }
             } else if(stage==3 && mc.currentScreen instanceof CorpseGUIContainer && ++frames>20) {
-                RuntimeChecks.require(((CorpseGUIContainer)mc.currentScreen).inventorySlots.inventorySlots.size()==84,"rendered GUI slots");
+                RuntimeChecks.require(((CorpseGUIContainer)mc.currentScreen).getContainer().inventorySlots.size()==84,"rendered GUI slots");
                 ScreenShotHelper.saveScreenshot(mc.gameDir,"corpse-gui-fresh.png",mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
                 mc.player.closeScreen(); stage=4;
                 FixtureConnections.disconnect(mc);
@@ -87,15 +91,15 @@ public final class ClientChecks {
                 stage=5; mc.launchIntegratedServer("build-fixture","Build fixture",null);
             } else if(stage==5 && mc.player!=null && mc.world!=null && mc.getIntegratedServer()!=null) {
                 stage=6;
-                pending=mc.getIntegratedServer().addScheduledTask(() -> {
+                pending=mc.getIntegratedServer().runAsync(() -> {
                     try { RuntimeChecks.run(mc.getIntegratedServer(),"deferred"); }
                     catch(Exception error) { throw new RuntimeException(error); }
                     positionViewer(mc.getIntegratedServer().getPlayerList().getPlayerByUUID(mc.player.getUniqueID()));
                 });
             } else if(stage==6 && pending.isDone()) {
                 pending.get();
-                for(Entity entity:mc.world.loadedEntityList) if(entity instanceof EntityLootableBody && entity.getUniqueID().equals(RuntimeChecks.NEAR)) {
-                    mc.playerController.interactWithEntity(mc.player,entity,EnumHand.MAIN_HAND);
+                for(Entity entity:FixtureApi.entities(mc.world)) if(entity instanceof EntityLootableBody && entity.getUniqueID().equals(RuntimeChecks.NEAR)) {
+                    mc.playerController.interactWithEntity(mc.player,entity,Hand.MAIN_HAND);
                     stage=7; frames=0; break;
                 }
             } else if(stage==7 && mc.currentScreen instanceof CorpseGUIContainer && ++frames>20) {
@@ -116,12 +120,12 @@ public final class ClientChecks {
             }
         } catch(Throwable error) { fail(error); }
     }
-    private static void positionViewer(net.minecraft.entity.player.EntityPlayerMP player) {
-        WorldServer world=player.getServerWorld();
+    private static void positionViewer(net.minecraft.entity.player.ServerPlayerEntity player) {
+        ServerWorld world=player.getServerWorld();
         RuntimeChecks.awaitChunk(world,0,0);
         for(int x=7;x<=9;x++)for(int z=6;z<=8;z++)
-            world.setBlockState(new net.minecraft.util.math.BlockPos(x,79,z),net.minecraft.init.Blocks.STONE.getDefaultState());
-        RuntimeChecks.require(world.getBlockState(new net.minecraft.util.math.BlockPos(8,79,7)).getBlock()==net.minecraft.init.Blocks.STONE,
+            world.setBlockState(new net.minecraft.util.math.BlockPos(x,79,z),net.minecraft.block.Blocks.STONE.getDefaultState());
+        RuntimeChecks.require(world.getBlockState(new net.minecraft.util.math.BlockPos(8,79,7)).getBlock()==net.minecraft.block.Blocks.STONE,
                 "Graphical recovery needs a stable floor below the viewing player");
         player.setGameType(GameType.CREATIVE);
         player.abilities.allowFlying=true;player.abilities.isFlying=true;player.sendPlayerAbilities();

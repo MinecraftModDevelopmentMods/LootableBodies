@@ -1,4 +1,4 @@
-// Compile fixture writers against the pinned historical API, not native 1.13.
+// Compile fixture writers against the pinned historical API, not native 1.14.
 gradle.projectsEvaluated {
     def p=gradle.rootProject
     File writerRoot=p.file(p.property('historicalWriterSource'))

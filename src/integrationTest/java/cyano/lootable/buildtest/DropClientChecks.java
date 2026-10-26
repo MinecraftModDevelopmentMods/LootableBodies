@@ -1,4 +1,8 @@
 package cyano.lootable.buildtest;
+import net.minecraft.inventory.container.Slot;
+import net.minecraft.inventory.Inventory;
+import net.minecraft.nbt.ListNBT;
+import net.minecraft.nbt.CompoundNBT;
 
 import cyano.lootable.entities.EntityLootableBody;
 import cyano.lootable.graphics.CorpseGUIContainer;
@@ -6,15 +10,15 @@ import java.io.*;
 import java.util.*;
 import java.util.concurrent.Future;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiMainMenu;
+import net.minecraft.client.gui.screen.MainMenuScreen;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.item.EntityItem;
-import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.init.Blocks;
-import net.minecraft.inventory.ClickType;
+import net.minecraft.entity.item.ItemEntity;
+import net.minecraft.entity.player.ServerPlayerEntity;
+import net.minecraft.block.Blocks;
+import net.minecraft.inventory.container.ClickType;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.*;
-import net.minecraft.util.EnumHand;
+import net.minecraft.util.Hand;
 import net.minecraft.util.ScreenShotHelper;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.GameType;
@@ -28,8 +32,8 @@ final class DropClientChecks {
     private int stage,frames;
     private Future<?> pending;
     private UUID playerId;
-    private NBTTagCompound savedBody;
-    private NBTTagList savedPlayer;
+    private CompoundNBT savedBody;
+    private ListNBT savedPlayer;
     void start(Minecraft mc){playerId=mc.player.getUniqueID();}
     boolean tick(Minecraft mc) throws Exception {
         frames++;
@@ -72,44 +76,44 @@ final class DropClientChecks {
         } else if(stage==18 && done() && frames>20){equal(mc.player.inventory.getItemStack(),item(122,17),"Creative close cursor fixture");mc.player.closeScreen();next(19);}
         else if(stage==19 && frames>20){
             equal(mc.player.inventory.getItemStack(),null,"Closed creative client cursor");
-            schedule(mc,()->{equal(player(mc).inventory.getItemStack(),null,"Closed creative server cursor");NBTTagCompound data=new NBTTagCompound();body(mc).writeAdditional(data);NBTTagList aux=data.getList("Aux",10);int count=0;
+            schedule(mc,()->{equal(player(mc).inventory.getItemStack(),null,"Closed creative server cursor");CompoundNBT data=new CompoundNBT();body(mc).writeAdditional(data);ListNBT aux=data.getList("Aux",10);int count=0;
                 for(int i=0;i<aux.size();i++)if(RuntimeChecks.sameStack(ItemStack.read(aux.getCompound(i)),item(122,17)))count++;
                 RuntimeChecks.require(count==1,"Cancelled creative close lost/duplicated full-inventory cursor");MinecraftForge.EVENT_BUS.unregister(reject);
-                RuntimeChecks.saveExpected(folder(mc),"drop-creative-final",body(mc));savedBody=new NBTTagCompound();body(mc).writeUnlessPassenger(savedBody);savedPlayer=player(mc).inventory.write(new NBTTagList());
-                NBTTagCompound expected=new NBTTagCompound();expected.setTag("Inventory",savedPlayer.copy());try(FileOutputStream out=new FileOutputStream(new File(folder(mc),"drop-creative-player.nbt"))){CompressedStreamTools.writeCompressed(expected,out);}
-                mc.getIntegratedServer().getPlayerList().saveAllPlayerData();mc.getIntegratedServer().saveAllWorlds(false);});next(20);
+                RuntimeChecks.saveExpected(folder(mc),"drop-creative-final",body(mc));savedBody=new CompoundNBT();body(mc).writeUnlessPassenger(savedBody);savedPlayer=player(mc).inventory.write(new ListNBT());
+                CompoundNBT expected=new CompoundNBT();expected.put("Inventory",savedPlayer.copy());try(FileOutputStream out=new FileOutputStream(new File(folder(mc),"drop-creative-player.nbt"))){CompressedStreamTools.writeCompressed(expected,out);}
+                mc.getIntegratedServer().getPlayerList().saveAllPlayerData();mc.getIntegratedServer().save(false,true,false);});next(20);
         } else if(stage==20 && done()){quit(mc);next(21);}
         else if(stage==21 && FixtureConnections.stopped(mc)){mc.launchIntegratedServer("build-fixture","Build fixture",null);next(22);}
         else if(stage==22 && ready(mc) && frames>20){schedule(mc,()->{
             player(mc).world.getChunk(2,0);body(mc).baseTick();RuntimeChecks.verifyExpected(folder(mc),"drop-creative-final",body(mc));
-            RuntimeChecks.require(savedPlayer.equals(player(mc).inventory.write(new NBTTagList())),"Creative player inventory changed on disk reload");player(mc).connection.setPlayerLocation(40.5,80,7.5,0,0);
+            RuntimeChecks.require(savedPlayer.equals(player(mc).inventory.write(new ListNBT())),"Creative player inventory changed on disk reload");player(mc).connection.setPlayerLocation(40.5,80,7.5,0,0);
             mark(mc,"creative_cancelled_close_full_inventory_disk_reload");});next(23);
         } else if(stage==23 && done()){if(open(mc))next(24);}
         else if(stage==24 && gui(mc) && frames>20){
-            ItemStack[] expected=new ItemStack[48];NBTTagList list=savedBody.getList("Equipment",10);for(int i=0;i<list.size();i++){NBTTagCompound tag=list.getCompound(i);expected[tag.getByte("Slot")]=ItemStack.read(tag);}
+            ItemStack[] expected=new ItemStack[48];ListNBT list=savedBody.getList("Equipment",10);for(int i=0;i<list.size();i++){CompoundNBT tag=list.getCompound(i);expected[tag.getByte("Slot")]=ItemStack.read(tag);}
             for(int i=0;i<48;i++)equal(slot(mc,i),expected[i],"Reloaded creative client slot "+i);screenshot(mc,"drop-creative-final-reload.png");System.out.println("LOOTABLE_BODIES_DROP_CLIENT_PASS");return true;
         }
         return false;
     }
     private void prepare(Minecraft mc){
-        EntityPlayerMP p=player(mc);for(int x=37;x<=43;x++)for(int z=5;z<=11;z++)p.world.setBlockState(new BlockPos(x,79,z),Blocks.STONE.getDefaultState());
+        ServerPlayerEntity p=player(mc);for(int x=37;x<=43;x++)for(int z=5;z<=11;z++)p.world.setBlockState(new BlockPos(x,79,z),Blocks.STONE.getDefaultState());
         p.setGameType(GameType.SURVIVAL);p.inventory.clear();p.inventory.setItemStack(ItemStack.EMPTY);p.connection.setPlayerLocation(40.5,80,7.5,0,0);
         EntityLootableBody b=new EntityLootableBody(p.world);b.setUniqueId(bodyId);b.setPosition(40.5,80,8.5);b.setNoGravity(true);RuntimeChecks.disableVacuum(b);
-        b.setInventorySlotContents(6,item(120,17));b.setInventorySlotContents(7,item(120,20));b.setInventorySlotContents(8,item(121,10));RuntimeChecks.require(p.world.spawnEntity(b),"Graphical drop corpse spawn");refresh(mc);
+        b.setInventorySlotContents(6,item(120,17));b.setInventorySlotContents(7,item(120,20));b.setInventorySlotContents(8,item(121,10));RuntimeChecks.require(p.world.addEntity(b),"Graphical drop corpse spawn");refresh(mc);
     }
     private static ItemStack item(int id,int count){ItemStack s=RuntimeChecks.stack(id);s.setCount(count);return s;}
     private static void equal(ItemStack a,ItemStack b,String message){RuntimeChecks.require(RuntimeChecks.sameStack(a == null ? ItemStack.EMPTY : a,b == null ? ItemStack.EMPTY : b),message);}
-    private void drop(Minecraft mc,ItemStack expected){int count=0;for(Entity e:new ArrayList<Entity>(player(mc).world.loadedEntityList))if(e instanceof EntityItem && !e.removed){equal(((EntityItem)e).getItem(),expected,"Accepted world drop NBT/count");count++;player(mc).world.removeEntityDangerously(e);}RuntimeChecks.require(count==1,"Expected exactly one accepted drop");}
+    private void drop(Minecraft mc,ItemStack expected){int count=0;for(Entity e:new ArrayList<Entity>(FixtureApi.entities(player(mc).world)))if(e instanceof ItemEntity && !e.removed){equal(((ItemEntity)e).getItem(),expected,"Accepted world drop NBT/count");count++;e.remove();}RuntimeChecks.require(count==1,"Expected exactly one accepted drop");}
     private static ItemStack slot(Minecraft mc,int index){return mc.player.openContainer.getSlot(index).getStack();}
     private static void click(Minecraft mc,int slot,int button,ClickType type){mc.playerController.windowClick(mc.player.openContainer.windowId,slot,button,type,mc.player);}
     private static boolean gui(Minecraft mc){return mc.currentScreen instanceof CorpseGUIContainer;}
     private static boolean ready(Minecraft mc){return mc.world!=null && mc.player!=null && mc.getIntegratedServer()!=null;}
-    private boolean open(Minecraft mc){for(Entity e:mc.world.loadedEntityList)if(e.getUniqueID().equals(bodyId)){mc.playerController.interactWithEntity(mc.player,e,EnumHand.MAIN_HAND);return true;}return false;}
-    private EntityPlayerMP player(Minecraft mc){return mc.getIntegratedServer().getPlayerList().getPlayerByUUID(playerId);}
+    private boolean open(Minecraft mc){for(Entity e:FixtureApi.entities(mc.world))if(e.getUniqueID().equals(bodyId)){mc.playerController.interactWithEntity(mc.player,e,Hand.MAIN_HAND);return true;}return false;}
+    private ServerPlayerEntity player(Minecraft mc){return mc.getIntegratedServer().getPlayerList().getPlayerByUUID(playerId);}
     private EntityLootableBody body(Minecraft mc){return RuntimeChecks.find(mc.getIntegratedServer().getWorld(net.minecraft.world.dimension.DimensionType.getById(0)),bodyId);}
-    private File folder(Minecraft mc){return player(mc).world.getSaveHandler().getWorldDirectory();}
+    private File folder(Minecraft mc){return player(mc).getServerWorld().getSaveHandler().getWorldDirectory();}
     private void refresh(Minecraft mc){player(mc).openContainer.detectAndSendChanges();player(mc).sendContainerToPlayer(player(mc).openContainer);}
-    private void schedule(Minecraft mc,Action action){pending=mc.getIntegratedServer().addScheduledTask(()->{try{action.run();}catch(Exception e){throw new RuntimeException(e);}});}
+    private void schedule(Minecraft mc,Action action){pending=mc.getIntegratedServer().runAsync(()->{try{action.run();}catch(Exception e){throw new RuntimeException(e);}});}
     private boolean done() throws Exception {if(!pending.isDone())return false;pending.get();return true;}
     private void next(int value){stage=value;frames=0;System.out.println("DROP_CLIENT_STAGE "+stage);}
     private static void screenshot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));}

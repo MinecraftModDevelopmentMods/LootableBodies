@@ -1,0 +1,26 @@
+// Build a separate fixture writer against the immutable released 1.13 API.
+gradle.projectsEvaluated {
+    def p = gradle.rootProject
+    File writerRoot = p.file(p.property('historicalWriterSource'))
+    def classes = p.layout.buildDirectory.dir('native113-seed/classes')
+    def compile = p.tasks.register('compileNative113Seed', JavaCompile) {
+        dependsOn 'classes'
+        source p.fileTree(new File(writerRoot, 'src/nativeSeed113/java'))
+        classpath = p.files(p.sourceSets.main.output, p.sourceSets.main.compileClasspath)
+        destinationDirectory = classes
+        options.compilerArgs.add('-proc:none')
+    }
+    def jar = p.tasks.register('native113SeedJar', Jar) {
+        dependsOn compile
+        archiveFileName = 'lootablebodies-native113-world-fixtures.jar'
+        destinationDirectory = p.layout.buildDirectory.dir('native113-seed')
+        from classes
+        from new File(writerRoot, 'src/nativeSeed113/resources')
+    }
+    def packaged = p.renamer.classes(jar) {
+        map.from p.minecraft.dependency.toSrgFile
+        libraries.from(p.tasks.named('jar'), p.sourceSets.main.compileClasspath)
+        output = p.layout.buildDirectory.file('native113-seed/lootablebodies-native113-world-fixtures-reobf.jar')
+    }
+    p.tasks.register('prepareNative113WorldFixtures') { dependsOn packaged }
+}

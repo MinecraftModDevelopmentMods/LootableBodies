@@ -21,6 +21,7 @@ def main():
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--mode',choices=['visibility','respawn'],required=True)
     parser.add_argument('--source-server',type=Path)
+    parser.add_argument('--probe-jar',type=Path,help='Isolated verifier jar; production jar is unchanged')
     parser.add_argument('--cases',type=int,default=16)
     parser.add_argument('--simultaneous',action='store_true')
     parser.add_argument('--drop-spawn',action='store_true',help='Destructive negative control: discards every owner corpse spawn; expected to fail')
@@ -30,7 +31,7 @@ def main():
     java=args.java.resolve(); distribution=args.forge_home.resolve(); home=args.output.resolve()
     home.mkdir(parents=True,exist_ok=False); shared=home/'sync'; shared.mkdir()
     jar=project/'build/libs'/MAIN; before=digest(jar)
-    probe=project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar'
+    probe=(args.probe_jar or project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar').resolve()
     prepare(home/'server',distribution,jar,probe)
     source_before=None
     if args.source_server:
@@ -47,7 +48,7 @@ def main():
     if args.source_server: commands['server'].insert(2,'-Dlootablebodies.visibility.reload=true')
     if args.simultaneous: commands['server'].insert(2,'-Dlootablebodies.respawn.simultaneous=true')
     for role in ['A','B']:
-        command=client_command(project,java,args.forge_client_home.resolve(),home/('client'+role),None,shared,port,role,args.hidden_agent)
+        command=client_command(project,java,args.forge_client_home.resolve(),home/('client'+role),None,shared,port,role,args.hidden_agent,probe)
         command.insert(2,'-Dlootablebodies.'+args.mode+'=true')
         if args.simultaneous: command.insert(2,'-Dlootablebodies.respawn.simultaneous=true')
         if args.counter_collision: command.insert(2,'-Dlootablebodies.respawn.counterCollision=true')

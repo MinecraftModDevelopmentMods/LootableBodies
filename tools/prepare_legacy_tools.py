@@ -6,6 +6,7 @@ import os
 from pathlib import Path, PurePosixPath
 import subprocess
 import tarfile
+from command_logs import run_logged
 
 SOURCE = 'ee8ee733fa091e961f27812ad780d56c35813f30'
 REPOSITORY = 'https://github.com/MinecraftModDevelopmentMods/LootableBodies.git'
@@ -21,23 +22,23 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
 
 
-def prepare(project, output):
+def prepare(project, output, commit=SOURCE):
     source = output / 'source'
     manifest = output / 'source.json'
     if source.exists():
         recorded = json.loads(manifest.read_text(encoding='utf-8'))
-        if recorded['commit'] != SOURCE or any(
+        if recorded['commit'] != commit or any(
                 not (source / name).is_file() or digest(source / name) != expected
                 for name, expected in recorded['files'].items()):
             raise RuntimeError('Historical source changed; preserve it and use a new output folder')
         return source
     output.mkdir(parents=True, exist_ok=False)
-    if subprocess.run(['git', 'cat-file', '-e', SOURCE], cwd=project,
+    if subprocess.run(['git', 'cat-file', '-e', commit], cwd=project,
                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
-        subprocess.run(['git', 'fetch', '--no-tags', REPOSITORY, SOURCE], cwd=project, check=True)
+        subprocess.run(['git', 'fetch', '--no-tags', REPOSITORY, commit], cwd=project, check=True)
     archive = output / 'released-source.tar'
     with archive.open('wb') as stream:
-        subprocess.run(['git', 'archive', '--format=tar', SOURCE], cwd=project,
+        subprocess.run(['git', 'archive', '--format=tar', commit], cwd=project,
                        stdout=stream, check=True)
     source.mkdir()
     files = {}
@@ -53,7 +54,7 @@ def prepare(project, output):
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_bytes(tar.extractfile(entry).read())
                 files[name.as_posix()] = digest(destination)
-    manifest.write_text(json.dumps({'commit': SOURCE, 'files': files}, indent=2) + '\n', encoding='utf-8')
+    manifest.write_text(json.dumps({'commit': commit, 'files': files}, indent=2) + '\n', encoding='utf-8')
     return source
 
 
@@ -73,11 +74,10 @@ def main():
     wrapper = source / ('gradlew.bat' if os.name == 'nt' else 'gradlew')
     if os.name != 'nt':
         wrapper.chmod(0o755)
-    with (output / 'build.log').open('w', encoding='utf-8') as log:
-        subprocess.run([str(wrapper), 'prepareLegacyWorldFixtures', 'prepareOriginal112Checks', 'preparePackagedIntegrationProbe',
+    run_logged([str(wrapper), 'prepareLegacyWorldFixtures', 'prepareOriginal112Checks', 'preparePackagedIntegrationProbe',
                         '--init-script='+str(project/'gradle/historical-writers.init.gradle'),
                         '-PhistoricalWriterSource='+str(project),'--no-daemon', '--console=plain'], cwd=source, env=environment,
-                       stdout=log, stderr=subprocess.STDOUT, check=True, timeout=1800)
+                       path=output / 'build.log', timeout=1800)
     hashes = {}
     for name in OUTPUTS:
         artifact = source / 'build' / name

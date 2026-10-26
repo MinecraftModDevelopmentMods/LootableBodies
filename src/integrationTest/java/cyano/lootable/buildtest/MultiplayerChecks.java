@@ -1,4 +1,10 @@
 package cyano.lootable.buildtest;
+import net.minecraft.inventory.container.Container;
+import net.minecraft.entity.boss.dragon.phase.Phase;
+import net.minecraft.inventory.Inventory;
+import net.minecraft.world.server.ServerWorld;
+import net.minecraft.nbt.ListNBT;
+import net.minecraft.nbt.CompoundNBT;
 
 import cyano.lootable.LootableBodies;
 import cyano.lootable.entities.EntityLootableBody;
@@ -7,8 +13,8 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.UUID;
-import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.init.Blocks;
+import net.minecraft.entity.player.ServerPlayerEntity;
+import net.minecraft.block.Blocks;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.*;
 import net.minecraft.server.MinecraftServer;
@@ -16,7 +22,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.*;
 
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.fml.network.NetworkRegistry;
 import net.minecraftforge.fml.network.simple.*;
 import net.minecraftforge.api.distmarker.Dist;
@@ -39,20 +45,20 @@ public final class MultiplayerChecks {
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);
     }
     public static File sync(){return new File(System.getProperty("lootablebodies.multiplayer.sync"));}
-    private EntityPlayerMP player(String role){return server.getPlayerList().getPlayerByUsername("Container"+role);}
+    private ServerPlayerEntity player(String role){return server.getPlayerList().getPlayerByUsername("Container"+role);}
     private boolean ack(String role,int step){return new File(sync,"Container"+role+".step-"+step).isFile();}
     @SubscribeEvent public void tick(TickEvent.ServerTickEvent e){
         if(e.phase!=TickEvent.Phase.END || finishing)return;
         try{
             RuntimeChecks.require(++ticks<2400,"Two-client timeout phase="+phase);
             if(new File(sync,"abort").exists())throw new AssertionError("Runner aborted multiplayer fixture");
-            EntityPlayerMP a=player("A"),b=player("B");
+            ServerPlayerEntity a=player("A"),b=player("B");
             if(phase==0 && a!=null && b!=null){
-                WorldServer w=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));
+                ServerWorld w=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));
                 for(int x=93;x<=100;x++)for(int z=93;z<=100;z++)w.setBlockState(new BlockPos(x,79,z),Blocks.STONE.getDefaultState());
-                w.getGameRules().setOrCreateGameRule("doMobSpawning","false",null);
+                w.getGameRules().get(net.minecraft.world.GameRules.DO_MOB_SPAWNING).set(false,null);
                 body=new EntityLootableBody(w);body.setUniqueId(BODY);body.setPosition(96.5,80.5,96.5);body.setNoGravity(true);body.setUserName("SharedFixture");RuntimeChecks.disableVacuum(body);
-                body.setInventorySlotContents(6,stack(19,23));RuntimeChecks.require(w.spawnEntity(body),"Shared corpse spawn");
+                body.setInventorySlotContents(6,stack(19,23));RuntimeChecks.require(w.addEntity(body),"Shared corpse spawn");
                 a.setGameType(GameType.SURVIVAL);b.setGameType(GameType.SURVIVAL);a.inventory.clear();b.inventory.clear();
                 a.connection.setPlayerLocation(96.5,80,94.5,0,0);b.connection.setPlayerLocation(98.5,80,96.5,0,0);
                 setPhase(1);
@@ -74,13 +80,13 @@ public final class MultiplayerChecks {
             }else if(phase==7 && ack("A",7) && ack("B",7)){
                 File folder=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0)).getSaveHandler().getWorldDirectory();
                 RuntimeChecks.saveExpected(folder,"multiplayer-body",body);savePlayer(folder,a,"A");savePlayer(folder,b,"B");
-                server.getPlayerList().saveAllPlayerData();server.saveAllWorlds(false);mark("two_tcp_clients_final_gui_and_saved_nbt");
+                server.getPlayerList().saveAllPlayerData();server.save(false,true,false);mark("two_tcp_clients_final_gui_and_saved_nbt");
                 setPhase(8);
             }else if(phase==8 && server.getPlayerList().getCurrentPlayerCount()==0){
                 Files.write(new File(sync,"multiplayer.pass").toPath(),"two TCP clients passed\n".getBytes(StandardCharsets.UTF_8));
-                System.out.println("LOOTABLE_BODIES_MULTIPLAYER_PASS");finishing=true;server.initiateShutdown();
+                System.out.println("LOOTABLE_BODIES_MULTIPLAYER_PASS");finishing=true;server.initiateShutdown(false);
             }
-        }catch(Throwable error){error.printStackTrace();finishing=true;server.initiateShutdown();}
+        }catch(Throwable error){error.printStackTrace();finishing=true;server.initiateShutdown(false);}
     }
     private void setPhase(int value) throws Exception {
         phase=value;File temporary=new File(sync,"phase.tmp");Files.write(temporary.toPath(),Integer.toString(value).getBytes(StandardCharsets.UTF_8));
@@ -90,23 +96,23 @@ public final class MultiplayerChecks {
     private void mark(String name) throws Exception{try(FileWriter out=new FileWriter(new File(sync,"checks.txt"),true)){out.write("PASS "+name+"\n");}System.out.println("MULTIPLAYER_CHECK_PASS "+name);}
     public static ItemStack stack(int i,int n){ItemStack s=RuntimeChecks.stack(i);s.setCount(n);return s;}
     public static void equal(ItemStack a,ItemStack b,String reason){RuntimeChecks.require(RuntimeChecks.sameStack(a == null ? ItemStack.EMPTY : a,b == null ? ItemStack.EMPTY : b),reason);}
-    private static int count(EntityPlayerMP p,int index){int n=0;ItemStack expected=RuntimeChecks.stack(index);for(int i=0;i<p.inventory.getSizeInventory();i++){ItemStack s=p.inventory.getStackInSlot(i);if((s != null && !s.isEmpty()) && ItemStack.areItemsEqual(s,expected) && ItemStack.areItemStackTagsEqual(s,expected))n+=s.getCount();}return n;}
-    private static void refresh(EntityPlayerMP p){p.openContainer.detectAndSendChanges();p.sendContainerToPlayer(p.openContainer);p.updateHeldItem();}
-    private static void savePlayer(File folder,EntityPlayerMP p,String role) throws Exception {
-        NBTTagCompound n=new NBTTagCompound();n.setString("UUID",p.getUniqueID().toString());n.setTag("Inventory",p.inventory.write(new NBTTagList()));
+    private static int count(ServerPlayerEntity p,int index){int n=0;ItemStack expected=RuntimeChecks.stack(index);for(int i=0;i<p.inventory.getSizeInventory();i++){ItemStack s=p.inventory.getStackInSlot(i);if((s != null && !s.isEmpty()) && ItemStack.areItemsEqual(s,expected) && ItemStack.areItemStackTagsEqual(s,expected))n+=s.getCount();}return n;}
+    private static void refresh(ServerPlayerEntity p){p.openContainer.detectAndSendChanges();p.sendContainerToPlayer(p.openContainer);p.updateHeldItem();}
+    private static void savePlayer(File folder,ServerPlayerEntity p,String role) throws Exception {
+        CompoundNBT n=new CompoundNBT();n.putString("UUID",p.getUniqueID().toString());n.put("Inventory",p.inventory.write(new ListNBT()));
         try(FileOutputStream out=new FileOutputStream(new File(folder,"multiplayer-player-"+role+".nbt"))){CompressedStreamTools.writeCompressed(n,out);}
     }
     static void verifyReload(MinecraftServer server) throws Exception {
-        WorldServer world=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));world.getChunk(6,6);EntityLootableBody body=RuntimeChecks.find(world,BODY);body.baseTick();
+        ServerWorld world=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));world.getChunk(6,6);EntityLootableBody body=RuntimeChecks.find(world,BODY);body.baseTick();
         File folder=world.getSaveHandler().getWorldDirectory();RuntimeChecks.verifyExpected(folder,"multiplayer-body",body);
         for(String role:new String[]{"A","B"}){
-            NBTTagCompound expected;try(FileInputStream in=new FileInputStream(new File(folder,"multiplayer-player-"+role+".nbt"))){expected=CompressedStreamTools.readCompressed(in);}
-            NBTTagCompound actual;try(FileInputStream in=new FileInputStream(new File(folder,"playerdata/"+expected.getString("UUID")+".dat"))){actual=CompressedStreamTools.readCompressed(in);}
-            RuntimeChecks.require(expected.getTag("Inventory").equals(actual.getTag("Inventory")),"Real player "+role+" inventory changed on disk");
+            CompoundNBT expected;try(FileInputStream in=new FileInputStream(new File(folder,"multiplayer-player-"+role+".nbt"))){expected=CompressedStreamTools.readCompressed(in);}
+            CompoundNBT actual;try(FileInputStream in=new FileInputStream(new File(folder,"playerdata/"+expected.getString("UUID")+".dat"))){actual=CompressedStreamTools.readCompressed(in);}
+            RuntimeChecks.require(expected.get("Inventory").equals(actual.get("Inventory")),"Real player "+role+" inventory changed on disk");
         }
     }
     public static final class Step {private final int number;public Step(int number){this.number=number;}}
-    private static void acknowledge(Step message,EntityPlayerMP player) {
+    private static void acknowledge(Step message,ServerPlayerEntity player) {
         try {RuntimeChecks.require(player!=null && player.getGameProfile().getName().matches("Container[AB]"),"Unexpected fixture player");Files.write(new File(sync(),player.getGameProfile().getName()+".step-"+message.number).toPath(),"ack\n".getBytes(StandardCharsets.UTF_8));}
         catch(Exception error){throw new RuntimeException(error);}
     }
