@@ -229,6 +229,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: LootableBodies-1.14.4-diagnostics-${{ github.sha }}
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
           path: |
@@ -239,6 +240,8 @@ jobs:
             build/**/screenshots/*.png
             build/**/result.json
             build/**/*checks.txt
+            .gradle/legacy-tools/released-112/build.log
+            .gradle/legacy-tools/released-113/build.log
             build/packaged-client-issues/config/*.toml
             build/packaged-client-issues/saves/issue-fixture/level.dat
             build/packaged-client-issues/saves/issue-fixture/region/*.mca

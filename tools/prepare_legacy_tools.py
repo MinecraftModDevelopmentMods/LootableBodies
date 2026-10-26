@@ -6,6 +6,7 @@ import os
 from pathlib import Path, PurePosixPath
 import subprocess
 import tarfile
+from command_logs import run_logged
 
 SOURCE = 'ee8ee733fa091e961f27812ad780d56c35813f30'
 REPOSITORY = 'https://github.com/MinecraftModDevelopmentMods/LootableBodies.git'
@@ -73,11 +74,10 @@ def main():
     wrapper = source / ('gradlew.bat' if os.name == 'nt' else 'gradlew')
     if os.name != 'nt':
         wrapper.chmod(0o755)
-    with (output / 'build.log').open('w', encoding='utf-8') as log:
-        subprocess.run([str(wrapper), 'prepareLegacyWorldFixtures', 'prepareOriginal112Checks', 'preparePackagedIntegrationProbe',
+    run_logged([str(wrapper), 'prepareLegacyWorldFixtures', 'prepareOriginal112Checks', 'preparePackagedIntegrationProbe',
                         '--init-script='+str(project/'gradle/historical-writers.init.gradle'),
                         '-PhistoricalWriterSource='+str(project),'--no-daemon', '--console=plain'], cwd=source, env=environment,
-                       stdout=log, stderr=subprocess.STDOUT, check=True, timeout=1800)
+                       path=output / 'build.log', timeout=1800)
     hashes = {}
     for name in OUTPUTS:
         artifact = source / 'build' / name

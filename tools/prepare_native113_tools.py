@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 from prepare_legacy_tools import prepare, digest
+from command_logs import run_logged
 
 SOURCE = '8219190bab22600475542d20ed5df74fea15c27b'
 OUTPUT = 'native113-seed/lootablebodies-native113-world-fixtures-reobf.jar'
@@ -41,12 +42,10 @@ def main():
     wrapper = source / ('gradlew.bat' if os.name == 'nt' else 'gradlew')
     if os.name != 'nt':
         wrapper.chmod(0o755)
-    with (output / 'build.log').open('w', encoding='utf-8') as log:
-        subprocess.run([str(wrapper), 'prepareNative113WorldFixtures', 'preparePackagedIntegrationProbe',
+    run_logged([str(wrapper), 'prepareNative113WorldFixtures', 'preparePackagedIntegrationProbe',
                         '--init-script='+str(project/'gradle/native113-writer.init.gradle'),
                         '-PhistoricalWriterSource='+str(project), '--no-daemon', '--console=plain'],
-                       cwd=source, env=environment, stdout=log, stderr=subprocess.STDOUT,
-                       check=True, timeout=1800)
+                       cwd=source, env=environment, path=output / 'build.log', timeout=1800)
     artifact = source / 'build' / OUTPUT
     if not artifact.is_file() or not artifact.stat().st_size:
         raise FileNotFoundError(artifact)

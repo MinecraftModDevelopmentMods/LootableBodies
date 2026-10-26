@@ -9,6 +9,7 @@ import subprocess
 import urllib.error
 import urllib.request
 import zipfile
+from command_logs import run_logged
 
 FORGE = 'forge-1.14.4-28.2.26'
 INSTALLER_SHA256 = 'E68A0E2D589B2954C5D109A04B80747AC8C061ACABE074DB1607F9C2FD7D2CE1'
@@ -257,10 +258,9 @@ def install(java,home,client=False):
         _download({'sha1':'be146d5f66a3627ed0a87c234c4d8dde8ab35098','url':'https://piston-meta.mojang.com/v1/packages/be146d5f66a3627ed0a87c234c4d8dde8ab35098/1.14.4.json'},base)
         metadata=json.loads(base.read_text());_download(metadata['downloads']['client'],base.with_suffix('.jar'))
         (home/'launcher_profiles.json').write_text('{"profiles":{}}\n')
-    with (home/'install.log').open('w',encoding='utf-8') as log:
-        subprocess.run([str(java),'-Djava.awt.headless=true','-jar',installer.name,
+    run_logged([str(java),'-Djava.awt.headless=true','-jar',installer.name,
                         '--installClient' if client else '--installServer',str(home)],
-                       cwd=home,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=600)
+                       cwd=home,path=home/'install.log',timeout=600)
     if client:
         base,forge,paths,natives=client_inputs(home)
         inputs={str(path.relative_to(home)):digest(path) for path in paths}
