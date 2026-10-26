@@ -1,5 +1,6 @@
 import contextlib
 import io
+import hashlib
 from pathlib import Path
 import subprocess
 import sys
@@ -10,10 +11,30 @@ from unittest.mock import patch
 import native_runtime
 import prepare_legacy_tools
 import prepare_native113_tools
+import prepare_migration_inputs
 
 
 class ToolDiagnosticsTests(unittest.TestCase):
     payload = 'original beginning\n' + 'build progress\n' * 100 + 'fixture failure detail\n'
+
+    def test_rejected_download_tries_next_address_before_writing(self):
+        valid=b'checksum-locked fixture'
+        expected=hashlib.sha256(valid).hexdigest().upper()
+        with tempfile.TemporaryDirectory() as directory:
+            target=Path(directory)/'fixture.jar'
+            with patch('urllib.request.urlopen',side_effect=[io.BytesIO(b'incomplete'),io.BytesIO(valid)]) as fetch, contextlib.redirect_stdout(io.StringIO()):
+                prepare_migration_inputs.fetch('https://example.invalid/fixture.jar',target,expected)
+            self.assertEqual(2,fetch.call_count)
+            self.assertEqual(valid,target.read_bytes())
+
+    def test_every_rejected_download_is_checked_and_existing_file_preserved(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target=Path(directory)/'fixture.jar';target.write_bytes(b'previous verified fixture')
+            with patch('urllib.request.urlopen',side_effect=[io.BytesIO(b'bad') for _ in range(3)]) as fetch, contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(RuntimeError,'checksum mismatch'):
+                    prepare_migration_inputs.fetch('https://example.invalid/fixture.jar',target,'0'*64)
+            self.assertEqual(3,fetch.call_count)
+            self.assertEqual(b'previous verified fixture',target.read_bytes())
 
     def failed_command(self, command, **options):
         options['stdout'].write(self.payload)

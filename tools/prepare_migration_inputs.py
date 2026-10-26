@@ -61,6 +61,12 @@ def fetch(url, path, expected):
                     chunks.append(part)
                     if time.monotonic()-started>120: raise TimeoutError('Artifact transfer exceeded two minutes')
                 payload=b''.join(chunks)
+            actual=hashlib.sha256(payload).hexdigest().upper()
+            if actual!=expected:
+                print('MIGRATION_INPUT_CHECKSUM_REJECTED',path.name,'bytes='+str(len(payload)),
+                      'sha256='+actual,'expected='+expected,flush=True)
+                payload=None
+                continue
             break
         except urllib.error.HTTPError as error:
             if error.code not in (403, 429, 500, 502, 503, 504):

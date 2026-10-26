@@ -90,7 +90,9 @@ final class ReportedIssueClientChecks {
                 RuntimeChecks.require(second!=null,"Second actual death corpse absent");secondId=second.getUniqueID();
                 verifyOriginals(second);equal(second.getStackInSlot(4),RuntimeChecks.stack(301),"Second selected main hand");
                 RuntimeChecks.require(p.inventory.write(new ListNBT()).size()==0,"Second death duplicated player inventory");
-                p.connection.setPlayerLocation(32.5,80,.5,0,0);
+                if(Boolean.getBoolean("lootablebodies.issueClient.offsetViewer"))
+                    p.connection.setPlayerLocation(48.5,4,32.5,0,0);
+                else p.connection.setPlayerLocation(32.5,80,.5,0,0);
                 mark("second_death_without_inventory_resync_preserves_original_shovel_and_all_tags");
             });next(10);
         } else if(stage==10 && done() && open(mc,secondId)) {next(11);
@@ -159,11 +161,29 @@ final class ReportedIssueClientChecks {
     private static void equal(ItemStack a,ItemStack b,String reason){RuntimeChecks.require(RuntimeChecks.sameStack(a == null ? ItemStack.EMPTY : a,b == null ? ItemStack.EMPTY : b),reason);}
     private static boolean ready(Minecraft mc){return mc.world!=null && mc.player!=null && mc.getIntegratedServer()!=null;}
     private static boolean gui(Minecraft mc){return mc.currentScreen instanceof CorpseGUIContainer;}
-    private boolean open(Minecraft mc,UUID id){
+    private boolean open(Minecraft mc,UUID id) throws Exception {
         // Sending an interaction does not mean the server has opened its GUI.
         if(gui(mc))return true;
         if(frames%10!=0)return false;
         for(Entity e:FixtureApi.entities(mc.world))if(e instanceof EntityLootableBody && e.getUniqueID().equals(id)){
+            if(mc.player.getDistanceSq(e)>9) {
+                if(pending!=null && !done())return false;
+                schedule(mc,()->{
+                    ServerPlayerEntity p=player(mc);
+                    EntityLootableBody corpse=RuntimeChecks.find(p.getServerWorld(),id);
+                    double x=corpse.posX,z=corpse.posZ-2;
+                    int y=net.minecraft.util.math.MathHelper.floor(corpse.posY);
+                    // A respawn can leave the viewer far from the original
+                    // platform. Give this disposable fixture a stable place
+                    // beside the actual corpse before sending normal clicks.
+                    for(int dx=-1;dx<=1;dx++)for(int dz=-1;dz<=1;dz++)
+                        p.world.setBlockState(new BlockPos(x+dx,y-1,z+dz),Blocks.STONE.getDefaultState());
+                    p.setMotion(0,0,0);
+                    p.connection.setPlayerLocation(x,y,z,0,0);
+                    System.out.println("ISSUE5_VIEWER_APPROACH corpse="+id);
+                });
+                return false;
+            }
             System.out.println("ISSUE5_GUI_OPEN_REQUEST corpse="+id+" distance_sq="+mc.player.getDistanceSq(e));
             mc.playerController.interactWithEntity(mc.player,e,Hand.MAIN_HAND);
             break;
