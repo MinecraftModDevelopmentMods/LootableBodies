@@ -21,6 +21,26 @@ class RuntimeLogAuditTests(unittest.TestCase):
             with self.subTest(options=options),self.assertRaises(RuntimeError):
                 self.check_log(self.dead_player_movement(),**options)
 
+    def test_native_dead_player_position_rotation_matches_independent_control(self):
+        known=self.dead_player_movement().replace('CPlayerPacket$PositionPacket.func_148833_a(SourceFile:57)',
+            'CPlayerPacket$PositionRotationPacket.func_148833_a(SourceFile:18)')
+        for stack in (known,known.replace('func_213161_c(SourceFile:127)','func_213160_bf(SourceFile:103)').replace('MinecraftServer.java:681','MinecraftServer.java:680')):
+            with self.subTest(stack=stack):
+                self.assertEqual(1,self.check_log(stack,native=True)['known_forge28_dead_player_movement_failures'])
+
+    def test_position_rotation_control_still_requires_exact_complete_native_stack(self):
+        known=self.dead_player_movement().replace('CPlayerPacket$PositionPacket.func_148833_a(SourceFile:57)',
+            'CPlayerPacket$PositionRotationPacket.func_148833_a(SourceFile:18)')
+        for options in ({},{'development':True},{'upgrade':True}):
+            with self.subTest(options=options),self.assertRaises(RuntimeError):self.check_log(known,**options)
+        for changed in (known.replace('PositionRotationPacket.func_148833_a(SourceFile:18)',
+                'PositionRotationPacket.func_148833_a(SourceFile:19)'),
+                known.replace('SourceFile:208','SourceFile:209'),
+                known.replace('PositionRotationPacket','RotationPacket'),
+                known+'\tat cyano.lootable.Other.hook(Other.java:12)\n',
+                known+'Caused by: java.lang.IllegalStateException: other failure\n'):
+            with self.subTest(changed=changed),self.assertRaises(RuntimeError):self.check_log(changed,native=True)
+
     def test_native_dead_player_movement_rejects_changed_or_additional_failures(self):
         known=self.dead_player_movement()
         variants=[known.replace('SourceFile:208','SourceFile:209'),

@@ -85,6 +85,12 @@ def dead_player_movement_blocks(lines):
             'net.minecraft.server.MinecraftServer.func_213202_o(MinecraftServer.java:680)']]
     ending=['net.minecraft.server.MinecraftServer.run(MinecraftServer.java:628)',
             'java.lang.Thread.run(Thread.java:750)']
+    # The independent control also reproduces this with native combined
+    # position/rotation packets. Keep both exact packet frames and loop tails.
+    stacks=[]
+    for packet in [prefix[5],'net.minecraft.network.play.client.CPlayerPacket$PositionRotationPacket.func_148833_a(SourceFile:18)']:
+        shaped=prefix[:5]+[packet]+prefix[6:]
+        stacks.extend(shaped+tail+ending for tail in tails)
     header=re.compile(r'^\[(?:\d{2}[A-Za-z]{3}\d{4} )?\d{2}:\d{2}:\d{2}(?:\.\d{3})?\] '
         r'\[Server thread/FATAL\] \[(?:minecraft/ThreadTaskExecutor|net\.minecraft\.util\.concurrent\.ThreadTaskExecutor)/?\]: Error executing task on Server$')
     frame=re.compile(r'\tat ([^()\r\n]+\([^()\r\n]*\))(?: ~?\[[^\]\r\n]+\](?: \{[^{}\r\n]*\})?)?')
@@ -97,7 +103,7 @@ def dead_player_movement_blocks(lines):
         matches=[frame.fullmatch(line) for line in body[1:]]
         if not all(matches):continue
         frames=[match.group(1) for match in matches]
-        if not any(frames==prefix+tail+ending for tail in tails):continue
+        if frames not in stacks:continue
         accepted.update(range(a,b));count+=1
     return accepted,count
 
