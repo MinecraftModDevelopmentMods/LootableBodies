@@ -27,11 +27,11 @@ public final class ForgeControl {
             p.setGameType(net.minecraft.world.GameType.SURVIVAL);
             double x=checkDeaths%2==0?96.5:-.4,z=checkDeaths%2==0?96.5:-.4;
             for(int a=-6;a<=6;a++)for(int b=-6;b<=6;b++)p.world.setBlockState(new net.minecraft.util.math.BlockPos(x+a,80,z+b),net.minecraft.block.Blocks.OBSIDIAN.getDefaultState());
-            p.setSpawnPoint(new net.minecraft.util.math.BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),true);
+            p.setSpawnPoint(new net.minecraft.util.math.BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),true,false,p.dimension);
             p.connection.setPlayerLocation(x,81,z,0,0);
         }
         if(checkTicks==50){
-            int px=(int)Math.floor(p.posX),pz=(int)Math.floor(p.posZ);
+            int px=(int)Math.floor(p.getPosX()),pz=(int)Math.floor(p.getPosZ());
             for(int ax=-6;ax<=6;ax++)for(int az=-6;az<=6;az++){
                 p.world.setBlockState(new net.minecraft.util.math.BlockPos(px+ax,77,pz+az),net.minecraft.block.Blocks.OBSIDIAN.getDefaultState());
                 p.world.removeBlock(new net.minecraft.util.math.BlockPos(px+ax,79,pz+az),false);
@@ -56,7 +56,7 @@ public final class ForgeControl {
                 }catch(java.io.IOException failure){throw new IllegalStateException(failure);}
                 stage=4;
             }else if(stage==4 && ++ticks>=80) {
-                mc.world.sendQuittingDisconnectingPacket();mc.func_213254_o();stage=2;
+                mc.world.sendQuittingDisconnectingPacket();mc.unloadWorld();stage=2;
             }else if(stage==2 && mc.world==null && !mc.isIntegratedServerRunning())finish(mc);
         }
         private int connections,wait,deathTicks,respawns;
@@ -122,7 +122,7 @@ public final class ForgeControl {
                     wait=0;return;
                 }
                 System.out.println("NATIVE_FORGE_TCP_JOIN "+(++connections));
-                mc.world.sendQuittingDisconnectingPacket();mc.func_213254_o();mc.displayGuiScreen(new net.minecraft.client.gui.screen.MainMenuScreen());stage=0;wait=0;
+                mc.world.sendQuittingDisconnectingPacket();mc.unloadWorld();mc.displayGuiScreen(new net.minecraft.client.gui.screen.MainMenuScreen());stage=0;wait=0;
             }else if(stage==1 && mc.currentScreen instanceof net.minecraft.client.gui.screen.DisconnectedScreen) {
                 throw new AssertionError("NATIVE_FORGE_TCP_LOGIN_FAILURE joins="+connections);
             }

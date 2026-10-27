@@ -91,6 +91,35 @@ def dead_player_movement_blocks(lines):
     for packet in [prefix[5],'net.minecraft.network.play.client.CPlayerPacket$PositionRotationPacket.func_148833_a(SourceFile:18)']:
         shaped=prefix[:5]+[packet]+prefix[6:]
         stacks.extend(shaped+tail+ending for tail in tails)
+    return _movement_blocks(lines,stacks)
+
+
+def forge31_dead_player_movement_blocks(lines):
+    """Only the complete 19-frame stack observed in the Forge31-only control."""
+    stack=[
+        'net.minecraft.world.server.TicketManager.func_219367_b(SourceFile:201)',
+        'net.minecraft.world.server.ChunkManager.func_219183_a(ChunkManager.java:857)',
+        'net.minecraft.world.server.ServerChunkProvider.func_217221_a(SourceFile:479)',
+        'net.minecraft.network.play.ServerPlayNetHandler.func_147347_a(ServerPlayNetHandler.java:765)',
+        'net.minecraft.network.play.client.CPlayerPacket.func_148833_a(SourceFile:122)',
+        'net.minecraft.network.play.client.CPlayerPacket$PositionPacket.func_148833_a(SourceFile:56)',
+        'net.minecraft.network.PacketThreadUtil.func_225383_a(SourceFile:21)',
+        'net.minecraft.util.concurrent.TickDelayedTask.run(SourceFile:18)',
+        'net.minecraft.util.concurrent.ThreadTaskExecutor.func_213166_h(SourceFile:144)',
+        'net.minecraft.util.concurrent.RecursiveEventLoop.func_213166_h(SourceFile:23)',
+        'net.minecraft.server.MinecraftServer.func_213166_h(MinecraftServer.java:731)',
+        'net.minecraft.server.MinecraftServer.func_213166_h(MinecraftServer.java:141)',
+        'net.minecraft.util.concurrent.ThreadTaskExecutor.func_213168_p(SourceFile:118)',
+        'net.minecraft.server.MinecraftServer.func_213205_aW(MinecraftServer.java:714)',
+        'net.minecraft.server.MinecraftServer.func_213168_p(MinecraftServer.java:708)',
+        'net.minecraft.util.concurrent.ThreadTaskExecutor.func_213161_c(SourceFile:127)',
+        'net.minecraft.server.MinecraftServer.func_213202_o(MinecraftServer.java:694)',
+        'net.minecraft.server.MinecraftServer.run(MinecraftServer.java:641)',
+        'java.lang.Thread.run(Thread.java:750)']
+    return _movement_blocks(lines,[stack])
+
+
+def _movement_blocks(lines,stacks):
     header=re.compile(r'^\[(?:\d{2}[A-Za-z]{3}\d{4} )?\d{2}:\d{2}:\d{2}(?:\.\d{3})?\] '
         r'\[Server thread/FATAL\] \[(?:minecraft/ThreadTaskExecutor|net\.minecraft\.util\.concurrent\.ThreadTaskExecutor)/?\]: Error executing task on Server$')
     frame=re.compile(r'\tat ([^()\r\n]+\([^()\r\n]*\))(?: ~?\[[^\]\r\n]+\](?: \{[^{}\r\n]*\})?)?')
@@ -123,7 +152,9 @@ def audit(path, development=False, upgrade=False, fixture_logins=False, native=F
     # as the complete file logs while keeping the original evidence untouched.
     lines=re.sub(r'\x1b\[[0-9;]*m','',text).splitlines()
     proven=development_control_lines(lines) if development else set()
-    native_movement,movement_count=dead_player_movement_blocks(lines) if native else (set(),0)
+    native28,count28=dead_player_movement_blocks(lines) if native else (set(),0)
+    native31,count31=forge31_dead_player_movement_blocks(lines) if native else (set(),0)
+    native_movement=native28|native31
     version_check_block=False
     for number,line in enumerate(lines):
         if number in login_lines or number in native_movement: continue
@@ -151,7 +182,9 @@ def audit(path, development=False, upgrade=False, fixture_logins=False, native=F
     if not text.strip(): failures.append('Empty runtime log')
     if failures: raise RuntimeError(str(path)+'\n'+'\n'.join(failures))
     return {'path':str(path),'lines':len(text.splitlines()),'recovered_forge_pre_login_failures':len(login_lines),
-        'known_forge28_dead_player_movement_failures':movement_count,'expected_platform_errors':sum(
+        'known_forge28_dead_player_movement_failures':count28,
+        'known_forge31_dead_player_movement_failures':count31,
+        'known_native_dead_player_movement_failures':count28+count31,'expected_platform_errors':sum(
         1 for line in text.splitlines() if re.search(r'/ERROR\]|/FATAL\]',line))}
 
 

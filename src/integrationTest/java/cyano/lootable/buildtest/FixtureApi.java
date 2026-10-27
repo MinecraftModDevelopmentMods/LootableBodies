@@ -37,13 +37,13 @@ final class FixtureApi {
         }catch(ReflectiveOperationException failure){throw new IllegalStateException("Native chunk admission failed",failure);}
     }
     static void awaitTicking(Entity entity) {
-        ServerWorld world=(ServerWorld)entity.world;int x=net.minecraft.util.math.MathHelper.floor(entity.posX)>>4,z=net.minecraft.util.math.MathHelper.floor(entity.posZ)>>4;
+        ServerWorld world=(ServerWorld)entity.world;int x=net.minecraft.util.math.MathHelper.floor(entity.getPosX())>>4,z=net.minecraft.util.math.MathHelper.floor(entity.getPosZ())>>4;
         world.forceChunk(x,z,true);
         net.minecraft.world.server.ServerChunkProvider provider=world.getChunkProvider();
         long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
         while(!provider.isChunkLoaded(entity)) {
             RuntimeChecks.require(System.nanoTime()<deadline,"Native entity-ticking chunk did not become ready");
-            if(!provider.func_217234_d())Thread.yield();
+            if(!provider.driveOneTask())Thread.yield();
         }
     }
     static void unload(ServerWorld world,int x,int z) {
@@ -52,7 +52,7 @@ final class FixtureApi {
         // Expire temporary native load tickets and execute real save/unload work.
         for(int tick=0;tick<1200 && provider.chunkExists(x,z);tick++) {
             provider.tick(()->true);
-            for(int task=0;task<1000 && provider.func_217234_d();task++) { }
+            for(int task=0;task<1000 && provider.driveOneTask();task++) { }
             if((tick&31)==0)Thread.yield();
         }
         provider.save(true);

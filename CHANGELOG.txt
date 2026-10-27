@@ -1,8 +1,8 @@
-2.4.5.114041 - Minecraft 1.14.4, Forge
+2.4.6.115021 - Minecraft 1.15.2, Forge
 
-Updated for Minecraft 1.14.4.
+Updated for Minecraft 1.15.2.
 
-Includes the inventory, corpse and config improvements from 1.13.2.
+Includes the inventory, corpse and config improvements from 1.14.4.
 Preserves bodies and their contents when upgrading older worlds,
 including bodies in chunks visited later.
 

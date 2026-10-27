@@ -59,7 +59,7 @@ public final class RuntimeChecks {
     @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.LOWEST) public void fixtureAdmission(net.minecraftforge.event.entity.EntityJoinWorldEvent event) {
         if(Boolean.getBoolean("lootablebodies.assertFixtureAdmission") && event.getEntity() instanceof EntityLootableBody && !event.getWorld().isRemote && !event.getEntity().addedToChunk) {
             EntityLootableBody body=(EntityLootableBody)event.getEntity();
-            require(event.getWorld().getChunkProvider().chunkExists(net.minecraft.util.math.MathHelper.floor(body.posX)>>4,net.minecraft.util.math.MathHelper.floor(body.posZ)>>4),"Manual corpse fixture spawned before chunk admission: "+body.getPosition()+" name="+body.getCustomNameTag());
+            require(event.getWorld().getChunkProvider().chunkExists(net.minecraft.util.math.MathHelper.floor(body.getPosX())>>4,net.minecraft.util.math.MathHelper.floor(body.getPosZ())>>4),"Manual corpse fixture spawned before chunk admission: "+body.getPosition()+" name="+body.getCustomNameTag());
         }
     }
     @SubscribeEvent public void started(FMLServerStartedEvent event) {
@@ -90,9 +90,9 @@ public final class RuntimeChecks {
     public static void run(MinecraftServer server, String phase) throws Exception {
         ServerWorld world = server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));
         File folder = world.getSaveHandler().getWorldDirectory();
-        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.5.114041"), "identity/version");
+        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.6.115021"), "identity/version");
         require(net.minecraftforge.fml.ModList.get().getModContainerById("lootablebodies").get().getModInfo().getVersion().toString().equals(phase.equals("seed") ? "2.4.0" : phase.equals("issues") ?
-                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.5.114041") : "2.4.5.114041"), "loaded release version");
+                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.6.115021") : "2.4.6.115021"), "loaded release version");
         if (!defaultsChecked) require(LootableBodies.addBonesToCorpse && LootableBodies.displayNameTag && !LootableBodies.hurtByEnvironment &&
                 !LootableBodies.hurtByAttacks && !LootableBodies.hurtByMisc && LootableBodies.corpseHP == 20 &&
                 LootableBodies.ticksPerItemDecay == 6000 && LootableBodies.corpseDecayTime == 72000 &&
@@ -196,7 +196,7 @@ public final class RuntimeChecks {
         System.out.println("LOOTABLE_BODIES_RUNTIME_PASS phase=" + phase);
     }
     static net.minecraft.world.chunk.Chunk emptyChunk(ServerWorld world,int x,int z) {
-        net.minecraft.world.biome.Biome[] biomes=new net.minecraft.world.biome.Biome[256];java.util.Arrays.fill(biomes,net.minecraft.world.biome.Biomes.PLAINS);return new net.minecraft.world.chunk.Chunk(world,new net.minecraft.util.math.ChunkPos(x,z),biomes);
+        net.minecraft.world.biome.Biome[] biomes=new net.minecraft.world.biome.Biome[1024];java.util.Arrays.fill(biomes,net.minecraft.world.biome.Biomes.PLAINS);return new net.minecraft.world.chunk.Chunk(world,new net.minecraft.util.math.ChunkPos(x,z),new net.minecraft.world.biome.BiomeContainer(biomes));
     }
     static ItemStack stack(int index) {
         ItemStack stack=index<4?new ItemStack(new net.minecraft.item.Item[]{Items.DIAMOND_HELMET,Items.DIAMOND_CHESTPLATE,Items.DIAMOND_LEGGINGS,Items.DIAMOND_BOOTS}[index]):index==4?new ItemStack(Items.DIAMOND_SWORD):index==5?new ItemStack(Items.SHIELD):new ItemStack(Items.LAPIS_LAZULI,1+index%32);

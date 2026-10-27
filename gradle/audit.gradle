@@ -60,11 +60,11 @@ ext.auditReleaseArchives = { File directory ->
                     if (!names.contains(it)) throw new GradleException("Missing production entry ${it}")
                 }
                 String info=zip.getInputStream(zip.getEntry('META-INF/mods.toml')).getText('UTF-8')
-                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.14.4]"'].each {
+                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.15.2]"'].each {
                     if(!info.contains(it))throw new GradleException("Incorrect production metadata: ${it}")
                 }
-                if(new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack.pack_format!=4)
-                    throw new GradleException('Native resource pack format must be 4')
+                if(new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack.pack_format!=5)
+                    throw new GradleException('Native resource pack format must be 5')
                 def languages=names.findAll {it.startsWith('assets/lootablebodies/lang/') && !it.endsWith('/')}
                 if(languages.size()!=14 || languages.any {!it.endsWith('.json') || it!=it.toLowerCase(Locale.ROOT)})
                     throw new GradleException('Incorrect native language resources')

@@ -125,7 +125,7 @@ final class RespawnPacketClientChecks {
                     if(!found||++guiFrames<10)return;
                 }
                 observe(mc,"VERIFIED owner_or_observer exact_uuid_loaded_after_respawn");
-                if(index%8==0||index%8==7)ScreenShotHelper.saveScreenshot(mc.gameDir,"respawn-case-"+index+".png",mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
+                if(index%8==0||index%8==7)ScreenShotHelper.saveScreenshot(mc.gameDir,"respawn-case-"+index+".png",mc.getMainWindow().getFramebufferWidth(),mc.getMainWindow().getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
                 ack(key);
             } else if(phase==9) {
                 new File(mc.gameDir,"respawn-client.pass").createNewFile();System.out.println("LOOTABLE_BODIES_RESPAWN_CLIENT_PASS "+role);

@@ -33,29 +33,29 @@ final class NbtRecoveryChecks {
         check("duplicate_distinct_stacks_keep_first_and_retain_second",()->duplicate(false));
         check("duplicate_identical_stacks_are_not_deduplicated",()->duplicate(true));
         check("missing_duplicate_does_not_erase_known_stack",NbtRecoveryChecks::missingDuplicate);
-        for(int slot:new int[]{-1,48,127,256}) {final int s=slot;check("invalid_slot_"+s,()->invalidSlot(new IntNBT(s)));}
+        for(int slot:new int[]{-1,48,127,256}) {final int s=slot;check("invalid_slot_"+s,()->invalidSlot(IntNBT.valueOf(s)));}
         check("missing_slot_does_not_default_to_helmet",()->invalidSlot(null));
-        check("string_slot_is_not_coerced_to_zero",()->invalidSlot(new StringNBT("7")));
-        check("fractional_slot_is_not_truncated",()->invalidSlot(new FloatNBT(6.5F)));
-        check("long_slot_is_not_narrowed",()->invalidSlot(new LongNBT(4294967302L)));
+        check("string_slot_is_not_coerced_to_zero",()->invalidSlot(StringNBT.valueOf("7")));
+        check("fractional_slot_is_not_truncated",()->invalidSlot(FloatNBT.valueOf(6.5F)));
+        check("long_slot_is_not_narrowed",()->invalidSlot(LongNBT.valueOf(4294967302L)));
         check("valid_wide_slot_is_read_without_byte_wrap",NbtRecoveryChecks::validWideSlot);
-        check("missing_equipment_item_raw_retained",()->unreadable("Equipment","id",new StringNBT("absentfixture:missing")));
-        check("missing_aux_item_raw_retained",()->unreadable("Aux","id",new StringNBT("absentfixture:missing")));
-        check("air_item_is_not_a_replacement",()->unreadable("Equipment","id",new StringNBT("minecraft:air")));
-        check("numeric_item_id_not_guessed",()->unreadable("Equipment","id",new ShortNBT((short)264)));
+        check("missing_equipment_item_raw_retained",()->unreadable("Equipment","id",StringNBT.valueOf("absentfixture:missing")));
+        check("missing_aux_item_raw_retained",()->unreadable("Aux","id",StringNBT.valueOf("absentfixture:missing")));
+        check("air_item_is_not_a_replacement",()->unreadable("Equipment","id",StringNBT.valueOf("minecraft:air")));
+        check("numeric_item_id_not_guessed",()->unreadable("Equipment","id",ShortNBT.valueOf((short)264)));
         check("missing_count_retained_raw",()->unreadable("Equipment","Count",null));
-        check("zero_count_retained_raw",()->unreadable("Equipment","Count",new ByteNBT((byte)0)));
-        check("negative_count_retained_raw",()->unreadable("Equipment","Count",new ByteNBT((byte)-1)));
-        check("wide_count_does_not_wrap_to_zero",()->unreadable("Equipment","Count",new IntNBT(256)));
-        check("string_count_retained_raw",()->unreadable("Equipment","Count",new StringNBT("17")));
-        check("fractional_count_retained_raw",()->unreadable("Equipment","Count",new FloatNBT(17.5F)));
+        check("zero_count_retained_raw",()->unreadable("Equipment","Count",ByteNBT.valueOf((byte)0)));
+        check("negative_count_retained_raw",()->unreadable("Equipment","Count",ByteNBT.valueOf((byte)-1)));
+        check("wide_count_does_not_wrap_to_zero",()->unreadable("Equipment","Count",IntNBT.valueOf(256)));
+        check("string_count_retained_raw",()->unreadable("Equipment","Count",StringNBT.valueOf("17")));
+        check("fractional_count_retained_raw",()->unreadable("Equipment","Count",FloatNBT.valueOf(17.5F)));
         check("valid_integer_count_preserved",NbtRecoveryChecks::integerCount);
-        check("wrong_damage_type_retained_raw",()->unreadable("Equipment","Damage",new StringNBT("17")));
-        check("negative_damage_not_reset",()->unreadable("Equipment","Damage",new ShortNBT((short)-1)));
-        check("wide_damage_not_narrowed",()->unreadable("Equipment","Damage",new IntNBT(32768)));
-        check("wrong_custom_tag_type_retained_raw",()->unreadable("Equipment","tag",new StringNBT("opaque")));
+        check("wrong_damage_type_retained_raw",()->unreadable("Equipment","Damage",StringNBT.valueOf("17")));
+        check("negative_damage_not_reset",()->unreadable("Equipment","Damage",ShortNBT.valueOf((short)-1)));
+        check("wide_damage_not_narrowed",()->unreadable("Equipment","Damage",IntNBT.valueOf(32768)));
+        check("wrong_custom_tag_type_retained_raw",()->unreadable("Equipment","tag",StringNBT.valueOf("opaque")));
         check("unknown_capability_payload_retained_raw",NbtRecoveryChecks::unknownCaps);
-        check("unknown_stack_root_data_retained_raw",()->unreadable("Equipment","UnknownPayload",new StringNBT("retain verbatim")));
+        check("unknown_stack_root_data_retained_raw",()->unreadable("Equipment","UnknownPayload",StringNBT.valueOf("retain verbatim")));
         check("wrong_equipment_list_type_retained",()->wrongList("Equipment"));
         check("wrong_aux_list_type_retained",()->wrongList("Aux"));
         check("empty_aux_record_retained_without_null_queue",NbtRecoveryChecks::emptyAux);
@@ -106,7 +106,7 @@ final class NbtRecoveryChecks {
     private static void unreadable(String source,String key,INBT value){CompoundNBT raw=entry(120,17,6);if(value==null)raw.remove(key);else raw.put(key,value);CompoundNBT n=root(entry(121,11,7));if(source.equals("Equipment"))n.getList("Equipment",10).add(raw.copy());else n.put("Aux",list(raw));EntityLootableBody b=read(n);equal(b.getStackInSlot(7),item(121,11),"Unreadable sibling erased valid slot");contains(b,item(121,11));retained(b,raw);stable(b);}
     private static void integerCount(){CompoundNBT e=entry(120,17,6);e.putInt("Count",17);EntityLootableBody b=read(root(e));contains(b,item(120,17));stable(b);}
     private static void unknownCaps(){CompoundNBT caps=new CompoundNBT();caps.putString("absentfixture:inventory","opaque capabilities");unreadable("Equipment","ForgeCaps",caps);}
-    private static void wrongList(String source){ListNBT wrong=new ListNBT();wrong.add(new StringNBT("opaque inventory payload"));CompoundNBT n=root(entry(121,11,7));n.put(source,wrong);EntityLootableBody b=read(n);retained(b,wrong);stable(b);}
+    private static void wrongList(String source){ListNBT wrong=new ListNBT();wrong.add(StringNBT.valueOf("opaque inventory payload"));CompoundNBT n=root(entry(121,11,7));n.put(source,wrong);EntityLootableBody b=read(n);retained(b,wrong);stable(b);}
     private static void emptyAux(){CompoundNBT n=root(entry(120,17,6));n.put("Aux",list(new CompoundNBT()));EntityLootableBody b=read(n);retained(b,new CompoundNBT());contains(b,item(120,17));b.baseTick();stable(b);}
     private static void repeated(){CompoundNBT raw=entry(120,17,6);raw.putString("id","absentfixture:missing");CompoundNBT n=root(raw);EntityLootableBody b=read(n);b.readAdditional(n);retained(b,raw);RuntimeChecks.require(saved(b).getList(RECOVERY,10).size()==1,"Repeated load accumulated unresolved records");stable(b);}
     private static void clear(){CompoundNBT raw=entry(120,17,6);raw.putString("id","absentfixture:missing");CompoundNBT n=root(entry(121,11,7),raw);n.put("Aux",list(entry(122,5,0)));EntityLootableBody b=read(n);CompoundNBT target=saved(b);b.clear();b.writeAdditional(target);RuntimeChecks.require(target.getList("Equipment",10).size()==0 && !target.contains("Aux") && !target.contains(RECOVERY),"Writer left stale cleared inventory in reused compound");}
@@ -119,11 +119,11 @@ final class NbtRecoveryChecks {
     static CompoundNBT record(String source,INBT data){CompoundNBT n=new CompoundNBT();n.putString("Source",source);n.put("Data",data.copy());return n;}
     private static void retry(boolean occupied){CompoundNBT n=occupied?root(entry(121,11,6)):root();n.put(RECOVERY,list(record("Equipment",entry(120,17,6))));EntityLootableBody b=read(n);equal(b.getStackInSlot(6),occupied?item(121,11):item(120,17),"Retry changed original slot ownership");if(occupied)contains(b,item(121,11),item(120,17));else contains(b,item(120,17));RuntimeChecks.require(!saved(b).contains(RECOVERY),"Resolved record was retained and can duplicate on reload");stable(b);}
     private static void futureRecord(){CompoundNBT record=new CompoundNBT();record.putString("Source","future-format");record.putLong("Opaque",7712);CompoundNBT n=root();n.put(RECOVERY,list(record));EntityLootableBody b=read(n);RuntimeChecks.require(saved(b).getList(RECOVERY,10).getCompound(0).equals(record),"Unknown recovery record changed");stable(b);}
-    private static void wrongRecovery(){CompoundNBT n=root();StringNBT raw=new StringNBT("opaque recovery data");n.put(RECOVERY,raw);EntityLootableBody b=read(n);retained(b,raw);stable(b);}
+    private static void wrongRecovery(){CompoundNBT n=root();StringNBT raw=StringNBT.valueOf("opaque recovery data");n.put(RECOVERY,raw);EntityLootableBody b=read(n);retained(b,raw);stable(b);}
     private static void tail(){CompoundNBT broken=entry(120,17,6);broken.putInt("Slot",999);EntityLootableBody b=read(root(broken,entry(121,11,47)));equal(b.getStackInSlot(47),item(121,11),"Bad first record hid valid tail");contains(b,item(120,17),item(121,11));}
     private static void auxOrder(){CompoundNBT n=root();n.put("Aux",list(entry(120,17,0),entry(121,11,0)));EntityLootableBody b=read(n);ListNBT aux=saved(b).getList("Aux",10);equal(ItemStack.read(aux.getCompound(0)),item(120,17),"Aux head changed");equal(ItemStack.read(aux.getCompound(1)),item(121,11),"Aux tail changed");stable(b);}
     private static void mirrors(){EntityLootableBody original=new EntityLootableBody(world);original.setInventorySlotContents(4,item(4,1));CompoundNBT n=saved(original);n.put("Equipment",list(entry(120,17,6)));EntityLootableBody b=read(n);contains(b,item(120,17));stable(b);}
-    private static void mirrorFallback(){EntityLootableBody original=new EntityLootableBody(world);original.setInventorySlotContents(4,item(4,1));CompoundNBT n=saved(original);StringNBT raw=new StringNBT("opaque inventory");n.put("Equipment",raw);EntityLootableBody b=read(n);contains(b,item(4,1));retained(b,raw);stable(b);}
+    private static void mirrorFallback(){EntityLootableBody original=new EntityLootableBody(world);original.setInventorySlotContents(4,item(4,1));CompoundNBT n=saved(original);StringNBT raw=StringNBT.valueOf("opaque inventory");n.put("Equipment",raw);EntityLootableBody b=read(n);contains(b,item(4,1));retained(b,raw);stable(b);}
     private static void missingDamage(){CompoundNBT e=entry(4,1,6);e.remove("Damage");e.getCompound("tag").remove("Damage");EntityLootableBody b=read(root(e));ItemStack expected=item(4,1);expected.getTag().remove("Damage");RuntimeChecks.require(expected.getDamage()==0,"Native missing durability must default to zero");contains(b,expected);RuntimeChecks.require(!saved(b).contains(RECOVERY),"Missing vanilla-zero damage was quarantined");stable(b);}
     private static void oversizedAux(){CompoundNBT n=root();n.put("Aux",list(entry(120,127,0)));EntityLootableBody b=read(n);contains(b,item(120,127));ListNBT aux=saved(b).getList("Aux",10);RuntimeChecks.require(aux.size()==2,"Oversized auxiliary stack not split");for(int i=0;i<aux.size();i++)RuntimeChecks.require(ItemStack.read(aux.getCompound(i)).getCount()<=64,"Aux exceeds capacity");stable(b);}
     private static void factory(){EntityLootableBody original=new EntityLootableBody(world);original.setUniqueId(UUID.fromString("00000000-0000-4000-8000-000000000120"));original.setPosition(160.5,80,160.5);original.setRotation(37);original.setCustomNameTag("NbtFixture");CompoundNBT n=new CompoundNBT();original.writeUnlessPassenger(n);CompoundNBT broken=entry(120,17,6);broken.putInt("Slot",999);n.put("Equipment",list(broken,entry(121,11,47)));Entity loaded=FixtureApi.loadEntity(n,world);RuntimeChecks.require(loaded instanceof EntityLootableBody,"Malformed inventory discarded whole corpse");EntityLootableBody b=(EntityLootableBody)loaded;RuntimeChecks.require(b.getUniqueID().equals(original.getUniqueID()) && b.getPosition().equals(original.getPosition()) && b.rotationYaw==37 && b.getCustomNameTag().equals("NbtFixture"),"Entity identity/base fields changed");contains(b,item(120,17),item(121,11));}

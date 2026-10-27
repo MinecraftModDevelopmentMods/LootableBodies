@@ -239,7 +239,7 @@ public final class UpgradeJournal {
                     else atomic(destination,original,false);
                     if(entity.contains("LootableBodiesUpgradePayload") || entity.contains("LootableBodiesInventorySource"))
                         throw new IOException("Unexpected intermediate corpse migration data on disk; original chunk has been preserved");
-                    preserved.add(new StringNBT(filename));
+                    preserved.add(StringNBT.valueOf(filename));
                 }
             }
         } catch(RuntimeException damaged) { throw new IOException("Cannot safely preserve "+relative,damaged); }
@@ -273,13 +273,15 @@ public final class UpgradeJournal {
         else if(marker==2)version=1343;
         else if(marker==3)version=1631;
         else if(marker==4)version=1976;
+        else if(marker==5)version=2230;
         if(legacy) {if(version!=512)context.putBoolean("Inferred",true);version=512;}
         int family=-1;
         ListNBT mods=world.getCompound("WorldFML").getList("ModList",10);
         for(int i=0;i<mods.size();i++) {
             CompoundNBT mod=mods.getCompound(i);if(!mod.getString("ModId").equals("lootablebodies"))continue;
             String release=mod.getString("ModVersion");
-            if(release.endsWith(".114041"))family=1976;
+            if(release.endsWith(".115021"))family=2230;
+            else if(release.endsWith(".114041"))family=1976;
             else if(release.endsWith(".113021"))family=1631;
             else if(release.endsWith(".112021") || release.equals("2.4.0"))family=1139;
             else if(release.endsWith(".111021") || release.equals("2.3.0"))family=922;
@@ -295,7 +297,7 @@ public final class UpgradeJournal {
         if(version<512 || version>UpgradePreservation.MINECRAFT_VERSION) {
             // Keep ambiguous records retriable without guessing a bed colour or
             // discarding known items whose conversion agrees in both families.
-            context.putBoolean("Ambiguous",true);context.putIntArray("CandidateDataVersions",new int[]{922,1343,1631,1976});version=922;
+            context.putBoolean("Ambiguous",true);context.putIntArray("CandidateDataVersions",new int[]{922,1343,1631,1976,2230});version=922;
         }
         context.putInt("DataVersion",version);return context;
     }

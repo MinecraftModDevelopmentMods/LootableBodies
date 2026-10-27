@@ -82,10 +82,10 @@ final class NbtWorldChecks {
     private static final class RawBody extends EntityLootableBody {
         RawBody(World w){super(w);}
         @Override public boolean writeUnlessPassenger(CompoundNBT n){if(removed)return false;n.putString("id","lootablebodies:corpse");writeWithoutTypeId(n);return true;}
-        @Override public void writeAdditional(CompoundNBT n){super.writeAdditional(n);CompoundNBT raw=rawEquipment();for(String key:raw.keySet())n.put(key,raw.get(key).copy());n.put("Pos",PositionMotionChecks.vector(Double.NaN,80,posZ));n.put("Motion",PositionMotionChecks.vector(Double.NaN,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY));}
+        @Override public void writeAdditional(CompoundNBT n){super.writeAdditional(n);CompoundNBT raw=rawEquipment();for(String key:raw.keySet())n.put(key,raw.get(key).copy());n.put("Pos",PositionMotionChecks.vector(Double.NaN,80,getPosZ()));n.put("Motion",PositionMotionChecks.vector(Double.NaN,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY));}
     }
     private static void settle(EntityLootableBody b){for(int i=0;i<8;i++)b.baseTick();}
-    private static void identity(EntityLootableBody b,UUID id,int coordinate){RuntimeChecks.require(b.isAlive() && b.getUniqueID().equals(id) && b.posX==coordinate+8.5 && b.posY==80 && b.posZ==coordinate+.5 && b.rotationYaw==37 && b.getCustomNameTag().equals("NbtFixture"),"Recovered corpse identity/position/rotation/name/health changed");}
+    private static void identity(EntityLootableBody b,UUID id,int coordinate){RuntimeChecks.require(b.isAlive() && b.getUniqueID().equals(id) && b.getPosX()==coordinate+8.5 && b.getPosY()==80 && b.getPosZ()==coordinate+.5 && b.rotationYaw==37 && b.getCustomNameTag().equals("NbtFixture"),"Recovered corpse identity/position/rotation/name/health changed");}
     private static void add(Map<String,Integer> totals,ItemStack s){CompoundNBT n=s.write(new CompoundNBT());n.remove("Count");String key=n.toString();totals.put(key,totals.getOrDefault(key,0)+s.getCount());}
     static void verify(EntityLootableBody b,boolean restored){
         verifyMetadata(b);

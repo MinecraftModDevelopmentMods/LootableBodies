@@ -6,6 +6,34 @@ from audit_runtime_logs import audit, FORGE_UPGRADE_RENAME
 
 
 class RuntimeLogAuditTests(unittest.TestCase):
+    def native31_dead_player_movement(self):
+        return (Path(__file__).parent/'fixtures/forge31-dead-player-movement.txt').read_text()
+
+    def test_native31_control_requires_its_exact_complete_19_frame_stack(self):
+        report=self.check_log(self.native31_dead_player_movement(),native=True)
+        self.assertEqual(1,report['known_forge31_dead_player_movement_failures'])
+        self.assertEqual(0,report['known_forge28_dead_player_movement_failures'])
+        self.assertEqual(1,report['known_native_dead_player_movement_failures'])
+
+    def test_native31_control_still_requires_native_mode(self):
+        for options in ({},{'development':True},{'upgrade':True}):
+            with self.subTest(options=options), self.assertRaises(RuntimeError):
+                self.check_log(self.native31_dead_player_movement(),**options)
+
+    def test_native31_control_rejects_changed_added_and_truncated_failures(self):
+        known=self.native31_dead_player_movement()
+        variants=[known.replace('SourceFile:201','SourceFile:202'),
+            known.replace('MinecraftServer.java:731','MinecraftServer.java:732'),
+            known.replace('CPlayerPacket$PositionPacket','CPlayerPacket$PositionRotationPacket'),
+            known.replace('java.lang.NullPointerException: null','java.lang.IllegalStateException: null'),
+            known.replace('/FATAL]','/ERROR]'),known.replace('Server thread','Netty Server IO #1'),
+            known+'\tat cyano.lootable.Other.hook(Other.java:12)\n',
+            known+'Caused by: java.lang.IllegalStateException: another failure\n',
+            known+'Suppressed: java.lang.IllegalStateException: another failure\n',
+            known.rsplit('\n\tat java.lang.Thread.run',1)[0]+'\n']
+        for changed in variants:
+            with self.subTest(changed=changed), self.assertRaises(RuntimeError): self.check_log(changed,native=True)
+
     def dead_player_movement(self):
         return (Path(__file__).parent/'fixtures/forge28-dead-player-movement.txt').read_text()
 

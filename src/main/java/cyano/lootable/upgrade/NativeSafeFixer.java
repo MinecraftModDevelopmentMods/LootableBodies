@@ -40,8 +40,16 @@ final class NativeSafeFixer implements DataFixer {
     }
     private CompoundNBT convert(DSL.TypeReference type,CompoundNBT input,int source,int target) {
         CompoundNBT copy=input.copy();Tokens tokens=new Tokens();String kind=type.typeName();
+        INBT currentBiomes=null;
         if(kind.equals("chunk")) {
             CompoundNBT level=copy.getCompound("Level");
+            // A damaged stamp can replay the old 2D biome expansion on an
+            // already-current 3D array. Protect that field alone so older
+            // vanilla entities and containers still receive their own fixes.
+            if(source<2202 && target>=2202 && level.contains("Biomes",11)
+                    && level.getIntArray("Biomes").length==1024) {
+                currentBiomes=level.get("Biomes").copy();level.remove("Biomes");
+            }
             // Vanilla discards typed Sections/TileEntities from incomplete old
             // chunks. Keep stored terrain as well as entities and containers.
             if(source<1493 && (nonempty(level,"Sections") || nonempty(level,"Entities") || nonempty(level,"TileEntities"))) {
@@ -65,6 +73,7 @@ final class NativeSafeFixer implements DataFixer {
             result=cyano.lootable.upgrade.NativeNbt.update(delegate,type,result,705,target);
         } else result=source<target?cyano.lootable.upgrade.NativeNbt.update(delegate,type,copy,source,target):copy;
         result=(CompoundNBT)restore(result,tokens);
+        if(currentBiomes!=null)result.getCompound("Level").put("Biomes",currentBiomes);
         for(String token:tokens.values.keySet())if(!Integer.valueOf(1).equals(tokens.restored.get(token)))throw new IllegalStateException("Native conversion lost or duplicated protected Lootable Bodies data");
         if(kind.equals("chunk"))result.putInt("DataVersion",Math.max(source,target));
         return result;
@@ -149,7 +158,7 @@ final class NativeSafeFixer implements DataFixer {
             }catch(IOException damaged){throw new IllegalStateException("Corpse preservation could not be verified",damaged);}
         }
         CompoundNBT context=new CompoundNBT();int marker=entity.getInt(UpgradePreservation.VERSION);
-        context.putInt("DataVersion",entity.getString("id").equals("lootablebodies.Corpse")?512:marker==1?922:marker==2?1343:marker==3?1631:version);return context;
+        context.putInt("DataVersion",entity.getString("id").equals("lootablebodies.Corpse")?512:marker==1?922:marker==2?1343:marker==3?1631:marker==4?1976:version);return context;
     }
     static CompoundNBT stageCorpse(CompoundNBT raw,CompoundNBT context) {
         if(raw.contains(UpgradePreservation.VERSION,3) && raw.getInt(UpgradePreservation.VERSION)>UpgradePreservation.DATA_VERSION)throw new IllegalStateException("This corpse was saved by a newer Lootable Bodies format");

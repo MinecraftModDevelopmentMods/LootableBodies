@@ -54,7 +54,7 @@ public final class ClientChecks {
                     " position="+(mc.player==null?"none":mc.player.getPosition())+" focus="+mc.isGameFocused());
             reportedStage=stage;
         }
-        if(ticks>0 && ticks%150==0) ScreenShotHelper.saveScreenshot(mc.gameDir,"diagnostic-stage-"+stage+"-tick-"+ticks+".png",mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
+        if(ticks>0 && ticks%150==0) ScreenShotHelper.saveScreenshot(mc.gameDir,"diagnostic-stage-"+stage+"-tick-"+ticks+".png",mc.getMainWindow().getFramebufferWidth(),mc.getMainWindow().getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
         if(++ticks > 12000) fail(new AssertionError("client timeout stage="+stage));
         try {
             RuntimeChecks.require(!new File(mc.gameDir,"abort").exists(),"Disposable graphical check aborted");
@@ -84,7 +84,7 @@ public final class ClientChecks {
                 }
             } else if(stage==3 && mc.currentScreen instanceof CorpseGUIContainer && ++frames>20) {
                 RuntimeChecks.require(((CorpseGUIContainer)mc.currentScreen).getContainer().inventorySlots.size()==84,"rendered GUI slots");
-                ScreenShotHelper.saveScreenshot(mc.gameDir,"corpse-gui-fresh.png",mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
+                ScreenShotHelper.saveScreenshot(mc.gameDir,"corpse-gui-fresh.png",mc.getMainWindow().getFramebufferWidth(),mc.getMainWindow().getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
                 mc.player.closeScreen(); stage=4;
                 FixtureConnections.disconnect(mc);
             } else if(stage==4 && FixtureConnections.stopped(mc)) {
@@ -103,7 +103,7 @@ public final class ClientChecks {
                     stage=7; frames=0; break;
                 }
             } else if(stage==7 && mc.currentScreen instanceof CorpseGUIContainer && ++frames>20) {
-                ScreenShotHelper.saveScreenshot(mc.gameDir,"corpse-gui-reload.png",mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
+                ScreenShotHelper.saveScreenshot(mc.gameDir,"corpse-gui-reload.png",mc.getMainWindow().getFramebufferWidth(),mc.getMainWindow().getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
                 mc.player.closeScreen(); stage=20; connected.start(mc);
             } else if(stage==20 && connected.tick(mc)) {
                 mc.player.closeScreen();drops.start(mc);stage=21;

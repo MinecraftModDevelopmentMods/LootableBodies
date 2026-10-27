@@ -93,7 +93,7 @@ final class NbtClientChecks {
     private void schedule(Minecraft mc,Action action){pending=mc.getIntegratedServer().runAsync(()->{try{action.run();}catch(Exception e){throw new RuntimeException(e);}});}
     private boolean done() throws Exception{if(!pending.isDone())return false;pending.get();return true;}
     private void next(int value){stage=value;frames=0;System.out.println("NBT_CLIENT_STAGE "+stage);}
-    private static void screenshot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));}
+    private static void screenshot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.getMainWindow().getFramebufferWidth(),mc.getMainWindow().getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));}
     private static void quit(Minecraft mc){mc.player.closeScreen();FixtureConnections.disconnect(mc);}
     private static void mark(Minecraft mc,String name) throws Exception{try(FileWriter out=new FileWriter(new File(mc.gameDir,"nbt-client-checks.txt"),true)){out.write("PASS "+name+"\n");}System.out.println("NBT_CLIENT_CHECK_PASS "+name);}
 }

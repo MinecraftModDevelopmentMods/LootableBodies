@@ -16,7 +16,7 @@ from release_identity import MAIN_JAR as MAIN
 
 def client_command(project,java,distribution,root,cache,shared,port,role,hidden_agent=None,probe=None):
     prepare_client(root,project/'build/libs'/MAIN,probe or project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar')
-    (root/'config').mkdir();(root/'config/lootablebodies.cfg').write_text('options {\n B:local_texture=true\n}\n')
+    (root/'config').mkdir(exist_ok=True);(root/'config/lootablebodies.cfg').write_text('options {\n B:local_texture=true\n}\n')
     extra=['-Dlootablebodies.multiplayer.role='+role,'-Dlootablebodies.multiplayer.sync='+str(shared),
            '-Dlootablebodies.multiplayer.port='+str(port),
            '-Dlog4j.configurationFile='+(project/'src/integrationTest/resources/log4j2.xml').as_uri()]

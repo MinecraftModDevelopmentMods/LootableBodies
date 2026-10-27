@@ -11,6 +11,7 @@ from unittest.mock import patch
 import native_runtime
 import prepare_legacy_tools
 import prepare_native113_tools
+import prepare_native114_tools
 import prepare_migration_inputs
 
 
@@ -64,6 +65,9 @@ class ToolDiagnosticsTests(unittest.TestCase):
 
     def test_native113_writer_failure_keeps_full_log_and_explains_it_in_ci(self):
         self.check_writer(prepare_native113_tools)
+
+    def test_native114_writer_failure_keeps_full_log_and_explains_it_in_ci(self):
+        self.check_writer(prepare_native114_tools)
 
     def test_installer_failure_keeps_full_log_and_explains_it_in_ci(self):
         with tempfile.TemporaryDirectory() as directory:

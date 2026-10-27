@@ -33,7 +33,7 @@ class ItemNbtConversionTest {
         CompoundNBT versions=context(922);versions.putBoolean("Ambiguous",true);versions.putIntArray("CandidateDataVersions",new int[]{922,1343});assertNull(ItemMigration.convertNbt(item("minecraft:bed",0),versions));assertNotNull(ItemMigration.convertNbt(item("minecraft:stone",1),versions));
     }
     @Test void malformedCountsAndUnknownFutureVersionsAreNotGuessed() {
-        CompoundNBT raw=item("minecraft:stone",1);raw.putString("Count","bad");assertNull(ItemMigration.convertNbt(raw,context(512)));assertNull(ItemMigration.convertNbt(item("minecraft:stone",1),context(2000)));
+        CompoundNBT raw=item("minecraft:stone",1);raw.putString("Count","bad");assertNull(ItemMigration.convertNbt(raw,context(512)));assertNull(ItemMigration.convertNbt(item("minecraft:stone",1),context(2231)));
     }
     @Test void unrecognisedMetadataAndEnchantmentsRemainRecoverable() {
         assertNull(ItemMigration.convertNbt(item("minecraft:stone",99),context(1343)));

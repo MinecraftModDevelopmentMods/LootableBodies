@@ -173,12 +173,12 @@ final class ReportedIssueChecks {
         EntityLootableBody b=fullBody(c,c,8.5);Map<String,Integer> expected=inventory(b);
         FixtureApi.awaitTicking(b);
         for(int i=0;i<40;i++)world.updateEntity(b);
-        RuntimeChecks.require(b.onGround && b.posY==80 && b.isAlive() && expected.equals(inventory(b)),"Loaded platform/normal gravity lost body or inventory");
+        RuntimeChecks.require(b.onGround && b.getPosY()==80 && b.isAlive() && expected.equals(inventory(b)),"Loaded platform/normal gravity lost body or inventory");
     }
     private static void normalTickGate() {
         EntityLootableBody b=fullBody(112,112,8.5);int ticks=b.ticksExisted;
         for(int i=0;i<40;i++)world.updateEntity(b);
-        RuntimeChecks.require(b.ticksExisted==ticks && b.posY==80 && !world.getChunkProvider().chunkExists(113,112),"Vanilla unloaded-neighbour tick guard did not hold");
+        RuntimeChecks.require(b.ticksExisted==ticks && b.getPosY()==80 && !world.getChunkProvider().chunkExists(113,112),"Vanilla unloaded-neighbour tick guard did not hold");
     }
     private static void unloadReload() throws Exception {
         EntityLootableBody b=fullBody(128,128,8.5);UUID uuid=b.getUniqueID();Map<String,Integer> expected=inventory(b);
@@ -192,10 +192,10 @@ final class ReportedIssueChecks {
         EntityLootableBody body; int cx,cz,nx,nz; BlockPos platform;
         boolean forced;
         Map<String,Integer> expected;
-        void unload(){world.forceChunk(cx,cz,false);net.minecraft.util.math.ChunkPos pos=new net.minecraft.util.math.ChunkPos(cx,cz);world.getChunkProvider().func_217228_a(net.minecraft.world.server.TicketType.FORCED,pos,0,pos);unloadChunk(nx,nz);RuntimeChecks.require(!world.getChunkProvider().chunkExists(nx,nz),"Support chunk did not unload");}
-        void frozen(){for(int i=0;i<100;i++)body.tick();System.out.println("ISSUE17_UNLOADED_SUPPORT y="+body.posY+" alive="+body.isAlive()+" inventory="+inventory(body).size()+" supportLoaded="+world.getChunkProvider().chunkExists(nx,nz));RuntimeChecks.require(body.isAlive() && body.posY==80 && expected.equals(inventory(body)),"Corpse fell through unloaded neighbour support and lost recoverable inventory");}
-        void resume(){RuntimeChecks.awaitChunk(world,nx,nz);FixtureApi.awaitTicking(body);for(int i=0;i<10;i++)world.updateEntity(body);RuntimeChecks.require(body.onGround && body.posY==80 && body.addedToChunk && expected.equals(inventory(body)),"Corpse failed to resume safely after support terrain loaded");}
-        @Override public void close(){if(forced)world.forceChunk(cx,cz,false);net.minecraft.util.math.ChunkPos pos=new net.minecraft.util.math.ChunkPos(cx,cz);world.getChunkProvider().func_217222_b(net.minecraft.world.server.TicketType.FORCED,pos,0,pos);}
+        void unload(){world.forceChunk(cx,cz,false);net.minecraft.util.math.ChunkPos pos=new net.minecraft.util.math.ChunkPos(cx,cz);world.getChunkProvider().registerTicket(net.minecraft.world.server.TicketType.FORCED,pos,0,pos);unloadChunk(nx,nz);RuntimeChecks.require(!world.getChunkProvider().chunkExists(nx,nz),"Support chunk did not unload");}
+        void frozen(){for(int i=0;i<100;i++)body.tick();System.out.println("ISSUE17_UNLOADED_SUPPORT y="+body.getPosY()+" alive="+body.isAlive()+" inventory="+inventory(body).size()+" supportLoaded="+world.getChunkProvider().chunkExists(nx,nz));RuntimeChecks.require(body.isAlive() && body.getPosY()==80 && expected.equals(inventory(body)),"Corpse fell through unloaded neighbour support and lost recoverable inventory");}
+        void resume(){RuntimeChecks.awaitChunk(world,nx,nz);FixtureApi.awaitTicking(body);for(int i=0;i<10;i++)world.updateEntity(body);RuntimeChecks.require(body.onGround && body.getPosY()==80 && body.addedToChunk && expected.equals(inventory(body)),"Corpse failed to resume safely after support terrain loaded");}
+        @Override public void close(){if(forced)world.forceChunk(cx,cz,false);net.minecraft.util.math.ChunkPos pos=new net.minecraft.util.math.ChunkPos(cx,cz);world.getChunkProvider().releaseTicket(net.minecraft.world.server.TicketType.FORCED,pos,0,pos);}
     }
     private static Support support(int axis,int direction) {
         Support f=new Support();f.cx=144+(sequence++)*8;f.cz=f.cx;
@@ -214,7 +214,7 @@ final class ReportedIssueChecks {
         RuntimeChecks.require(f.forced && world.getChunkProvider().chunkExists(f.cx,f.cz),"Native forced chunk unavailable");
         FixtureApi.awaitTicking(f.body);
         for(int i=0;i<10;i++)world.updateEntity(f.body);
-        RuntimeChecks.require(f.body.onGround && f.body.posY==80 && f.body.isAlive(),"Loaded neighbour platform control failed");
+        RuntimeChecks.require(f.body.onGround && f.body.getPosY()==80 && f.body.isAlive(),"Loaded neighbour platform control failed");
         return f;
     }
     private static void forcedSupport(int axis,int direction) {
@@ -233,7 +233,7 @@ final class ReportedIssueChecks {
             // Allow that native sequence to finish; retain the same conservation gate.
             for(int i=0;i<250 && f.body.isAlive();i++)world.updateEntity(f.body);
             for(int i=0;i<15;i++)f.body.baseTick();
-            System.out.println("VOID_CONTROL y="+f.body.posY+" alive="+f.body.isAlive()+" items="+inventory(f.body).size()+" motion="+f.body.getMotion().y);
+            System.out.println("VOID_CONTROL y="+f.body.getPosY()+" alive="+f.body.isAlive()+" items="+inventory(f.body).size()+" motion="+f.body.getMotion().y);
             RuntimeChecks.require(!f.body.isAlive() && inventory(f.body).isEmpty(),"Loaded real void behavior changed into a rescue feature");
         }
     }
@@ -258,12 +258,12 @@ final class ReportedIssueChecks {
         EntityLootableBody b=RuntimeChecks.find(world,UUID.fromString("00000000-0000-4000-8000-000000000117"));
         RuntimeChecks.verifyExpected(folder,"issue17-paused",b);
         for(int i=0;i<100;i++)world.updateEntity(b);
-        RuntimeChecks.require(b.isAlive() && b.posY==80,"Cold-loaded paused corpse fell before support loaded");
+        RuntimeChecks.require(b.isAlive() && b.getPosY()==80,"Cold-loaded paused corpse fell before support loaded");
         RuntimeChecks.verifyExpected(folder,"issue17-paused",b);
         for(int x=cx-2;x<=cx+2;x++)for(int z=cz-2;z<=cz+2;z++)RuntimeChecks.awaitChunk(world,x,z);
         FixtureApi.awaitTicking(b);
         for(int i=0;i<20;i++)world.updateEntity(b);
-        RuntimeChecks.require(b.onGround && b.posY==80 && b.isAlive(),"Cold-loaded corpse failed to resume on restored platform");
+        RuntimeChecks.require(b.onGround && b.getPosY()==80 && b.isAlive(),"Cold-loaded corpse failed to resume on restored platform");
         RuntimeChecks.verifyExpected(folder,"issue17-paused",b);
         world.forceChunk(cx,cz,false);
         System.out.println("ISSUE17_COLD_RELOAD_DEFERRED_SUPPORT_AND_COMPLETE_NBT_PASS");

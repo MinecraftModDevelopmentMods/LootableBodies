@@ -47,10 +47,13 @@ def main():
         results.append({"case": name, "expected_rejection": expected, "exit": process.returncode})
         print("RELEASE_CONTRACT_PASS", name, flush=True)
 
+    target_suffix = MOD_VERSION.rsplit(".", 1)[1]
+    parts = MOD_VERSION.split(".")
+    stale_version = ".".join(parts[:2] + [str(int(parts[2]) + 1), target_suffix])
     run("valid-prepared", ["verifyPreparedReleaseArtifacts", f"-PpreparedReleaseDir={bundle}"], prepared=True)
     for name, override, expected in [
-        ("three-component-version", "mod_version=2.4.1", "Major.Minor.Bug.114041"),
-        ("wrong-target", "mod_version=2.4.4.112021", "Major.Minor.Bug.114041"),
+        ("three-component-version", "mod_version=2.4.1", "Major.Minor.Bug." + target_suffix),
+        ("wrong-target", "mod_version=2.4.4.112021", "Major.Minor.Bug." + target_suffix),
         ("wrong-group", "mod_group=zone.moddev.mc.orespawn", "Release identity mismatch: mod_group"),
         ("wrong-artifact", "mod_artifact=OreSpawn", "Release identity mismatch: mod_artifact"),
         ("wrong-mod-id", "mod_id=orespawn", "Release identity mismatch: mod_id"),
@@ -58,7 +61,7 @@ def main():
         ("wrong-loader", "loader_name=neoforge", "Release identity mismatch: loader_name"),
         ("wrong-license", "mod_license=CC0-1.0", "Release identity mismatch: mod_license"),
         ("wrong-java", "java_version=17", "Release identity mismatch: java_version"),
-        ("stale-java-version", "mod_version=2.4.6.114041", "Java release version or persistent identity differs"),
+        ("stale-java-version", "mod_version=" + stale_version, "Java release version or persistent identity differs"),
     ]:
         run(name, ["verifyReleaseConfiguration", "-P" + override], expected)
 

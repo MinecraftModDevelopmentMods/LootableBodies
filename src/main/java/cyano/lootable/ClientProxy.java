@@ -17,7 +17,7 @@ public final class ClientProxy {
         FMLJavaModLoadingContext.get().getModEventBus().addListener(ClientProxy::setup);
     }
     private static void setup(net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent event) {
-        RenderingRegistry.registerEntityRenderingHandler(EntityLootableBody.class,CorpseRenderer::new);
+        RenderingRegistry.registerEntityRenderingHandler(LootableBodies.CORPSE,CorpseRenderer::new);
         net.minecraft.client.gui.ScreenManager.<CorpseContainer,CorpseGUIContainer>registerFactory(LootableBodies.CORPSE_CONTAINER,CorpseGUIContainer::new);
     }
 }

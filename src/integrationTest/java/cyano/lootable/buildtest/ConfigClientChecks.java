@@ -14,10 +14,10 @@ import net.minecraft.client.gui.widget.button.Button;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.util.ScreenShotHelper;
 import net.minecraft.world.*;
-import net.minecraftforge.fml.client.gui.GuiModList;
+import net.minecraftforge.fml.client.gui.screen.ModListScreen;
 /** Real native Mods button and widgets, without operating the user's desktop. */
 final class ConfigClientChecks {
-    private int stage,frames,step;private File report;private GuiModList mods;private CorpseConfigGui root;private Future<?> pending;
+    private int stage,frames,step;private File report;private ModListScreen mods;private CorpseConfigGui root;private Future<?> pending;
     void tick(Minecraft mc)throws Exception {
         if(++frames<20)return;frames=0;
         if(report==null)report=new File(mc.gameDir,"config-checks.txt");
@@ -64,13 +64,13 @@ final class ConfigClientChecks {
         } else if(stage==5 && FixtureConnections.stopped(mc))finish(mc);
     }
     private void openMods(Minecraft mc)throws Exception {
-        mods=new GuiModList(new MainMenuScreen());mc.displayGuiScreen(mods);List<?> list=(List<?>)get(mods,"mods");
-        for(int i=0;i<list.size();i++)if(((net.minecraftforge.forgespi.language.IModInfo)list.get(i)).getModId().equals("lootablebodies")){net.minecraftforge.fml.client.gui.GuiSlotModList entries=(net.minecraftforge.fml.client.gui.GuiSlotModList)get(mods,"modList");Object entry=((java.util.List<?>)entries.children()).get(i);mods.getClass().getMethod("setSelected",entry.getClass()).invoke(mods,entry);net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.GuiScreenEvent.DrawScreenEvent.Pre(mods,0,0,0F));check(button(mods,20).active,"mods_config_button_enabled");return;}
+        mods=new ModListScreen(new MainMenuScreen());mc.displayGuiScreen(mods);List<?> list=(List<?>)get(mods,"mods");
+        for(int i=0;i<list.size();i++)if(((net.minecraftforge.forgespi.language.IModInfo)list.get(i)).getModId().equals("lootablebodies")){net.minecraftforge.fml.client.gui.widget.ModListWidget entries=(net.minecraftforge.fml.client.gui.widget.ModListWidget)get(mods,"modList");Object entry=((java.util.List<?>)entries.children()).get(i);mods.getClass().getMethod("setSelected",entry.getClass()).invoke(mods,entry);net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.GuiScreenEvent.DrawScreenEvent.Pre(mods,0,0,0F));check(button(mods,20).active,"mods_config_button_enabled");return;}
         throw new AssertionError("Lootable Bodies missing from Mods list");
     }
     private void openConfig(Minecraft mc)throws Exception {net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.GuiScreenEvent.DrawScreenEvent.Pre(mods,0,0,0F));click(mods,20);check(mc.currentScreen instanceof CorpseConfigGui,"mods_button_opens_regular_config");root=(CorpseConfigGui)mc.currentScreen;}
     private static Object get(Object target,String name)throws Exception {for(Class<?> type=target.getClass();type!=null;type=type.getSuperclass())try{Field f=type.getDeclaredField(name);f.setAccessible(true);return f.get(target);}catch(NoSuchFieldException absent){}throw new NoSuchFieldException(name);}
-    private static Button button(Screen screen,int id)throws Exception {if(screen instanceof GuiModList && id==20)return (Button)get(screen,"configButton");for(Object value:screen.children())if(value instanceof CorpseConfigGui.SettingButton && ((CorpseConfigGui.SettingButton)value).id==id)return (CorpseConfigGui.SettingButton)value;throw new AssertionError("Missing GUI button "+id);}
+    private static Button button(Screen screen,int id)throws Exception {if(screen instanceof ModListScreen && id==20)return (Button)get(screen,"configButton");for(Object value:screen.children())if(value instanceof CorpseConfigGui.SettingButton && ((CorpseConfigGui.SettingButton)value).id==id)return (CorpseConfigGui.SettingButton)value;throw new AssertionError("Missing GUI button "+id);}
     private static void click(Screen screen,int id)throws Exception {Button button=button(screen,id);RuntimeChecks.require(button.active,"Disabled GUI button "+id);button.onClick(button.x+1,button.y+1);}
     @SuppressWarnings("unchecked") private static TextFieldWidget field(CorpseConfigGui screen,String key)throws Exception {
         for(int attempt=0;attempt<10;attempt++){TextFieldWidget field=((Map<String,TextFieldWidget>)get(screen,"fields")).get(key);if(field!=null)return field;int page=(Integer)get(screen,"page");try{click(screen,4);}catch(AssertionError end){while((Integer)get(screen,"page")>0)click(screen,3);}if(page==(Integer)get(screen,"page") && attempt>0)break;}
@@ -78,6 +78,6 @@ final class ConfigClientChecks {
     }
     private static void text(CorpseConfigGui screen,String key,String value)throws Exception {field(screen,key).setText(value);}
     private void check(boolean condition,String label)throws Exception {RuntimeChecks.require(condition,label);try(FileWriter out=new FileWriter(report,true)){out.write("PASS "+label+"\n");}System.out.println("CONFIG_CHECK_PASS "+label);}
-    private static void screenshot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));}
+    private static void screenshot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.getMainWindow().getFramebufferWidth(),mc.getMainWindow().getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));}
     private static void finish(Minecraft mc)throws Exception {new File(mc.gameDir,"client.pass").createNewFile();System.out.println("LOOTABLE_BODIES_CONFIG_CLIENT_PASS");mc.shutdown();}
 }

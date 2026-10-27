@@ -1,0 +1,21 @@
+[21:43:37] [Server thread/FATAL] [minecraft/ThreadTaskExecutor]: Error executing task on Server
+java.lang.NullPointerException: null
+	at net.minecraft.world.server.TicketManager.func_219367_b(SourceFile:201) ~[?:?] {re:classloading}
+	at net.minecraft.world.server.ChunkManager.func_219183_a(ChunkManager.java:857) ~[?:?] {re:classloading,pl:runtimedistcleaner:A}
+	at net.minecraft.world.server.ServerChunkProvider.func_217221_a(SourceFile:479) ~[?:?] {re:classloading,pl:accesstransformer:B}
+	at net.minecraft.network.play.ServerPlayNetHandler.func_147347_a(ServerPlayNetHandler.java:765) ~[?:?] {re:classloading}
+	at net.minecraft.network.play.client.CPlayerPacket.func_148833_a(SourceFile:122) ~[?:?] {re:classloading}
+	at net.minecraft.network.play.client.CPlayerPacket$PositionPacket.func_148833_a(SourceFile:56) ~[?:?] {re:classloading}
+	at net.minecraft.network.PacketThreadUtil.func_225383_a(SourceFile:21) ~[?:?] {re:classloading}
+	at net.minecraft.util.concurrent.TickDelayedTask.run(SourceFile:18) ~[?:?] {re:classloading}
+	at net.minecraft.util.concurrent.ThreadTaskExecutor.func_213166_h(SourceFile:144) [?:?] {re:classloading,pl:accesstransformer:B}
+	at net.minecraft.util.concurrent.RecursiveEventLoop.func_213166_h(SourceFile:23) [?:?] {re:classloading}
+	at net.minecraft.server.MinecraftServer.func_213166_h(MinecraftServer.java:731) [?:?] {re:classloading,pl:accesstransformer:B,pl:runtimedistcleaner:A}
+	at net.minecraft.server.MinecraftServer.func_213166_h(MinecraftServer.java:141) [?:?] {re:classloading,pl:accesstransformer:B,pl:runtimedistcleaner:A}
+	at net.minecraft.util.concurrent.ThreadTaskExecutor.func_213168_p(SourceFile:118) [?:?] {re:classloading,pl:accesstransformer:B}
+	at net.minecraft.server.MinecraftServer.func_213205_aW(MinecraftServer.java:714) [?:?] {re:classloading,pl:accesstransformer:B,pl:runtimedistcleaner:A}
+	at net.minecraft.server.MinecraftServer.func_213168_p(MinecraftServer.java:708) [?:?] {re:classloading,pl:accesstransformer:B,pl:runtimedistcleaner:A}
+	at net.minecraft.util.concurrent.ThreadTaskExecutor.func_213161_c(SourceFile:127) [?:?] {re:classloading,pl:accesstransformer:B}
+	at net.minecraft.server.MinecraftServer.func_213202_o(MinecraftServer.java:694) [?:?] {re:classloading,pl:accesstransformer:B,pl:runtimedistcleaner:A}
+	at net.minecraft.server.MinecraftServer.run(MinecraftServer.java:641) [?:?] {re:classloading,pl:accesstransformer:B,pl:runtimedistcleaner:A}
+	at java.lang.Thread.run(Thread.java:750) [?:1.8.0_502] {}
