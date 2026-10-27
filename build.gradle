@@ -116,7 +116,7 @@ minecraft {
                     providers.gradleProperty('gameRunDirectory').getOrElse('run'))
             systemProperty 'log4j.configurationFile', file('gradle/log4j2.xml').toURI().toString()
         }
-        register('client') { client=true; args '--assetsDir', minecraftAssets.asFile.absolutePath, '--assetIndex', '1.14' }
+        register('client') { client=true; args '--assetsDir', minecraftAssets.asFile.absolutePath, '--assetIndex', '1.15' }
         register('server') { client=false; args '--nogui' }
     }
 }
@@ -129,11 +129,11 @@ minecraft.runs.configureEach { options ->
     environment.put('FORGE_VERSION',forge_version.toString())
     environment.put('FORGE_GROUP','net.minecraftforge')
     environment.put('MC_VERSION',minecraft_version.toString())
-    String root=layout.buildDirectory.dir('forge14-development/main').get().asFile.absolutePath
+    String root=layout.buildDirectory.dir('forge15-development/main').get().asFile.absolutePath
     environment.put('MOD_CLASSES',"${mod_id}%%${root}${File.pathSeparator}${mod_id}%%${root}")
     if(options.name=='client') {
         environment.put('assetDirectory',minecraftAssets.asFile.absolutePath)
-        environment.put('assetIndex','1.14')
+        environment.put('assetIndex','1.15')
         environment.put('nativesDirectory',new File(gradle.gradleUserHomeDir,"caches/minecraftforge/forgegradle/slime-launcher/cache/net/minecraftforge/forge/${minecraft_version}-${forge_version}/natives").absolutePath)
     }
 }
@@ -146,12 +146,12 @@ tasks.withType(JavaExec).configureEach { run ->
         environment 'FORGE_VERSION', forge_version
         environment 'FORGE_GROUP', 'net.minecraftforge'
         environment 'MC_VERSION', minecraft_version
-        String root=layout.buildDirectory.dir('forge14-development/main').get().asFile.absolutePath
+        String root=layout.buildDirectory.dir('forge15-development/main').get().asFile.absolutePath
         environment 'MOD_CLASSES', "${mod_id}%%${root}${File.pathSeparator}${mod_id}%%${root}"
         if(run.name=='runClient') {
             File cache=new File(gradle.gradleUserHomeDir,'caches/forge_gradle')
             environment 'assetDirectory',minecraftAssets.asFile.absolutePath
-            environment 'assetIndex','1.14'
+            environment 'assetIndex','1.15'
             environment 'nativesDirectory',new File(cache,"minecraftforge/forgegradle/slime-launcher/cache/net/minecraftforge/forge/${minecraft_version}-${forge_version}/natives").absolutePath
         }
     }
@@ -170,7 +170,7 @@ tasks.register('prepareProductionRunDirectory') {
 }
 
 // Legacy FML discovers classes and processed resources from a single root.
-ext.developmentOutput = layout.buildDirectory.dir('forge14-development/main')
+ext.developmentOutput = layout.buildDirectory.dir('forge15-development/main')
 tasks.register('syncDevelopmentOutput', Sync) {
     dependsOn 'classes'
     from tasks.named('compileJava', JavaCompile).flatMap { it.destinationDirectory }

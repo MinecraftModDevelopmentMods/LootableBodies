@@ -134,7 +134,7 @@ final class NamelessCorpseClientChecks {
             if(frames==15 && Arrays.asList("en_us","de_de","en_pt","es_es","zh_cn").contains(code)) {
                 System.out.println("NAME_CAMERA player="+mc.player.getPosition()+" view="+mc.getRenderViewEntity().getPosition()+" yaw="+mc.player.rotationYaw+" pitch="+mc.player.rotationPitch+" rendered="+renderedBody);
                 RuntimeChecks.require(renderedBody,"No corpse rendered for label screenshot "+code);
-                ScreenShotHelper.saveScreenshot(mc.gameDir,"name-"+code+".png",mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
+                ScreenShotHelper.saveScreenshot(mc.gameDir,"name-"+code+".png",mc.getMainWindow().getFramebufferWidth(),mc.getMainWindow().getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
             }
             if(frames>20) {frames=0;locale++;if(locale==LOCALES.length) {
                 mc.getLanguageManager().setCurrentLanguage(originalLanguage);mc.getLanguageManager().onResourceManagerReload(mc.getResourceManager());
@@ -147,7 +147,7 @@ final class NamelessCorpseClientChecks {
             }
         } else if(stage==5 && mc.currentScreen instanceof CorpseGUIContainer && ++frames>20) {
             for(int slot=0;slot<48;slot++)RuntimeChecks.require(RuntimeChecks.sameStack(mc.player.openContainer.getSlot(slot).getStack(),RuntimeChecks.stack(slot)),"Name fix changed network inventory slot "+slot);
-            ScreenShotHelper.saveScreenshot(mc.gameDir,"name-english-inventory.png",mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
+            ScreenShotHelper.saveScreenshot(mc.gameDir,"name-english-inventory.png",mc.getMainWindow().getFramebufferWidth(),mc.getMainWindow().getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
             new File(mc.gameDir,"client.pass").createNewFile();System.out.println("LOOTABLE_BODIES_NAME_TRANSLATION_PASS locales="+LOCALES.length);
             mc.player.closeScreen();FixtureConnections.disconnect(mc);stage=6;
         } else if(stage==6 && FixtureConnections.stopped(mc)) {mc.shutdown();stage=7;}

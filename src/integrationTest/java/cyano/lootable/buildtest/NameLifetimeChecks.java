@@ -34,19 +34,19 @@ final class NameLifetimeChecks {
     private static int failures;
     static void run(MinecraftServer server,ServerWorld target,File folder) throws Exception {
         world=target;results.clear();failures=0;
-        INBT[] wrong={new StringNBT("not a timer"),new FloatNBT(1.5F),new DoubleNBT(Double.NaN),new DoubleNBT(Double.POSITIVE_INFINITY),new CompoundNBT(),new ListNBT(),new ByteArrayNBT(new byte[]{1}),new IntArrayNBT(new int[]{1})};
+        INBT[] wrong={StringNBT.valueOf("not a timer"),FloatNBT.valueOf(1.5F),DoubleNBT.valueOf(Double.NaN),DoubleNBT.valueOf(Double.POSITIVE_INFINITY),new CompoundNBT(),new ListNBT(),new ByteArrayNBT(new byte[]{1}),new IntArrayNBT(new int[]{1})};
         for(String key:new String[]{"Vac","DeathTime","DecayTime"}) {
             for(int i=0;i<wrong.length;i++){final INBT value=wrong[i];check(key+"_invalid_type_"+i,()->invalid(key,value));}
-            for(long value:new long[]{Long.MIN_VALUE,-1,Long.MAX_VALUE,10001})check(key+"_invalid_value_"+value,()->invalid(key,new LongNBT(value)));
+            for(long value:new long[]{Long.MIN_VALUE,-1,Long.MAX_VALUE,10001})check(key+"_invalid_value_"+value,()->invalid(key,LongNBT.valueOf(value)));
         }
-        for(int i=0;i<wrong.length;i++){final INBT value=wrong[i] instanceof StringNBT?new IntNBT(27):wrong[i];check("Name_invalid_type_"+i,()->badName("Name",value));}
-        check("Name_over_packet_string_limit",()->badName("Name",new StringNBT(repeat('n',32768))));
-        check("Name_utf8_bytes_over_packet_limit",()->badName("Name",new StringNBT(repeat('\u20ac',10923))));
-        check("CustomName_utf8_bytes_over_packet_limit",()->badName("CustomName",new StringNBT(repeat('\u20ac',10923))));
+        for(int i=0;i<wrong.length;i++){final INBT value=wrong[i] instanceof StringNBT?IntNBT.valueOf(27):wrong[i];check("Name_invalid_type_"+i,()->badName("Name",value));}
+        check("Name_over_packet_string_limit",()->badName("Name",StringNBT.valueOf(repeat('n',32768))));
+        check("Name_utf8_bytes_over_packet_limit",()->badName("Name",StringNBT.valueOf(repeat('\u20ac',10923))));
+        check("CustomName_utf8_bytes_over_packet_limit",()->badName("CustomName",StringNBT.valueOf(repeat('\u20ac',10923))));
         check("name_exact_packet_byte_limit_preserved",NameLifetimeChecks::packetBoundary);
-        check("old_maximum_name_remains_recoverable_when_native_json_cannot_fit",()->{CompoundNBT n=base();String original=repeat('a',32767);n.putString("Name",original);EntityLootableBody b=read(n);RuntimeChecks.require(b.getCustomNameTag().equals("Saved Owner"),"Unencodable native name entered metadata");retained(b,"Name",new StringNBT(original));stable(b);});
-        check("CustomName_wrong_type_retained",()->badName("CustomName",new IntNBT(27)));
-        check("CustomName_over_packet_string_limit",()->badName("CustomName",new StringNBT(repeat('c',32768))));
+        check("old_maximum_name_remains_recoverable_when_native_json_cannot_fit",()->{CompoundNBT n=base();String original=repeat('a',32767);n.putString("Name",original);EntityLootableBody b=read(n);RuntimeChecks.require(b.getCustomNameTag().equals("Saved Owner"),"Unencodable native name entered metadata");retained(b,"Name",StringNBT.valueOf(original));stable(b);});
+        check("CustomName_wrong_type_retained",()->badName("CustomName",IntNBT.valueOf(27)));
+        check("CustomName_over_packet_string_limit",()->badName("CustomName",StringNBT.valueOf(repeat('c',32768))));
         check("custom_name_fallback_and_source_immutable",NameLifetimeChecks::fallback);
         check("valid_name_authoritative_without_username_regex",NameLifetimeChecks::namePriority);
         check("save_before_first_tick_keeps_name",NameLifetimeChecks::earlySave);
@@ -102,9 +102,9 @@ final class NameLifetimeChecks {
     private static void blankName(){CompoundNBT n=base();n.putString("Name","   ");EntityLootableBody b=read(n);b.baseTick();RuntimeChecks.require(b.getCustomNameTag().isEmpty() && b.getGameProfile()==null && !saved(b).contains("Name"),"Blank name semantics changed");}
     private static void missingTimers(){EntityLootableBody b=read(base());CompoundNBT n=base();n.remove("DeathTime");n.remove("DecayTime");n.remove("Vac");world.getWorldInfo().setGameTime(11000);b.read(n);CompoundNBT s=saved(b);RuntimeChecks.require(s.getLong("DeathTime")==11000 && s.getLong("DecayTime")==11000 && !s.contains("Vac"),"Repeated load kept stale timers");}
     private static void animation(){CompoundNBT n=base();n.putLong("DeathTime",9999);EntityLootableBody b=read(n);RuntimeChecks.require(b.deathTime==0,"Custom lifetime loaded into vanilla short death animation");}
-    private static void integral(int type){INBT[] values={new ByteNBT((byte)10),new ShortNBT((short)10),new IntNBT(10),new LongNBT(10)};CompoundNBT n=base();for(String k:new String[]{"Vac","DeathTime","DecayTime"})n.put(k,values[type].copy());EntityLootableBody b=read(n);CompoundNBT s=saved(b);RuntimeChecks.require(s.getByte("Vac")==10 && s.getLong("DeathTime")==10 && s.getLong("DecayTime")==10 && !s.contains(RECOVERY),"Lossless integral scalar changed");}
+    private static void integral(int type){INBT[] values={ByteNBT.valueOf((byte)10),ShortNBT.valueOf((short)10),IntNBT.valueOf(10),LongNBT.valueOf(10)};CompoundNBT n=base();for(String k:new String[]{"Vac","DeathTime","DecayTime"})n.put(k,values[type].copy());EntityLootableBody b=read(n);CompoundNBT s=saved(b);RuntimeChecks.require(s.getByte("Vac")==10 && s.getLong("DeathTime")==10 && s.getLong("DecayTime")==10 && !s.contains(RECOVERY),"Lossless integral scalar changed");}
     private static void zero(){CompoundNBT n=base();for(String k:new String[]{"Vac","DeathTime","DecayTime"})n.putLong(k,0);EntityLootableBody b=read(n);CompoundNBT s=saved(b);RuntimeChecks.require(s.getLong("DeathTime")==0 && s.getLong("DecayTime")==0 && s.contains("Vac") && s.getByte("Vac")==0 && !s.contains(RECOVERY),"Valid zero discarded");}
-    private static void vacuumLimit(){CompoundNBT n=base();n.putLong("Vac",20);RuntimeChecks.require(!saved(read(n)).contains(RECOVERY),"Valid limit rejected");invalid("Vac",new IntNBT(21));}
+    private static void vacuumLimit(){CompoundNBT n=base();n.putLong("Vac",20);RuntimeChecks.require(!saved(read(n)).contains(RECOVERY),"Valid limit rejected");invalid("Vac",IntNBT.valueOf(21));}
     private static EntityLootableBody timed(long timestamp){CompoundNBT n=base();n.putLong("DeathTime",timestamp);n.putLong("DecayTime",timestamp);return read(n);}
     private static void future(){CompoundNBT n=base();n.putLong("DeathTime",Long.MAX_VALUE);n.putLong("DecayTime",Long.MAX_VALUE);EntityLootableBody b=read(n);LootableBodies.ticksPerItemDecay=10;world.getWorldInfo().setGameTime(10011);b.baseTick();RuntimeChecks.require(saved(b).getLong("DecayTime")==10010,"Future timestamp stalled normal progression");}
     private static void rollback(){EntityLootableBody b=timed(9999);world.getWorldInfo().setGameTime(100);LootableBodies.allowCorpseDecay=true;LootableBodies.decayOnlyWhenEmpty=false;LootableBodies.ticksPerItemDecay=10;b.baseTick();RuntimeChecks.require(saved(b).getLong("DeathTime")==100 && saved(b).getLong("DecayTime")==100 && termination(b)<0,"Clock rollback did not rebase safely");}
@@ -121,10 +121,9 @@ final class NameLifetimeChecks {
     private static void metadataOnly(){CompoundNBT n=base();n.put("Equipment",new ListNBT());n.putString("DeathTime","opaque");EntityLootableBody b=read(n);RuntimeChecks.require(b.isEmpty(),"Scalar evidence counted as inventory");LootableBodies.allowCorpseDecay=true;LootableBodies.decayOnlyWhenEmpty=true;LootableBodies.corpseDecayTime=40;world.getWorldInfo().setGameTime(10041);b.baseTick();RuntimeChecks.require(termination(b)>=0,"Scalar evidence made empty corpse immortal");}
     private static void inventory(){CompoundNBT n=base();CompoundNBT missing=NbtRecoveryChecks.entry(121,11,7);missing.putString("id","absentfixture:missing");n.getList("Equipment",10).add(missing);n.putString("DeathTime","bad");n.put("Name",new CompoundNBT());EntityLootableBody b=read(n);NbtRecoveryChecks.retained(b,missing);stable(b);b.read(saved(b));stable(b);RuntimeChecks.require(saved(b).getList(RECOVERY,10).size()==2 && saved(b).getList(NbtRecoveryChecks.RECOVERY,10).size()==1,"Raw scalar/item evidence accumulated or disappeared");}
     private static void unknownRecovery(){CompoundNBT n=base(),record=new CompoundNBT();record.putString("Future","opaque");n.put(RECOVERY,NbtRecoveryChecks.list(record));EntityLootableBody b=read(n);RuntimeChecks.require(saved(b).getList(RECOVERY,10).getCompound(0).equals(record),"Unknown metadata evidence changed");stable(b);}
-    private static void wrongRecovery(){CompoundNBT n=base();StringNBT raw=new StringNBT("opaque");n.put(RECOVERY,raw);EntityLootableBody b=read(n);retained(b,"Recovery",raw);stable(b);}
+    private static void wrongRecovery(){CompoundNBT n=base();StringNBT raw=StringNBT.valueOf("opaque");n.put(RECOVERY,raw);EntityLootableBody b=read(n);retained(b,"Recovery",raw);stable(b);}
     private static void healthy(){EntityLootableBody b=read(base());b.baseTick();stable(b);RuntimeChecks.require(!saved(b).contains(RECOVERY),"Healthy save gained invalid-field data");}
     // DoubleNBT.equals uses ==, so NaN copies are unequal without any mutation.
-    static boolean same(INBT a,INBT b){if(a==null || b==null)return a==b;return Arrays.equals(encoded(a),encoded(b));}
-    private static byte[] encoded(INBT value){try{CompoundNBT n=new CompoundNBT();n.put("Value",value);ByteArrayOutputStream out=new ByteArrayOutputStream();CompressedStreamTools.write(n,new DataOutputStream(out));return out.toByteArray();}catch(IOException e){throw new AssertionError(e);}}
+    static boolean same(INBT a,INBT b){return TypedNbt.same(a,b);}
     private static String repeat(char c,int size){char[] a=new char[size];Arrays.fill(a,c);return new String(a);}
 }

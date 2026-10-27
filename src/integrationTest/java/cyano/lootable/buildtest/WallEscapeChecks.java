@@ -92,7 +92,7 @@ final class WallEscapeChecks {
 
     private static void clear(EntityLootableBody body) {
         PositionMotionChecks.finite(body);
-        RuntimeChecks.require(world.isCollisionBoxesEmpty(body,body.getBoundingBox()), "Escape left body intersecting terrain");
+        RuntimeChecks.require(world.hasNoCollisions(body,body.getBoundingBox()), "Escape left body intersecting terrain");
     }
 
     private static void centred() {
@@ -103,7 +103,7 @@ final class WallEscapeChecks {
             world.removeBlock(BlockPos.ZERO,false);
             EntityLootableBody body = body(centre); CompoundNBT before = NameLifetimeChecks.saved(body);
             body.jumpOutOfWall(); clear(body); unchanged(before, body);
-            RuntimeChecks.require(body.posY == centre.getY()+1.015625, "Centred body missed the existing upward exit priority");
+            RuntimeChecks.require(body.getPosY() == centre.getY()+1.015625, "Centred body missed the existing upward exit priority");
         } finally { world.setBlockState(BlockPos.ZERO, origin, 2); }
     }
 
@@ -111,7 +111,7 @@ final class WallEscapeChecks {
         BlockPos centre = site(false); terrain(centre, true); BlockPos exit = centre.offset(direction); world.removeBlock(exit,false);
         EntityLootableBody body = body(centre); CompoundNBT before = NameLifetimeChecks.saved(body);
         body.jumpOutOfWall(); clear(body); unchanged(before, body);
-        RuntimeChecks.require(body.posX == exit.getX()+.5 && body.posY == exit.getY()+.015625 && body.posZ == exit.getZ()+.5, "Missed sole adjacent exit");
+        RuntimeChecks.require(body.getPosX() == exit.getX()+.5 && body.getPosY() == exit.getY()+.015625 && body.getPosZ() == exit.getZ()+.5, "Missed sole adjacent exit");
     }
 
     private static void overlap() {
@@ -182,7 +182,7 @@ final class WallEscapeChecks {
         BlockPos centre = site(false); terrain(centre, true); EntityLootableBody body = body(centre);
         CompoundNBT before = NameLifetimeChecks.saved(body);
         for (int i = 0; i < 100; i++) body.tick();
-        RuntimeChecks.require(body.posX == centre.getX()+.5 && body.posY == centre.getY()+.015625 && body.posZ == centre.getZ()+.5 && body.isAlive(), "Ticking sealed corpse drifted or died");
+        RuntimeChecks.require(body.getPosX() == centre.getX()+.5 && body.getPosY() == centre.getY()+.015625 && body.getPosZ() == centre.getZ()+.5 && body.isAlive(), "Ticking sealed corpse drifted or died");
         for (String key : new String[]{"Equipment","Aux","LootableBodiesUnresolved","LootableBodiesInvalidFields","DeathTime","DecayTime"})
             RuntimeChecks.require(NameLifetimeChecks.same(before.get(key),NameLifetimeChecks.saved(body).get(key)), "Ticking escape changed " + key);
         world.removeBlock(centre.up(),false);
@@ -227,10 +227,10 @@ final class WallEscapeChecks {
         for (int x = 7; x <= 9; x++) for (int z = 7; z <= 9; z++) world.getChunk(x,z);
         EntityLootableBody body = null;
         for (net.minecraft.entity.Entity entity : FixtureApi.entities(world))
-            if (entity instanceof EntityLootableBody && Math.abs(entity.posX-128.5)<.001 && Math.abs(entity.posZ-128.5)<.001)
+            if (entity instanceof EntityLootableBody && Math.abs(entity.getPosX()-128.5)<.001 && Math.abs(entity.getPosZ()-128.5)<.001)
                 body = (EntityLootableBody) entity;
         RuntimeChecks.require(body != null, "Original Nether corpse not found at its saved position");
-        RuntimeChecks.require(!world.isCollisionBoxesEmpty(body,body.getBoundingBox()), "Historical buried-body terrain was cleared");
+        RuntimeChecks.require(!world.hasNoCollisions(body,body.getBoundingBox()), "Historical buried-body terrain was cleared");
         CompoundNBT expected = NameLifetimeChecks.saved(body);
         File file = new File(folder,"wall-historical.nbt");
         if (reload) {

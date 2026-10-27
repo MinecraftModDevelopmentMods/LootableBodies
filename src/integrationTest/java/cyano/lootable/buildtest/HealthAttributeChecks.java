@@ -34,40 +34,40 @@ final class HealthAttributeChecks {
     private static final UUID MOD=UUID.fromString("00000000-0000-4000-8000-000000000141");
     static void run(MinecraftServer server,ServerWorld target,File folder) throws Exception {
         world=target;results.clear();failures=0;
-        INBT[] wrong={new StringNBT("opaque"),new CompoundNBT(),new ListNBT(),new ByteArrayNBT(new byte[]{1}),new IntArrayNBT(new int[]{1})};
+        INBT[] wrong={StringNBT.valueOf("opaque"),new CompoundNBT(),new ListNBT(),new ByteArrayNBT(new byte[]{1}),new IntArrayNBT(new int[]{1})};
         for(String key:new String[]{"Health","AbsorptionAmount"}) {
             for(int i=0;i<wrong.length;i++){final INBT raw=wrong[i];check(key+"_wrong_type_"+i,()->badScalar(key,raw));}
-            for(double value:new double[]{Double.NaN,Double.NEGATIVE_INFINITY,Double.POSITIVE_INFINITY,-1,Double.MAX_VALUE,1e-300})check(key+"_invalid_value_"+value,()->badScalar(key,new DoubleNBT(value)));
+            for(double value:new double[]{Double.NaN,Double.NEGATIVE_INFINITY,Double.POSITIVE_INFINITY,-1,Double.MAX_VALUE,1e-300})check(key+"_invalid_value_"+value,()->badScalar(key,DoubleNBT.valueOf(value)));
         }
-        check("health_above_effective_max_retained",()->badScalar("Health",new FloatNBT(21)));
+        check("health_above_effective_max_retained",()->badScalar("Health",FloatNBT.valueOf(21)));
         for(int type=0;type<6;type++){final int t=type;check("valid_numeric_scalar_type_"+type,()->numeric(t));}
         check("valid_zero_health_keeps_death_semantics",HealthAttributeChecks::zero);
         check("missing_health_defaults_to_loaded_max",HealthAttributeChecks::missingHealth);
         check("configured_health_and_follow_range_defaults",HealthAttributeChecks::configured);
         check("configured_health_above_engine_cap_keeps_existing_clamp",HealthAttributeChecks::configuredCap);
         check("previous_configured_health_survives_later_config_change",HealthAttributeChecks::configuredHistory);
-        for(int i=0;i<wrong.length;i++){final INBT raw=wrong[i] instanceof ListNBT?new ByteNBT((byte)1):wrong[i];check("Attributes_wrong_type_"+i,()->badList(raw));}
+        for(int i=0;i<wrong.length;i++){final INBT raw=wrong[i] instanceof ListNBT?ByteNBT.valueOf((byte)1):wrong[i];check("Attributes_wrong_type_"+i,()->badList(raw));}
         check("empty_attribute_list_keeps_constructor_defaults",()->{CompoundNBT n=base();n.put("Attributes",new ListNBT());EntityLootableBody b=read(n);value(b.getMaxHealth(),20,"Empty list changed max");RuntimeChecks.require(!NameLifetimeChecks.saved(b).contains(NameLifetimeChecks.RECOVERY),"Valid empty list quarantined");stable(b);});
-        check("Attributes_wrong_element_type",()->{ListNBT raw=new ListNBT();raw.add(new StringNBT("opaque"));badList(raw);});
+        check("Attributes_wrong_element_type",()->{ListNBT raw=new ListNBT();raw.add(StringNBT.valueOf("opaque"));badList(raw);});
         check("attribute_missing_name",()->badAttribute("Name",null));
-        check("attribute_wrong_name_type",()->badAttribute("Name",new IntNBT(1)));
-        check("attribute_unknown_name_retained",()->badAttribute("Name",new StringNBT("absentfixture:attribute")));
+        check("attribute_wrong_name_type",()->badAttribute("Name",IntNBT.valueOf(1)));
+        check("attribute_unknown_name_retained",()->badAttribute("Name",StringNBT.valueOf("absentfixture:attribute")));
         check("attribute_missing_base",()->badAttribute("Base",null));
         for(int i=0;i<wrong.length;i++){final INBT raw=wrong[i];check("Base_wrong_type_"+i,()->badAttribute("Base",raw));}
-        for(double value:new double[]{Double.NaN,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY,-1,0,Double.MAX_VALUE})check("Base_invalid_value_"+value,()->badAttribute("Base",new DoubleNBT(value)));
+        for(double value:new double[]{Double.NaN,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY,-1,0,Double.MAX_VALUE})check("Base_invalid_value_"+value,()->badAttribute("Base",DoubleNBT.valueOf(value)));
         check("invalid_base_does_not_hide_later_valid_attribute",HealthAttributeChecks::validTail);
         check("duplicate_attribute_keeps_first_valid_record",HealthAttributeChecks::duplicateAttribute);
         check("unknown_attribute_payload_preserved_with_valid_fields",HealthAttributeChecks::unknownAttributeData);
-        check("Modifiers_wrong_list_type_keeps_base",()->badModifierList(new StringNBT("opaque")));
-        check("Modifiers_wrong_element_type_keeps_base",()->{ListNBT l=new ListNBT();l.add(new IntNBT(3));badModifierList(l);});
+        check("Modifiers_wrong_list_type_keeps_base",()->badModifierList(StringNBT.valueOf("opaque")));
+        check("Modifiers_wrong_element_type_keeps_base",()->{ListNBT l=new ListNBT();l.add(IntNBT.valueOf(3));badModifierList(l);});
         for(String field:new String[]{"Name","Amount","Operation","UUIDMost","UUIDLeast"}) {
             check("modifier_missing_"+field,()->badModifier(field,null));
-            check("modifier_wrong_type_"+field,()->badModifier(field,field.equals("Name")?new IntNBT(1):new StringNBT("opaque")));
+            check("modifier_wrong_type_"+field,()->badModifier(field,field.equals("Name")?IntNBT.valueOf(1):StringNBT.valueOf("opaque")));
         }
-        check("modifier_blank_name",()->badModifier("Name",new StringNBT("")));
-        for(double value:new double[]{Double.NaN,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY})check("modifier_nonfinite_amount_"+value,()->badModifier("Amount",new DoubleNBT(value)));
-        for(INBT value:new INBT[]{new IntNBT(-1),new IntNBT(3),new LongNBT(4294967296L),new FloatNBT(1F)})check("modifier_invalid_operation_"+value,()->badModifier("Operation",value));
-        check("modifier_fractional_UUID_not_coerced",()->badModifier("UUIDMost",new DoubleNBT(1.5)));
+        check("modifier_blank_name",()->badModifier("Name",StringNBT.valueOf("")));
+        for(double value:new double[]{Double.NaN,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY})check("modifier_nonfinite_amount_"+value,()->badModifier("Amount",DoubleNBT.valueOf(value)));
+        for(INBT value:new INBT[]{IntNBT.valueOf(-1),IntNBT.valueOf(3),LongNBT.valueOf(4294967296L),FloatNBT.valueOf(1F)})check("modifier_invalid_operation_"+value,()->badModifier("Operation",value));
+        check("modifier_fractional_UUID_not_coerced",()->badModifier("UUIDMost",DoubleNBT.valueOf(1.5)));
         check("duplicate_modifier_UUID_keeps_first",HealthAttributeChecks::duplicateModifier);
         check("bad_modifier_keeps_valid_base_and_tail",HealthAttributeChecks::modifierTail);
         check("unknown_modifier_payload_retained",HealthAttributeChecks::unknownModifierData);
@@ -100,7 +100,7 @@ final class HealthAttributeChecks {
     private static void stable(EntityLootableBody b){CompoundNBT a=NameLifetimeChecks.saved(b),z=NameLifetimeChecks.saved(read(a));for(String key:new String[]{"Health","AbsorptionAmount","Attributes","Equipment","Aux",NameLifetimeChecks.RECOVERY,NbtRecoveryChecks.RECOVERY})RuntimeChecks.require(NameLifetimeChecks.same(a.get(key),z.get(key)),"Round trip changed "+key);inventoryKept(b);}
     private static void retained(EntityLootableBody b,String key,INBT raw){NameLifetimeChecks.retained(b,key,raw);}
     private static void badScalar(String key,INBT raw){CompoundNBT n=base();n.put(key,raw.copy());EntityLootableBody b=read(n);value(key.equals("Health")?b.getHealth():b.getAbsorptionAmount(),key.equals("Health")?20:0,"Bad scalar did not use safe default");RuntimeChecks.require(b.isAlive(),"Malformed scalar made corpse inaccessible");retained(b,key,raw);stable(b);}
-    private static void numeric(int type){INBT[] values={new ByteNBT((byte)1),new ShortNBT((short)1),new IntNBT(1),new LongNBT(1),new FloatNBT(1),new DoubleNBT(1)};CompoundNBT n=base();n.put("Health",values[type]);n.put("AbsorptionAmount",values[type].copy());EntityLootableBody b=read(n);value(b.getHealth(),1,"Valid Health changed");value(b.getAbsorptionAmount(),1,"Valid absorption changed");stable(b);}
+    private static void numeric(int type){INBT[] values={ByteNBT.valueOf((byte)1),ShortNBT.valueOf((short)1),IntNBT.valueOf(1),LongNBT.valueOf(1),FloatNBT.valueOf(1),DoubleNBT.valueOf(1)};CompoundNBT n=base();n.put("Health",values[type]);n.put("AbsorptionAmount",values[type].copy());EntityLootableBody b=read(n);value(b.getHealth(),1,"Valid Health changed");value(b.getAbsorptionAmount(),1,"Valid absorption changed");stable(b);}
     private static void zero(){CompoundNBT n=base();n.putFloat("Health",0);EntityLootableBody b=read(n);value(b.getHealth(),0,"Legitimate zero revived");RuntimeChecks.require(!b.isAlive(),"Zero health no longer starts death handling");inventoryKept(b);}
     private static void missingHealth(){CompoundNBT n=with(attribute("generic.maxHealth",30));n.remove("Health");EntityLootableBody b=read(n);value(b.getHealth(),30,"Missing Health did not use loaded max");stable(b);}
     private static void configured(){LootableBodies.corpseHP=37;CompoundNBT n=base();n.remove("Attributes");n.remove("Health");EntityLootableBody b=read(n);value(b.getMaxHealth(),37,"Config health changed");value(b.getAttribute(SharedMonsterAttributes.FOLLOW_RANGE).getBaseValue(),16,"EntityLiving follow-range default changed");stable(b);}
@@ -119,7 +119,7 @@ final class HealthAttributeChecks {
     private static void overflow(){CompoundNBT a=attribute("generic.maxHealth",30);a.put("Modifiers",NbtRecoveryChecks.list(modifier(Double.MAX_VALUE,2)));EntityLootableBody b=read(with(a));value(b.getMaxHealth(),30,"Overflowing modifier activated");retained(b,"Attribute",a);stable(b);}
     private static void validModifiers(){CompoundNBT a=attribute("generic.maxHealth",30);CompoundNBT m0=modifier(-2,0),m1=modifier(.5,1),m2=modifier(.25,2);m1.putUniqueId("UUID",new UUID(0,142));m2.putUniqueId("UUID",new UUID(0,143));a.put("Modifiers",NbtRecoveryChecks.list(m0,m1,m2));EntityLootableBody b=read(with(a));value(b.getMaxHealth(),52.5,"Valid signed/three-operation modifiers changed");RuntimeChecks.require(!NameLifetimeChecks.saved(b).contains(NameLifetimeChecks.RECOVERY),"Valid modifiers quarantined");stable(b);}
     private static void zeroUuid(){CompoundNBT a=attribute("generic.maxHealth",30),m=modifier(5,0);m.putLong("UUIDMost",0);m.putLong("UUIDLeast",0);m.putByte("Operation",(byte)0);m.putInt("Amount",5);a.put("Modifiers",NbtRecoveryChecks.list(m));EntityLootableBody b=read(with(a));value(b.getMaxHealth(),35,"Zero UUID or lossless numbers rejected");stable(b);}
-    private static void validBases(){for(INBT raw:new INBT[]{new ByteNBT((byte)30),new ShortNBT((short)30),new IntNBT(30),new LongNBT(30),new FloatNBT(30.5F),new DoubleNBT(30.5)}){CompoundNBT a=attribute("generic.maxHealth",30);a.put("Base",raw);CompoundNBT n=with(a);n.putDouble("Health",12.5);EntityLootableBody b=read(n);value(b.getMaxHealth(),((NumberNBT)raw).getDouble(),"Valid base changed");value(b.getHealth(),12.5,"Fractional Health changed");stable(b);}}
+    private static void validBases(){for(INBT raw:new INBT[]{ByteNBT.valueOf((byte)30),ShortNBT.valueOf((short)30),IntNBT.valueOf(30),LongNBT.valueOf(30),FloatNBT.valueOf(30.5F),DoubleNBT.valueOf(30.5)}){CompoundNBT a=attribute("generic.maxHealth",30);a.put("Base",raw);CompoundNBT n=with(a);n.putDouble("Health",12.5);EntityLootableBody b=read(n);value(b.getMaxHealth(),((NumberNBT)raw).getDouble(),"Valid base changed");value(b.getHealth(),12.5,"Fractional Health changed");stable(b);}}
     private static void repeated(){EntityLootableBody b=read(with(attribute("generic.maxHealth",30)));CompoundNBT n=base();n.remove("Attributes");n.remove("Health");n.remove("AbsorptionAmount");b.setAbsorptionAmount(5);b.read(n);value(b.getMaxHealth(),20,"Missing Attributes retained previous max");value(b.getHealth(),20,"Missing Health retained previous value");value(b.getAbsorptionAmount(),0,"Missing absorption retained previous value");stable(b);}
     private static void repeatedModifiers(){CompoundNBT a=attribute("generic.maxHealth",30);a.put("Modifiers",NbtRecoveryChecks.list(modifier(5,0)));EntityLootableBody b=read(with(a));b.read(with(attribute("generic.maxHealth",20)));value(b.getMaxHealth(),20,"Repeated read kept obsolete modifier");stable(b);}
     private static void pendingRemoval(){CompoundNBT n=base();n.putFloat("Health",0);EntityLootableBody b=read(n);b.baseTick();n=base();n.putDouble("Health",Double.NaN);b.read(n);b.baseTick();RuntimeChecks.require(b.isAlive(),"Repaired owner still dead");inventoryKept(b);stable(b);n=base();n.putFloat("Health",3.5F);b.removed=true;b.read(n);RuntimeChecks.require(b.isAlive(),"Reused entity kept stale dead flag");value(b.getHealth(),3.5,"Reset healed valid wounded corpse");}

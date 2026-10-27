@@ -27,14 +27,14 @@ class Native114UpgradeTest {
         body.put("Equipment", equipment); ListNBT aux = new ListNBT(); aux.add(item(47)); body.put("Aux", aux);
         return body;
     }
-    @Test void currentFormatNamesThe114VanillaSchema() {
-        assertEquals(1976, UpgradePreservation.MINECRAFT_VERSION);
-        assertEquals(4, UpgradePreservation.DATA_VERSION);
+    @Test void currentFormatNamesThe115VanillaSchema() {
+        assertEquals(2230, UpgradePreservation.MINECRAFT_VERSION);
+        assertEquals(5, UpgradePreservation.DATA_VERSION);
     }
     @Test void released113EquipmentAndOverflowAreRetainedBeforeNativeConversion() {
         CompoundNBT original = body(3), before = original.copy();
         CompoundNBT staged = NativeSafeFixer.stageCorpse(original, context(1631));
-        assertEquals(4, staged.getInt(UpgradePreservation.VERSION));
+        assertEquals(5, staged.getInt(UpgradePreservation.VERSION));
         assertEquals(original.getUniqueId("UUID"), staged.getUniqueId("UUID"));
         assertTrue(staged.getList("Equipment", 10).isEmpty());
         ListNBT records = staged.getList("LootableBodiesUnresolved", 10); assertEquals(49, records.size());
@@ -52,12 +52,12 @@ class Native114UpgradeTest {
         record.put("SourceVersions", context(922)); ListNBT recovery = new ListNBT(); recovery.add(record.copy());
         original.put("LootableBodiesUnresolved", recovery);
         CompoundNBT staged = NativeSafeFixer.stageCorpse(original, context(1631));
-        assertEquals(4, staged.getInt(UpgradePreservation.VERSION));
+        assertEquals(5, staged.getInt(UpgradePreservation.VERSION));
         assertEquals(record, staged.getList("LootableBodiesUnresolved", 10).getCompound(49));
         assertEquals(record, original.getList("LootableBodiesUnresolved", 10).getCompound(0));
     }
-    @Test void current114RecordsAreNotWrappedOrDuplicatedAgain() {
-        CompoundNBT original = body(4);
+    @Test void current115RecordsAreNotWrappedOrDuplicatedAgain() {
+        CompoundNBT original = body(5);
         assertEquals(original, NativeSafeFixer.stageCorpse(original, context(1976)));
     }
     @Test void vanilla114ItemRenamesRunForReleased113InventoryCopies() {

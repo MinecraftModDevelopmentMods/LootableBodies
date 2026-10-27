@@ -201,7 +201,7 @@ final class ConnectedClientChecks {
         }
         return false;
     }
-    private static void screenshot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));}
+    private static void screenshot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.getMainWindow().getFramebufferWidth(),mc.getMainWindow().getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));}
     private static void quit(Minecraft mc){mc.player.closeScreen();FixtureConnections.disconnect(mc);}
     private void mark(String name) throws Exception {
         try(FileWriter out=new FileWriter(report,true)){out.write("PASS "+name+"\n");}

@@ -48,13 +48,13 @@ final class UpgradeChecks {
     static void run(MinecraftServer server) throws Exception {
         failures=0;sequence=0;world=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));registerOwnFixer();
         output=new File(world.getSaveHandler().getWorldDirectory().getParentFile(),"upgrade-contract-fixtures");
-        check("legacy_id_before_entity_construction",()->conversion("lootablebodies.Corpse",new IntNBT(512)));
-        check("native_111_identity_survives",()->conversion("lootablebodies:corpse",new IntNBT(922)));
+        check("legacy_id_before_entity_construction",()->conversion("lootablebodies.Corpse",IntNBT.valueOf(512)));
+        check("native_111_identity_survives",()->conversion("lootablebodies:corpse",IntNBT.valueOf(922)));
         check("missing_chunk_version_preserves_48_slots",()->conversion("lootablebodies.Corpse",null));
-        check("wrong_type_chunk_version_preserves_48_slots",()->conversion("lootablebodies.Corpse",new StringNBT("damaged")));
-        check("nonfinite_chunk_version_preserves_48_slots",()->conversion("lootablebodies.Corpse",new DoubleNBT(Double.NaN)));
-        check("negative_chunk_version_preserves_48_slots",()->conversion("lootablebodies.Corpse",new IntNBT(-1)));
-        check("incorrect_new_stamp_does_not_skip_legacy_items",()->conversion("lootablebodies.Corpse",new IntNBT(922)));
+        check("wrong_type_chunk_version_preserves_48_slots",()->conversion("lootablebodies.Corpse",StringNBT.valueOf("damaged")));
+        check("nonfinite_chunk_version_preserves_48_slots",()->conversion("lootablebodies.Corpse",DoubleNBT.valueOf(Double.NaN)));
+        check("negative_chunk_version_preserves_48_slots",()->conversion("lootablebodies.Corpse",IntNBT.valueOf(-1)));
+        check("incorrect_new_stamp_does_not_skip_legacy_items",()->conversion("lootablebodies.Corpse",IntNBT.valueOf(922)));
         check("unknown_items_keep_source_context",UpgradeChecks::missingItem);
         check("repeated_fixing_and_loading_never_duplicates",UpgradeChecks::repeated);
         check("old_recovery_payload_is_not_mutated",UpgradeChecks::recovery);
@@ -87,7 +87,7 @@ final class UpgradeChecks {
     private static void nativeChest(boolean legacy) throws Exception {
         CompoundNBT entity=body(legacy?"lootablebodies.Corpse":"lootablebodies:corpse");
         if(!legacy)entity.getList("Equipment",10).getCompound(40).getCompound("tag").getCompound("EntityTag").putString("id","minecraft:pig");
-        CompoundNBT input=chunk(entity,legacy?new IntNBT(1343):null);
+        CompoundNBT input=chunk(entity,legacy?IntNBT.valueOf(1343):null);
         CompoundNBT chest=new CompoundNBT();chest.putString("id","minecraft:chest");chest.putInt("x",2);chest.putInt("y",80);chest.putInt("z",2);
         CompoundNBT bed=new CompoundNBT();bed.putString("id","minecraft:bed");bed.putByte("Count",(byte)1);bed.putShort("Damage",(short)0);bed.putByte("Slot",(byte)0);
         ListNBT items=new ListNBT();items.add(bed);chest.put("Items",items);ListNBT tiles=new ListNBT();tiles.add(chest);input.getCompound("Level").put("TileEntities",tiles);
@@ -145,7 +145,7 @@ final class UpgradeChecks {
         input.getList("Equipment",10).getCompound(40).getCompound("tag").getCompound("EntityTag").putString("id","minecraft:pig");
         CompoundNBT item=new CompoundNBT();item.putString("id","minecraft:bed");item.putByte("Count",(byte)2);item.putShort("Damage",(short)0);item.putByte("Slot",(byte)41);input.getList("Equipment",10).set(41,item);
         if(marker>0)input.putInt("LootableBodiesDataVersion",marker);
-        CompoundNBT result=saved(process(chunk(input,new IntNBT(source))));
+        CompoundNBT result=saved(process(chunk(input,IntNBT.valueOf(source))));
         ListNBT equipment=result.getList("Equipment",10);CompoundNBT found=null;
         for(int i=0;i<equipment.size();i++)if(equipment.getCompound(i).getByte("Slot")==41)found=equipment.getCompound(i);
         int count=0;
@@ -231,19 +231,19 @@ final class UpgradeChecks {
     }
     private static void missingItem() throws Exception {
         CompoundNBT body=body("lootablebodies.Corpse"),raw=body.getList("Equipment",10).getCompound(20);raw.putString("id","absentfixture:keepsake");
-        CompoundNBT result=saved(process(chunk(body,new IntNBT(512))));ListNBT recovery=result.getList("LootableBodiesUnresolved",10);
+        CompoundNBT result=saved(process(chunk(body,IntNBT.valueOf(512))));ListNBT recovery=result.getList("LootableBodiesUnresolved",10);
         RuntimeChecks.require(recovery.size()==1,"unavailable item not retained exactly once");CompoundNBT record=recovery.getCompound(0);
         RuntimeChecks.require(NameLifetimeChecks.same(raw,record.get("Data")) && record.getCompound("SourceVersions").getInt("DataVersion")==512,"unavailable item lost its original payload or source context");
     }
     private static void repeated() throws Exception {
-        CompoundNBT raw=body("lootablebodies.Corpse"),fixed=process(chunk(raw,new IntNBT(512))),once=saved(fixed);
-        CompoundNBT again=nativeChunk(chunk(fixed.copy(),new IntNBT(512))).getCompound("Level").getList("Entities",10).getCompound(0);
+        CompoundNBT raw=body("lootablebodies.Corpse"),fixed=process(chunk(raw,IntNBT.valueOf(512))),once=saved(fixed);
+        CompoundNBT again=nativeChunk(chunk(fixed.copy(),IntNBT.valueOf(512))).getCompound("Level").getList("Entities",10).getCompound(0);
         CompoundNBT twice=saved(again);RuntimeChecks.require(inventory(once).equals(inventory(twice)),"repeated data fixing duplicated or lost items");
     }
     private static void recovery() throws Exception {
         CompoundNBT body=body("lootablebodies.Corpse"),raw=body.getList("Equipment",10).getCompound(20).copy();raw.putString("id","absentfixture:keepsake");
         CompoundNBT record=new CompoundNBT();record.putString("Source","Aux");record.put("Data",raw.copy());ListNBT records=new ListNBT();records.add(record);body.put("LootableBodiesUnresolved",records);
-        CompoundNBT output=saved(process(chunk(body,new IntNBT(512))));CompoundNBT kept=output.getList("LootableBodiesUnresolved",10).getCompound(0);
+        CompoundNBT output=saved(process(chunk(body,IntNBT.valueOf(512))));CompoundNBT kept=output.getList("LootableBodiesUnresolved",10).getCompound(0);
         RuntimeChecks.require(kept.getString("Source").equals("Aux") && NameLifetimeChecks.same(raw,kept.get("Data")),"existing Source/Data payload changed");
         RuntimeChecks.require(kept.getCompound("SourceVersions").getInt("DataVersion")==512,"existing recovery extension lost source version context");
     }
@@ -253,11 +253,11 @@ final class UpgradeChecks {
     }
     private static void savedCounter() throws Exception {
         CompoundNBT source=body("lootablebodies.Corpse");source.getList("Equipment",10).getCompound(20).getCompound("tag").putInt("upgrade_counter",0);
-        CompoundNBT once=fullSave(process(chunk(source,new IntNBT(512))));
+        CompoundNBT once=fullSave(process(chunk(source,IntNBT.valueOf(512))));
         CompoundNBT counted=null;
         for(INBT entry:once.getList("Equipment",10))if(((CompoundNBT)entry).getByte("Slot")==20)counted=(CompoundNBT)entry;
         RuntimeChecks.require(counted!=null && counted.getCompound("tag").getInt("upgrade_counter")==1,"Item fixer did not run exactly once on first load: "+counted);
-        CompoundNBT twice=fullSave(process(chunk(once,new IntNBT(922))));RuntimeChecks.require(inventory(once).equals(inventory(twice)),"Old item version was applied again after saving migrated items");
+        CompoundNBT twice=fullSave(process(chunk(once,IntNBT.valueOf(922))));RuntimeChecks.require(inventory(once).equals(inventory(twice)),"Old item version was applied again after saving migrated items");
     }
     private static CompoundNBT currentStamps(CompoundNBT chunk) {chunk.putInt("DataVersion",UpgradePreservation.MINECRAFT_VERSION);chunk.put("ForgeDataVersion",new CompoundNBT());chunk.getCompound("ForgeDataVersion").putInt("minecraft",-1);return chunk;}
     private static void migratedDamagedStamp() throws Exception {
@@ -266,22 +266,22 @@ final class UpgradeChecks {
     }
     private static void forgedModStamp() throws Exception {
         CompoundNBT source=body("lootablebodies.Corpse"),expected=source.copy();
-        CompoundNBT input=currentStamps(chunk(source,new IntNBT(512)));input.getCompound("ForgeDataVersion").putInt("minecraft",512);
+        CompoundNBT input=currentStamps(chunk(source,IntNBT.valueOf(512)));input.getCompound("ForgeDataVersion").putInt("minecraft",512);
         RuntimeChecks.require(expectedInventory(expected,512).equals(inventory(saved(process(input)))),"Incorrect mod stamp bypassed custom inventory preservation");
     }
     private static void reusedOutput() throws Exception {
-        CompoundNBT fixed=process(chunk(body("lootablebodies.Corpse"),new IntNBT(512)));
+        CompoundNBT fixed=process(chunk(body("lootablebodies.Corpse"),IntNBT.valueOf(512)));
         EntityLootableBody entity=(EntityLootableBody)FixtureApi.loadEntity(fixed.copy(),world);entity.clear();entity.writeAdditional(fixed);
         EntityLootableBody reloaded=(EntityLootableBody)FixtureApi.loadEntity(fixed.copy(),world);
         RuntimeChecks.require(reloaded.isEmpty(),"Reused output compound resurrected a consumed upgrade payload");
     }
     private static void allCurrentStamps() throws Exception {
-        CompoundNBT input=chunk(body("lootablebodies.Corpse"),new IntNBT(922)),versions=new CompoundNBT();
+        CompoundNBT input=chunk(body("lootablebodies.Corpse"),IntNBT.valueOf(922)),versions=new CompoundNBT();
         versions.putInt("minecraft",922);versions.putInt("lootablebodies",1);versions.putInt("lootablebodiesbuildtest",1);input.put("ForgeDataVersion",versions);
         saved(process(input));
     }
     private static void vanillaFalseStamp() throws Exception {
-        CompoundNBT input=chunk(body("lootablebodies.Corpse"),new IntNBT(922)),versions=new CompoundNBT();
+        CompoundNBT input=chunk(body("lootablebodies.Corpse"),IntNBT.valueOf(922)),versions=new CompoundNBT();
         versions.putInt("minecraft",922);versions.putInt("lootablebodies",1);versions.putInt("lootablebodiesbuildtest",1);input.put("ForgeDataVersion",versions);
         CompoundNBT chest=new CompoundNBT();chest.putString("id","Chest");chest.putInt("x",2);chest.putInt("y",80);chest.putInt("z",2);
         CompoundNBT banner=new CompoundNBT();banner.putString("id","minecraft:banner");banner.putByte("Count",(byte)2);banner.putShort("Damage",(short)0);banner.putByte("Slot",(byte)0);

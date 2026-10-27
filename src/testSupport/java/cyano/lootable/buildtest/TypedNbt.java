@@ -1,18 +1,15 @@
 package cyano.lootable.buildtest;
-import net.minecraft.nbt.INBT;
-import net.minecraft.nbt.ListNBT;
-import net.minecraft.nbt.IntArrayNBT;
-import net.minecraft.nbt.FloatNBT;
-import net.minecraft.nbt.DoubleNBT;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.nbt.ByteArrayNBT;
 
 import java.util.TreeSet;
 import net.minecraft.nbt.*;
 
 /** Compound order is immaterial; NBT types, list order and every array byte matter. */
-final class TypedNbt {
-    static String canonical(INBT tag) {
+public final class TypedNbt {
+    private TypedNbt() { }
+    public static boolean same(INBT left, INBT right) {
+        return canonical(left).equals(canonical(right));
+    }
+    public static String canonical(INBT tag) {
         if(tag==null)return "null";
         StringBuilder text=new StringBuilder().append(tag.getId()).append(':');
         if(tag instanceof CompoundNBT) {

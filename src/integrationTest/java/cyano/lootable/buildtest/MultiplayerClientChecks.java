@@ -47,7 +47,7 @@ final class MultiplayerClientChecks {
             if(phase==8){
                 try(FileWriter out=new FileWriter(new File(mc.gameDir,"multiplayer-client.pass"))){out.write("two-client packet/GUI checks passed\n");}
                 System.out.println("LOOTABLE_BODIES_MULTIPLAYER_CLIENT_PASS role="+role);
-                finished=true;mc.player.closeScreen();mc.world.sendQuittingDisconnectingPacket();mc.func_213254_o();mc.displayGuiScreen(new MainMenuScreen());return;
+                finished=true;mc.player.closeScreen();mc.world.sendQuittingDisconnectingPacket();mc.unloadWorld();mc.displayGuiScreen(new MainMenuScreen());return;
             }
             if(frames%100==0)System.out.println("TCP_CLIENT_STATE role="+role+" phase="+phase+" screen="+(mc.currentScreen==null?"world":mc.currentScreen.getClass().getSimpleName())+" container="+mc.player.openContainer.getClass().getSimpleName()+" window="+mc.player.openContainer.windowId+" position="+mc.player.getPosition()+" completed="+completed);
             if(!(mc.currentScreen instanceof CorpseGUIContainer)){
@@ -76,5 +76,5 @@ final class MultiplayerClientChecks {
         }catch(Throwable error){error.printStackTrace();mc.shutdown();}
     }
     private void ack(int phase){completed.add(phase);MultiplayerChecks.CHANNEL.sendToServer(new MultiplayerChecks.Step(phase));}
-    private void shot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));}
+    private void shot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.getMainWindow().getFramebufferWidth(),mc.getMainWindow().getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));}
 }

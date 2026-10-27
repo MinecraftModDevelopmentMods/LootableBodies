@@ -108,7 +108,7 @@ public final class InventorySafetyChecks {
     }
     private static List<ItemEntity> drops(ServerPlayerEntity player,ItemStack... stacks) {
         List<ItemEntity> result=new ArrayList<>();
-        for(ItemStack stack:stacks) result.add(new ItemEntity(player.getEntityWorld(),player.posX,player.posY,player.posZ,stack));
+        for(ItemStack stack:stacks) result.add(new ItemEntity(player.getEntityWorld(),player.getPosX(),player.getPosY(),player.getPosZ(),stack));
         return result;
     }
     private static void handle(PlayerDeathEventHandler handler,ServerPlayerEntity player,List<ItemEntity> drops) {
@@ -368,6 +368,7 @@ public final class InventorySafetyChecks {
             delegate=target;
         }
         @Override public AbstractChunkProvider getChunkProvider(){return delegate.getChunkProvider();}
+        @Override public net.minecraft.world.biome.Biome getNoiseBiomeRaw(int x,int y,int z){return delegate.getNoiseBiomeRaw(x,y,z);}
 
         @Override public net.minecraft.world.ITickList<net.minecraft.block.Block> getPendingBlockTicks(){return delegate.getPendingBlockTicks();}
         @Override public net.minecraft.world.ITickList<net.minecraft.fluid.Fluid> getPendingFluidTicks(){return delegate.getPendingFluidTicks();}
@@ -381,8 +382,8 @@ public final class InventorySafetyChecks {
         @Override public void playSound(net.minecraft.entity.player.PlayerEntity player,double x,double y,double z,net.minecraft.util.SoundEvent sound,net.minecraft.util.SoundCategory category,float volume,float pitch){delegate.playSound(player,x,y,z,sound,category,volume,pitch);}
         @Override public void playMovingSound(net.minecraft.entity.player.PlayerEntity player,Entity entity,net.minecraft.util.SoundEvent sound,net.minecraft.util.SoundCategory category,float volume,float pitch){delegate.playMovingSound(player,entity,sound,category,volume,pitch);}
         @Override public Entity getEntityByID(int id){return delegate.getEntityByID(id);}
-        @Override public net.minecraft.world.storage.MapData func_217406_a(String id){return delegate.func_217406_a(id);}
-        @Override public void func_217399_a(net.minecraft.world.storage.MapData data){delegate.func_217399_a(data);}
+        @Override public net.minecraft.world.storage.MapData getMapData(String id){return delegate.getMapData(id);}
+        @Override public void registerMapData(net.minecraft.world.storage.MapData data){delegate.registerMapData(data);}
         @Override public int getNextMapId(){return delegate.getNextMapId();}
         @Override public void sendBlockBreakProgress(int id,net.minecraft.util.math.BlockPos pos,int progress){delegate.sendBlockBreakProgress(id,pos,progress);}
         @Override public void playEvent(net.minecraft.entity.player.PlayerEntity player,int type,net.minecraft.util.math.BlockPos pos,int data){delegate.playEvent(player,type,pos,data);}

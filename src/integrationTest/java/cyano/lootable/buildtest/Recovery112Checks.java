@@ -22,10 +22,10 @@ final class Recovery112Checks {
                 world.setBlockState(center,Blocks.STONE.getDefaultState());
                 EntityLootableBody body=body(world,coordinate,-1);
                 LootableBodies.voidPlatform=false;body.baseTick();
-                RuntimeChecks.require(body.posY==-1 && world.isAirBlock(center.add(1,0,0)),"Disabled void platform changed behaviour");
+                RuntimeChecks.require(body.getPosY()==-1 && world.isAirBlock(center.add(1,0,0)),"Disabled void platform changed behaviour");
                 LootableBodies.voidPlatform=true;LootableBodies.dimensionSpecificPlatform=dimensionBlocks;body.baseTick();
                 Block expected=!dimensionBlocks || dimension==0?Blocks.COBBLESTONE:dimension==-1?Blocks.NETHERRACK:Blocks.END_STONE;
-                RuntimeChecks.require(body.posY==1.5 && body.isAlive(),"Enabled void platform did not rescue corpse");
+                RuntimeChecks.require(body.getPosY()==1.5 && body.isAlive(),"Enabled void platform did not rescue corpse");
                 for(int x=-1;x<=1;x++)for(int z=-1;z<=1;z++)
                     RuntimeChecks.require(world.getBlockState(center.add(x,0,z)).getBlock()==(x==0 && z==0?Blocks.STONE:expected),"Void platform changed existing terrain or dimension block");
                 conserved(body);checks++;

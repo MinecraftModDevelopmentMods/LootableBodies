@@ -46,10 +46,11 @@ public final class PortBaselineChecks {
                 require(RespawnPacketTrace.describe(sent).equals(RespawnPacketTrace.describe(received)),"Spawn observer differs before/after native decoding");
                 require(RespawnPacketTrace.describe(received).contains("mod=lootablebodies "),"Negative control cannot identify corpse spawns");
                 buffer.clear();
-                net.minecraft.network.play.server.SRespawnPacket outgoing=new net.minecraft.network.play.server.SRespawnPacket(net.minecraft.world.dimension.DimensionType.OVERWORLD,WorldType.DEFAULT,GameType.SURVIVAL);
+                net.minecraft.network.play.server.SRespawnPacket outgoing=new net.minecraft.network.play.server.SRespawnPacket(net.minecraft.world.dimension.DimensionType.OVERWORLD,0x13572468ABCDEF01L,WorldType.DEFAULT,GameType.SURVIVAL);
                 outgoing.writePacketData(buffer);
                 net.minecraft.network.play.server.SRespawnPacket incoming=new net.minecraft.network.play.server.SRespawnPacket();incoming.readPacketData(buffer);
                 require(RespawnPacketTrace.describe(outgoing).equals(RespawnPacketTrace.describe(incoming)),"Respawn observer differs before/after native decoding");
+                require(RespawnPacketTrace.describe(incoming).equals("RESPAWN dimension=0 hashedSeed="+0x13572468ABCDEF01L),"Native 1.15 hashed seed missing from the packet observation");
             } finally {buffer.release();}
         });
         check("rejected_spawn_keeps_death_inventory", () -> {
@@ -94,7 +95,7 @@ public final class PortBaselineChecks {
         });
         check("malformed_name_and_timer_are_retained", () -> {
             EntityLootableBody body=new EntityLootableBody(world); CompoundNBT nbt=new CompoundNBT();body.writeAdditional(nbt);
-            nbt.put("Name",new IntNBT(17));nbt.putDouble("DeathTime",Double.NaN);body.readAdditional(nbt);
+            nbt.put("Name",IntNBT.valueOf(17));nbt.putDouble("DeathTime",Double.NaN);body.readAdditional(nbt);
             CompoundNBT saved=new CompoundNBT();body.writeAdditional(saved);
             require(saved.getList("LootableBodiesInvalidFields",10).size()==2,"malformed fields lost without recovery");
         });

@@ -1,4 +1,4 @@
-"""Reproduce the pinned Forge 28 delayed-movement error without Lootable Bodies."""
+"""Reproduce the pinned Forge 31 delayed-movement error without Lootable Bodies."""
 import argparse,json,socket,subprocess,time
 from pathlib import Path
 from audit_runtime_logs import audit
@@ -60,7 +60,7 @@ def main():
         for path in (root/(name+'.log'),root/name/'logs/latest.log',root/name/'logs/debug.log'):
             if not path.is_file():raise FileNotFoundError(path)
             reports.append(audit(path,native=True))
-    count=reports[0]['known_forge28_dead_player_movement_failures']
+    count=reports[0]['known_forge31_dead_player_movement_failures']
     if count<1 or 'NATIVE_FIFO_DELAY_RELEASE packets=' not in client:
         raise RuntimeError('Native control did not reproduce the expected upstream error')
     result={'lootable_bodies_installed':False,'respawns':8,'native_error_reproductions':count,

@@ -33,12 +33,11 @@ import net.minecraftforge.common.util.FakePlayerFactory;
 final class WorldUpgradeChecks {
     private static CompoundNBT manifest,ledger;
     private static File folder;
-    private static boolean old,native112,native113;
     private static int sourceVersion;
     private static int checks;
     static void run(MinecraftServer server,String phase) throws Exception {
         folder=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0)).getSaveHandler().getWorldDirectory();
-        manifest=read(new File(folder,"upgrade-fixtures.nbt"));old=manifest.getString("Minecraft").equals("1.10.2");native112=manifest.getString("Minecraft").equals("1.12.2");native113=manifest.getString("Minecraft").equals("1.13.2");sourceVersion=old?512:native112?1343:native113?1631:922;
+        manifest=read(new File(folder,"upgrade-fixtures.nbt"));sourceVersion=HistoricalVersions.dataVersion(manifest.getString("Minecraft"));
         File stored=new File(folder,"upgrade-recovered.nbt");ledger=stored.isFile()?read(stored):new CompoundNBT();checks=0;
         if(!ledger.contains("Recoveries",10))ledger.put("Recoveries",new CompoundNBT());
         LootableBodies.allowCorpseDecay=false;LootableBodies.ticksPerItemDecay=-1;
@@ -54,7 +53,7 @@ final class WorldUpgradeChecks {
             require(body!=null,"Missing historical corpse "+uuid);
             require(body.getUniqueID().equals(uuid) && body.dimension.getId()==record.getInt("Dimension"),"UUID/dimension changed");
             require(body.getCustomNameTag().equals(source.contains("Name",8)?source.getString("Name"):source.getString("CustomName")),"Owner attribution changed");
-            require(body.posX==source.getList("Pos",6).getDouble(0) && body.posY==source.getList("Pos",6).getDouble(1) && body.posZ==source.getList("Pos",6).getDouble(2),"Position changed in dimension "+world.dimension.getType().getId()+": "+body.getPositionVector());
+            require(body.getPosX()==source.getList("Pos",6).getDouble(0) && body.getPosY()==source.getList("Pos",6).getDouble(1) && body.getPosZ()==source.getList("Pos",6).getDouble(2),"Position changed in dimension "+world.dimension.getType().getId()+": "+body.getPositionVector());
             CompoundNBT actual=save(body);require(actual.getInt("LootableBodiesDataVersion")==cyano.lootable.upgrade.UpgradePreservation.DATA_VERSION,"Missing corpse migration marker");
             require(NameLifetimeChecks.same(source.get("LootableBodiesInvalidFields"),actual.get("LootableBodiesInvalidFields")),"Original invalid-field evidence changed");
             Map<String,Integer> expected=expectedInventory(source);Map<String,Integer> observed=inventory(actual);
@@ -71,6 +70,7 @@ final class WorldUpgradeChecks {
                 verifyRaw(source,save(body));
             }
             verifyChest(world,record.getInt("Wave"));
+            verifyBiomes(world,record.getInt("Wave"));
         }
         verifyPlayer(server);
         if(wave==0 || wave<0) verifyVanilla(server);
@@ -177,7 +177,7 @@ final class WorldUpgradeChecks {
         // netherrack otherwise invokes the existing wall-escape gameplay.
         BlockPos center=body.getPosition();
         for(int x=-1;x<=1;x++)for(int y=0;y<=2;y++)for(int z=-1;z<=1;z++)world.removeBlock(center.add(x,y,z),false);
-        ServerPlayerEntity visitor=FakePlayerFactory.get(world,new GameProfile(UUID.fromString("00000000-2222-4222-8222-000000000099"),"RecoveryVisitor"));visitor.setHealth(20);visitor.inventory.clear();visitor.setPosition(body.posX,body.posY,body.posZ);
+        ServerPlayerEntity visitor=FakePlayerFactory.get(world,new GameProfile(UUID.fromString("00000000-2222-4222-8222-000000000099"),"RecoveryVisitor"));visitor.setHealth(20);visitor.inventory.clear();visitor.setPosition(body.getPosX(),body.getPosY(),body.getPosZ());
         CorpseContainer container=new CorpseContainer(visitor.inventory,body);
         for(int attempt=0;attempt<200 && !inventory(save(body)).isEmpty();attempt++) {
             for(int slot=0;slot<48;slot++)container.transferStackInSlot(visitor,slot);
@@ -191,7 +191,7 @@ final class WorldUpgradeChecks {
         for(int slot=0;slot<player.getSizeInventory();slot++) {
             ItemStack stack=player.getStackInSlot(slot);if(stack.isEmpty())continue;IInventory destination=null;int empty=-1;
             if(stored.size()>0) {destination=(IInventory)world.getTileEntity(position(stored.getCompound(stored.size()-1)));for(int i=0;i<destination.getSizeInventory();i++)if(destination.getStackInSlot(i).isEmpty()){empty=i;break;}}
-            if(empty<0){BlockPos pos=new BlockPos(body.posX+10,80+stored.size(),body.posZ+10);world.setBlockState(pos,net.minecraft.block.Blocks.CHEST.getDefaultState());destination=(IInventory)world.getTileEntity(pos);CompoundNBT place=new CompoundNBT();place.putInt("x",pos.getX());place.putInt("y",pos.getY());place.putInt("z",pos.getZ());stored.add(place);empty=0;}
+            if(empty<0){BlockPos pos=new BlockPos(body.getPosX()+10,80+stored.size(),body.getPosZ()+10);world.setBlockState(pos,net.minecraft.block.Blocks.CHEST.getDefaultState());destination=(IInventory)world.getTileEntity(pos);CompoundNBT place=new CompoundNBT();place.putInt("x",pos.getX());place.putInt("y",pos.getY());place.putInt("z",pos.getZ());stored.add(place);empty=0;}
             destination.setInventorySlotContents(empty,stack.copy());destination.markDirty();player.setInventorySlotContents(slot,ItemStack.EMPTY);
         }
     }
@@ -206,7 +206,30 @@ final class WorldUpgradeChecks {
         // PlayerInventory serializes armour as 100..103 and offhand as 150.
         ListNBT actual=player.inventory.write(new ListNBT());require(indexedPlayer(expected,"Inventory").equals(indexedCurrent(actual)),"Player inventory slots, counts or custom data changed");
         require(indexedPlayer(expected,"EnderItems").equals(indexedCurrent(player.getInventoryEnderChest().write())),"Ender chest slots/data changed");
-        require(player.getUniqueID().equals(id),"Player UUID changed");world.getSaveHandler().writePlayerData(player);
+        require(player.getUniqueID().equals(id),"Player UUID changed");
+        if(manifest.contains("Recipe",8)) {
+            require(manifest.getString("Recipe").equals("minecraft:sugar"),"Unexpected historical recipe fixture");
+            net.minecraft.item.crafting.IRecipe<?> recipe=server.getRecipeManager().getRecipe(new ResourceLocation("minecraft:sugar_from_sugar_cane")).orElse(null);
+            require(recipe!=null && player.getRecipeBook().isUnlocked(recipe),"Native sugar recipe conversion lost its unlock");
+            net.minecraft.advancements.Advancement advancement=server.getAdvancementManager().getAdvancement(new ResourceLocation("minecraft:recipes/misc/sugar_from_sugar_cane"));
+            require(manifest.getString("Advancement").equals("minecraft:recipes/misc/sugar"),"Unexpected historical advancement fixture");
+            require(advancement!=null && player.getAdvancements().getProgress(advancement).isDone(),"Native sugar advancement conversion lost its completion");
+            player.getAdvancements().save();
+        }
+        world.getSaveHandler().writePlayerData(player);
+    }
+    private static void verifyBiomes(ServerWorld world,int wave) {
+        ListNBT samples=manifest.getList("BiomeSamples",10);
+        for(int i=0;i<samples.size();i++) {
+            CompoundNBT record=samples.getCompound(i);
+            if(record.getInt("Dimension")!=world.dimension.getType().getId() || record.getInt("Wave")!=wave)continue;
+            int[] source=record.getIntArray("Data"),expected=new int[1024];
+            require(source.length==256,"Historical 1.14 biome fixture has the wrong shape");
+            for(int y=0;y<64;y++)for(int z=0;z<4;z++)for(int x=0;x<4;x++)
+                expected[y*16+z*4+x]=source[(z*4+2)*16+x*4+2];
+            int[] actual=world.getChunk(record.getInt("ChunkX"),record.getInt("ChunkZ")).getBiomes().getBiomeIds();
+            require(Arrays.equals(expected,actual),"Historical biome sampling changed in dimension "+record.getInt("Dimension")+" wave "+wave);
+        }
     }
     private static Map<String,Integer> indexedPlayer(CompoundNBT player,String key) {
         int version=player.contains("DataVersion",3)?player.getInt("DataVersion"):(sourceVersion);

@@ -18,6 +18,8 @@ MODS = {
                          'C82CC329BA53A218CADB681D646F64A9C457341577BC4F9AA07E2F9926434CCF'),
 }
 MODS.update({
+    'released-114.jar': ('https://mediafilez.forgecdn.net/files/9336/927/LootableBodies-2.4.5.114041.jar',
+                         '1C4C153A2F67B9F0BC85913A33FBBC9575C4C6EF8EF49DF901120DF811484E7D'),
     'released-113.jar': ('https://github.com/MinecraftModDevelopmentMods/LootableBodies/releases/download/2.4.4.113021/LootableBodies-2.4.4.113021.jar',
                          '464CC1CDDA6C04CD72F5F1A2A504EB8A665E6E48AC255918437262DB2A22A4C1'),
     'released-112.jar': ('https://github.com/MinecraftModDevelopmentMods/LootableBodies/releases/download/2.4.3.112021/LootableBodies-2.4.3.112021.jar',
@@ -52,7 +54,7 @@ def fetch(url, path, expected):
     for address in [url, url + '?source=lootablebodies-migration', url + '?source=lootablebodies111']:
         try:
             print('MIGRATION_INPUT_FETCH',path.name,flush=True)
-            request = urllib.request.Request(address, headers={'User-Agent': 'LootableBodiesMigrationTests/2.4.5.114041'})
+            request = urllib.request.Request(address, headers={'User-Agent': 'LootableBodiesMigrationTests/2.4.6.115021'})
             with urllib.request.urlopen(request, timeout=30) as response:
                 chunks=[]; started=time.monotonic()
                 while True:
@@ -112,6 +114,10 @@ def main():
     runtime = historical_runtime(Path(__file__).resolve().parents[1])
     runtime.install(args.java.resolve(), root/'forge113')
     report['forge113'] = json.loads((root/'forge113/runtime-inputs.json').read_text())
+    from prepare_native114_tools import historical_runtime
+    runtime=historical_runtime(Path(__file__).resolve().parents[1])
+    runtime.install(args.java.resolve(),root/'forge114')
+    report['forge114']=json.loads((root/'forge114/runtime-inputs.json').read_text())
     (root / 'inputs.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     print('MIGRATION_INPUTS_VERIFIED', flush=True)
 

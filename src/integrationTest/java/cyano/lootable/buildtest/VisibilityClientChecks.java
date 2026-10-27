@@ -82,7 +82,7 @@ final class VisibilityClientChecks {
             } else if(phase==7 || phase==9 || phase==11) {
                 EntityLootableBody b=body(mc,"first");if(b!=null&&!b.removed&&!b.isInvisible()&&rendered.contains(b.getUniqueID())){shot(mc,"tracked-"+phase+".png");ack();}
             } else if(phase==8 || phase==10) {
-                if(role.equals(phase==8?"A":"B")){mc.world.sendQuittingDisconnectingPacket();mc.func_213254_o();mc.displayGuiScreen(new MainMenuScreen());connecting=false;}
+                if(role.equals(phase==8?"A":"B")){mc.world.sendQuittingDisconnectingPacket();mc.unloadWorld();mc.displayGuiScreen(new MainMenuScreen());connecting=false;}
                 ack();
             } else if(phase==12 || phase==120) {
                 EntityLootableBody b=body(mc,"first");if(b!=null&&!b.removed&&rendered.contains(b.getUniqueID()))ack();
@@ -109,5 +109,5 @@ final class VisibilityClientChecks {
         for(Entity e:FixtureApi.entities(mc.world))if(e instanceof EntityLootableBody&&e.getUniqueID().equals(id))return (EntityLootableBody)e;return null;
     }
     private void ack() throws Exception {done.add(phase);Files.write(VisibilityChecks.file(role+".visibility-"+phase).toPath(),new byte[]{1});}
-    private static void shot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));}
+    private static void shot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.getMainWindow().getFramebufferWidth(),mc.getMainWindow().getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));}
 }

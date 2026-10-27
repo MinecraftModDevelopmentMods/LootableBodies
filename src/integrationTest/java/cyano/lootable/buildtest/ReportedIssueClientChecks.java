@@ -186,8 +186,8 @@ final class ReportedIssueClientChecks {
                 ServerPlayerEntity p=player(mc);
                 EntityLootableBody corpse=RuntimeChecks.find(p.getServerWorld(),id);
                 if(p.getDistanceSq(corpse)>9) {
-                    double x=corpse.posX,z=corpse.posZ-2;
-                    int y=net.minecraft.util.math.MathHelper.floor(corpse.posY);
+                    double x=corpse.getPosX(),z=corpse.getPosZ()-2;
+                    int y=net.minecraft.util.math.MathHelper.floor(corpse.getPosY());
                     // A respawn can leave the viewer far from the original
                     // platform. Give this disposable fixture a stable place
                     // beside the actual corpse before sending normal clicks.
@@ -214,6 +214,6 @@ final class ReportedIssueClientChecks {
     private boolean done() throws Exception {if(!pending.isDone())return false;pending.get();return true;}
     private void next(int n){stage=n;frames=0;System.out.println("ISSUE5_CLIENT_STAGE "+n);}
     private void mark(String name) throws Exception {try(FileWriter out=new FileWriter(report,true)){out.write("PASS "+name+"\n");}System.out.println("ISSUE5_CLIENT_CHECK_PASS "+name);}
-    private static void shot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));}
+    private static void shot(Minecraft mc,String name){ScreenShotHelper.saveScreenshot(mc.gameDir,name,mc.getMainWindow().getFramebufferWidth(),mc.getMainWindow().getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));}
     private static void quit(Minecraft mc){mc.player.closeScreen();FixtureConnections.disconnect(mc);}
 }

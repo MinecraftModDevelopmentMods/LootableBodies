@@ -5,8 +5,8 @@ import net.minecraft.nbt.*;
 import com.mojang.datafixers.DataFixer;
 /** World-local originals and the native conversion boundary. */
 public final class UpgradePreservation {
-    public static final int DATA_VERSION=4;
-    public static final int MINECRAFT_VERSION=1976;
+    public static final int DATA_VERSION=5;
+    public static final int MINECRAFT_VERSION=2230;
     public static final String VERSION="LootableBodiesDataVersion";
     public static final String SOURCES="LootableBodiesSourceVersions";
     public static final String ITEMS_PENDING="LootableBodiesInventorySource";
@@ -31,7 +31,7 @@ public final class UpgradePreservation {
         for(int m=0;m<mods.size();m++) {
             CompoundNBT mod=mods.getCompound(m);if(!mod.getString("ModId").equals("minecraft"))continue;
             String release=mod.getString("ModVersion");
-            family=release.equals("1.14.4")?1976:release.equals("1.13.2")?1631:release.equals("1.12.2")?1343:release.equals("1.11.2")?922:release.equals("1.10.2")?512:-1;
+            family=release.equals("1.15.2")?2230:release.equals("1.14.4")?1976:release.equals("1.13.2")?1631:release.equals("1.12.2")?1343:release.equals("1.11.2")?922:release.equals("1.10.2")?512:-1;
         }
         if(family>0) {
             int stamped=versions.contains("ChunkDataVersion",3)?versions.getInt("ChunkDataVersion"):-1;

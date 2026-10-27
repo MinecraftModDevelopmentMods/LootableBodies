@@ -17,7 +17,7 @@ final class FixtureConnections {
         if(mc.getIntegratedServer()!=null)retiringServer=mc.getIntegratedServer().getExecutionThread();
         if(mc.player!=null)mc.player.closeScreen();
         if(mc.world!=null)mc.world.sendQuittingDisconnectingPacket();
-        mc.func_213254_o();mc.displayGuiScreen(new MainMenuScreen());
+        mc.unloadWorld();mc.displayGuiScreen(new MainMenuScreen());
     }
     static boolean stopped(Minecraft mc) {
         return ServerStopGate.ready(mc.world==null,mc.isIntegratedServerRunning(),retiringServer);

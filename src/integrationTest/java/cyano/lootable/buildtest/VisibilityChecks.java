@@ -58,7 +58,7 @@ public final class VisibilityChecks {
                 RuntimeChecks.require(first.isUsableByPlayer(a) && first.isUsableByPlayer(b),
                     "Offset death fixture left a viewer outside corpse reach: first="+first.getPosition()+" A="+a.getPosition()+" B="+b.getPosition());
             if(phase==3 && a!=null && a.isAlive())
-                RuntimeChecks.require(Math.abs(a.posX-first.posX)<28 && Math.abs(a.posZ-first.posZ)<28 && Math.abs(a.posY-first.posY)<8,
+                RuntimeChecks.require(Math.abs(a.getPosX()-first.getPosX())<28 && Math.abs(a.getPosZ()-first.getPosZ())<28 && Math.abs(a.getPosY()-first.getPosY())<8,
                     "Visibility fixture respawned outside its corpse viewing area: "+a.getPosition()+" corpse="+first.getPosition());
             if(phaseTicks%100==0 && phase!=12)System.out.println("VISIBILITY_SERVER_STATE phase="+phase+" A="+(a==null?null:a.getPosition())+" B="+(b==null?null:b.getPosition())+" first="+(first==null?null:first.getPosition())+" firstUsableA="+(first!=null&&first.isUsableByPlayer(a))+" firstUsableB="+(first!=null&&first.isUsableByPlayer(b))+" corpse="+(second==null?null:second.getPosition())+" usableA="+(second!=null&&second.isUsableByPlayer(a))+" usableB="+(second!=null&&second.isUsableByPlayer(b)));
             if(phase==0 && resumed && a!=null && b!=null && both(0)) {
@@ -69,7 +69,7 @@ public final class VisibilityChecks {
                 CompoundNBT n;try(FileInputStream in=new FileInputStream(new File(world().getSaveHandler().getWorldDirectory(),"visibility-state.nbt"))){n=CompressedStreamTools.readCompressed(in);}
                 first=loadExpected(world(),"first");second=loadExpected(world(),"second");
                 saveId("first",first);saveId("second",second);verifyInventories();
-                a.connection.setPlayerLocation(first.posX,first.posY,first.posZ-2.5,0,25);b.connection.setPlayerLocation(first.posX+1.5,first.posY,first.posZ-2.5,0,25);phase(19);
+                a.connection.setPlayerLocation(first.getPosX(),first.getPosY(),first.getPosZ()-2.5,0,25);b.connection.setPlayerLocation(first.getPosX()+1.5,first.getPosY(),first.getPosZ()-2.5,0,25);phase(19);
             } else if(phase==0 && a!=null && b!=null && both(0)) {
                 ServerWorld w=world();w.getGameRules().get(net.minecraft.world.GameRules.DO_MOB_SPAWNING).set(false,null);w.getGameRules().get(net.minecraft.world.GameRules.KEEP_INVENTORY).set(false,null);
                 // Forge25's forced player spawn can fall back to world spawn.
@@ -77,7 +77,7 @@ public final class VisibilityChecks {
                 w.setSpawnPoint(new BlockPos(96,PLAYER_Y,93));server.getCommandManager().handleCommand(server.getCommandSource(),"gamerule spawnRadius 0");
                 w.setDayTime(6000);
                 for(int x=88;x<=170;x++)for(int z=89;z<=103;z++)w.setBlockState(new BlockPos(x,GROUND_Y,z),Blocks.OBSIDIAN.getDefaultState());
-                for(ServerPlayerEntity p:new ServerPlayerEntity[]{a,b}) {p.setGameType(GameType.SURVIVAL);p.inventory.clear();p.setSpawnPoint(new BlockPos(96,PLAYER_Y,93),true);}
+                for(ServerPlayerEntity p:new ServerPlayerEntity[]{a,b}) {p.setGameType(GameType.SURVIVAL);p.inventory.clear();p.setSpawnPoint(new BlockPos(96,PLAYER_Y,93),true,false,p.dimension);}
                 a.connection.setPlayerLocation(96.5,PLAYER_Y,96.5,0,0);b.connection.setPlayerLocation(98.5,PLAYER_Y,93.5,0,25);
                 a.inventory.mainInventory.set(9,RuntimeChecks.stack(410));a.container.detectAndSendChanges();phase(1);
             } else if(phase==1 && both(1)) {
@@ -88,8 +88,8 @@ public final class VisibilityChecks {
             } else if(phase==2 && both(2)) {mark("both_clients_receive_actual_death_before_respawn");phase(3);
             } else if(phase==3 && both(3) && a!=null && a.isAlive()) {
                 RuntimeChecks.require(first.isAlive(),"Server lost corpse after respawn");
-                a.connection.setPlayerLocation(first.posX,first.posY,first.posZ-2.5,0,25);
-                b.connection.setPlayerLocation(first.posX+1.5,first.posY,first.posZ-2.5,0,25);phase(4);
+                a.connection.setPlayerLocation(first.getPosX(),first.getPosY(),first.getPosZ()-2.5,0,25);
+                b.connection.setPlayerLocation(first.getPosX()+1.5,first.getPosY(),first.getPosZ()-2.5,0,25);phase(4);
             } else if(phase==4 && both(4)) {
                 RuntimeChecks.require(a.openContainer instanceof cyano.lootable.graphics.CorpseContainer && b.openContainer instanceof cyano.lootable.graphics.CorpseContainer,"GUI ack without server access");
                 mark("both_clients_render_and_open_corpse_after_respawn");phase(5);
@@ -113,15 +113,15 @@ public final class VisibilityChecks {
                 a.connection.setPlayerLocation(100.5,PLAYER_Y,96.5,0,0);b.connection.setPlayerLocation(102.5,PLAYER_Y,93.5,0,25);
                 a.inventory.mainInventory.set(9,RuntimeChecks.stack(411));a.container.detectAndSendChanges();phase(13);
             } else if(phase==13 && both(13)) {
-                before=new HashSet<>(FixtureApi.entities(world()));TNTEntity tnt=new TNTEntity(world(),a.posX,a.posY,a.posZ,null);tnt.setFuse(0);
+                before=new HashSet<>(FixtureApi.entities(world()));TNTEntity tnt=new TNTEntity(world(),a.getPosX(),a.getPosY(),a.getPosZ(),null);tnt.setFuse(0);
                 RuntimeChecks.require(world().addEntity(tnt),"TNT fixture spawn");phase(14);
             } else if(phase==14) {
                 if(second==null && a!=null && !a.isAlive()) {second=newCorpse();saveId("second",second);}
                 if(second!=null && both(14)) {RuntimeChecks.require(second.isAlive() && has(second,411),"TNT destroyed default corpse/inventory");mark("tnt_death_after_five_minutes_both_clients_receive_corpse");phase(15);}
             } else if(phase==15 && both(15) && a!=null && a.isAlive()) {
                 // TNT can displace both the observer and the death position.
-                a.connection.setPlayerLocation(second.posX,second.posY,second.posZ-2.5,0,25);
-                b.connection.setPlayerLocation(second.posX+1.5,second.posY,second.posZ-2.5,0,25);phase(16);
+                a.connection.setPlayerLocation(second.getPosX(),second.getPosY(),second.getPosZ()-2.5,0,25);
+                b.connection.setPlayerLocation(second.getPosX()+1.5,second.getPosY(),second.getPosZ()-2.5,0,25);phase(16);
             } else if(phase==16 && both(16)) {mark("both_clients_render_and_open_tnt_corpse_after_respawn");phase(17);
             } else if(phase==17 && both(17) && phaseTicks>20) {
                 RuntimeChecks.require(!has(second,411) && playerHas(a,411),"TNT corpse recovery lost or duplicated tagged stack");
@@ -140,7 +140,7 @@ public final class VisibilityChecks {
             } else if(phase==20 && both(20) && phaseTicks>240 && !world().getChunkProvider().chunkExists(first.chunkCoordX,first.chunkCoordZ) && !world().getChunkProvider().chunkExists(second.chunkCoordX,second.chunkCoordZ)) {
                 mark("both_clients_leave_and_corpse_chunk_really_unloads");
                 FixtureApi.flush(server);
-                a.connection.setPlayerLocation(first.posX,first.posY,first.posZ-2.5,0,25);b.connection.setPlayerLocation(first.posX+1.5,first.posY,first.posZ-2.5,0,25);phase(21);
+                a.connection.setPlayerLocation(first.getPosX(),first.getPosY(),first.getPosZ()-2.5,0,25);b.connection.setPlayerLocation(first.getPosX()+1.5,first.getPosY(),first.getPosZ()-2.5,0,25);phase(21);
             } else if(phase==21 && both(21)) {
                 first=RuntimeChecks.find(world(),first.getUniqueID());second=RuntimeChecks.find(world(),second.getUniqueID());verifyInventories();
                 mark("chunk_reentry_both_clients_render_same_uuids_and_inventory");server.getPlayerList().saveAllPlayerData();server.save(false,true,false);phase(18);

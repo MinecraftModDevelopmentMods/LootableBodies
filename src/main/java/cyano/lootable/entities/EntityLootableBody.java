@@ -97,7 +97,7 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 		for(IAttributeInstance attribute : getAttributes().getAllAttributes()) {
 			String name = attribute.getAttribute().getName();
 			defaultAttributeBases.put(name,attribute.getBaseValue());
-			defaultAttributeModifiers.put(name,new ArrayList<>(attribute.getModifiers()));
+			defaultAttributeModifiers.put(name,new ArrayList<>(attribute.func_225505_c_()));
 		}
 		deathTimestamp = w.getGameTime();
 		decayTimestamp = deathTimestamp;
@@ -112,13 +112,13 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 
 	public EntityLootableBody(PlayerEntity player){
 		this(player.getEntityWorld());
-		this.setPosition(player.posX, player.posY+0.5,  player.posZ);
+		this.setPosition(player.getPosX(), player.getPosY()+0.5,  player.getPosZ());
 
 		this.setMotion(player.getMotion().add(0D,0.0784000015258789D,0D));
 
-		//this.newPosX = posX; // no newPosX?
-		//this.newPosY = posY; // no newPosY?
-		//this.newPosZ = posZ; // no newPosZ?
+		//this.newPosX = getPosX(); // no newPosX?
+		//this.newPosY = getPosY(); // no newPosY?
+		//this.newPosZ = getPosZ(); // no newPosZ?
 		this.markDirty();
 	}
 
@@ -233,8 +233,8 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 		if(isServer && vacuumTime < VACUUM_TIMELIMIT){
 			vacuumTime++;
 			List<ItemEntity> items = getEntityWorld().getEntitiesWithinAABB(ItemEntity.class, new AxisAlignedBB(
-					posX - VACUUM_RADIUS, posY - VACUUM_RADIUS, posZ - VACUUM_RADIUS,
-					posX + VACUUM_RADIUS, posY + VACUUM_RADIUS, posZ + VACUUM_RADIUS));
+					getPosX() - VACUUM_RADIUS, getPosY() - VACUUM_RADIUS, getPosZ() - VACUUM_RADIUS,
+					getPosX() + VACUUM_RADIUS, getPosY() + VACUUM_RADIUS, getPosZ() + VACUUM_RADIUS));
 			for(ItemEntity item : items){
 				if(item.removed) continue;
 				ItemStack stack = item.getItem();
@@ -247,9 +247,9 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 			this.setMotion(getMotion().x,(getMotion().y+0.025D)*0.9D,getMotion().z);
 		}
 		
-		if(isServer && LootableBodies.voidPlatform && this.posY < 0) {
+		if(isServer && LootableBodies.voidPlatform && this.getPosY() < 0) {
 			generateVoidPlatform();
-			this.setPositionAndUpdate((int)this.posX, 1.5, (int)this.posZ);
+			this.setPositionAndUpdate((int)this.getPosX(), 1.5, (int)this.getPosZ());
 		}
 
 	}
@@ -269,7 +269,7 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 	
 	private void generateVoidPlatform() {
 		World world = this.world;
-		BlockPos testPos = new BlockPos((int)this.posX, 0, (int)this.posZ);
+		BlockPos testPos = new BlockPos((int)this.getPosX(), 0, (int)this.getPosZ());
 		
 		BlockState platformBlockstate = getPlatformBlock(this.dimension.getId());
 		
@@ -494,13 +494,13 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 		AxisAlignedBB bounds = getBoundingBox();
 		// Collision queries omit unloaded chunks. They cannot establish an exit
 		// until the complete local terrain (including tall neighbour shapes) exists.
-		if(!escapeTerrainLoaded(bounds) || world.isCollisionBoxesEmpty(this,bounds)) return;
+		if(!escapeTerrainLoaded(bounds) || world.hasNoCollisions(this,bounds)) return;
 		BlockPos currentCoord = getPosition();
-		double x = currentCoord.getX()+0.5 - posX;
-		double z = currentCoord.getZ()+0.5 - posZ;
+		double x = currentCoord.getX()+0.5 - getPosX();
+		double z = currentCoord.getZ()+0.5 - getPosZ();
 		double length = Math.hypot(x,z);
 		// At a block centre there is no horizontal direction to normalize.
-		if(length > 0 && tryWallExit(posX+x/length,posY,posZ+z/length)) return;
+		if(length > 0 && tryWallExit(getPosX()+x/length,getPosY(),getPosZ()+z/length)) return;
 
 		// Retain the original adjacent-exit priority, but check the whole body.
 		for(Direction direction : new Direction[]{Direction.UP,Direction.NORTH,
@@ -518,10 +518,10 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 	}
 
 	private boolean tryWallExit(double x,double y,double z) {
-		AxisAlignedBB bounds = getBoundingBox().offset(x-posX,y-posY,z-posZ);
+		AxisAlignedBB bounds = getBoundingBox().offset(x-getPosX(),y-getPosY(),z-getPosZ());
 		if(bounds.minY < 0 || bounds.maxY > world.getHeight() ||
 				!world.getWorldBorder().contains(bounds) || !escapeTerrainLoaded(bounds) ||
-				!world.isCollisionBoxesEmpty(this,bounds)) return false;
+				!world.hasNoCollisions(this,bounds)) return false;
 		setPosition(x,y,z);
 		return true;
 	}
@@ -767,7 +767,7 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 		for(int slot = 0; slot < getSizeInventory(); slot++){
 			ItemStack stack = getStackInSlot(slot);
 			if(!emptyStack(stack) && getEntityWorld().addEntity(
-					new ItemEntity(getEntityWorld(),posX,posY,posZ,stack.copy()))) {
+					new ItemEntity(getEntityWorld(),getPosX(),getPosY(),getPosZ(),stack.copy()))) {
 				setInventorySlotContents(slot,null);
 			}
 		}
@@ -775,7 +775,7 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 		while(iterator.hasNext()) {
 			ItemStack stack = iterator.next();
 			if(emptyStack(stack) || getEntityWorld().addEntity(
-					new ItemEntity(getEntityWorld(),posX,posY,posZ,stack.copy()))) iterator.remove();
+					new ItemEntity(getEntityWorld(),getPosX(),getPosY(),getPosZ(),stack.copy()))) iterator.remove();
 		}
 		markDirty();
 		return isEmpty();
@@ -901,7 +901,7 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 			if(angle == null) { invalid[axis] = true; angle = 0F; }
 			// Preserve the legacy float remainder and the corpse's existing
 			// flat pitch before vanilla copies angles into head/render state.
-			clean.add(new net.minecraft.nbt.FloatNBT(axis == 0 ? angle % 360F : 0F));
+			clean.add(net.minecraft.nbt.FloatNBT.valueOf(axis == 0 ? angle % 360F : 0F));
 		}
 		return clean;
 	}
@@ -922,7 +922,7 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 				// A lost height must not put recoverable inventory in the void.
 				value = !motion && axis == 1 ? 64D : 0D;
 			}
-			clean.add(new net.minecraft.nbt.DoubleNBT(value));
+			clean.add(net.minecraft.nbt.DoubleNBT.valueOf(value));
 		}
 		return clean;
 	}
@@ -931,18 +931,18 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 	public void recoverPositionInChunk(int chunkX, int chunkZ) {
 		if(!positionNeedsChunk) return;
 		positionNeedsChunk = false;
-		boolean wrongX = net.minecraft.util.math.MathHelper.floor(posX / 16D) != chunkX;
-		boolean wrongZ = net.minecraft.util.math.MathHelper.floor(posZ / 16D) != chunkZ;
+		boolean wrongX = net.minecraft.util.math.MathHelper.floor(getPosX() / 16D) != chunkX;
+		boolean wrongZ = net.minecraft.util.math.MathHelper.floor(getPosZ() / 16D) != chunkZ;
 		if(!malformedPosition && !wrongX && !wrongZ) { loadedPosition = null; return; }
 		if(!malformedPosition && loadedPosition != null) retainInvalid("Pos",loadedPosition);
 		loadedPosition = null;
-		double x = missingPositionX || wrongX ? chunkX * 16D + 8.5D : posX;
-		double z = missingPositionZ || wrongZ ? chunkZ * 16D + 8.5D : posZ;
+		double x = missingPositionX || wrongX ? chunkX * 16D + 8.5D : getPosX();
+		double z = missingPositionZ || wrongZ ? chunkZ * 16D + 8.5D : getPosZ();
 		// Chunk.addEntity flags a location mismatch dead immediately before
 		// EnteringChunk. Only the first pending NBT admission may undo that
 		// flag; saved zero health and normal later removals remain effective.
 		if(wrongX || wrongZ) removed = false;
-		setLocationAndAngles(x,posY,z,rotationYaw,rotationPitch);
+		setLocationAndAngles(x,getPosY(),z,rotationYaw,rotationPitch);
 		ModLog.warning("Lootable Bodies recovered malformed corpse position in chunk %s,%s",chunkX,chunkZ);
 	}
 
@@ -1035,7 +1035,7 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 
 	private void restoreAttribute(IAttributeInstance attribute) {
 		String name = attribute.getAttribute().getName();
-		for(AttributeModifier modifier : new ArrayList<>(attribute.getModifiers())) attribute.removeModifier(modifier);
+		for(AttributeModifier modifier : new ArrayList<>(attribute.func_225505_c_())) attribute.removeModifier(modifier);
 		attribute.setBaseValue(defaultAttributeBases.getOrDefault(name,attribute.getAttribute().getDefaultValue()));
 		List<AttributeModifier> defaults = defaultAttributeModifiers.get(name);
 		if(defaults != null) for(AttributeModifier modifier : defaults) attribute.applyModifier(modifier);
@@ -1200,7 +1200,7 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 
 	private long checkedTimestamp(String key, long timestamp, long now) {
 		if(timestamp >= 0 && timestamp <= now) return timestamp;
-		retainInvalid(key,new net.minecraft.nbt.LongNBT(timestamp));
+		retainInvalid(key,net.minecraft.nbt.LongNBT.valueOf(timestamp));
 		markDirty();
 		return now;
 	}

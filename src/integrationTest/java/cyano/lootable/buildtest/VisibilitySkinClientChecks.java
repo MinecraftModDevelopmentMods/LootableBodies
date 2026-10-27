@@ -35,7 +35,7 @@ final class VisibilitySkinClientChecks {
             });
             mc.displayGuiScreen(new Panel(mc));stage=2;frames=0;
         } else if(stage==2 && ++frames>30) {
-            ScreenShotHelper.saveScreenshot(mc.gameDir,"skin-fallback-models.png",mc.mainWindow.getFramebufferWidth(),mc.mainWindow.getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
+            ScreenShotHelper.saveScreenshot(mc.gameDir,"skin-fallback-models.png",mc.getMainWindow().getFramebufferWidth(),mc.getMainWindow().getFramebufferHeight(),mc.getFramebuffer(),message->System.out.println(message.getString()));
             skinField.set(mc,original);new File(mc.gameDir,"client.pass").createNewFile();
             System.out.println("LOOTABLE_BODIES_VISIBILITY_SKIN_PASS");mc.shutdown();stage=3;
         }

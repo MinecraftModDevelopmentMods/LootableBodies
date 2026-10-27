@@ -50,9 +50,9 @@ class BuildContractTest {
         assertTrue(info.contains("modId=\"lootablebodies\""));
         Properties release=new Properties();try(java.io.InputStream input=Files.newInputStream(Paths.get("gradle.properties"))){release.load(input);}
         assertTrue(info.contains("version=\""+release.getProperty("mod_version")+"\""));
-        assertTrue(info.contains("versionRange=\"[1.14.4]\""));assertTrue(info.contains("Cyanobacterium"));assertFalse(info.contains("${"));
+        assertTrue(info.contains("versionRange=\"[1.15.2]\""));assertTrue(info.contains("Cyanobacterium"));assertFalse(info.contains("${"));
         assertFalse(Files.exists(Paths.get("build/resources/main/mcmod.info")));
-        assertEquals(4,new com.google.gson.JsonParser().parse(text("build/resources/main/pack.mcmeta")).getAsJsonObject().getAsJsonObject("pack").get("pack_format").getAsInt());
+        assertEquals(5,new com.google.gson.JsonParser().parse(text("build/resources/main/pack.mcmeta")).getAsJsonObject().getAsJsonObject("pack").get("pack_format").getAsInt());
     }
     @Test void everyOriginalTranslationSurvivesTheNativeJsonFormat() throws Exception {
         try(DirectoryStream<Path> locales=Files.newDirectoryStream(Paths.get("src/test/resources/legacy-translations"),"*.lang")){

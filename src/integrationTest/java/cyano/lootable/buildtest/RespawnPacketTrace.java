@@ -57,9 +57,8 @@ final class RespawnPacketTrace extends ChannelDuplexHandler {
         if(!(packet instanceof SSpawnMobPacket||packet instanceof SRespawnPacket||packet instanceof SDestroyEntitiesPacket||packet instanceof SUnloadChunkPacket
             ||packet instanceof SChunkDataPacket||packet instanceof SCombatPacket||packet instanceof SEntityMetadataPacket||packet instanceof CClientStatusPacket))return null;
         if(packet instanceof SSpawnMobPacket) {
-            // MobEntity uses vanilla spawn packets in 1.14. Received packets
-            // have entries rather than a live dataManager, so cannot be written
-            // again. Read the two mapped scalar fields and unique UUID only.
+            // Native 1.15 sends metadata separately. Observe only the decoded
+            // spawn scalars and UUID; never alter the live receiving packet.
             int id=net.minecraftforge.fml.common.ObfuscationReflectionHelper.getPrivateValue(SSpawnMobPacket.class,(SSpawnMobPacket)packet,"field_149042_a");
             int type=net.minecraftforge.fml.common.ObfuscationReflectionHelper.getPrivateValue(SSpawnMobPacket.class,(SSpawnMobPacket)packet,"field_149040_b");
             UUID uuid=null;
@@ -70,19 +69,7 @@ final class RespawnPacketTrace extends ChannelDuplexHandler {
             return "MOD_SPAWN id="+id+" mod="+name+" type="+type+" uuid="+uuid;
         }
         if(packet instanceof SRespawnPacket) {
-            // Native 1.14 reads dimensionInt and leaves dimensionID null until
-            // the client handles the packet. Re-serializing it here disconnects
-            // the transport. Observe both representations without calling the
-            // client-only accessor or mutating the packet.
-            try {
-                net.minecraft.world.dimension.DimensionType dimension=null;int id=0;
-                for(java.lang.reflect.Field field:SRespawnPacket.class.getDeclaredFields()) {
-                    if(field.getType()==net.minecraft.world.dimension.DimensionType.class) {
-                        field.setAccessible(true);dimension=(net.minecraft.world.dimension.DimensionType)field.get(packet);
-                    } else if(field.getType()==int.class) {field.setAccessible(true);id=field.getInt(packet);}
-                }
-                return "RESPAWN dimension="+(dimension==null?id:dimension.getId());
-            } catch(ReflectiveOperationException invalid) {throw new AssertionError("Fixture respawn observation",invalid);}
+            return NativeRespawnDescription.describe((SRespawnPacket)packet);
         }
         // Vanilla strips receiving-side accessors from a dedicated distribution.
         // Read an independent serialization, never its live reader index/fields.

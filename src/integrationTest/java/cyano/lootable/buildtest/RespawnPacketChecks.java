@@ -86,9 +86,9 @@ public final class RespawnPacketChecks {
                 }
                 w.getGameRules().get(net.minecraft.world.GameRules.DO_MOB_SPAWNING).set(false,null);w.getGameRules().get(net.minecraft.world.GameRules.KEEP_INVENTORY).set(false,null);
                 a.setGameType(GameType.SURVIVAL);b.setGameType(GameType.SURVIVAL);a.inventory.clear();b.inventory.clear();
-                a.setSpawnPoint(new BlockPos(kind==5?160:(int)Math.floor(x),80,(int)Math.floor(z)-3),true);
-                b.setSpawnPoint(new BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),true);
-                if(kind==7)a.setSpawnPoint(new BlockPos(96,80,93),true);
+                a.setSpawnPoint(new BlockPos(kind==5?160:(int)Math.floor(x),80,(int)Math.floor(z)-3),true,false,a.dimension);
+                b.setSpawnPoint(new BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),true,false,b.dimension);
+                if(kind==7)a.setSpawnPoint(new BlockPos(96,80,93),true,false,a.dimension);
                 for(int dx=157;dx<=164;dx++)for(int dz=90;dz<=98;dz++)w.setBlockState(new BlockPos(dx,79,dz),Blocks.OBSIDIAN.getDefaultState());
                 a.inventory.mainInventory.set(9,RuntimeChecks.stack(520+index));a.container.detectAndSendChanges();
                 if(simultaneous){b.inventory.mainInventory.set(9,RuntimeChecks.stack(620+index));b.container.detectAndSendChanges();}
@@ -106,9 +106,9 @@ public final class RespawnPacketChecks {
             } else if(phase==2&&a!=null&&a!=dead&&a.isAlive()&&(!simultaneous||(b!=null&&b!=observerDead&&b.isAlive()))) {
                 RuntimeChecks.require(body.isAlive()&&VisibilityChecks.has(body,520+index),"Server corpse/inventory lost during respawn");
                 if(a.dimension!=body.dimension)transfer(a,body.dimension);
-                a.connection.setPlayerLocation(body.posX,body.posY,body.posZ-2.5,0,25);
+                a.connection.setPlayerLocation(body.getPosX(),body.getPosY(),body.getPosZ()-2.5,0,25);
                 if(b.dimension!=body.dimension)transfer(b,body.dimension);
-                b.connection.setPlayerLocation(body.posX+1.5,body.posY,body.posZ-2.5,0,25);
+                b.connection.setPlayerLocation(body.getPosX()+1.5,body.getPosY(),body.getPosZ()-2.5,0,25);
                 // With no players left, Forge may unload/reload the Nether between
                 // death and return. Saved UUIDs survive; runtime entity IDs do not.
                 body=live(body);if(simultaneous)observerBody=live(observerBody);state(3);
@@ -116,7 +116,7 @@ public final class RespawnPacketChecks {
                 // In a cold restart, many ordinary saved bodies can collide and
                 // move the new corpse beyond the player's interaction reach.
                 // Follow it with the viewer; never freeze production physics.
-                if(a!=null&&a.getDistanceSq(body)>9)a.connection.setPlayerLocation(body.posX,body.posY,body.posZ-2.5,0,25);
+                if(a!=null&&a.getDistanceSq(body)>9)a.connection.setPlayerLocation(body.getPosX(),body.getPosY(),body.getPosZ()-2.5,0,25);
                 if(phaseTicks==10){writeTracked(a,"A");writeTracked(b,"B");}
                 if(!ack("A",3)||!ack("B",3))return;
                 RuntimeChecks.require(a.openContainer instanceof cyano.lootable.graphics.CorpseContainer,"Owner GUI not backed by server container");
@@ -151,7 +151,7 @@ public final class RespawnPacketChecks {
     }
     private EntityLootableBody live(EntityLootableBody previous) {
         ServerWorld w=server.getWorld(previous.dimension);
-        w.getChunk((int)Math.floor(previous.posX/16),(int)Math.floor(previous.posZ/16));
+        w.getChunk((int)Math.floor(previous.getPosX()/16),(int)Math.floor(previous.getPosZ()/16));
         return RuntimeChecks.find(w,previous.getUniqueID());
     }
 }
