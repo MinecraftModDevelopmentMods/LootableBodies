@@ -36,7 +36,7 @@ final class WorldUpgradeChecks {
     private static int sourceVersion;
     private static int checks;
     static void run(MinecraftServer server,String phase) throws Exception {
-        folder=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0)).getSaveHandler().getWorldDirectory();
+        folder=server.getWorld(FixtureApi.dimensionKey(0)).getServer().func_240776_a_(net.minecraft.world.storage.FolderName.DOT).toFile();
         manifest=read(new File(folder,"upgrade-fixtures.nbt"));sourceVersion=HistoricalVersions.dataVersion(manifest.getString("Minecraft"));
         File stored=new File(folder,"upgrade-recovered.nbt");ledger=stored.isFile()?read(stored):new CompoundNBT();checks=0;
         if(!ledger.contains("Recoveries",10))ledger.put("Recoveries",new CompoundNBT());
@@ -46,14 +46,14 @@ final class WorldUpgradeChecks {
         ListNBT bodies=manifest.getList("Bodies",10);
         for(int i=0;i<bodies.size();i++) {
             CompoundNBT record=bodies.getCompound(i);if(wave>=0 && record.getInt("Wave")!=wave)continue;
-            ServerWorld world=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(record.getInt("Dimension")));CompoundNBT source=record.getCompound("Body");
+            ServerWorld world=server.getWorld(FixtureApi.dimensionKey(record.getInt("Dimension")));CompoundNBT source=record.getCompound("Body");
             int x=(int)source.getList("Pos",6).getDouble(0),z=(int)source.getList("Pos",6).getDouble(2);RuntimeChecks.awaitChunk(world,x>>4,z>>4);
-            UUID uuid=source.getUniqueId("UUID");EntityLootableBody body=find(world,uuid);String id=uuid.toString();
+            UUID uuid=HistoricalUuid.read(source,"UUID");EntityLootableBody body=find(world,uuid);String id=uuid.toString();
             if(ledger.getString("Removed").equals(id)) {require(body==null,"Journal resurrected a deliberately removed corpse");continue;}
             require(body!=null,"Missing historical corpse "+uuid);
-            require(body.getUniqueID().equals(uuid) && body.dimension.getId()==record.getInt("Dimension"),"UUID/dimension changed");
+            require(body.getUniqueID().equals(uuid) && FixtureApi.dimensionId(body.world)==record.getInt("Dimension"),"UUID/dimension changed");
             require(body.getCustomNameTag().equals(source.contains("Name",8)?source.getString("Name"):source.getString("CustomName")),"Owner attribution changed");
-            require(body.getPosX()==source.getList("Pos",6).getDouble(0) && body.getPosY()==source.getList("Pos",6).getDouble(1) && body.getPosZ()==source.getList("Pos",6).getDouble(2),"Position changed in dimension "+world.dimension.getType().getId()+": "+body.getPositionVector());
+            require(body.getPosX()==source.getList("Pos",6).getDouble(0) && body.getPosY()==source.getList("Pos",6).getDouble(1) && body.getPosZ()==source.getList("Pos",6).getDouble(2),"Position changed in dimension "+FixtureApi.dimensionId(world)+": "+body.getPositionVec());
             CompoundNBT actual=save(body);require(actual.getInt("LootableBodiesDataVersion")==cyano.lootable.upgrade.UpgradePreservation.DATA_VERSION,"Missing corpse migration marker");
             require(NameLifetimeChecks.same(source.get("LootableBodiesInvalidFields"),actual.get("LootableBodiesInvalidFields")),"Original invalid-field evidence changed");
             Map<String,Integer> expected=expectedInventory(source);Map<String,Integer> observed=inventory(actual);
@@ -76,14 +76,14 @@ final class WorldUpgradeChecks {
         if(wave==0 || wave<0) verifyVanilla(server);
         if(phase.equals("upgrade-final") && ledger.getString("Removed").isEmpty()) {
             for(int i=0;i<bodies.size();i++) {
-                CompoundNBT record=bodies.getCompound(i);ServerWorld world=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(record.getInt("Dimension")));EntityLootableBody body=find(world,record.getCompound("Body").getUniqueId("UUID"));
+                CompoundNBT record=bodies.getCompound(i);ServerWorld world=server.getWorld(FixtureApi.dimensionKey(record.getInt("Dimension")));EntityLootableBody body=find(world,HistoricalUuid.read(record.getCompound("Body"),"UUID"));
                 if(body!=null && body.isEmpty()) {ledger.putString("Removed",body.getUniqueID().toString());BlockPos position=body.getPosition();world.removeEntity(body);world.getChunkAt(position).setModified(true);break;}
             }
             require(!ledger.getString("Removed").isEmpty(),"No safely empty corpse available for non-resurrection check");
         }
         // This harness stops before the game loop. Advance the clock as a real
         // played session would, so vanilla actually writes its loaded chunks.
-        for(int dimension:new int[]{0,-1,1}) {ServerWorld world=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(dimension));world.getWorldInfo().setGameTime(world.getGameTime()+1);}
+        for(int dimension:new int[]{0,-1,1}) {ServerWorld world=server.getWorld(FixtureApi.dimensionKey(dimension));((net.minecraft.world.storage.IServerWorldInfo)world.getWorldInfo()).setGameTime(world.getGameTime()+1);}
         server.save(false,true,false);FixtureApi.flush(server);
         try(FileOutputStream output=new FileOutputStream(stored)){CompressedStreamTools.writeCompressed(ledger,output);}
         try(PrintWriter out=new PrintWriter(new File(folder,phase+".pass"),"UTF-8")){out.println("checks="+checks+" historical="+manifest.getString("Minecraft")+"/"+manifest.getString("ModVersion"));}
@@ -99,7 +99,7 @@ final class WorldUpgradeChecks {
         // Independent vanilla oracle. Production additionally checks conservation,
         // resolves registries and shields owned entity payloads; this path does not.
         if(!source.contains("id",8) || !source.contains("Count"))return source.copy();
-        com.mojang.datafixers.DataFixer vanilla=net.minecraft.util.datafix.DataFixesManager.getDataFixer();
+        com.mojang.datafixers.DataFixer vanilla=NativeVanillaDataFixer.get();
         CompoundNBT input=source.copy();
         if(version<704 && (source.getString("id").equals("minecraft:spawn_egg") || source.getString("id").equals("minecraft:chest") || source.getString("id").equals("minecraft:banner"))) {
             // These three sealed writer fixtures exercise the broken vanilla
@@ -197,36 +197,32 @@ final class WorldUpgradeChecks {
     }
     private static void verifyChest(ServerWorld world,int wave) {
         ListNBT containers=manifest.getList("Containers",10);
-        for(int i=0;i<containers.size();i++){CompoundNBT record=containers.getCompound(i);if(record.getInt("Dimension")!=world.dimension.getType().getId() || record.getInt("Wave")!=wave)continue;CompoundNBT source=record.getCompound("Tile");TileEntity tile=world.getTileEntity(position(source));require(tile instanceof IInventory,"Vanilla source chest disappeared");Map<String,Integer> expected=indexed(source.getList("Items",10)),actual=contents((IInventory)tile,true);if(!expected.equals(actual)){Map<String,Integer> missing=new TreeMap<>(expected),unexpected=new TreeMap<>(actual);missing.entrySet().removeAll(actual.entrySet());unexpected.entrySet().removeAll(expected.entrySet());System.out.println("VANILLA_CHEST_DIFF missing="+missing+" unexpected="+unexpected);}require(expected.equals(actual),"Vanilla source chest slots/data changed");}
+        for(int i=0;i<containers.size();i++){CompoundNBT record=containers.getCompound(i);if(record.getInt("Dimension")!=FixtureApi.dimensionId(world) || record.getInt("Wave")!=wave)continue;CompoundNBT source=record.getCompound("Tile");TileEntity tile=world.getTileEntity(position(source));require(tile instanceof IInventory,"Vanilla source chest disappeared");Map<String,Integer> expected=indexed(source.getList("Items",10)),actual=contents((IInventory)tile,true);if(!expected.equals(actual)){Map<String,Integer> missing=new TreeMap<>(expected),unexpected=new TreeMap<>(actual);missing.entrySet().removeAll(actual.entrySet());unexpected.entrySet().removeAll(expected.entrySet());System.out.println("VANILLA_CHEST_DIFF missing="+missing+" unexpected="+unexpected);}require(expected.equals(actual),"Vanilla source chest slots/data changed");}
     }
     private static void verifyPlayer(MinecraftServer server) throws Exception {
-        ServerWorld world=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));UUID id=manifest.getUniqueId("Player");
+        ServerWorld world=server.getWorld(FixtureApi.dimensionKey(0));UUID id=HistoricalUuid.read(manifest,"Player");
         CompoundNBT expected=read(new File(folder,"upgrade-player-source.nbt"));
-        ServerPlayerEntity player=new ServerPlayerEntity(server,world,new GameProfile(id,"UpgradeFixture"),new PlayerInteractionManager(world));world.getSaveHandler().readPlayerData(player);
+        ServerPlayerEntity player=new ServerPlayerEntity(server,world,new GameProfile(id,"UpgradeFixture"),new PlayerInteractionManager(world));FixtureApi.playerData(server).loadPlayerData(player);
         // PlayerInventory serializes armour as 100..103 and offhand as 150.
         ListNBT actual=player.inventory.write(new ListNBT());require(indexedPlayer(expected,"Inventory").equals(indexedCurrent(actual)),"Player inventory slots, counts or custom data changed");
         require(indexedPlayer(expected,"EnderItems").equals(indexedCurrent(player.getInventoryEnderChest().write())),"Ender chest slots/data changed");
         require(player.getUniqueID().equals(id),"Player UUID changed");
         if(manifest.contains("Recipe",8)) {
-            require(manifest.getString("Recipe").equals("minecraft:sugar"),"Unexpected historical recipe fixture");
+            require(HistoricalUnlocks.sugarPair(manifest.getString("Recipe"),manifest.getString("Advancement")),"Unexpected historical recipe/advancement fixture");
             net.minecraft.item.crafting.IRecipe<?> recipe=server.getRecipeManager().getRecipe(new ResourceLocation("minecraft:sugar_from_sugar_cane")).orElse(null);
             require(recipe!=null && player.getRecipeBook().isUnlocked(recipe),"Native sugar recipe conversion lost its unlock");
             net.minecraft.advancements.Advancement advancement=server.getAdvancementManager().getAdvancement(new ResourceLocation("minecraft:recipes/misc/sugar_from_sugar_cane"));
-            require(manifest.getString("Advancement").equals("minecraft:recipes/misc/sugar"),"Unexpected historical advancement fixture");
             require(advancement!=null && player.getAdvancements().getProgress(advancement).isDone(),"Native sugar advancement conversion lost its completion");
             player.getAdvancements().save();
         }
-        world.getSaveHandler().writePlayerData(player);
+        FixtureApi.playerData(server).savePlayerData(player);
     }
     private static void verifyBiomes(ServerWorld world,int wave) {
         ListNBT samples=manifest.getList("BiomeSamples",10);
         for(int i=0;i<samples.size();i++) {
             CompoundNBT record=samples.getCompound(i);
-            if(record.getInt("Dimension")!=world.dimension.getType().getId() || record.getInt("Wave")!=wave)continue;
-            int[] source=record.getIntArray("Data"),expected=new int[1024];
-            require(source.length==256,"Historical 1.14 biome fixture has the wrong shape");
-            for(int y=0;y<64;y++)for(int z=0;z<4;z++)for(int x=0;x<4;x++)
-                expected[y*16+z*4+x]=source[(z*4+2)*16+x*4+2];
+            if(record.getInt("Dimension")!=FixtureApi.dimensionId(world) || record.getInt("Wave")!=wave)continue;
+            int[] source=record.getIntArray("Data"),expected=HistoricalBiomes.nativeValues(source);
             int[] actual=world.getChunk(record.getInt("ChunkX"),record.getInt("ChunkZ")).getBiomes().getBiomeIds();
             require(Arrays.equals(expected,actual),"Historical biome sampling changed in dimension "+record.getInt("Dimension")+" wave "+wave);
         }
@@ -240,10 +236,10 @@ final class WorldUpgradeChecks {
     private static Map<String,Integer> indexedCurrent(ListNBT list){Map<String,Integer> map=new TreeMap<>();for(int i=0;i<list.size();i++)add(map,list.getCompound(i),true);return map;}
     private static void verifyVanilla(MinecraftServer server) {
         ListNBT list=manifest.getList("Vanilla",10);
-        for(int i=0;i<list.size();i++) {CompoundNBT record=list.getCompound(i),source=record.getCompound("Entity");ServerWorld world=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(record.getInt("Dimension")));ListNBT pos=source.getList("Pos",6);world.getChunk(((int)pos.getDouble(0))>>4,((int)pos.getDouble(2))>>4);Entity found=null;for(Entity e:FixtureApi.entities(world))if(e.getUniqueID().equals(source.getUniqueId("UUID")))found=e;require(found!=null,"Vanilla entity disappeared");CompoundNBT actual=new CompoundNBT();found.writeUnlessPassenger(actual);require(actual.getString("id").equals(record.getString("ExpectedType")),"Vanilla entity-name conversion failed");require(found.dimension.getId()==record.getInt("Dimension"),"Vanilla entity dimension changed");if(record.getString("ExpectedType").equals("minecraft:villager"))verifyVillager(source,actual);if(found instanceof IInventory)require(indexed(source.getList("Items",10)).equals(contents((IInventory)found,true)),"Vanilla minecart inventory changed");if(record.getString("ExpectedType").equals("minecraft:armor_stand"))require(indexedEquipment(source.getList("ArmorItems",10)).equals(indexedNativeEquipment(actual.getList("ArmorItems",10))),"Vanilla armour stand equipment changed");}
+        for(int i=0;i<list.size();i++) {CompoundNBT record=list.getCompound(i),source=record.getCompound("Entity");ServerWorld world=server.getWorld(FixtureApi.dimensionKey(record.getInt("Dimension")));ListNBT pos=source.getList("Pos",6);world.getChunk(((int)pos.getDouble(0))>>4,((int)pos.getDouble(2))>>4);Entity found=null;for(Entity e:FixtureApi.entities(world))if(e.getUniqueID().equals(HistoricalUuid.read(source,"UUID")))found=e;require(found!=null,"Vanilla entity disappeared");CompoundNBT actual=new CompoundNBT();found.writeUnlessPassenger(actual);require(actual.getString("id").equals(record.getString("ExpectedType")),"Vanilla entity-name conversion failed");require(FixtureApi.dimensionId(found.world)==record.getInt("Dimension"),"Vanilla entity dimension changed");if(record.getString("ExpectedType").equals("minecraft:villager"))verifyVillager(source,actual);if(found instanceof IInventory)require(indexed(source.getList("Items",10)).equals(contents((IInventory)found,true)),"Vanilla minecart inventory changed");if(record.getString("ExpectedType").equals("minecraft:armor_stand"))require(indexedEquipment(source.getList("ArmorItems",10)).equals(indexedNativeEquipment(actual.getList("ArmorItems",10))),"Vanilla armour stand equipment changed");}
     }
     private static void verifyVillager(CompoundNBT source,CompoundNBT actual) {
-        CompoundNBT expected=cyano.lootable.upgrade.NativeNbt.update(net.minecraft.util.datafix.DataFixesManager.getDataFixer(),net.minecraft.util.datafix.TypeReferences.ENTITY,source.copy(),sourceVersion,cyano.lootable.upgrade.UpgradePreservation.MINECRAFT_VERSION);
+        CompoundNBT expected=cyano.lootable.upgrade.NativeNbt.update(NativeVanillaDataFixer.get(),net.minecraft.util.datafix.TypeReferences.ENTITY,source.copy(),sourceVersion,cyano.lootable.upgrade.UpgradePreservation.MINECRAFT_VERSION);
         require(NameLifetimeChecks.same(expected.get("VillagerData"),actual.get("VillagerData")),"Vanilla villager profession, career or level changed");
         require(indexed(source.getList("Inventory",10)).equals(indexedCurrent(actual.getList("Inventory",10))),"Vanilla villager inventory changed");
     }

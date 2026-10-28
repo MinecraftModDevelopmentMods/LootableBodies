@@ -28,8 +28,7 @@ def main():
         command=[str(project/('gradlew.bat' if os.name=='nt' else 'gradlew')),'runServer','--init-script',str(init),'--no-daemon','--console=plain']
         cwd=project
     else:
-        # Reusing the same path for both inputs installs exactly one production jar.
-        prepare(home,args.forge_home.resolve(),jar,jar)
+        prepare(home,args.forge_home.resolve(),jar)
         command=[str(args.java.resolve()),'-Xmx1G','-jar',FORGE+'.jar','--nogui'];cwd=home
     results=[]
     for phase in ['fresh','reload']:

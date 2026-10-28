@@ -36,11 +36,17 @@ public class CorpseGUIContainer extends net.minecraft.client.gui.screen.inventor
 	 * @param mouseY       Mouse y coordinate
 	 */
 	@Override
-	protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
+	protected void drawGuiContainerBackgroundLayer(com.mojang.blaze3d.matrix.MatrixStack matrices, float partialTicks, int mouseX, int mouseY) {
 		GlStateManager.color4f(1.0F, 1.0F, 1.0F, 1.0F);
 		int x = (width - xSize) / 2;
 		int y = (height - ySize) / 2;
 		this.minecraft.getTextureManager().bindTexture(image);
-		this.blit(x, y, 0, 0, this.xSize, this.ySize); // x, y, textureOffsetX, textureOffsetY, width, height)
+		this.blit(matrices, x, y, 0, 0, this.xSize, this.ySize); // x, y, textureOffsetX, textureOffsetY, width, height)
 	}
+
+    @Override
+    protected void drawGuiContainerForegroundLayer(com.mojang.blaze3d.matrix.MatrixStack matrices,int mouseX,int mouseY) {
+        // This seven-row layout has no label strip. Keep the original screen's
+        // foreground; the new vanilla labels would overlap corpse item slots.
+    }
 }

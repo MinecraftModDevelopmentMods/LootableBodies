@@ -86,7 +86,7 @@ final class WallEscapeChecks {
     private static void unchanged(CompoundNBT before, EntityLootableBody body) {
         CompoundNBT after = NameLifetimeChecks.saved(body);
         before = before.copy(); before.remove("Pos"); after.remove("Pos");
-        RuntimeChecks.require(NameLifetimeChecks.same(before, after), "Escape changed saved fields besides position");
+        RuntimeChecks.require(TypedNbt.sameEntity(before, after), "Escape changed saved fields besides position");
         PositionMotionChecks.finite(body);
     }
 
@@ -138,14 +138,14 @@ final class WallEscapeChecks {
         BlockPos centre = site(false); terrain(centre, true); EntityLootableBody body = body(centre);
         CompoundNBT before = NameLifetimeChecks.saved(body);
         for (int i = 0; i < 32; i++) body.jumpOutOfWall();
-        RuntimeChecks.require(NameLifetimeChecks.same(before, NameLifetimeChecks.saved(body)), "Sealed corpse drifted or changed saved data");
+        RuntimeChecks.require(TypedNbt.sameEntity(before, NameLifetimeChecks.saved(body)), "Sealed corpse drifted or changed saved data");
         PositionMotionChecks.finite(body);
     }
 
     private static void alreadyClear() {
         BlockPos centre = site(false); terrain(centre, false); EntityLootableBody body = body(centre);
         CompoundNBT before = NameLifetimeChecks.saved(body); body.jumpOutOfWall();
-        RuntimeChecks.require(NameLifetimeChecks.same(before, NameLifetimeChecks.saved(body)), "Clear corpse teleported on stale suffocation damage");
+        RuntimeChecks.require(TypedNbt.sameEntity(before, NameLifetimeChecks.saved(body)), "Clear corpse teleported on stale suffocation damage");
     }
 
     private static void negative() {
@@ -174,7 +174,7 @@ final class WallEscapeChecks {
         EntityLootableBody body = body(centre); CompoundNBT before = NameLifetimeChecks.saved(body);
         body.jumpOutOfWall();
         RuntimeChecks.require(!world.getChunkProvider().chunkExists(nx,nz), "Escape forced an unloaded neighbour to load");
-        RuntimeChecks.require(NameLifetimeChecks.same(before, NameLifetimeChecks.saved(body)), "Escape moved without loaded terrain");
+        RuntimeChecks.require(TypedNbt.sameEntity(before, NameLifetimeChecks.saved(body)), "Escape moved without loaded terrain");
         world.getChunk(nx,nz); body.jumpOutOfWall(); clear(body); unchanged(before, body);
     }
 
@@ -198,7 +198,7 @@ final class WallEscapeChecks {
             body.setUniqueId(UUID.nameUUIDFromBytes(("wall-escape-"+trapped).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
             CompoundNBT before = NameLifetimeChecks.saved(body); body.jumpOutOfWall(); unchanged(before,body);
             if (!trapped) clear(body);
-            else RuntimeChecks.require(NameLifetimeChecks.same(before,NameLifetimeChecks.saved(body)), "Sealed disk fixture moved");
+            else RuntimeChecks.require(TypedNbt.sameEntity(before,NameLifetimeChecks.saved(body)), "Sealed disk fixture moved");
             RuntimeChecks.awaitChunk(world,body.getPosition().getX()>>4,body.getPosition().getZ()>>4);
             RuntimeChecks.require(world.addEntity(body), "Could not save wall fixture");
             CompressedStreamTools.writeCompressed(NameLifetimeChecks.saved(body), new FileOutputStream(new File(folder,"wall-escape-"+trapped+".nbt")));
@@ -213,9 +213,16 @@ final class WallEscapeChecks {
             ListNBT pos = expected.getList("Pos",6);
             world.getChunk(new BlockPos(pos.getDouble(0),pos.getDouble(1),pos.getDouble(2)));
             EntityLootableBody body = RuntimeChecks.find(world, expected.getUniqueId("UUID"));
-            RuntimeChecks.require(NameLifetimeChecks.same(expected,NameLifetimeChecks.saved(body)), "Cold reload changed wall fixture NBT");
+            CompoundNBT actual=NameLifetimeChecks.saved(body);
+            if(!TypedNbt.sameEntity(expected,actual)) {
+                try(OutputStream out=new FileOutputStream(new File(folder,"wall-reload-actual-"+trapped+".nbt"))){CompressedStreamTools.writeCompressed(actual,out);}
+                for(String key:expected.keySet())if(!NameLifetimeChecks.same(expected.get(key),actual.get(key)))
+                    System.out.println("WALL_RELOAD_DIFF key="+key+" expected="+expected.get(key)+" actual="+actual.get(key));
+                for(String key:actual.keySet())if(!expected.contains(key))System.out.println("WALL_RELOAD_EXTRA key="+key+" value="+actual.get(key));
+            }
+            RuntimeChecks.require(TypedNbt.sameEntity(expected,NameLifetimeChecks.saved(body)), "Cold reload changed wall fixture NBT");
             body.jumpOutOfWall();
-            RuntimeChecks.require(NameLifetimeChecks.same(expected,NameLifetimeChecks.saved(body)), "Repeated escape changed cold-loaded fixture");
+            RuntimeChecks.require(TypedNbt.sameEntity(expected,NameLifetimeChecks.saved(body)), "Repeated escape changed cold-loaded fixture");
             if (!trapped) clear(body);
         }
         System.out.println("LOOTABLE_BODIES_WALL_ESCAPE_RELOAD_PASS bodies=2");
@@ -223,7 +230,7 @@ final class WallEscapeChecks {
 
     /** The sealed 2.2.0 Nether fixture that originally exposed random wall drift. */
     static void historical(MinecraftServer server, File folder, boolean reload) throws Exception {
-        world = server.getWorld(net.minecraft.world.dimension.DimensionType.getById(-1));
+        world = server.getWorld(FixtureApi.dimensionKey(-1));
         for (int x = 7; x <= 9; x++) for (int z = 7; z <= 9; z++) world.getChunk(x,z);
         EntityLootableBody body = null;
         for (net.minecraft.entity.Entity entity : FixtureApi.entities(world))
@@ -235,11 +242,11 @@ final class WallEscapeChecks {
         File file = new File(folder,"wall-historical.nbt");
         if (reload) {
             try (InputStream in = new FileInputStream(file)) {
-                RuntimeChecks.require(NameLifetimeChecks.same(CompressedStreamTools.readCompressed(in),expected), "Historical cold reload changed complete corpse NBT");
+                RuntimeChecks.require(TypedNbt.sameEntity(CompressedStreamTools.readCompressed(in),expected), "Historical cold reload changed complete corpse NBT");
             }
         }
         for (int i = 0; i < 32; i++) body.jumpOutOfWall();
-        RuntimeChecks.require(NameLifetimeChecks.same(expected,NameLifetimeChecks.saved(body)), "Historical sealed corpse drifted or lost saved data");
+        RuntimeChecks.require(TypedNbt.sameEntity(expected,NameLifetimeChecks.saved(body)), "Historical sealed corpse drifted or lost saved data");
         PositionMotionChecks.finite(body);
         if (!reload) try (OutputStream out = new FileOutputStream(file)) { CompressedStreamTools.writeCompressed(expected,out); }
         System.out.println("LOOTABLE_BODIES_WALL_HISTORICAL_PASS reload="+reload+" slots="+body.getSizeInventory());

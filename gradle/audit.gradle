@@ -60,11 +60,17 @@ ext.auditReleaseArchives = { File directory ->
                     if (!names.contains(it)) throw new GradleException("Missing production entry ${it}")
                 }
                 String info=zip.getInputStream(zip.getEntry('META-INF/mods.toml')).getText('UTF-8')
-                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.15.2]"'].each {
+                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.16.5]"'].each {
                     if(!info.contains(it))throw new GradleException("Incorrect production metadata: ${it}")
                 }
-                if(new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack.pack_format!=5)
-                    throw new GradleException('Native resource pack format must be 5')
+                if(new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack.pack_format!=6)
+                    throw new GradleException('Native resource pack format must be 6')
+                def atEntry=zip.getEntry('META-INF/accesstransformer.cfg')
+                def atRules=atEntry?zip.getInputStream(atEntry).getText('UTF-8').readLines()
+                        .collect {it.split('#',2)[0].trim()}.findAll {!it.isEmpty()}:[]
+                if(atRules!=['public-f net.minecraft.util.datafix.DataFixesManager field_210902_d'] ||
+                        manifest.getValue('FMLAT')!='accesstransformer.cfg')
+                    throw new GradleException('Missing or changed native world-reader access boundary')
                 def languages=names.findAll {it.startsWith('assets/lootablebodies/lang/') && !it.endsWith('/')}
                 if(languages.size()!=14 || languages.any {!it.endsWith('.json') || it!=it.toLowerCase(Locale.ROOT)})
                     throw new GradleException('Incorrect native language resources')

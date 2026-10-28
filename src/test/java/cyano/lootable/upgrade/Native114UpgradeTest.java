@@ -28,13 +28,13 @@ class Native114UpgradeTest {
         return body;
     }
     @Test void currentFormatNamesThe115VanillaSchema() {
-        assertEquals(2230, UpgradePreservation.MINECRAFT_VERSION);
-        assertEquals(5, UpgradePreservation.DATA_VERSION);
+        assertEquals(2586, UpgradePreservation.MINECRAFT_VERSION);
+        assertEquals(6, UpgradePreservation.DATA_VERSION);
     }
     @Test void released113EquipmentAndOverflowAreRetainedBeforeNativeConversion() {
         CompoundNBT original = body(3), before = original.copy();
         CompoundNBT staged = NativeSafeFixer.stageCorpse(original, context(1631));
-        assertEquals(5, staged.getInt(UpgradePreservation.VERSION));
+        assertEquals(6, staged.getInt(UpgradePreservation.VERSION));
         assertEquals(original.getUniqueId("UUID"), staged.getUniqueId("UUID"));
         assertTrue(staged.getList("Equipment", 10).isEmpty());
         ListNBT records = staged.getList("LootableBodiesUnresolved", 10); assertEquals(49, records.size());
@@ -52,12 +52,12 @@ class Native114UpgradeTest {
         record.put("SourceVersions", context(922)); ListNBT recovery = new ListNBT(); recovery.add(record.copy());
         original.put("LootableBodiesUnresolved", recovery);
         CompoundNBT staged = NativeSafeFixer.stageCorpse(original, context(1631));
-        assertEquals(5, staged.getInt(UpgradePreservation.VERSION));
+        assertEquals(6, staged.getInt(UpgradePreservation.VERSION));
         assertEquals(record, staged.getList("LootableBodiesUnresolved", 10).getCompound(49));
         assertEquals(record, original.getList("LootableBodiesUnresolved", 10).getCompound(0));
     }
-    @Test void current115RecordsAreNotWrappedOrDuplicatedAgain() {
-        CompoundNBT original = body(5);
+    @Test void currentRecordsAreNotWrappedOrDuplicatedAgain() {
+        CompoundNBT original = body(6);
         assertEquals(original, NativeSafeFixer.stageCorpse(original, context(1976)));
     }
     @Test void vanilla114ItemRenamesRunForReleased113InventoryCopies() {

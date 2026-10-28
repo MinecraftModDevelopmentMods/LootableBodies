@@ -16,7 +16,7 @@ import net.minecraft.nbt.ByteArrayNBT;
 import cyano.lootable.entities.EntityLootableBody;
 import java.io.*;
 import java.util.*;
-import net.minecraft.entity.SharedMonsterAttributes;
+import net.minecraft.entity.ai.attributes.Attributes;
 import net.minecraft.potion.Effects;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.*;

@@ -1,6 +1,7 @@
 package cyano.lootable.upgrade;
 
 import com.mojang.datafixers.*;
+import com.mojang.serialization.Dynamic;
 import com.mojang.datafixers.schemas.Schema;
 import java.io.IOException;
 import java.util.*;
@@ -16,7 +17,7 @@ final class NativeSafeFixer implements DataFixer {
     NativeSafeFixer(DataFixer delegate,UnaryOperator<CompoundNBT> structures){this.delegate=delegate;this.structures=structures;}
     @Override public Schema getSchema(int key){return delegate.getSchema(key);}
     @Override @SuppressWarnings("unchecked") public <T> Dynamic<T> update(DSL.TypeReference type,Dynamic<T> input,int version,int target) {
-        if(!(input.getValue() instanceof CompoundNBT) || input.getOps()!=NBTDynamicOps.INSTANCE)return delegate.update(type,input,version,target);
+        if(!(input.getValue() instanceof CompoundNBT))return delegate.update(type,input,version,target);
         CompoundNBT raw=(CompoundNBT)input.getValue();String kind=type.typeName();
         try {
         int source=kind.equals("chunk")?chunkVersion(raw,version):version;
@@ -26,7 +27,7 @@ final class NativeSafeFixer implements DataFixer {
             if(result.getCompound("Level").getBoolean("hasLegacyStructureData") && structures!=null)result=structures.apply(result);
             result=convert(type,result,1493,target);
         } else result=convert(type,raw,source,target);
-        return (Dynamic<T>)new Dynamic<>(NBTDynamicOps.INSTANCE,result);
+        return new Dynamic<>(input.getOps(),(T)result);
         }catch(RuntimeException failure) {
             // ServerChunkProvider catches Exception and regenerates a missing
             // chunk. Preservation failure must escape that fallback and stop.
@@ -40,6 +41,13 @@ final class NativeSafeFixer implements DataFixer {
     }
     private CompoundNBT convert(DSL.TypeReference type,CompoundNBT input,int source,int target) {
         CompoundNBT copy=input.copy();Tokens tokens=new Tokens();String kind=type.typeName();
+        // Current world settings are already a registry codec payload. Replaying
+        // pre-1.16 fixes on a damaged stamp otherwise replaces the seed and
+        // dimensions. Shield this field alone; vanilla still fixes the level.
+        if(kind.equals("world_gen_settings") && currentWorldSettings(copy))return copy;
+        INBT currentSettings=kind.equals("level") && copy.contains("WorldGenSettings",10)
+                && currentWorldSettings(copy.getCompound("WorldGenSettings"))?copy.get("WorldGenSettings").copy():null;
+        if(currentSettings!=null)copy.remove("WorldGenSettings");
         INBT currentBiomes=null;
         if(kind.equals("chunk")) {
             CompoundNBT level=copy.getCompound("Level");
@@ -74,9 +82,22 @@ final class NativeSafeFixer implements DataFixer {
         } else result=source<target?cyano.lootable.upgrade.NativeNbt.update(delegate,type,copy,source,target):copy;
         result=(CompoundNBT)restore(result,tokens);
         if(currentBiomes!=null)result.getCompound("Level").put("Biomes",currentBiomes);
+        if(currentSettings!=null)result.put("WorldGenSettings",currentSettings);
         for(String token:tokens.values.keySet())if(!Integer.valueOf(1).equals(tokens.restored.get(token)))throw new IllegalStateException("Native conversion lost or duplicated protected Lootable Bodies data");
         if(kind.equals("chunk"))result.putInt("DataVersion",Math.max(source,target));
         return result;
+    }
+    private static boolean currentWorldSettings(CompoundNBT nbt) {
+        if(!nbt.contains("seed",4) || !nbt.contains("dimensions",10))return false;
+        CompoundNBT dimensions=nbt.getCompound("dimensions");
+        if(dimensions.isEmpty())return false;
+        for(String key:dimensions.keySet()) {
+            if(!dimensions.contains(key,10))return false;
+            CompoundNBT dimension=dimensions.getCompound(key);
+            if(!(dimension.contains("type",8) || dimension.contains("type",10))
+                    || !dimension.contains("generator",10) || !dimension.getCompound("generator").contains("type",8))return false;
+        }
+        return true;
     }
     private void bridgeIdentifiers(CompoundNBT nbt,String kind) {
         switch(kind) {
@@ -152,17 +173,20 @@ final class NativeSafeFixer implements DataFixer {
         UpgradeJournal journal=UpgradePreservation.journal();
         if(saved) {
             try {
-                CompoundNBT original=journal==null || !entity.hasUniqueId("UUID")?null:journal.originalFor(entity.getUniqueId("UUID"),x,z);
+                CompoundNBT original=journal==null || !CorpseIdentity.present(entity)?null:journal.originalFor(CorpseIdentity.read(entity),x,z);
                 if(original==null)throw new IllegalStateException("Unpreserved corpse in saved chunk; refusing unsafe conversion");
                 return original.getCompound("SourceVersions").copy();
             }catch(IOException damaged){throw new IllegalStateException("Corpse preservation could not be verified",damaged);}
         }
         CompoundNBT context=new CompoundNBT();int marker=entity.getInt(UpgradePreservation.VERSION);
-        context.putInt("DataVersion",entity.getString("id").equals("lootablebodies.Corpse")?512:marker==1?922:marker==2?1343:marker==3?1631:marker==4?1976:version);return context;
+        context.putInt("DataVersion",entity.getString("id").equals("lootablebodies.Corpse")?512:marker==1?922:marker==2?1343:marker==3?1631:marker==4?1976:marker==5?2230:version);return context;
     }
     static CompoundNBT stageCorpse(CompoundNBT raw,CompoundNBT context) {
         if(raw.contains(UpgradePreservation.VERSION,3) && raw.getInt(UpgradePreservation.VERSION)>UpgradePreservation.DATA_VERSION)throw new IllegalStateException("This corpse was saved by a newer Lootable Bodies format");
         CompoundNBT safe=raw.copy();boolean current=raw.getString("id").equals("lootablebodies:corpse") && raw.contains(UpgradePreservation.VERSION,3) && raw.getInt(UpgradePreservation.VERSION)==UpgradePreservation.DATA_VERSION;
+        if(CorpseIdentity.present(raw)) {
+            safe.putUniqueId("UUID",CorpseIdentity.read(raw));safe.remove("UUIDMost");safe.remove("UUIDLeast");
+        }
         safe.putString("id","lootablebodies:corpse");safe.putInt(UpgradePreservation.VERSION,UpgradePreservation.DATA_VERSION);
         if(current)return safe;
         safe.put(UpgradePreservation.SOURCES,context.copy());
@@ -245,7 +269,7 @@ final class NativeSafeFixer implements DataFixer {
         int preserved=-1;
         for(UpgradeJournal.LocatedCorpse located:UpgradeJournal.corpses(level.getList("Entities",10))) {
             try {
-                CompoundNBT original=journal==null || !located.entity.hasUniqueId("UUID")?null:journal.originalFor(located.entity.getUniqueId("UUID"),level.getInt("xPos"),level.getInt("zPos"));
+                CompoundNBT original=journal==null || !CorpseIdentity.present(located.entity)?null:journal.originalFor(CorpseIdentity.read(located.entity),level.getInt("xPos"),level.getInt("zPos"));
                 if(original!=null) {
                     CompoundNBT context=original.getCompound("SourceVersions");int candidate=UpgradePreservation.chunkSourceVersion(context);
                     if(!context.getBoolean("Ambiguous") && compatible(candidate,legacy,palette)) {

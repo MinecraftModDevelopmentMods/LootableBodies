@@ -1,4 +1,4 @@
-"""Disposable official Forge 31 launches, separate from the development bootstrap."""
+"""Disposable official Forge 36 launches, separate from the development bootstrap."""
 import hashlib
 import json
 import os
@@ -11,9 +11,9 @@ import urllib.request
 import zipfile
 from command_logs import run_logged
 
-FORGE = 'forge-1.15.2-31.2.57'
-INSTALLER_SHA256 = '84FD49A743978421B26F62AC78222289FE892A46F996CF11CB5E05B7441A7773'
-SERVER_INPUTS = {'forge-1.15.2-31.2.57.jar': '52F070B74817AD31B6D08A267FFE0CB9AB99C08363C8880EA813807C7BDD1517', 'libraries/net/minecraftforge/forge/1.15.2-31.2.57/forge-1.15.2-31.2.57-server.jar': '94DA642D7C81F9947C8366D80AE7E36EBC58D9D4005811591234E269C42B8896', 'minecraft_server.1.15.2.jar': '80CF86DC2004EC6A2DC0183D1C75A9AF3BA0669F7C332E4247AFB1D76FB67E8A'}
+FORGE = 'forge-1.16.5-36.2.42'
+INSTALLER_SHA256 = 'DFA90C681F30BE2406548B6429BCCB68D95AF4F64AB19B8C58F6128FD50FF857'
+SERVER_INPUTS = {'forge-1.16.5-36.2.42.jar': 'DFEAB9C7D582FCE5B1112E9D3038FA0E7075296E467031CE1E2C0BA9FDCF441F', 'libraries/net/minecraftforge/forge/1.16.5-36.2.42/forge-1.16.5-36.2.42-server.jar': '487536E867F5D4287121BAB75600C980A8313E458DE2B2C392C7201EB5648EA1', 'minecraft_server.1.16.5.jar': '58F329C7D2696526F948470AA6FD0B45545039B64CB75015E64C12194B373DA6'}
 
 
 def project_assets(project):
@@ -30,13 +30,13 @@ def fingerprint(directory):
             for p in sorted(directory.rglob('*')) if p.is_file()}
 
 
-def seed_loader_defaults(home):
-    """Seed verified Forge 31 stock values only in an owned test home."""
+def seed_loader_defaults(home, deterministic=False):
+    """Seed an owned home; disable optional HTTP checks only for probes."""
     config=home/'config/fml.toml'
     config.parent.mkdir(parents=True, exist_ok=True)
     try:
         with config.open('x', encoding='utf-8', newline='\n') as stream:
-            stream.write('versionCheck = true\nsplashscreen = true\n'
+            stream.write('versionCheck = '+('false' if deterministic else 'true')+'\nsplashscreen = true\n'
                          'maxThreads = -1\ndefaultConfigPath = "defaultconfigs"\n')
     except FileExistsError:
         pass  # Retain existing choices, comments and even unreadable bytes.
@@ -48,14 +48,14 @@ def prepare_server(home, distribution, candidate=None, probe=None):
     launcher = distribution / (FORGE + '.jar')
     libraries = distribution / 'libraries'
     if not launcher.is_file() or not libraries.is_dir():
-        raise FileNotFoundError('Incomplete official Forge 31 server installation')
+        raise FileNotFoundError('Incomplete official Forge 36 server installation')
     for name, expected in SERVER_INPUTS.items():
         artifact = distribution / name
         if not artifact.is_file() or digest(artifact) != expected:
-            raise RuntimeError('Incorrect official Forge 31 server input: ' + name)
+            raise RuntimeError('Incorrect official Forge 36 server input: ' + name)
     home.mkdir(parents=True, exist_ok=False)
     (home / 'mods').mkdir()
-    seed_loader_defaults(home)
+    seed_loader_defaults(home, deterministic=probe is not None)
     shutil.copy2(launcher, home / launcher.name)
     # Share this disposable installation's immutable libraries, not a user
     # installation or Gradle cache. Every matrix run fingerprints the inputs.
@@ -119,7 +119,7 @@ def _download(artifact, destination):
     destination.parent.mkdir(parents=True, exist_ok=True)
     for address in (artifact['url'], artifact['url'] + '?source=lootablebodies-runtime'):
         try:
-            request = urllib.request.Request(address, headers={'User-Agent': 'LootableBodiesRuntimeTests/2.4.6.115021'})
+            request = urllib.request.Request(address, headers={'User-Agent': 'LootableBodiesRuntimeTests/2.4.7.116051'})
             with urllib.request.urlopen(request, timeout=60) as response:
                 content = response.read()
             if hashlib.sha1(content).hexdigest() != expected:
@@ -157,11 +157,11 @@ def validate_client_paths(paths):
 
 def client_inputs(runtime):
     runtime = runtime.resolve()
-    base_path = runtime / 'versions/1.15.2/1.15.2.json'
-    if not base_path.is_file() or hashlib.sha1(base_path.read_bytes()).hexdigest() != 'e9d0adb8f642abe422909ede50f651b2b58a3573':
-        raise RuntimeError('Missing or incorrect official Minecraft 1.15.2 descriptor')
+    base_path = runtime / 'versions/1.16.5/1.16.5.json'
+    if not base_path.is_file() or hashlib.sha1(base_path.read_bytes()).hexdigest() != 'fba9f7833e858a1257d810d21a3a9e3c967f9077':
+        raise RuntimeError('Missing or incorrect official Minecraft 1.16.5 descriptor')
     base = json.loads(base_path.read_text(encoding='utf-8'))
-    forge = json.loads((runtime / 'versions/1.15.2-forge-31.2.57/1.15.2-forge-31.2.57.json').read_text(encoding='utf-8'))
+    forge = json.loads((runtime / 'versions/1.16.5-forge-36.2.42/1.16.5-forge-36.2.42.json').read_text(encoding='utf-8'))
     system = {'Windows': 'windows', 'Darwin': 'osx', 'Linux': 'linux'}[platform.system()]
     architecture = 'x86' if platform.architecture()[0] == '32bit' else 'amd64'
     native_directory = runtime / ('natives-' + system + '-' + architecture)
@@ -198,7 +198,7 @@ def client_inputs(runtime):
                                 raise RuntimeError('Conflicting native runtime input: ' + target.name)
                         else:
                             target.write_bytes(content)
-    base_jar = runtime / 'versions/1.15.2/1.15.2.jar'
+    base_jar = runtime / 'versions/1.16.5/1.16.5.jar'
     _download(base['downloads']['client'], base_jar)
     paths = list(modules.values()) + [base_jar]
     validate_client_paths(paths)
@@ -209,9 +209,9 @@ def prepare_assets(runtime, cache=None):
     """Hydrate owned assets from official hashes, reusing verified cache objects."""
     from concurrent.futures import ThreadPoolExecutor
     runtime = runtime.resolve()
-    base = json.loads((runtime / 'versions/1.15.2/1.15.2.json').read_text(encoding='utf-8'))
+    base = json.loads((runtime / 'versions/1.16.5/1.16.5.json').read_text(encoding='utf-8'))
     assets = runtime / 'assets'
-    index = assets / 'indexes/1.15.json'
+    index = assets / 'indexes/1.16.json'
     _download(base['assetIndex'], index)
     objects = json.loads(index.read_text(encoding='utf-8'))['objects']
     unique = {item['hash'] for item in objects.values()}
@@ -237,7 +237,7 @@ def prepare_assets(runtime, cache=None):
 def prepare_client(home, candidate=None, probe=None):
     home.mkdir(parents=True, exist_ok=False)
     (home / 'mods').mkdir()
-    seed_loader_defaults(home)
+    seed_loader_defaults(home, deterministic=probe is not None)
     for artifact in (candidate, probe):
         if artifact is not None:
             if not artifact.is_file():
@@ -249,15 +249,15 @@ def prepare_client(home, candidate=None, probe=None):
 
 def client_command(java, home, runtime, assets, *, username='LootableTest', extra=()):
     base, forge, paths, natives = client_inputs(runtime)
-    index = assets / 'indexes/1.15.json'
+    index = assets / 'indexes/1.16.json'
     if not index.is_file() or hashlib.sha1(index.read_bytes()).hexdigest() != base['assetIndex']['sha1']:
         raise RuntimeError('Missing or incorrect official Minecraft asset index')
     return [str(java), '-Xmx2G', '-Djava.library.path=' + str(natives),
             '-DlibraryDirectory=' + str(runtime.resolve() / 'libraries'), *extra,
             '-cp', os.pathsep.join(str(path) for path in paths), forge['mainClass'],
             *forge['arguments']['game'], '--username', username,
-            '--version', '1.15.2-forge-31.2.57', '--gameDir', str(home.resolve()),
-            '--assetsDir', str(assets.resolve()), '--assetIndex', '1.15',
+            '--version', '1.16.5-forge-36.2.42', '--gameDir', str(home.resolve()),
+            '--assetsDir', str(assets.resolve()), '--assetIndex', '1.16',
             '--uuid', '00000000-0000-4000-8000-000000000001', '--accessToken', 'disposable-test',
             '--userType', 'legacy', '--versionType', 'release', '--width', '854', '--height', '480']
 
@@ -267,10 +267,10 @@ def install(java,home,client=False):
     from prepare_migration_inputs import fetch
     home=home.resolve();home.mkdir(parents=True,exist_ok=False)
     installer=home/(FORGE+'-installer.jar')
-    fetch('https://maven.minecraftforge.net/net/minecraftforge/forge/1.15.2-31.2.57/'+installer.name,installer,INSTALLER_SHA256)
+    fetch('https://maven.minecraftforge.net/net/minecraftforge/forge/1.16.5-36.2.42/'+installer.name,installer,INSTALLER_SHA256)
     if client:
-        base=home/'versions/1.15.2/1.15.2.json'
-        _download({'sha1':'e9d0adb8f642abe422909ede50f651b2b58a3573','url':'https://piston-meta.mojang.com/v1/packages/e9d0adb8f642abe422909ede50f651b2b58a3573/1.15.2.json'},base)
+        base=home/'versions/1.16.5/1.16.5.json'
+        _download({'sha1':'fba9f7833e858a1257d810d21a3a9e3c967f9077','url':'https://piston-meta.mojang.com/v1/packages/fba9f7833e858a1257d810d21a3a9e3c967f9077/1.16.5.json'},base)
         metadata=json.loads(base.read_text());_download(metadata['downloads']['client'],base.with_suffix('.jar'))
         (home/'launcher_profiles.json').write_text('{"profiles":{}}\n')
     run_logged([str(java),'-Djava.awt.headless=true','-jar',installer.name,

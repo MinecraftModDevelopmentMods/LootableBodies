@@ -47,7 +47,7 @@ public final class VisibilityChecks {
     private ServerPlayerEntity player(String role){return server.getPlayerList().getPlayerByUsername("Container"+role);}
     private boolean ack(String role,int n){return file(role+".visibility-"+n).isFile();}
     private boolean both(int n){return ack("A",n)&&ack("B",n);}
-    private ServerWorld world(){return server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));}
+    private ServerWorld world(){return server.getWorld(FixtureApi.dimensionKey(0));}
     @SubscribeEvent public void tick(TickEvent.ServerTickEvent e) {
         if(e.phase!=TickEvent.Phase.END || finished)return;
         try {
@@ -65,8 +65,8 @@ public final class VisibilityChecks {
                 // Only this disposable tracking fixture moves the world spawn.
                 // The corpse chunk must be eligible to unload when both clients
                 // leave; keeping it inside the spawn area would test no unload.
-                world().setSpawnPoint(new BlockPos(8192,PLAYER_Y,8192));
-                CompoundNBT n;try(FileInputStream in=new FileInputStream(new File(world().getSaveHandler().getWorldDirectory(),"visibility-state.nbt"))){n=CompressedStreamTools.readCompressed(in);}
+                world().setSpawnLocation(new BlockPos(8192,PLAYER_Y,8192),0F);
+                CompoundNBT n;try(FileInputStream in=new FileInputStream(new File(world().getServer().func_240776_a_(net.minecraft.world.storage.FolderName.DOT).toFile(),"visibility-state.nbt"))){n=CompressedStreamTools.readCompressed(in);}
                 first=loadExpected(world(),"first");second=loadExpected(world(),"second");
                 saveId("first",first);saveId("second",second);verifyInventories();
                 a.connection.setPlayerLocation(first.getPosX(),first.getPosY(),first.getPosZ()-2.5,0,25);b.connection.setPlayerLocation(first.getPosX()+1.5,first.getPosY(),first.getPosZ()-2.5,0,25);phase(19);
@@ -74,10 +74,10 @@ public final class VisibilityChecks {
                 ServerWorld w=world();w.getGameRules().get(net.minecraft.world.GameRules.DO_MOB_SPAWNING).set(false,null);w.getGameRules().get(net.minecraft.world.GameRules.KEEP_INVENTORY).set(false,null);
                 // Forge25's forced player spawn can fall back to world spawn.
                 // Keep this disposable respawn within the intended viewing area.
-                w.setSpawnPoint(new BlockPos(96,PLAYER_Y,93));server.getCommandManager().handleCommand(server.getCommandSource(),"gamerule spawnRadius 0");
+                w.setSpawnLocation(new BlockPos(96,PLAYER_Y,93),0F);server.getCommandManager().handleCommand(server.getCommandSource(),"gamerule spawnRadius 0");
                 w.setDayTime(6000);
                 for(int x=88;x<=170;x++)for(int z=89;z<=103;z++)w.setBlockState(new BlockPos(x,GROUND_Y,z),Blocks.OBSIDIAN.getDefaultState());
-                for(ServerPlayerEntity p:new ServerPlayerEntity[]{a,b}) {p.setGameType(GameType.SURVIVAL);p.inventory.clear();p.setSpawnPoint(new BlockPos(96,PLAYER_Y,93),true,false,p.dimension);}
+                for(ServerPlayerEntity p:new ServerPlayerEntity[]{a,b}) {p.setGameType(GameType.SURVIVAL);p.inventory.clear();FixtureApi.spawn(p,new BlockPos(96,PLAYER_Y,93),true,false,p.world.getDimensionKey());}
                 a.connection.setPlayerLocation(96.5,PLAYER_Y,96.5,0,0);b.connection.setPlayerLocation(98.5,PLAYER_Y,93.5,0,25);
                 a.inventory.mainInventory.set(9,RuntimeChecks.stack(410));a.container.detectAndSendChanges();phase(1);
             } else if(phase==1 && both(1)) {
@@ -126,7 +126,7 @@ public final class VisibilityChecks {
             } else if(phase==17 && both(17) && phaseTicks>20) {
                 RuntimeChecks.require(!has(second,411) && playerHas(a,411),"TNT corpse recovery lost or duplicated tagged stack");
                 RuntimeChecks.require(has(first,410),"Earlier corpse inventory changed during TNT/reconnect checks");
-                a.closeScreen();b.closeScreen();File folder=world().getSaveHandler().getWorldDirectory();
+                a.closeScreen();b.closeScreen();File folder=world().getServer().func_240776_a_(net.minecraft.world.storage.FolderName.DOT).toFile();
                 RuntimeChecks.saveExpected(folder,"visibility-first",first);RuntimeChecks.saveExpected(folder,"visibility-second",second);
                 CompoundNBT state=new CompoundNBT();state.putUniqueId("First",first.getUniqueID());state.putUniqueId("Second",second.getUniqueID());state.putUniqueId("Player",a.getUniqueID());state.put("Inventory",a.inventory.write(new ListNBT()));
                 try(FileOutputStream out=new FileOutputStream(new File(folder,"visibility-state.nbt"))){CompressedStreamTools.writeCompressed(state,out);}
@@ -167,19 +167,19 @@ public final class VisibilityChecks {
         verifySnapshot(world(),"first",first);verifySnapshot(world(),"second",second);
     }
     static void reload(MinecraftServer server) throws Exception {
-        ServerWorld w=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));File folder=w.getSaveHandler().getWorldDirectory();CompoundNBT n;
+        ServerWorld w=server.getWorld(FixtureApi.dimensionKey(0));File folder=w.getServer().func_240776_a_(net.minecraft.world.storage.FolderName.DOT).toFile();CompoundNBT n;
         try(FileInputStream in=new FileInputStream(new File(folder,"visibility-state.nbt"))){n=CompressedStreamTools.readCompressed(in);}
         for(String key:new String[]{"First","Second"}) {EntityLootableBody b=loadExpected(w,key.toLowerCase(Locale.ROOT));RuntimeChecks.require(b.getUniqueID().equals(n.getUniqueId(key)),"Saved identity differs");verifySnapshot(w,key.toLowerCase(Locale.ROOT),b);}
         CompoundNBT p;try(FileInputStream in=new FileInputStream(new File(folder,"playerdata/"+n.getUniqueId("Player")+".dat"))){p=CompressedStreamTools.readCompressed(in);}
         RuntimeChecks.require(n.get("Inventory").equals(p.get("Inventory")),"Recovered inventory changed on cold restart");
     }
     private static EntityLootableBody loadExpected(ServerWorld w,String name) throws Exception {
-        CompoundNBT n;try(FileInputStream in=new FileInputStream(new File(w.getSaveHandler().getWorldDirectory(),"visibility-"+name+".nbt"))){n=CompressedStreamTools.readCompressed(in);}
+        CompoundNBT n;try(FileInputStream in=new FileInputStream(new File(w.getServer().func_240776_a_(net.minecraft.world.storage.FolderName.DOT).toFile(),"visibility-"+name+".nbt"))){n=CompressedStreamTools.readCompressed(in);}
         ListNBT pos=n.getList("Pos",6);w.getChunk((int)Math.floor(pos.getDouble(0)/16),(int)Math.floor(pos.getDouble(2)/16));
         return RuntimeChecks.find(w,n.getUniqueId("UUID"));
     }
     private static void verifySnapshot(ServerWorld w,String name,EntityLootableBody body) throws Exception {
-        CompoundNBT expected;try(FileInputStream in=new FileInputStream(new File(w.getSaveHandler().getWorldDirectory(),"visibility-"+name+".nbt"))){expected=CompressedStreamTools.readCompressed(in);}
+        CompoundNBT expected;try(FileInputStream in=new FileInputStream(new File(w.getServer().func_240776_a_(net.minecraft.world.storage.FolderName.DOT).toFile(),"visibility-"+name+".nbt"))){expected=CompressedStreamTools.readCompressed(in);}
         CompoundNBT actual=new CompoundNBT();body.writeUnlessPassenger(actual);
         for(String key:new String[]{"id","UUIDMost","UUIDLeast","Equipment","Aux","Name","CustomName","LootableBodiesUnresolved","LootableBodiesInvalidFields"})RuntimeChecks.require(Objects.equals(expected.get(key),actual.get(key)),"Reloaded corpse differs: "+name+" "+key);
         // These live-default fixtures keep ticking between the snapshot and logout.

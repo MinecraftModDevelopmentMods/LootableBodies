@@ -40,7 +40,7 @@ public final class RespawnPacketChecks {
     }
     static void verifySlowClientStartup(MinecraftServer server) throws Exception {
         String previous=System.getProperty("lootablebodies.multiplayer.sync");
-        File folder=new File(server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0)).getSaveHandler().getWorldDirectory(),"respawn-startup-regression");
+        File folder=new File(server.getWorld(FixtureApi.dimensionKey(0)).getServer().func_240776_a_(net.minecraft.world.storage.FolderName.DOT).toFile(),"respawn-startup-regression");
         Files.createDirectories(folder.toPath());
         RespawnPacketChecks fixture=null;
         try {
@@ -76,9 +76,9 @@ public final class RespawnPacketChecks {
             if(phaseTicks%100==0)System.out.println("RESPAWN_MATRIX_STATE case="+index+" phase="+phase+" A="+(a==null?null:a.getPosition())+" body="+(body==null?null:body.getPosition())+" tracked="+(body==null?null:FixtureApi.tracked(body)));
             RuntimeChecks.require(phaseTicks<500,"Corpse missing after accepted respawn case="+index+" phase="+phase);
             if(phase==0 && a!=null&&b!=null&&ack("A",0)&&ack("B",0)) {
-                int kind=index%8;net.minecraft.world.dimension.DimensionType dim=kind==7?net.minecraft.world.dimension.DimensionType.THE_NETHER:net.minecraft.world.dimension.DimensionType.OVERWORLD;ServerWorld w=server.getWorld(dim);
-                if(a.dimension!=dim)transfer(a,dim);
-                if(b.dimension!=dim)transfer(b,dim);
+                int kind=index%8;net.minecraft.util.RegistryKey<net.minecraft.world.World> dim=kind==7?net.minecraft.world.World.THE_NETHER:net.minecraft.world.World.OVERWORLD;ServerWorld w=server.getWorld(dim);
+                if(a.world.getDimensionKey()!=dim)transfer(a,dim);
+                if(b.world.getDimensionKey()!=dim)transfer(b,dim);
                 double x=kind==6?-.4:96.5,z=kind==6?-.4:96.5;
                 for(int dx=-6;dx<=6;dx++)for(int dz=-6;dz<=6;dz++) {
                     BlockPos floor=new BlockPos(x+dx,79,z+dz);w.setBlockState(floor,Blocks.OBSIDIAN.getDefaultState());
@@ -86,9 +86,9 @@ public final class RespawnPacketChecks {
                 }
                 w.getGameRules().get(net.minecraft.world.GameRules.DO_MOB_SPAWNING).set(false,null);w.getGameRules().get(net.minecraft.world.GameRules.KEEP_INVENTORY).set(false,null);
                 a.setGameType(GameType.SURVIVAL);b.setGameType(GameType.SURVIVAL);a.inventory.clear();b.inventory.clear();
-                a.setSpawnPoint(new BlockPos(kind==5?160:(int)Math.floor(x),80,(int)Math.floor(z)-3),true,false,a.dimension);
-                b.setSpawnPoint(new BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),true,false,b.dimension);
-                if(kind==7)a.setSpawnPoint(new BlockPos(96,80,93),true,false,a.dimension);
+                FixtureApi.spawn(a,new BlockPos(kind==5?160:(int)Math.floor(x),80,(int)Math.floor(z)-3),true,false,a.world.getDimensionKey());
+                FixtureApi.spawn(b,new BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),true,false,b.world.getDimensionKey());
+                if(kind==7)FixtureApi.spawn(a,new BlockPos(96,80,93),true,false,a.world.getDimensionKey());
                 for(int dx=157;dx<=164;dx++)for(int dz=90;dz<=98;dz++)w.setBlockState(new BlockPos(dx,79,dz),Blocks.OBSIDIAN.getDefaultState());
                 a.inventory.mainInventory.set(9,RuntimeChecks.stack(520+index));a.container.detectAndSendChanges();
                 if(simultaneous){b.inventory.mainInventory.set(9,RuntimeChecks.stack(620+index));b.container.detectAndSendChanges();}
@@ -105,9 +105,9 @@ public final class RespawnPacketChecks {
                 }
             } else if(phase==2&&a!=null&&a!=dead&&a.isAlive()&&(!simultaneous||(b!=null&&b!=observerDead&&b.isAlive()))) {
                 RuntimeChecks.require(body.isAlive()&&VisibilityChecks.has(body,520+index),"Server corpse/inventory lost during respawn");
-                if(a.dimension!=body.dimension)transfer(a,body.dimension);
+                if(a.world.getDimensionKey()!=body.world.getDimensionKey())transfer(a,body.world.getDimensionKey());
                 a.connection.setPlayerLocation(body.getPosX(),body.getPosY(),body.getPosZ()-2.5,0,25);
-                if(b.dimension!=body.dimension)transfer(b,body.dimension);
+                if(b.world.getDimensionKey()!=body.world.getDimensionKey())transfer(b,body.world.getDimensionKey());
                 b.connection.setPlayerLocation(body.getPosX()+1.5,body.getPosY(),body.getPosZ()-2.5,0,25);
                 // With no players left, Forge may unload/reload the Nether between
                 // death and return. Saved UUIDs survive; runtime entity IDs do not.
@@ -138,10 +138,11 @@ public final class RespawnPacketChecks {
         catch(java.nio.file.AccessDeniedException busy){if(retry==50)throw busy;Thread.sleep(1);}
         System.out.println("RESPAWN_MATRIX_PHASE "+line);
     }
-    private void transfer(ServerPlayerEntity player,net.minecraft.world.dimension.DimensionType dimension) {
+    private void transfer(ServerPlayerEntity player,net.minecraft.util.RegistryKey<net.minecraft.world.World> dimension) {
         ServerWorld target=server.getWorld(dimension);
-        player.changeDimension(dimension);
-        player.connection.setPlayerLocation(96.5,80,96.5,player.rotationYaw,0);
+        // This is an absolute fixture move, not a portal-generation check.
+        // Use the native16 command path, including its real respawn packet.
+        player.teleport(target,96.5,80,96.5,player.rotationYaw,0);
 
     }
     private void writeTracked(ServerPlayerEntity player,String role) throws Exception {
@@ -150,7 +151,7 @@ public final class RespawnPacketChecks {
         Collections.sort(expected);Files.write(file("expected-"+index+"-"+role+".txt").toPath(),expected,StandardCharsets.UTF_8);
     }
     private EntityLootableBody live(EntityLootableBody previous) {
-        ServerWorld w=server.getWorld(previous.dimension);
+        ServerWorld w=server.getWorld(previous.world.getDimensionKey());
         w.getChunk((int)Math.floor(previous.getPosX()/16),(int)Math.floor(previous.getPosZ()/16));
         return RuntimeChecks.find(w,previous.getUniqueID());
     }

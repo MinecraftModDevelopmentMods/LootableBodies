@@ -67,7 +67,7 @@ public final class ClientChecks {
                 mc.gameSettings.framerateLimit=30;
                 mc.gameSettings.renderDistanceChunks=4;
                 stage=1;
-                mc.launchIntegratedServer("build-fixture", "Build fixture",new WorldSettings(4267321,GameType.CREATIVE,false,false,WorldType.FLAT));
+                FixtureApi.ClientWorlds.create(mc,"build-fixture","Build fixture",net.minecraft.world.GameType.CREATIVE,false);
             } else if(stage==1 && mc.world!=null && mc.player!=null && mc.getIntegratedServer()!=null) {
                 stage=2;
                 pending=mc.getIntegratedServer().runAsync(() -> {
@@ -88,7 +88,7 @@ public final class ClientChecks {
                 mc.player.closeScreen(); stage=4;
                 FixtureConnections.disconnect(mc);
             } else if(stage==4 && FixtureConnections.stopped(mc)) {
-                stage=5; mc.launchIntegratedServer("build-fixture","Build fixture",null);
+                stage=5; mc.loadWorld("build-fixture");
             } else if(stage==5 && mc.player!=null && mc.world!=null && mc.getIntegratedServer()!=null) {
                 stage=6;
                 pending=mc.getIntegratedServer().runAsync(() -> {

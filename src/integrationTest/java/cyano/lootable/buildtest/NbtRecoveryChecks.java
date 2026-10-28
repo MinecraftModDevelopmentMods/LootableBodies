@@ -55,6 +55,9 @@ final class NbtRecoveryChecks {
         check("wide_damage_not_narrowed",()->unreadable("Equipment","Damage",IntNBT.valueOf(32768)));
         check("wrong_custom_tag_type_retained_raw",()->unreadable("Equipment","tag",StringNBT.valueOf("opaque")));
         check("unknown_capability_payload_retained_raw",NbtRecoveryChecks::unknownCaps);
+        check("native116_unknown_capabilities_survive_copy_split_and_reload",NbtRecoveryChecks::nativeCaps);
+        check("native116_capability_initialization_exposes_unhandled_data",NbtRecoveryChecks::initializedCaps);
+        check("registered_capability_payload_remains_recoverable",NbtRecoveryChecks::knownCaps);
         check("unknown_stack_root_data_retained_raw",()->unreadable("Equipment","UnknownPayload",StringNBT.valueOf("retain verbatim")));
         check("wrong_equipment_list_type_retained",()->wrongList("Equipment"));
         check("wrong_aux_list_type_retained",()->wrongList("Aux"));
@@ -105,7 +108,34 @@ final class NbtRecoveryChecks {
     private static void validWideSlot(){CompoundNBT e=entry(120,17,7);e.putInt("Slot",7);EntityLootableBody b=read(root(e));equal(b.getStackInSlot(7),item(120,17),"Valid numeric slot changed");stable(b);}
     private static void unreadable(String source,String key,INBT value){CompoundNBT raw=entry(120,17,6);if(value==null)raw.remove(key);else raw.put(key,value);CompoundNBT n=root(entry(121,11,7));if(source.equals("Equipment"))n.getList("Equipment",10).add(raw.copy());else n.put("Aux",list(raw));EntityLootableBody b=read(n);equal(b.getStackInSlot(7),item(121,11),"Unreadable sibling erased valid slot");contains(b,item(121,11));retained(b,raw);stable(b);}
     private static void integerCount(){CompoundNBT e=entry(120,17,6);e.putInt("Count",17);EntityLootableBody b=read(root(e));contains(b,item(120,17));stable(b);}
-    private static void unknownCaps(){CompoundNBT caps=new CompoundNBT();caps.putString("absentfixture:inventory","opaque capabilities");unreadable("Equipment","ForgeCaps",caps);}
+    private static void unknownCaps(){
+        CompoundNBT caps=new CompoundNBT();caps.putString("absentfixture:inventory","opaque capabilities");
+        unreadable("Equipment","ForgeCaps",caps);
+    }
+    private static void nativeCaps(){
+        CompoundNBT raw=entry(120,17,6),caps=new CompoundNBT();caps.putString("absentfixture:inventory","opaque capabilities");raw.put("ForgeCaps",caps);
+        ItemStack nativeStack=ItemStack.read(raw.copy());
+        RuntimeChecks.require(caps.equals(nativeStack.write(new CompoundNBT()).get("ForgeCaps")),"Native capability load lost data");
+        ItemStack copy=nativeStack.copy(),split=copy.split(7);
+        for(ItemStack value:new ItemStack[]{copy,split,ItemStack.read(split.write(new CompoundNBT()))})
+            RuntimeChecks.require(caps.equals(value.write(new CompoundNBT()).get("ForgeCaps")),"Native capability copy/split/reload lost data");
+        RuntimeChecks.require(copy.getCount()==10 && split.getCount()==7 && nativeStack.getCount()==17,"Native capability control changed counts");
+    }
+    private static void initializedCaps(){
+        CompoundNBT raw=entry(120,17,6),caps=new CompoundNBT();caps.putString("absentfixture:inventory","opaque capabilities");raw.put("ForgeCaps",caps);
+        ItemStack stack=ItemStack.read(raw.copy());
+        stack.getCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY);
+        RuntimeChecks.require(!caps.equals(stack.write(new CompoundNBT()).get("ForgeCaps")),"Native control no longer exposes unsupported capability loss");
+        RuntimeChecks.require(raw.getCompound("ForgeCaps").equals(caps),"Native control mutated its source record");
+    }
+    private static void knownCaps(){
+        ItemStack stack=new ItemStack(FixtureItems.keepsake,3);
+        stack.getCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY);
+        CompoundNBT raw=stack.write(new CompoundNBT());raw.putByte("Slot",(byte)6);
+        RuntimeChecks.require(raw.contains("ForgeCaps",10),"Registered capability control has no serialized payload");
+        EntityLootableBody body=read(root(raw));contains(body,stack);
+        RuntimeChecks.require(!saved(body).contains(RECOVERY),"Registered provider was unnecessarily quarantined");stable(body);
+    }
     private static void wrongList(String source){ListNBT wrong=new ListNBT();wrong.add(StringNBT.valueOf("opaque inventory payload"));CompoundNBT n=root(entry(121,11,7));n.put(source,wrong);EntityLootableBody b=read(n);retained(b,wrong);stable(b);}
     private static void emptyAux(){CompoundNBT n=root(entry(120,17,6));n.put("Aux",list(new CompoundNBT()));EntityLootableBody b=read(n);retained(b,new CompoundNBT());contains(b,item(120,17));b.baseTick();stable(b);}
     private static void repeated(){CompoundNBT raw=entry(120,17,6);raw.putString("id","absentfixture:missing");CompoundNBT n=root(raw);EntityLootableBody b=read(n);b.readAdditional(n);retained(b,raw);RuntimeChecks.require(saved(b).getList(RECOVERY,10).size()==1,"Repeated load accumulated unresolved records");stable(b);}
@@ -124,7 +154,7 @@ final class NbtRecoveryChecks {
     private static void auxOrder(){CompoundNBT n=root();n.put("Aux",list(entry(120,17,0),entry(121,11,0)));EntityLootableBody b=read(n);ListNBT aux=saved(b).getList("Aux",10);equal(ItemStack.read(aux.getCompound(0)),item(120,17),"Aux head changed");equal(ItemStack.read(aux.getCompound(1)),item(121,11),"Aux tail changed");stable(b);}
     private static void mirrors(){EntityLootableBody original=new EntityLootableBody(world);original.setInventorySlotContents(4,item(4,1));CompoundNBT n=saved(original);n.put("Equipment",list(entry(120,17,6)));EntityLootableBody b=read(n);contains(b,item(120,17));stable(b);}
     private static void mirrorFallback(){EntityLootableBody original=new EntityLootableBody(world);original.setInventorySlotContents(4,item(4,1));CompoundNBT n=saved(original);StringNBT raw=StringNBT.valueOf("opaque inventory");n.put("Equipment",raw);EntityLootableBody b=read(n);contains(b,item(4,1));retained(b,raw);stable(b);}
-    private static void missingDamage(){CompoundNBT e=entry(4,1,6);e.remove("Damage");e.getCompound("tag").remove("Damage");EntityLootableBody b=read(root(e));ItemStack expected=item(4,1);expected.getTag().remove("Damage");RuntimeChecks.require(expected.getDamage()==0,"Native missing durability must default to zero");contains(b,expected);RuntimeChecks.require(!saved(b).contains(RECOVERY),"Missing vanilla-zero damage was quarantined");stable(b);}
+    private static void missingDamage(){CompoundNBT e=entry(4,1,6);e.remove("Damage");e.getCompound("tag").remove("Damage");EntityLootableBody b=read(root(e));ItemStack expected=ItemStack.read(e.copy());RuntimeChecks.require(expected.getDamage()==0,"Native missing durability must default to zero");contains(b,expected);RuntimeChecks.require(!saved(b).contains(RECOVERY),"Missing vanilla-zero damage was quarantined");stable(b);}
     private static void oversizedAux(){CompoundNBT n=root();n.put("Aux",list(entry(120,127,0)));EntityLootableBody b=read(n);contains(b,item(120,127));ListNBT aux=saved(b).getList("Aux",10);RuntimeChecks.require(aux.size()==2,"Oversized auxiliary stack not split");for(int i=0;i<aux.size();i++)RuntimeChecks.require(ItemStack.read(aux.getCompound(i)).getCount()<=64,"Aux exceeds capacity");stable(b);}
     private static void factory(){EntityLootableBody original=new EntityLootableBody(world);original.setUniqueId(UUID.fromString("00000000-0000-4000-8000-000000000120"));original.setPosition(160.5,80,160.5);original.setRotation(37);original.setCustomNameTag("NbtFixture");CompoundNBT n=new CompoundNBT();original.writeUnlessPassenger(n);CompoundNBT broken=entry(120,17,6);broken.putInt("Slot",999);n.put("Equipment",list(broken,entry(121,11,47)));Entity loaded=FixtureApi.loadEntity(n,world);RuntimeChecks.require(loaded instanceof EntityLootableBody,"Malformed inventory discarded whole corpse");EntityLootableBody b=(EntityLootableBody)loaded;RuntimeChecks.require(b.getUniqueID().equals(original.getUniqueID()) && b.getPosition().equals(original.getPosition()) && b.rotationYaw==37 && b.getCustomNameTag().equals("NbtFixture"),"Entity identity/base fields changed");contains(b,item(120,17),item(121,11));}
 }

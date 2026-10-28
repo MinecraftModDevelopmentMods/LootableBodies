@@ -1,4 +1,4 @@
-"""Run the exact production jar and isolated verifier in official Forge 31."""
+"""Run the exact production jar and isolated verifier in official Forge 36."""
 import argparse
 import hashlib
 import json

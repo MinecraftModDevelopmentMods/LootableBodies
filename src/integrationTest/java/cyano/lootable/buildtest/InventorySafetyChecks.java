@@ -28,7 +28,7 @@ import net.minecraft.util.DamageSource;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.*;
 import net.minecraft.world.chunk.AbstractChunkProvider;
-import net.minecraft.world.storage.WorldInfo;
+
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.EntityJoinWorldEvent;
 import net.minecraftforge.event.entity.living.*;
@@ -364,9 +364,11 @@ public final class InventorySafetyChecks {
     private static final class RejectingWorld extends World {
         private final ServerWorld delegate; int attempts;
         RejectingWorld(ServerWorld target) {
-            super(target.getWorldInfo(),target.dimension.getType(),(world,dimension)->target.getChunkProvider(),net.minecraft.profiler.EmptyProfiler.INSTANCE,false);
+            super((net.minecraft.world.storage.ISpawnWorldInfo)target.getWorldInfo(),target.getDimensionKey(),target.getDimensionType(),()->net.minecraft.profiler.EmptyProfiler.INSTANCE,false,false,target.getSeed());
             delegate=target;
         }
+        @Override public net.minecraft.util.registry.DynamicRegistries func_241828_r(){return delegate.func_241828_r();}
+        @Override public float func_230487_a_(net.minecraft.util.Direction direction,boolean shade){return delegate.func_230487_a_(direction,shade);}
         @Override public AbstractChunkProvider getChunkProvider(){return delegate.getChunkProvider();}
         @Override public net.minecraft.world.biome.Biome getNoiseBiomeRaw(int x,int y,int z){return delegate.getNoiseBiomeRaw(x,y,z);}
 
@@ -374,7 +376,7 @@ public final class InventorySafetyChecks {
         @Override public net.minecraft.world.ITickList<net.minecraft.fluid.Fluid> getPendingFluidTicks(){return delegate.getPendingFluidTicks();}
         @Override public net.minecraft.item.crafting.RecipeManager getRecipeManager(){return delegate.getRecipeManager();}
         @Override public net.minecraft.scoreboard.Scoreboard getScoreboard(){return delegate.getScoreboard();}
-        @Override public net.minecraft.tags.NetworkTagManager getTags(){return delegate.getTags();}
+        @Override public net.minecraft.tags.ITagCollectionSupplier getTags(){return delegate.getTags();}
         @Override public net.minecraft.server.MinecraftServer getServer(){return delegate.getServer();}
         @Override public long getGameTime(){return delegate==null?0:delegate.getGameTime();}
 

@@ -33,7 +33,7 @@ class ItemNbtConversionTest {
         CompoundNBT versions=context(922);versions.putBoolean("Ambiguous",true);versions.putIntArray("CandidateDataVersions",new int[]{922,1343});assertNull(ItemMigration.convertNbt(item("minecraft:bed",0),versions));assertNotNull(ItemMigration.convertNbt(item("minecraft:stone",1),versions));
     }
     @Test void malformedCountsAndUnknownFutureVersionsAreNotGuessed() {
-        CompoundNBT raw=item("minecraft:stone",1);raw.putString("Count","bad");assertNull(ItemMigration.convertNbt(raw,context(512)));assertNull(ItemMigration.convertNbt(item("minecraft:stone",1),context(2231)));
+        CompoundNBT raw=item("minecraft:stone",1);raw.putString("Count","bad");assertNull(ItemMigration.convertNbt(raw,context(512)));assertNull(ItemMigration.convertNbt(item("minecraft:stone",1),context(2587)));
     }
     @Test void unrecognisedMetadataAndEnchantmentsRemainRecoverable() {
         assertNull(ItemMigration.convertNbt(item("minecraft:stone",99),context(1343)));
@@ -52,12 +52,12 @@ class ItemNbtConversionTest {
     @Test void actualOriginalPigEggKeepsItsTypeAndSavedEntityName()throws Exception {
         CompoundNBT raw=original110(6);byte[] before=bytes(raw);CompoundNBT fixed=ItemMigration.convertNbt(raw,context(512));assertNotNull(fixed);
         assertEquals("minecraft:pig_spawn_egg",fixed.getString("id"));assertEquals(raw.getByte("Count"),fixed.getByte("Count"));assertEquals("minecraft:pig",fixed.getCompound("tag").getCompound("EntityTag").getString("id"));
-        assertEquals("Saved pig egg",net.minecraft.util.text.ITextComponent.Serializer.fromJson(fixed.getCompound("tag").getCompound("EntityTag").getString("CustomName")).getString());assertArrayEquals(before,bytes(raw));
+        assertEquals("Saved pig egg",net.minecraft.util.text.ITextComponent.Serializer.getComponentFromJson(fixed.getCompound("tag").getCompound("EntityTag").getString("CustomName")).getString());assertArrayEquals(before,bytes(raw));
     }
     @Test void actualOriginalChestKeepsItsNestedInventoryInNativeFormat()throws Exception {
         CompoundNBT raw=original110(7),fixed=ItemMigration.convertNbt(raw,context(512));assertNotNull(fixed);
         CompoundNBT nested=fixed.getCompound("tag").getCompound("BlockEntityTag");assertEquals("minecraft:chest",nested.getString("id"));assertEquals("minecraft:emerald",nested.getList("Items",10).getCompound(0).getString("id"));assertEquals(17,nested.getList("Items",10).getCompound(0).getByte("Count"));assertFalse(fixed.contains("Damage"));
-        assertEquals("Original keepsake 7",net.minecraft.util.text.ITextComponent.Serializer.fromJson(fixed.getCompound("tag").getCompound("display").getString("Name")).getString());
+        assertEquals("Original keepsake 7",net.minecraft.util.text.ITextComponent.Serializer.getComponentFromJson(fixed.getCompound("tag").getCompound("display").getString("Name")).getString());
     }
     @Test void actualOriginalBannerKeepsItsBaseColour()throws Exception {
         CompoundNBT raw=original110(8),fixed=ItemMigration.convertNbt(raw,context(512));assertNotNull(fixed);assertEquals("minecraft:purple_banner",fixed.getString("id"));assertEquals(raw.getByte("Count"),fixed.getByte("Count"));// Vanilla 1.13 leaves its inverted, redundant Base field behind.

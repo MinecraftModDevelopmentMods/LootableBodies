@@ -100,10 +100,10 @@ final class NamelessCorpseClientChecks {
             originalLanguage=mc.getLanguageManager().getCurrentLanguage();
             originalUnicode=mc.gameSettings.forceUnicodeFont; originalBidi=mc.fontRenderer.getBidiFlag();
             MinecraftForge.EVENT_BUS.register(this);
-            mc.launchIntegratedServer("name-fixture","Name fixture",new WorldSettings(4267321,GameType.CREATIVE,false,false,WorldType.FLAT));stage=1;
+            FixtureApi.ClientWorlds.create(mc,"name-fixture","Name fixture",net.minecraft.world.GameType.CREATIVE,false);stage=1;
         } else if(stage==1 && mc.world!=null && mc.player!=null && mc.getIntegratedServer()!=null) {
             pending=mc.getIntegratedServer().runAsync(() -> {
-                ServerWorld world=mc.getIntegratedServer().getWorld(net.minecraft.world.dimension.DimensionType.getById(0));
+                ServerWorld world=mc.getIntegratedServer().getWorld(FixtureApi.dimensionKey(0));
                 world.getGameRules().get(net.minecraft.world.GameRules.DO_MOB_SPAWNING).set(false,null);
                 for(int x=12;x<=24;x++)for(int z=12;z<=24;z++)world.setBlockState(new BlockPos(x,79,z),Blocks.STONE.getDefaultState());
                 EntityLootableBody body=new EntityLootableBody(world);body.setUniqueId(BODY);body.setPosition(18.5,80,18.5);body.setNoGravity(true);RuntimeChecks.disableVacuum(body);
@@ -118,7 +118,7 @@ final class NamelessCorpseClientChecks {
         } else if(stage==3) {
             // Keep the disposable view attached to the current network player.
             // The integrated-server join may replace its initial camera entity.
-            mc.setRenderViewEntity(mc.player);mc.gameSettings.thirdPersonView=0;
+            mc.setRenderViewEntity(mc.player);mc.gameSettings.setPointOfView(net.minecraft.client.settings.PointOfView.FIRST_PERSON);
             mc.player.rotationYaw=mc.player.prevRotationYaw=0;
             mc.player.rotationPitch=mc.player.prevRotationPitch=20;
             String code=LOCALES[locale];
@@ -127,7 +127,7 @@ final class NamelessCorpseClientChecks {
                 mc.getLanguageManager().setCurrentLanguage(new Language(code,code,code,false));
                 mc.getLanguageManager().onResourceManagerReload(mc.getResourceManager());
 
-                mc.fontRenderer.setBidiFlag(mc.getLanguageManager().isCurrentLanguageBidirectional());
+                // Native16 LanguageMap controls bidirectional text after resource reload.
                 assertLocale(mc,code);
                 try(PrintWriter out=new PrintWriter(new OutputStreamWriter(new FileOutputStream(new File(mc.gameDir,"name-checks.txt"),true),StandardCharsets.UTF_8))) {out.println("PASS locale_"+code+"_fallback_owner_egg_complete_nbt");}
             }
@@ -138,7 +138,7 @@ final class NamelessCorpseClientChecks {
             }
             if(frames>20) {frames=0;locale++;if(locale==LOCALES.length) {
                 mc.getLanguageManager().setCurrentLanguage(originalLanguage);mc.getLanguageManager().onResourceManagerReload(mc.getResourceManager());
-                mc.fontRenderer.setBidiFlag(originalBidi);stage=4;
+                RuntimeChecks.require(mc.fontRenderer.getBidiFlag()==originalBidi,"Restored language direction changed");stage=4;
             }}
         } else if(stage==4) {
             for(Entity entity:FixtureApi.entities(mc.world))if(entity.getUniqueID().equals(BODY)) {

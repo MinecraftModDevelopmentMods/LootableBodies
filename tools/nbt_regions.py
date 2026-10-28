@@ -105,6 +105,10 @@ def encode(name, root):
 
 def read_region(path):
     data = path.read_bytes()
+    # Native16 may create an empty placeholder for an absent-chunk lookup.
+    # Reading it must neither invent chunks nor write a replacement header.
+    if not data:
+        return {}
     if len(data) < 8192 or len(data) % 4096:
         raise ValueError('Incomplete region')
     chunks = {}

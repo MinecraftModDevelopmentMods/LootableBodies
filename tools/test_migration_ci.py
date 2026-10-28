@@ -36,9 +36,19 @@ class MigrationCiTests(unittest.TestCase):
         for value in [-1,6]:
             with self.assertRaises(ValueError):ci.partition(list(ORIGINS),value)
 
-    def test_all_460_phases_and_92_refusals_are_required(self):
+    def test_all_600_phases_and_120_refusals_are_required(self):
         result = ci.aggregate(self.reports(), list(ORIGINS), 'a'*40)
-        self.assertEqual((46,460,92),(len(result['cases']),result['jvm_phases'],result['abort_cases']))
+        self.assertEqual((60,600,120),(len(result['cases']),result['jvm_phases'],result['abort_cases']))
+        earlier=[name for name in result['cases'] if not name.startswith(('released-115-','recovery-115-','via115-'))]
+        self.assertEqual(46,len(earlier))
+        self.assertEqual(460,sum(len(result['cases'][name]['phases']) for name in earlier))
+        self.assertEqual(92,sum(len(result['aborts'][name]['conditions']) for name in earlier))
+
+    def test_two_local_workers_and_twelve_hosted_shards_keep_every_origin(self):
+        for total in [2,12]:
+            shards=[ci.partition(list(ORIGINS),index,total=total) for index in range(total)]
+            self.assertEqual(sorted(ORIGINS),sorted(origin for shard in shards for origin in shard))
+            self.assertLessEqual(max(map(len,shards))-min(map(len,shards)),1)
 
     def test_missing_duplicate_or_short_cases_cannot_pass(self):
         for mutation in ['missing','duplicate','short','bad-abort','wrong-source']:

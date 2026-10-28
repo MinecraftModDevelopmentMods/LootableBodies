@@ -28,7 +28,7 @@ class ReleaseContractTest {
         Properties values = properties();
         String version = values.getProperty("mod_version");
         assertTrue(version.matches("[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+"), version);
-        assertEquals("2.4.6.115021", version);
+        assertEquals("2.4.7.116051", version);
         assertEquals("forge", values.getProperty("loader_name"));
         assertEquals("1", values.getProperty("loader_code"));
         assertTrue(text("src/main/java/cyano/lootable/LootableBodies.java")
@@ -44,7 +44,7 @@ class ReleaseContractTest {
         String source = text("src/main/java/cyano/lootable/LootableBodies.java");
         assertTrue(source.startsWith("package cyano.lootable;"));
         assertTrue(source.contains("new ResourceLocation(\"lootablebodies:corpse\")"));
-        assertTrue(text("build/resources/main/META-INF/mods.toml").contains("versionRange=\"[1.15.2]\""));
+        assertTrue(text("build/resources/main/META-INF/mods.toml").contains("versionRange=\"[1.16.5]\""));
     }
 
     @Test void maintainedReleaseHasLgplAndRetainsTheOriginalNotice() throws Exception {

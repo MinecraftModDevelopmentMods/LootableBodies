@@ -27,7 +27,7 @@ public final class ForgeControl {
             p.setGameType(net.minecraft.world.GameType.SURVIVAL);
             double x=checkDeaths%2==0?96.5:-.4,z=checkDeaths%2==0?96.5:-.4;
             for(int a=-6;a<=6;a++)for(int b=-6;b<=6;b++)p.world.setBlockState(new net.minecraft.util.math.BlockPos(x+a,80,z+b),net.minecraft.block.Blocks.OBSIDIAN.getDefaultState());
-            p.setSpawnPoint(new net.minecraft.util.math.BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),true,false,p.dimension);
+            p.func_242111_a(p.world.getDimensionKey(),new net.minecraft.util.math.BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),0F,true,false);
             p.connection.setPlayerLocation(x,81,z,0,0);
         }
         if(checkTicks==50){
@@ -48,7 +48,7 @@ public final class ForgeControl {
             if(stage==0 && mc.currentScreen instanceof net.minecraft.client.gui.screen.MainMenuScreen) {
                 mc.gameSettings.pauseOnLostFocus=false;
                 if(Boolean.getBoolean("lootablebodies.control.world")) {
-                    mc.launchIntegratedServer("platform-fixture","Platform fixture",new net.minecraft.world.WorldSettings(4267321,net.minecraft.world.GameType.CREATIVE,false,false,net.minecraft.world.WorldType.FLAT));stage=1;
+                    createWorld(mc);stage=1;
                 }else finish(mc);
             }else if(stage==1 && mc.world!=null && mc.player!=null) {
                 try {
@@ -105,7 +105,7 @@ public final class ForgeControl {
                 destination=new net.minecraft.client.multiplayer.ServerData("Owned native control","127.0.0.1:"+Integer.getInteger("lootablebodies.control.port"),false);
                 if(Boolean.getBoolean("lootablebodies.control.ping")) {
                     pinger=new net.minecraft.client.network.ServerPinger();
-                    try{pinger.ping(destination);}catch(java.net.UnknownHostException failure){throw new IllegalStateException(failure);}
+                    try{pinger.ping(destination,()->{});}catch(java.net.UnknownHostException failure){throw new IllegalStateException(failure);}
                     stage=5;
                 }else {mc.displayGuiScreen(new net.minecraft.client.gui.screen.ConnectingScreen(new net.minecraft.client.gui.screen.MainMenuScreen(),mc,destination));stage=1;}
                 wait=0;
@@ -129,6 +129,16 @@ public final class ForgeControl {
         }
         private void finish(net.minecraft.client.Minecraft mc) {
             System.out.println("FORGE_PLATFORM_CONTROL_PASS");mc.shutdown();stage=3;
+        }
+        private void createWorld(net.minecraft.client.Minecraft client) {
+            net.minecraft.util.registry.DynamicRegistries.Impl registries=net.minecraft.util.registry.DynamicRegistries.func_239770_b_();
+            net.minecraft.util.registry.Registry<net.minecraft.world.DimensionType> types=registries.getRegistry(net.minecraft.util.registry.Registry.DIMENSION_TYPE_KEY);
+            net.minecraft.util.registry.Registry<net.minecraft.world.biome.Biome> biomes=registries.getRegistry(net.minecraft.util.registry.Registry.BIOME_KEY);
+            net.minecraft.world.gen.settings.DimensionGeneratorSettings settings=new net.minecraft.world.gen.settings.DimensionGeneratorSettings(4267321L,false,false,
+                net.minecraft.world.gen.settings.DimensionGeneratorSettings.func_242749_a(types,
+                    net.minecraft.world.DimensionType.getDefaultSimpleRegistry(types,biomes,registries.getRegistry(net.minecraft.util.registry.Registry.NOISE_SETTINGS_KEY),4267321L),
+                    new net.minecraft.world.gen.FlatChunkGenerator(net.minecraft.world.gen.FlatGenerationSettings.func_242869_a(biomes))));
+            client.createWorld("platform-fixture",new net.minecraft.world.WorldSettings("Platform fixture",net.minecraft.world.GameType.CREATIVE,false,net.minecraft.world.Difficulty.NORMAL,false,new net.minecraft.world.GameRules(),net.minecraft.util.datafix.codec.DatapackCodec.VANILLA_CODEC),registries,settings);
         }
     }
 }

@@ -13,6 +13,9 @@ class HistoricalVersionsTest {
     @Test void released114InventoryUses1976RatherThan111Context() {
         assertEquals(1976, HistoricalVersions.dataVersion("1.14.4"));
     }
+    @Test void released115InventoryUses2230RatherThanAnOlderSchema() {
+        assertEquals(2230,HistoricalVersions.dataVersion("1.15.2"));
+    }
     @Test void missingOrUnsupportedFixtureFamiliesCannotPretendToBe111() {
         assertThrows(IllegalArgumentException.class, () -> HistoricalVersions.dataVersion(null));
         assertThrows(IllegalArgumentException.class, () -> HistoricalVersions.dataVersion(""));

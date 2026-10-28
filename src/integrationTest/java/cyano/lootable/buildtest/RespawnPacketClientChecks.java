@@ -143,7 +143,7 @@ final class RespawnPacketClientChecks {
         try(FileWriter out=new FileWriter(observations,true)) {
             StringBuilder bodies=new StringBuilder();if(mc.world!=null)for(Entity ent:FixtureApi.entities(mc.world))if(ent instanceof EntityLootableBody)bodies.append(ent.getEntityId()).append(':').append(ent.getUniqueID()).append(':').append(ent.removed).append(',');
             Entity mapped=mc.world==null?null:mc.world.getEntityByID(entityId);
-            out.write(System.nanoTime()+" case="+index+" phase="+phase+" "+event+" world="+(mc.world==null?"none":mc.world.dimension.getType().getId())+" player="+(mc.player==null?"none":mc.player.getEntityId())+" mapped="+(mapped==null?null:mapped.getUniqueID())+" loaded="+bodies+"\n");
+            out.write(System.nanoTime()+" case="+index+" phase="+phase+" "+event+" world="+(mc.world==null?"none":FixtureApi.dimensionId(mc.world))+" player="+(mc.player==null?"none":mc.player.getEntityId())+" mapped="+(mapped==null?null:mapped.getUniqueID())+" loaded="+bodies+"\n");
         } catch(IOException error){throw new RuntimeException(error);}
     }
 }

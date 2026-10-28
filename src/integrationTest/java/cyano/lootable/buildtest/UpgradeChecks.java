@@ -26,11 +26,12 @@ import cyano.lootable.entities.EntityLootableBody;
 /** Real Forge data-fixer gates. Synthetic inputs complement sealed old-jar worlds. */
 final class UpgradeChecks {
     static void registerOwnFixer() {
+        NativeVanillaDataFixer.get(); // Capture the independent vanilla reference first.
         final com.mojang.datafixers.DataFixer nativeFixer=net.minecraft.util.datafix.DataFixesManager.getDataFixer();
         UpgradePreservation.register(new com.mojang.datafixers.DataFixer() {
             public com.mojang.datafixers.schemas.Schema getSchema(int key){return nativeFixer.getSchema(key);}
-            public <T>com.mojang.datafixers.Dynamic<T> update(com.mojang.datafixers.DSL.TypeReference type,com.mojang.datafixers.Dynamic<T> input,int source,int target) {
-                com.mojang.datafixers.Dynamic<T> result=nativeFixer.update(type,input,source,target);
+            public <T>com.mojang.serialization.Dynamic<T> update(com.mojang.datafixers.DSL.TypeReference type,com.mojang.serialization.Dynamic<T> input,int source,int target) {
+                com.mojang.serialization.Dynamic<T> result=nativeFixer.update(type,input,source,target);
                 if(type.typeName().equals("item_stack") && source<target && target==UpgradePreservation.MINECRAFT_VERSION && result.getValue() instanceof CompoundNBT) {
                     CompoundNBT tag=((CompoundNBT)result.getValue()).getCompound("tag");if(tag.contains("upgrade_counter",3))tag.putInt("upgrade_counter",tag.getInt("upgrade_counter")+1);
                 }
@@ -46,8 +47,8 @@ final class UpgradeChecks {
     private static File output;
     private static ServerWorld world;
     static void run(MinecraftServer server) throws Exception {
-        failures=0;sequence=0;world=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));registerOwnFixer();
-        output=new File(world.getSaveHandler().getWorldDirectory().getParentFile(),"upgrade-contract-fixtures");
+        failures=0;sequence=0;world=server.getWorld(FixtureApi.dimensionKey(0));registerOwnFixer();
+        output=new File(world.getServer().func_240776_a_(net.minecraft.world.storage.FolderName.DOT).toFile().getParentFile(),"upgrade-contract-fixtures");
         check("legacy_id_before_entity_construction",()->conversion("lootablebodies.Corpse",IntNBT.valueOf(512)));
         check("native_111_identity_survives",()->conversion("lootablebodies:corpse",IntNBT.valueOf(922)));
         check("missing_chunk_version_preserves_48_slots",()->conversion("lootablebodies.Corpse",null));
@@ -71,7 +72,7 @@ final class UpgradeChecks {
         check("native114_registry_rename_events_reach_the_bridge",UpgradeChecks::nativeRenames);
         check("retired_vanilla_professions_are_read_only_compatibility",UpgradeChecks::legacyProfessions);
         check("native114_tracking_range_preserves32blocks",()-> {
-            RuntimeChecks.require(cyano.lootable.LootableBodies.CORPSE.getTrackingRange()*16==32,"Native tracking range changed from32blocks");
+            RuntimeChecks.require(cyano.lootable.LootableBodies.CORPSE.func_233602_m_()*16==32,"Native tracking range changed from32blocks");
             RuntimeChecks.require(cyano.lootable.LootableBodies.CORPSE.getUpdateFrequency()==1 && cyano.lootable.LootableBodies.CORPSE.shouldSendVelocityUpdates(),"Tracking update settings changed");
         });
         check("unstamped_native112_chunk_keeps_white_bed_in_vanilla_chest",()->nativeChest(false));

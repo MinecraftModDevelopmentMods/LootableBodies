@@ -32,17 +32,22 @@ def allowed_platform_additions(before, after, world, original_config=None):
     name = 'serverconfig/forge-server.toml'
     if name not in after:
         return []
-    expected = (Path(__file__).parent / 'fixtures/forge28-server-default.toml').read_bytes()
+    expected = (Path(__file__).parent / 'fixtures/forge36-server-default.toml').read_bytes()
     actual = (world / name).read_bytes()
     if name in before:
         if original_config is None or before[name] != __import__('hashlib').sha256(original_config).hexdigest().upper():
             return []
         # The pinned Forge itself upgrades its own config before our preflight.
-        # Require proof that every existing value survives and only its two new
-        # target defaults are added. Original bytes remain in the sealed source.
+        # Native Forge36 removes its retired packet clumping option and adds
+        # these two defaults for older configs. Independent Forge-only controls
+        # prove this correction, including a nondefault choice. Every supported
+        # value/type must survive; original bytes remain in the sealed source.
         try:
             previous = tomllib.loads(original_config.decode('utf-8'))
             upgraded = tomllib.loads(actual.decode('utf-8'))
+            if 'clumpingThreshold' in previous['server']:
+                retired=previous['server'].pop('clumpingThreshold')
+                if type(retired) is not int or not 64 <= retired <= 1024:return []
             previous['server'].setdefault('treatEmptyTagsAsAir', False)
             previous['server'].setdefault('fixAdvancementLoading', True)
             return [name] if same_typed_values(previous, upgraded) else []
@@ -53,6 +58,21 @@ def allowed_platform_additions(before, after, world, original_config=None):
                                           tomllib.loads(actual.decode('utf-8'))) else []
     except (ValueError, UnicodeError):
         return []
+
+
+def allowed_native_session_lock(before, after, world, original=None):
+    # Native16 writes this exact UTF-8 marker while acquiring its file lock,
+    # before any mod world-read hook. It does not truncate an old 8-byte lock.
+    # A native-API control proves every trailing byte remains unchanged.
+    name='session.lock';marker=b'\xe2\x98\x83'
+    if name not in after:return []
+    actual=(world/name).read_bytes()
+    if after[name]!=__import__('hashlib').sha256(actual).hexdigest().upper():return []
+    if name not in before:
+        return [name] if original is None and actual==marker else []
+    if original is None or before[name]!=__import__('hashlib').sha256(original).hexdigest().upper():return []
+    if len(original)!=8 and original!=marker:return []
+    return [name] if actual==marker+original[3:] else []
 
 
 def inject_unsafe_journal(world, case):
@@ -101,6 +121,7 @@ def main():
         before = source_files(world)
         config = world/'serverconfig/forge-server.toml'
         original_config = config.read_bytes() if config.is_file() else None
+        lock=world/'session.lock';original_lock=lock.read_bytes() if lock.is_file() else None
         log = home / 'abort.log'
         with log.open('w', encoding='utf-8') as output:
             result = subprocess.run([str(args.java.resolve()), '-Xmx1G', '-jar',
@@ -115,13 +136,16 @@ def main():
         after = source_files(world)
         raw_after = dict(after)
         platform_additions = allowed_platform_additions(before, after, world, original_config)
-        for name in platform_additions:
+        lock_updates=allowed_native_session_lock(before,after,world,original_lock)
+        for name in platform_additions+lock_updates:
             if name in before: after[name] = before[name]
             else: del after[name]
         source_after = fingerprint(source)
         comparison = {
             'before': before, 'after': raw_after,
             'allowed_stock_config_files': platform_additions,
+            'allowed_native_session_lock_files': lock_updates,
+            'original_session_lock_hex':original_lock.hex() if original_lock is not None else None,
             'world_added': sorted(set(after) - set(before)),
             'world_removed': sorted(set(before) - set(after)),
             'world_changed': sorted(name for name in set(before) & set(after) if before[name] != after[name]),
@@ -136,6 +160,7 @@ def main():
                                  'world_data_unchanged': True, 'world_loading_started': False,
                                  'stock_forge_config_created': [name for name in platform_additions if name not in before],
                                  'stock_forge_config_updated': [name for name in platform_additions if name in before]}
+        report['cases'][case]['native_session_lock_updates']=lock_updates
         print('UPGRADE_ABORT_PASS', case, flush=True)
     (root / 'result.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
 

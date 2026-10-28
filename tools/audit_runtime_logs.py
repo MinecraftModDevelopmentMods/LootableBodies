@@ -119,6 +119,43 @@ def forge31_dead_player_movement_blocks(lines):
     return _movement_blocks(lines,[stack])
 
 
+def forge36_flat_settings_line(line):
+    """Exact native empty-flat-settings codec diagnostic, with no stack allowance."""
+    return bool(re.fullmatch(
+        r'\[(?:\d{2}[A-Za-z]{3}\d{4} )?\d{2}:\d{2}:\d{2}(?:\.\d{3})?\] \[main/ERROR\] '
+        r'\[(?:minecraft/DimensionGeneratorSettings|net\.minecraft\.world\.gen\.settings\.DimensionGeneratorSettings)/?\]: '
+        r'No key layers in MapLike\[\{\}\]; No key structures in MapLike\[\{\}\]; Not a registry ops',line))
+
+
+def forge36_dead_player_movement_blocks(lines):
+    """The complete 20-frame stack reproduced eight times without this mod."""
+    stack=[
+        'net.minecraft.world.server.TicketManager.func_219367_b(TicketManager.java:227)',
+        'net.minecraft.world.server.ChunkManager.func_219183_a(ChunkManager.java:884)',
+        'net.minecraft.world.server.ServerChunkProvider.func_217221_a(ServerChunkProvider.java:450)',
+        'net.minecraft.network.play.ServerPlayNetHandler.func_147347_a(ServerPlayNetHandler.java:845)',
+        'net.minecraft.network.play.client.CPlayerPacket.func_148833_a(SourceFile:122)',
+        'net.minecraft.network.play.client.CPlayerPacket$PositionPacket.func_148833_a(SourceFile:56)',
+        'net.minecraft.network.PacketThreadUtil.func_225383_a(SourceFile:21)',
+        'net.minecraft.util.concurrent.TickDelayedTask.run(SourceFile:18)',
+        'net.minecraft.util.concurrent.ThreadTaskExecutor.func_213166_h(SourceFile:144)',
+        'net.minecraft.util.concurrent.RecursiveEventLoop.func_213166_h(SourceFile:23)',
+        'net.minecraft.server.MinecraftServer.func_213166_h(MinecraftServer.java:734)',
+        'net.minecraft.server.MinecraftServer.func_213166_h(MinecraftServer.java:159)',
+        'net.minecraft.util.concurrent.ThreadTaskExecutor.func_213168_p(SourceFile:118)',
+        'net.minecraft.server.MinecraftServer.func_213205_aW(MinecraftServer.java:717)',
+        'net.minecraft.server.MinecraftServer.func_213168_p(MinecraftServer.java:711)',
+        'net.minecraft.util.concurrent.ThreadTaskExecutor.func_213161_c(SourceFile:127)',
+        'net.minecraft.server.MinecraftServer.func_213202_o(MinecraftServer.java:697)',
+        'net.minecraft.server.MinecraftServer.func_240802_v_(MinecraftServer.java:646)',
+        'net.minecraft.server.MinecraftServer.func_240783_a_(MinecraftServer.java:232)',
+        'java.lang.Thread.run(Thread.java:750)']
+    alternate=stack.copy()
+    alternate[15]='net.minecraft.util.concurrent.ThreadTaskExecutor.func_213160_bf(SourceFile:103)'
+    alternate[16]='net.minecraft.server.MinecraftServer.func_213202_o(MinecraftServer.java:696)'
+    return _movement_blocks(lines,[stack,alternate])
+
+
 def _movement_blocks(lines,stacks):
     header=re.compile(r'^\[(?:\d{2}[A-Za-z]{3}\d{4} )?\d{2}:\d{2}:\d{2}(?:\.\d{3})?\] '
         r'\[Server thread/FATAL\] \[(?:minecraft/ThreadTaskExecutor|net\.minecraft\.util\.concurrent\.ThreadTaskExecutor)/?\]: Error executing task on Server$')
@@ -154,10 +191,12 @@ def audit(path, development=False, upgrade=False, fixture_logins=False, native=F
     proven=development_control_lines(lines) if development else set()
     native28,count28=dead_player_movement_blocks(lines) if native else (set(),0)
     native31,count31=forge31_dead_player_movement_blocks(lines) if native else (set(),0)
-    native_movement=native28|native31
+    native36,count36=forge36_dead_player_movement_blocks(lines) if native else (set(),0)
+    native_movement=native28|native31|native36
+    native_flat={i for i,line in enumerate(lines) if forge36_flat_settings_line(line)} if native else set()
     version_check_block=False
     for number,line in enumerate(lines):
-        if number in login_lines or number in native_movement: continue
+        if number in login_lines or number in native_movement or number in native_flat: continue
         if line.startswith('['):
             version_check_block=('Forge Version Check/DEBUG]' in line and
                 ('[ForgeVersionCheck/forge]: Failed to process update information' in line or
@@ -184,13 +223,15 @@ def audit(path, development=False, upgrade=False, fixture_logins=False, native=F
     return {'path':str(path),'lines':len(text.splitlines()),'recovered_forge_pre_login_failures':len(login_lines),
         'known_forge28_dead_player_movement_failures':count28,
         'known_forge31_dead_player_movement_failures':count31,
-        'known_native_dead_player_movement_failures':count28+count31,'expected_platform_errors':sum(
+        'known_forge36_dead_player_movement_failures':count36,
+        'known_forge36_flat_settings_diagnostics':len(native_flat),
+        'known_native_dead_player_movement_failures':count28+count31+count36,'expected_platform_errors':sum(
         1 for line in text.splitlines() if re.search(r'/ERROR\]|/FATAL\]',line))}
 
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--native',action='store_true',help='Allow only independently reproduced Forge 28 platform diagnostics')
+    parser.add_argument('--native',action='store_true',help='Classify only exact independently reproduced native Forge diagnostics')
     parser.add_argument('--development',action='store_true')
     parser.add_argument('--upgrade',action='store_true')
     parser.add_argument('--recursive',action='store_true')

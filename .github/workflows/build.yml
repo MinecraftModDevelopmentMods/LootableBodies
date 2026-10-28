@@ -1,19 +1,19 @@
-name: LootableBodies 1.15 CI
+name: LootableBodies 1.16 CI
 
 on:
   push:
     branches:
-      - master-1.15.2
+      - master-1.16.5
       - 'feature/**'
   pull_request:
     branches:
-      - master-1.15.2
+      - master-1.16.5
 
 permissions:
   contents: read
 
 concurrency:
-  group: lootablebodies-1.15-${{ github.workflow }}-${{ github.ref }}
+  group: lootablebodies-1.16-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -227,12 +227,12 @@ jobs:
       - name: Compare a second complete build
         run: |
           mkdir -p .gradle/repro-first
-          for name in LootableBodies-2.4.6.115021.jar LootableBodies-2.4.6.115021-sources.jar LootableBodies-2.4.6.115021-javadoc.jar; do
+          for name in LootableBodies-2.4.7.116051.jar LootableBodies-2.4.7.116051-sources.jar LootableBodies-2.4.7.116051-javadoc.jar; do
             cp "build/libs/$name" .gradle/repro-first/
           done
           cp build/release/SHA256SUMS .gradle/repro-first/
           ./gradlew build javadoc prepareReleaseBundle --rerun-tasks --no-build-cache --no-daemon
-          for name in LootableBodies-2.4.6.115021.jar LootableBodies-2.4.6.115021-sources.jar LootableBodies-2.4.6.115021-javadoc.jar; do
+          for name in LootableBodies-2.4.7.116051.jar LootableBodies-2.4.7.116051-sources.jar LootableBodies-2.4.7.116051-javadoc.jar; do
             cmp ".gradle/repro-first/$name" "build/libs/$name"
           done
           cmp .gradle/repro-first/SHA256SUMS build/release/SHA256SUMS
@@ -240,7 +240,7 @@ jobs:
 
       - name: Require all declared reports and artifacts
         run: |
-          for path in build/native-respawn-control/result.json build/libs/LootableBodies-2.4.6.115021.jar build/libs/LootableBodies-2.4.6.115021-sources.jar build/libs/LootableBodies-2.4.6.115021-javadoc.jar build/release/SHA256SUMS build/publications/mavenJava/pom-default.xml CHANGELOG.txt build/packaged-runtime/result.json build/packaged-nbt/result.json build/ordinary-development/result.json build/ordinary-packaged/result.json build/packaged-client-default/result.json build/packaged-client-config/result.json build/packaged-client-skin/result.json build/packaged-client-issues/result.json build/packaged-client-names/result.json build/packaged-multiplayer/result.json build/packaged-visibility/result.json build/packaged-visibility-restart/result.json build/packaged-respawn-ordinary/result.json build/packaged-respawn-simultaneous/result.json build/packaged-respawn-restart/result.json build/packaged-respawn-counter-collision/result.json build/release-contracts/result.json; do
+          for path in build/native-respawn-control/result.json build/libs/LootableBodies-2.4.7.116051.jar build/libs/LootableBodies-2.4.7.116051-sources.jar build/libs/LootableBodies-2.4.7.116051-javadoc.jar build/release/SHA256SUMS build/publications/mavenJava/pom-default.xml CHANGELOG.txt build/packaged-runtime/result.json build/packaged-nbt/result.json build/ordinary-development/result.json build/ordinary-packaged/result.json build/packaged-client-default/result.json build/packaged-client-config/result.json build/packaged-client-skin/result.json build/packaged-client-issues/result.json build/packaged-client-names/result.json build/packaged-multiplayer/result.json build/packaged-visibility/result.json build/packaged-visibility-restart/result.json build/packaged-respawn-ordinary/result.json build/packaged-respawn-simultaneous/result.json build/packaged-respawn-restart/result.json build/packaged-respawn-counter-collision/result.json build/release-contracts/result.json; do
             test -s "$path"
           done
           test -s build/test-results/test/TEST-cyano.lootable.contracts.NativeUpgradeBoundaryTest.xml
@@ -250,7 +250,7 @@ jobs:
       - name: Keep native control evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: Native-Forge-31-control-${{ github.sha }}
+          name: Native-Forge-36-control-${{ github.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
@@ -262,13 +262,13 @@ jobs:
       - name: Upload audited local candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: LootableBodies-1.15.2-${{ github.sha }}
+          name: LootableBodies-1.16.5-${{ github.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
-            build/libs/LootableBodies-2.4.6.115021.jar
-            build/libs/LootableBodies-2.4.6.115021-sources.jar
-            build/libs/LootableBodies-2.4.6.115021-javadoc.jar
+            build/libs/LootableBodies-2.4.7.116051.jar
+            build/libs/LootableBodies-2.4.7.116051-sources.jar
+            build/libs/LootableBodies-2.4.7.116051-javadoc.jar
             build/release/SHA256SUMS
             build/publications/mavenJava/pom-default.xml
             CHANGELOG.txt
@@ -277,7 +277,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: LootableBodies-1.15.2-diagnostics-${{ github.sha }}
+          name: LootableBodies-1.16.5-diagnostics-${{ github.sha }}
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14

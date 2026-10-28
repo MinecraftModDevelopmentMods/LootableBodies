@@ -47,4 +47,27 @@ class TypedNbtTest {
         CompoundNBT left = compound(false), before = left.copy(), right = compound(true);
         TypedNbt.same(left, right); assertEquals(before, left); assertEquals(before, right);
     }
+    private CompoundNBT entity(boolean reverse) {
+        CompoundNBT body=new CompoundNBT(),health=new CompoundNBT(),speed=new CompoundNBT();
+        health.putString("Name","minecraft:generic.max_health");health.putDouble("Base",20);
+        speed.putString("Name","minecraft:generic.movement_speed");speed.putDouble("Base",.7);
+        ListNBT attributes=new ListNBT();attributes.add(reverse?speed:health);attributes.add(reverse?health:speed);body.put("Attributes",attributes);
+        ListNBT equipment=new ListNBT();equipment.add(compound(false));equipment.add(compound(true));body.put("Equipment",equipment);return body;
+    }
+    @Test void nativeAttributeMapOrderDoesNotInventAnEntityMutation() {
+        CompoundNBT before=entity(false),other=entity(true),copy=before.copy();
+        assertFalse(TypedNbt.same(before,other));assertTrue(TypedNbt.sameEntity(before,other));
+        assertTrue(TypedNbt.same(before,copy));assertTrue(TypedNbt.same(other,entity(true)));
+    }
+    @Test void entityComparisonStillRequiresEveryTypedAttributeAndDuplicate() {
+        CompoundNBT left=entity(false),right=entity(true);right.getList("Attributes",10).getCompound(0).putFloat("Base",.7F);
+        assertFalse(TypedNbt.sameEntity(left,right));right=entity(true);right.getList("Attributes",10).add(right.getList("Attributes",10).getCompound(0).copy());
+        assertFalse(TypedNbt.sameEntity(left,right));
+    }
+    @Test void inventoryAndRecoveryListOrderRemainStrictInsideEntityComparison() {
+        CompoundNBT left=entity(false),right=entity(true);ListNBT items=new ListNBT();items.add(IntNBT.valueOf(1));items.add(IntNBT.valueOf(2));left.put("Equipment",items);
+        ListNBT reversed=new ListNBT();reversed.add(IntNBT.valueOf(2));reversed.add(IntNBT.valueOf(1));right.put("Equipment",reversed);
+        assertFalse(TypedNbt.sameEntity(left,right));left.remove("Equipment");right.remove("Equipment");left.put("LootableBodiesUnresolved",items);right.put("LootableBodiesUnresolved",reversed);
+        assertFalse(TypedNbt.sameEntity(left,right));
+    }
 }
