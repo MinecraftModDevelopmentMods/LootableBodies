@@ -127,8 +127,8 @@ def forge36_flat_settings_line(line):
         r'No key layers in MapLike\[\{\}\]; No key structures in MapLike\[\{\}\]; Not a registry ops',line))
 
 
-def forge36_dead_player_movement_blocks(lines):
-    """The complete 20-frame stack reproduced eight times without this mod."""
+def forge36_dead_player_movement_blocks(lines, position_only=False):
+    """Exact complete stacks captured by the independent Forge-only control."""
     stack=[
         'net.minecraft.world.server.TicketManager.func_219367_b(TicketManager.java:227)',
         'net.minecraft.world.server.ChunkManager.func_219183_a(ChunkManager.java:884)',
@@ -153,7 +153,12 @@ def forge36_dead_player_movement_blocks(lines):
     alternate=stack.copy()
     alternate[15]='net.minecraft.util.concurrent.ThreadTaskExecutor.func_213160_bf(SourceFile:103)'
     alternate[16]='net.minecraft.server.MinecraftServer.func_213202_o(MinecraftServer.java:696)'
-    return _movement_blocks(lines,[stack,alternate])
+    stacks=[stack,alternate]
+    if not position_only:
+        rotation=stack.copy()
+        rotation[5]='net.minecraft.network.play.client.CPlayerPacket$PositionRotationPacket.func_148833_a(SourceFile:18)'
+        stacks.append(rotation)
+    return _movement_blocks(lines,stacks)
 
 
 def _movement_blocks(lines,stacks):

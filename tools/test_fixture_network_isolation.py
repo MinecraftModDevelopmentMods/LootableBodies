@@ -3,9 +3,29 @@ from pathlib import Path
 import tempfile
 import unittest
 from native_runtime import seed_loader_defaults,prepare_client
+from verify_world_upgrades import prepare_historical_server
 
 
 class OwnedFixtureNetworkIsolationTest(unittest.TestCase):
+    def test_frozen_historical_runtime_receives_complete_owned_loader_settings(self):
+        class FrozenRuntime:
+            def prepare_server(self,home,*args,**kwargs):
+                home.mkdir();self.received=(args,kwargs);return 'original return value'
+        with tempfile.TemporaryDirectory() as folder:
+            home=Path(folder)/'historical';runtime=FrozenRuntime()
+            self.assertEqual('original return value',prepare_historical_server(runtime,home,'released jar',probe='original writer'))
+            self.assertEqual((('released jar',),{'probe':'original writer'}),runtime.received)
+            import tomllib
+            self.assertEqual({'versionCheck':False,'splashscreen':True,'maxThreads':-1,'defaultConfigPath':'defaultconfigs'},tomllib.loads((home/'config/fml.toml').read_text()))
+
+    def test_existing_frozen_runtime_configuration_is_never_overwritten(self):
+        original=b'# Original choices\r\nversionCheck = true\r\nmaxThreads = 7\r\n'
+        class FrozenRuntime:
+            def prepare_server(self,home):
+                (home/'config').mkdir(parents=True);(home/'config/fml.toml').write_bytes(original)
+        with tempfile.TemporaryDirectory() as folder:
+            home=Path(folder)/'historical';prepare_historical_server(FrozenRuntime(),home)
+            self.assertEqual(original,(home/'config/fml.toml').read_bytes())
     def test_only_owned_deterministic_fixtures_disable_optional_metadata_requests(self):
         with tempfile.TemporaryDirectory() as folder:
             home=Path(folder)

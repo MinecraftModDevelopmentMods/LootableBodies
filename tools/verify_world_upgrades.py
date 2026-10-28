@@ -54,6 +54,15 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
 
 
+def prepare_historical_server(runtime, home, *args, **kwargs):
+    result=runtime.prepare_server(home, *args, **kwargs)
+    # Frozen writers retain their original API and jars. Complete only the
+    # fresh, owned launch settings before Forge's config watcher starts.
+    from native_runtime import seed_loader_defaults
+    seed_loader_defaults(home, deterministic=True)
+    return result
+
+
 def fingerprint(path):
     return {p.relative_to(path).as_posix(): digest(p) for p in sorted(path.rglob('*')) if p.is_file()}
 
@@ -186,7 +195,7 @@ def main():
                 runtime=__import__('prepare_native'+family+'_tools',fromlist=['historical_runtime']).historical_runtime(project)
                 distribution=getattr(args,'forge'+family+'_home')
                 if not distribution:raise ValueError('Missing historical Forge distribution')
-                runtime.prepare_server(source_home,distribution.resolve(),original,
+                prepare_historical_server(runtime,source_home,distribution.resolve(),original,
                     project/('build/native'+family+'-seed/lootablebodies-native'+family+'-world-fixtures-reobf.jar'))
                 sealed=(seed_native113 if family=='113' else seed_native114)(args.java.resolve(),source_home)
             else:
@@ -208,7 +217,7 @@ def main():
                 from prepare_native113_tools import historical_runtime
                 runtime=historical_runtime(project)
                 if not args.forge113_home: raise ValueError('--forge113-home is required')
-                runtime.prepare_server(source_home,args.forge113_home.resolve(),original,
+                prepare_historical_server(runtime,source_home,args.forge113_home.resolve(),original,
                     project/'build/native113-seed/lootablebodies-native113-world-fixtures-reobf.jar')
                 sealed=seed_native113(args.java.resolve(),source_home)
             else:
@@ -259,7 +268,7 @@ def main():
             home=root/origin;native_seeder=project/'build/native115-seed/lootablebodies-native115-world-fixtures-reobf.jar'
             record=json.loads((project/'.gradle/legacy-tools/released-115/tools.json').read_text())
             if record['source']!=SOURCE or digest(native_seeder)!=record['sha256']:raise RuntimeError('Released 1.15 writer changed')
-            runtime.prepare_server(home,args.forge115_home.resolve(),source,native_seeder)
+            prepare_historical_server(runtime,home,args.forge115_home.resolve(),source,native_seeder)
             hashes=seed_native115(args.java.resolve(),home,origin.startswith('recovery-'))
             report['origins'][origin]={'minecraft':minecraft,'mod_version':version,'jar_sha256':expected,
                 'seeder_sha256':digest(native_seeder),'writer_source_commit':SOURCE,'world':hashes}
@@ -275,7 +284,7 @@ def main():
             record=json.loads((project/'.gradle/legacy-tools/released-114/tools.json').read_text())
             if record['source']!=SOURCE or digest(native_seeder)!=record['sha256']:
                 raise RuntimeError('Released 1.14 writer source or artifact changed')
-            runtime.prepare_server(home,args.forge114_home.resolve(),source,native_seeder)
+            prepare_historical_server(runtime,home,args.forge114_home.resolve(),source,native_seeder)
             hashes=seed_native114(args.java.resolve(),home,origin.startswith('recovery-'))
             report['origins'][origin]={'minecraft':minecraft,'mod_version':version,
                 'jar_sha256':expected,'seeder_sha256':digest(native_seeder),
@@ -290,7 +299,7 @@ def main():
                 raise ValueError('--forge113-home is required for the released 1.13 writer')
             home = root/origin
             native_seeder = project/'build/native113-seed/lootablebodies-native113-world-fixtures-reobf.jar'
-            runtime.prepare_server(home, args.forge113_home.resolve(), source, native_seeder)
+            prepare_historical_server(runtime,home, args.forge113_home.resolve(), source, native_seeder)
             hashes = seed_native113(args.java.resolve(), home, origin.startswith('recovery-'))
             report['origins'][origin] = {'minecraft': minecraft, 'mod_version': version,
                 'jar_sha256': expected, 'seeder_sha256': digest(native_seeder),
@@ -345,7 +354,7 @@ def transition113(java, project, source, sealed, target, distribution, released,
         raise RuntimeError('Released 1.13 transition tool or artifact changed')
     if fingerprint(source) != sealed or not distribution:
         raise RuntimeError('Missing or changed historical transition source')
-    runtime.prepare_server(target, distribution.resolve(), released, probe)
+    prepare_historical_server(runtime,target, distribution.resolve(), released, probe)
     shutil.copytree(source, target/'world')
     world = target/'world'
     shutil.copy2(next((world/'playerdata').glob('*.dat')), world/'upgrade-player-source.nbt')
@@ -372,7 +381,7 @@ def transition114(java, project, source, sealed, target, distribution, released,
         raise RuntimeError('Released 1.14 transition tool or artifact changed')
     if fingerprint(source)!=sealed or not distribution:
         raise RuntimeError('Missing or changed historical transition source')
-    runtime.prepare_server(target,distribution.resolve(),released,probe)
+    prepare_historical_server(runtime,target,distribution.resolve(),released,probe)
     shutil.copytree(source,target/'world'); world=target/'world'
     shutil.copy2(next((world/'playerdata').glob('*.dat')),world/'upgrade-player-source.nbt')
     distant={str(p.relative_to(world)):digest(p) for p in world.rglob('region/r.*.mca')
@@ -395,7 +404,7 @@ def transition115(java,project,source,sealed,target,distribution,released,minecr
     if record['source']!=SOURCE or digest(probe)!=record['probe_sha256'] or digest(released)!=ORIGINS['released-115'][2]:
         raise RuntimeError('Released 1.15 transition tool or artifact changed')
     if fingerprint(source)!=sealed or not distribution:raise RuntimeError('Missing or changed historical transition source')
-    runtime.prepare_server(target,distribution.resolve(),released,probe)
+    prepare_historical_server(runtime,target,distribution.resolve(),released,probe)
     shutil.copytree(source,target/'world');world=target/'world'
     shutil.copy2(next((world/'playerdata').glob('*.dat')),world/'upgrade-player-source.nbt')
     distant={str(p.relative_to(world)):digest(p) for p in world.rglob('region/r.*.mca') if p.name in ('r.8.8.mca','r.16.16.mca')}

@@ -1,8 +1,14 @@
 """Reproduce the pinned Forge 36 delayed-movement error without Lootable Bodies."""
 import argparse,json,socket,subprocess,time
 from pathlib import Path
-from audit_runtime_logs import audit
+from audit_runtime_logs import audit, forge36_dead_player_movement_blocks
 from native_runtime import prepare_server,prepare_client,client_command,project_assets,FORGE,digest
+
+def control_error_counts(path):
+    report=audit(path,native=True)
+    _,count=forge36_dead_player_movement_blocks(path.read_text(errors='replace').splitlines(),position_only=True)
+    if count!=8:raise RuntimeError('Native control did not reproduce eight delayed position packets')
+    return count,report['known_forge36_dead_player_movement_failures']-count
 
 
 def main():
@@ -60,10 +66,11 @@ def main():
         for path in (root/(name+'.log'),root/name/'logs/latest.log',root/name/'logs/debug.log'):
             if not path.is_file():raise FileNotFoundError(path)
             reports.append(audit(path,native=True))
-    count=reports[0]['known_forge36_dead_player_movement_failures']
+    count,additional=control_error_counts(root/'server.log')
     if count!=8 or 'NATIVE_FIFO_DELAY_RELEASE packets=' not in client:
         raise RuntimeError('Native control did not reproduce the expected upstream error')
     result={'lootable_bodies_installed':False,'respawns':8,'native_error_reproductions':count,
+        'additional_native_rotation_errors':additional,
         'control_jar_sha256':digest(probe),'native_outbound_packets_delayed_fifo':True,'log_audits':reports}
     (root/'result.json').write_text(json.dumps(result,indent=2)+'\n')
     print('NATIVE_RESPAWN_CONTROL_PASS',json.dumps(result),flush=True)
