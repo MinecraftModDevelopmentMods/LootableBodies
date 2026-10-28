@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import shutil
 from prepare_legacy_tools import prepare, digest
-from command_logs import run_logged
+from command_logs import run_build_input_logged as run_logged
 
 SOURCE = 'daff117e0ba02bba74dc7b13abfe21ece90dcc01'
 OUTPUT = 'native114-seed/lootablebodies-native114-world-fixtures-reobf.jar'

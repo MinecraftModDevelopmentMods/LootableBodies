@@ -6,7 +6,7 @@ import os
 from pathlib import Path, PurePosixPath
 import subprocess
 import tarfile
-from command_logs import run_logged
+from command_logs import run_build_input_logged as run_logged
 
 SOURCE = 'ee8ee733fa091e961f27812ad780d56c35813f30'
 REPOSITORY = 'https://github.com/MinecraftModDevelopmentMods/LootableBodies.git'

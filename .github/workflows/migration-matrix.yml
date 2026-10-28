@@ -51,7 +51,7 @@ jobs:
       - name: Build the released 1.15 fixture tools
         run: python3 tools/prepare_native115_tools.py --java17-home "$JAVA_HOME" --java8-home "$JAVA_HOME_8_X64" --java25-home "$JAVA_HOME_25_X64"
       - name: Build candidate and isolated fixture writers
-        run: ./gradlew assemble test prepareLegacyWorldFixtures preparePackagedIntegrationProbe --no-daemon
+        run: python3 tools/command_logs.py --log build/preparation-inputs.log -- ./gradlew assemble test prepareLegacyWorldFixtures preparePackagedIntegrationProbe --no-daemon --console=plain
       - name: Download and verify historical artifacts
         run: python3 tools/prepare_migration_inputs.py --java "$JAVA_HOME_8_X64/bin/java" --output build/migration-inputs
       - name: Install the native Forge target
@@ -77,7 +77,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: LootableBodies-1.16.5-migration-preparation-failure-${{ github.sha }}
+          name: LootableBodies-1.16.5-migration-preparation-failure-${{ github.sha }}-${{ github.run_attempt }}
           if-no-files-found: error
           include-hidden-files: true
           path: |
@@ -88,6 +88,19 @@ jobs:
             .gradle/legacy-tools/released-113/build.log
             .gradle/legacy-tools/released-114/build.log
             .gradle/legacy-tools/released-115/build.log
+      - name: Keep every preparation download attempt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: LootableBodies-1.16.5-preparation-logs-${{ github.sha }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          include-hidden-files: true
+          path: |
+            .gradle/legacy-tools/released-112/build*.log
+            .gradle/legacy-tools/released-113/build*.log
+            .gradle/legacy-tools/released-114/build*.log
+            .gradle/legacy-tools/released-115/build*.log
+            build/preparation-inputs*.log
 
   upgrade:
     name: Historical world shard ${{ matrix.shard }}
