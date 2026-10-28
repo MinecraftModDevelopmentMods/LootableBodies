@@ -158,6 +158,9 @@ def forge36_dead_player_movement_blocks(lines, position_only=False):
         rotation=stack.copy()
         rotation[5]='net.minecraft.network.play.client.CPlayerPacket$PositionRotationPacket.func_148833_a(SourceFile:18)'
         stacks.append(rotation)
+        rotation_alternate=alternate.copy()
+        rotation_alternate[5]=rotation[5]
+        stacks.append(rotation_alternate)
     return _movement_blocks(lines,stacks)
 
 
