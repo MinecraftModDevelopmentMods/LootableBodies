@@ -30,14 +30,14 @@ def fingerprint(directory):
             for p in sorted(directory.rglob('*')) if p.is_file()}
 
 
-def seed_loader_defaults(home, deterministic=False):
+def seed_loader_defaults(home, deterministic=False, include_default_path=True):
     """Seed an owned home; disable optional HTTP checks only for probes."""
     config=home/'config/fml.toml'
     config.parent.mkdir(parents=True, exist_ok=True)
     try:
         with config.open('x', encoding='utf-8', newline='\n') as stream:
             stream.write('versionCheck = '+('false' if deterministic else 'true')+'\nsplashscreen = true\n'
-                         'maxThreads = -1\ndefaultConfigPath = "defaultconfigs"\n')
+                         'maxThreads = -1\n'+('defaultConfigPath = "defaultconfigs"\n' if include_default_path else ''))
     except FileExistsError:
         pass  # Retain existing choices, comments and even unreadable bytes.
 

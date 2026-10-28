@@ -7,6 +7,16 @@ from verify_world_upgrades import prepare_historical_server
 
 
 class OwnedFixtureNetworkIsolationTest(unittest.TestCase):
+    def test_forge25_uses_only_its_three_actual_loader_settings(self):
+        class FrozenRuntime:
+            FORGE='forge-1.13.2-25.0.223'
+            def prepare_server(self,home):home.mkdir()
+        with tempfile.TemporaryDirectory() as folder:
+            home=Path(folder)/'historical';prepare_historical_server(FrozenRuntime(),home)
+            import tomllib
+            self.assertEqual({'versionCheck':False,'splashscreen':True,'maxThreads':-1},
+                tomllib.loads((home/'config/fml.toml').read_text()))
+
     def test_frozen_historical_runtime_receives_complete_owned_loader_settings(self):
         class FrozenRuntime:
             def prepare_server(self,home,*args,**kwargs):

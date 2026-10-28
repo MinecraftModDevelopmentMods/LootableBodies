@@ -59,7 +59,9 @@ def prepare_historical_server(runtime, home, *args, **kwargs):
     # Frozen writers retain their original API and jars. Complete only the
     # fresh, owned launch settings before Forge's config watcher starts.
     from native_runtime import seed_loader_defaults
-    seed_loader_defaults(home, deterministic=True)
+    # Forge25 predates defaultConfigPath; an extra key also needs correction.
+    seed_loader_defaults(home, deterministic=True,
+        include_default_path=not getattr(runtime,'FORGE','').startswith('forge-1.13.2-'))
     return result
 
 

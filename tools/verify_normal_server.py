@@ -7,6 +7,14 @@ import subprocess
 import time
 from audit_runtime_logs import audit
 from verify_packaged import prepare, digest, FORGE, MAIN
+from native_runtime import seed_loader_defaults
+
+
+def prepare_development_home(home):
+    home.mkdir(exist_ok=True);(home/'eula.txt').write_text('eula=true\n')
+    seed_loader_defaults(home)
+    (home/'server.properties').write_text('level-name=world\nlevel-type=FLAT\nserver-ip=127.0.0.1\nserver-port=0\nonline-mode=false\n')
+    for name in ['ops','whitelist','banned-players','banned-ips']: (home/(name+'.json')).write_text('[]\n')
 
 
 def main():
@@ -19,9 +27,7 @@ def main():
     root=args.output.resolve();root.mkdir(parents=True,exist_ok=False)
     home=root/'server'; jar=project/'build/libs'/MAIN
     if args.development:
-        home.mkdir();(home/'eula.txt').write_text('eula=true\n')
-        (home/'server.properties').write_text('level-name=world\nlevel-type=FLAT\nserver-ip=127.0.0.1\nserver-port=0\nonline-mode=false\n')
-        for name in ['ops','whitelist','banned-players','banned-ips']: (home/(name+'.json')).write_text('[]\n')
+        prepare_development_home(home)
         init=root/'ordinary.init.gradle'
         path=home.as_posix().replace("'","\\'")
         init.write_text("gradle.projectsEvaluated { def p=gradle.rootProject; p.minecraft.runs.getByName('server').workingDir.set(new File('"+path+"')); p.tasks.named('runServer') { workingDir new File('"+path+"') } }\n")
