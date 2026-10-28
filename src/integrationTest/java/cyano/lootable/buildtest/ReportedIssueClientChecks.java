@@ -48,7 +48,7 @@ final class ReportedIssueClientChecks {
         if(stage==0 && mc.currentScreen instanceof MainMenuScreen) {
             report=new File(mc.gameDir,"issue5-client-checks.txt");RuntimeChecks.require(!report.exists(),"Stale issue5 report");
             mc.gameSettings.pauseOnLostFocus=false;mc.gameSettings.framerateLimit=30;mc.gameSettings.renderDistanceChunks=4;
-            mc.launchIntegratedServer("issue-fixture","Issue fixture",new WorldSettings(4267321,GameType.SURVIVAL,false,false,WorldType.FLAT).enableCommands());next(1);
+            FixtureApi.ClientWorlds.create(mc,"issue-fixture","Issue fixture",net.minecraft.world.GameType.SURVIVAL,true);next(1);
         } else if(stage==1 && ready(mc)) {
             schedule(mc,()->{
                 ServerWorld w=player(mc).getServerWorld();w.getGameRules().get(net.minecraft.world.GameRules.KEEP_INVENTORY).set(false,null);
@@ -114,7 +114,7 @@ final class ReportedIssueClientChecks {
             mc.player.closeScreen();schedule(mc,()->save(mc));next(12);
         } else if(stage==12 && done()) {quit(mc);next(13);
         } else if(stage==13 && FixtureConnections.stopped(mc)) {
-            mc.launchIntegratedServer("issue-fixture","Issue fixture",null);next(14);
+            mc.loadWorld("issue-fixture");next(14);
         } else if(stage==14 && ready(mc) && frames>25) {
             schedule(mc,()->{verifyDisk(mc);verifyOriginals(body(mc));mark("first_disk_reload_complete_corpse_inventory");});next(15);
         } else if(stage==15 && done() && open(mc,secondId)) {next(16);
@@ -134,7 +134,7 @@ final class ReportedIssueClientChecks {
             });next(18);
         } else if(stage==18 && done()) {quit(mc);next(19);
         } else if(stage==19 && FixtureConnections.stopped(mc)) {
-            mc.launchIntegratedServer("issue-fixture","Issue fixture",null);next(20);
+            mc.loadWorld("issue-fixture");next(20);
         } else if(stage==20 && ready(mc) && frames>25) {
             schedule(mc,()->{verifyDisk(mc);mark("second_disk_reload_complete_player_and_corpse_inventory");});next(21);
         } else if(stage==21 && done()) {
@@ -159,7 +159,7 @@ final class ReportedIssueClientChecks {
     private static void verifyClientOriginals(Minecraft mc){Map<String,Integer> n=new TreeMap<>();for(int i=0;i<48;i++)addTagged(n,mc.player.openContainer.getSlot(i).getStack());RuntimeChecks.require(originals().equals(n),"Connected GUI differs from exact originals");}
     private void save(Minecraft mc) throws Exception {
         savedBody=new CompoundNBT();body(mc).writeUnlessPassenger(savedBody);savedPlayer=new CompoundNBT();savedPlayer.put("Inventory",player(mc).inventory.write(new ListNBT()));
-        File folder=player(mc).getServerWorld().getSaveHandler().getWorldDirectory();
+        File folder=player(mc).getServerWorld().getServer().func_240776_a_(net.minecraft.world.storage.FolderName.DOT).toFile();
         try(FileOutputStream out=new FileOutputStream(new File(folder,"issue5-corpse-expected.nbt"))){CompressedStreamTools.writeCompressed(savedBody,out);}
         try(FileOutputStream out=new FileOutputStream(new File(folder,"issue5-player-expected.nbt"))){CompressedStreamTools.writeCompressed(savedPlayer,out);}
         mc.getIntegratedServer().getPlayerList().saveAllPlayerData();mc.getIntegratedServer().save(false,true,false);

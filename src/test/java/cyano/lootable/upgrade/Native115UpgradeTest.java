@@ -20,7 +20,7 @@ class Native115UpgradeTest {
     }
     private CompoundNBT convert(CompoundNBT root, int source) {
         return NBTUtil.update(UpgradePreservation.wrapper(DataFixesManager.getDataFixer()),
-                DefaultTypeReferences.CHUNK, root, source, 2230);
+                DefaultTypeReferences.CHUNK, root, source, 2586);
     }
     private int[] currentBiomes() {
         int[] values = new int[1024];
@@ -28,8 +28,8 @@ class Native115UpgradeTest {
         return values;
     }
     @Test void currentFormatUsesThe115SchemaAndItsOwnMarker() {
-        assertEquals(2230, UpgradePreservation.MINECRAFT_VERSION);
-        assertEquals(5, UpgradePreservation.DATA_VERSION);
+        assertEquals(2586, UpgradePreservation.MINECRAFT_VERSION);
+        assertEquals(6, UpgradePreservation.DATA_VERSION);
     }
     @Test void currentBiomeValuesSurvivePlausibleOlderStampsAndRepeatedConversion() {
         int[] values = currentBiomes(); CompoundNBT original = chunk(values), before = original.copy();
@@ -73,7 +73,7 @@ class Native115UpgradeTest {
         ListNBT items = new ListNBT(); items.add(item); raw.put("Equipment", items);
         context.putInt("DataVersion", 1976); CompoundNBT before = raw.copy();
         CompoundNBT staged = NativeSafeFixer.stageCorpse(raw, context);
-        assertEquals(5, staged.getInt(UpgradePreservation.VERSION));
+        assertEquals(6, staged.getInt(UpgradePreservation.VERSION));
         CompoundNBT record = staged.getList("LootableBodiesUnresolved", 10).getCompound(0);
         assertEquals(item, record.get("Data")); assertEquals("Equipment", record.getString("Source"));
         assertEquals(1976, record.getCompound("SourceVersions").getInt("DataVersion"));
@@ -86,7 +86,7 @@ class Native115UpgradeTest {
         item.putByte("Slot", (byte) 47); ListNBT equipment = new ListNBT(); equipment.add(item);
         raw.put("Equipment", equipment); CompoundNBT before = raw.copy();
         CompoundNBT fixed = NativeNbt.update(UpgradePreservation.wrapper(DataFixesManager.getDataFixer()),
-                net.minecraft.util.datafix.TypeReferences.ENTITY_TYPE, raw, 1631, 2230);
+                net.minecraft.util.datafix.TypeReferences.ENTITY_TYPE, raw, 1631, 2586);
         assertEquals(1976, fixed.getList("LootableBodiesUnresolved", 10).getCompound(0)
                 .getCompound("SourceVersions").getInt("DataVersion"));
         assertEquals(before, raw);

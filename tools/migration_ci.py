@@ -116,9 +116,9 @@ def aggregate(reports, origins, commit):
             'abort_cases':sum(len(c['conditions']) for c in aborts.values()), 'all_sources_unchanged':True}
 
 
-def run_shard(project, java, shard, commit):
+def run_shard(project, java, shard, commit, total=12):
     started = time.monotonic()
-    origins = partition(list(ORIGINS), shard)
+    origins = partition(list(ORIGINS), shard, total=total)
     seeds = project / 'build/migration-seeds'
     seed_report = json.loads((seeds / 'seed-report.json').read_text())['origins']
     manifest = json.loads((project / 'build/migration-ci-inputs/inputs.json').read_text())
@@ -129,7 +129,7 @@ def run_shard(project, java, shard, commit):
         if digest(project / name) != manifest['files'][name]['sha256']:
             raise ValueError('Prepared candidate/probe changed')
     args = SimpleNamespace(java=java, origins=origins, variants=['normal','stamps'], seeds=[seeds],
-        forge115_home=project/'build/native-server-distribution', output=project/'build/migration-results')
+        forge116_home=project/'build/native-server-distribution', output=project/'build/migration-results')
     verify(args, project)
     abort_root = project / 'build/migration-abort';abort_root.mkdir(exist_ok=False)
     aborts = {}
@@ -142,7 +142,7 @@ def run_shard(project, java, shard, commit):
                 shutil.copytree(source, selected);changes = patch_stamps(selected, abort_root)
             with (abort_root / (name + '.log')).open('x') as log:
                 subprocess.run([sys.executable,str(project/'tools/verify_upgrade_abort.py'),'--java',str(java),
-                    '--forge-home',str(args.forge115_home),'--source-world',str(selected),
+                    '--forge-home',str(args.forge116_home),'--source-world',str(selected),
                     '--output',str(abort_root/name)],cwd=project,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=600)
             result = json.loads((abort_root/name/'result.json').read_text())
             aborts[name] = {'conditions':result['cases'], 'stamp_mutations':changes}
@@ -167,6 +167,7 @@ def main():
     parser.add_argument('--commit',required=True)
     parser.add_argument('--java',type=Path)
     parser.add_argument('--shard',type=int)
+    parser.add_argument('--shards',type=int,default=12)
     parser.add_argument('--folder',type=Path,default=Path('build/migration-ci-inputs'))
     args=parser.parse_args();project=Path(__file__).resolve().parents[1]
     actual=subprocess.check_output(['git','rev-parse','HEAD'],cwd=project,text=True).strip()
@@ -186,10 +187,10 @@ def main():
     elif args.mode=='restore':restore(project,args.folder,args.commit)
     elif args.mode=='shard':
         if args.java is None or args.shard is None:parser.error('--java and --shard are required')
-        run_shard(project,args.java.resolve(),args.shard,args.commit)
+        run_shard(project,args.java.resolve(),args.shard,args.commit,total=args.shards)
     else:
         reports=[json.loads(p.read_text()) for p in sorted(args.folder.glob('*/migration-ci/report.json'))]
-        if len(reports)!=6:raise ValueError('All six migration shards are required')
+        if len(reports)!=args.shards:raise ValueError('Every declared migration shard is required')
         result=aggregate(reports,list(ORIGINS),args.commit)
         output=project/'build/migration-summary.json';output.write_text(json.dumps(result,indent=2)+'\n')
         print('MIGRATION_MATRIX_PASS cases='+str(len(result['cases']))+' phases='+str(result['jvm_phases'])+' unsafe_aborts='+str(result['abort_cases']))

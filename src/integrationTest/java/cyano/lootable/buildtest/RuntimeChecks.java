@@ -88,11 +88,11 @@ public final class RuntimeChecks {
         return ItemStack.areItemStacksEqual(first==null?ItemStack.EMPTY:first,second==null?ItemStack.EMPTY:second);
     }
     public static void run(MinecraftServer server, String phase) throws Exception {
-        ServerWorld world = server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));
-        File folder = world.getSaveHandler().getWorldDirectory();
-        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.6.115021"), "identity/version");
+        ServerWorld world = server.getWorld(FixtureApi.dimensionKey(0));
+        File folder = world.getServer().func_240776_a_(net.minecraft.world.storage.FolderName.DOT).toFile();
+        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.7.116051"), "identity/version");
         require(net.minecraftforge.fml.ModList.get().getModContainerById("lootablebodies").get().getModInfo().getVersion().toString().equals(phase.equals("seed") ? "2.4.0" : phase.equals("issues") ?
-                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.6.115021") : "2.4.6.115021"), "loaded release version");
+                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.7.116051") : "2.4.7.116051"), "loaded release version");
         if (!defaultsChecked) require(LootableBodies.addBonesToCorpse && LootableBodies.displayNameTag && !LootableBodies.hurtByEnvironment &&
                 !LootableBodies.hurtByAttacks && !LootableBodies.hurtByMisc && LootableBodies.corpseHP == 20 &&
                 LootableBodies.ticksPerItemDecay == 6000 && LootableBodies.corpseDecayTime == 72000 &&
@@ -196,7 +196,8 @@ public final class RuntimeChecks {
         System.out.println("LOOTABLE_BODIES_RUNTIME_PASS phase=" + phase);
     }
     static net.minecraft.world.chunk.Chunk emptyChunk(ServerWorld world,int x,int z) {
-        net.minecraft.world.biome.Biome[] biomes=new net.minecraft.world.biome.Biome[1024];java.util.Arrays.fill(biomes,net.minecraft.world.biome.Biomes.PLAINS);return new net.minecraft.world.chunk.Chunk(world,new net.minecraft.util.math.ChunkPos(x,z),new net.minecraft.world.biome.BiomeContainer(biomes));
+        net.minecraft.util.registry.Registry<net.minecraft.world.biome.Biome> registry=world.func_241828_r().getRegistry(net.minecraft.util.registry.Registry.BIOME_KEY);
+        net.minecraft.world.biome.Biome[] biomes=new net.minecraft.world.biome.Biome[1024];java.util.Arrays.fill(biomes,registry.getOrThrow(net.minecraft.world.biome.Biomes.PLAINS));return new net.minecraft.world.chunk.Chunk(world,new net.minecraft.util.math.ChunkPos(x,z),new net.minecraft.world.biome.BiomeContainer(registry,biomes));
     }
     static ItemStack stack(int index) {
         ItemStack stack=index<4?new ItemStack(new net.minecraft.item.Item[]{Items.DIAMOND_HELMET,Items.DIAMOND_CHESTPLATE,Items.DIAMOND_LEGGINGS,Items.DIAMOND_BOOTS}[index]):index==4?new ItemStack(Items.DIAMOND_SWORD):index==5?new ItemStack(Items.SHIELD):new ItemStack(Items.LAPIS_LAZULI,1+index%32);

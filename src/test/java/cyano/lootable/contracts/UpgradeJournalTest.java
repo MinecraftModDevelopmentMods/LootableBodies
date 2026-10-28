@@ -49,6 +49,39 @@ class UpgradeJournalTest {
         CompoundNBT b=body(ID);b.putString("id","lootablebodies:corpse");regionVersion("",1343,b);
         assertEquals(1343,original(scan(),ID,0,0).getCompound("SourceVersions").getInt("DataVersion"));
     }
+    @Test void native116MarkerOverridesMissingAndOlderOuterStamps() throws Exception {
+        CompoundNBT b=body(ID);b.putString("id","lootablebodies:corpse");b.putInt("LootableBodiesDataVersion",6);
+        regionVersion("",512,b);
+        CompoundNBT saved=original(scan(),ID,0,0);
+        assertEquals(2586,saved.getCompound("SourceVersions").getInt("DataVersion"));
+        assertArrayEquals(encoded(b),encoded(saved.getCompound("Entity")));
+    }
+    @Test void released116MetadataIdentifiesUnstampedNativeItems() throws Exception {
+        CompoundNBT b=body(ID);b.putString("id","lootablebodies:corpse");regionVersion("",-1,b);
+        CompoundNBT root=new CompoundNBT(),fml=new CompoundNBT(),mod=new CompoundNBT();
+        mod.putString("ModId","lootablebodies");mod.putString("ModVersion","2.4.7.116051");
+        ListNBT mods=new ListNBT();mods.add(mod);fml.put("ModList",mods);root.put("FML",fml);root.put("Data",new CompoundNBT());
+        try(OutputStream output=Files.newOutputStream(world.resolve("level.dat"))){CompressedStreamTools.writeCompressed(root,output);}
+        assertEquals(2586,original(scan(),ID,0,0).getCompound("SourceVersions").getInt("DataVersion"));
+    }
+    @Test void ambiguousItemContextsIncludeTheNative116Schema() throws Exception {
+        CompoundNBT b=body(ID);b.putString("id","lootablebodies:corpse");regionVersion("",-1,b);
+        int[] versions=original(scan(),ID,0,0).getCompound("SourceVersions").getIntArray("CandidateDataVersions");
+        assertTrue(java.util.Arrays.stream(versions).anyMatch(version->version==2586));
+    }
+    @Test void nativeLowercaseFmlIdentifiesUnstampedItemsWithoutChangingOriginals() throws Exception {
+        CompoundNBT b=body(ID);b.putString("id","lootablebodies:corpse");regionVersion("",-1,b);
+        CompoundNBT root=new CompoundNBT(),fml=new CompoundNBT(),mod=new CompoundNBT();
+        mod.putString("ModId","lootablebodies");mod.putString("ModVersion","2.4.6.115021");
+        ListNBT mods=new ListNBT();mods.add(mod);fml.put("LoadingModList",mods);root.put("fml",fml);root.put("Data",new CompoundNBT());
+        try(OutputStream output=Files.newOutputStream(world.resolve("level.dat"))){CompressedStreamTools.writeCompressed(root,output);}
+        byte[] header=Files.readAllBytes(world.resolve("level.dat"));
+        CompoundNBT preserved=original(scan(),ID,0,0),context=preserved.getCompound("SourceVersions");
+        assertEquals(2230,context.getInt("DataVersion"));assertFalse(context.getBoolean("Ambiguous"));
+        assertEquals(fml,context.getCompound("WorldFML"));
+        assertArrayEquals(encoded(b),encoded(preserved.getCompound("Entity")));
+        assertArrayEquals(header,Files.readAllBytes(world.resolve("level.dat")));
+    }
     @Test void native113MarkerAndStampSurvivePreservation() throws Exception {
         CompoundNBT b=body(ID);b.putString("id","lootablebodies:corpse");b.putInt("LootableBodiesDataVersion",3);regionVersion("",1631,b);
         assertEquals(1631,original(scan(),ID,0,0).getCompound("SourceVersions").getInt("DataVersion"));
@@ -145,6 +178,15 @@ class UpgradeJournalTest {
         assertThrows(IOException.class,()->scan(),"A readable damaged index must not be accepted as a complete scan");
     }
     @Test void truncatedRegionAbortsBeforeLoading() throws Exception {Path region=region("",body(ID));Files.write(region,new byte[8193]);assertThrows(IOException.class,()->scan());}
+    @Test void nativeEmptyRegionPlaceholdersRemainReadOnlyAndAreScannedWhenPopulated()throws Exception {
+        Path folder=world.resolve("region");Files.createDirectories(folder);Path file=folder.resolve("r.0.0.mca");
+        try(net.minecraft.world.chunk.storage.RegionFile nativeRegion=new net.minecraft.world.chunk.storage.RegionFile(file.toFile(),folder.toFile(),false)) {
+            assertNull(nativeRegion.func_222666_a(new net.minecraft.util.math.ChunkPos(0,0)));
+        }
+        assertEquals(0,Files.size(file));assertNull(original(scan(),ID,0,0));assertEquals(0,Files.size(file));
+        region("",body(ID));assertNotNull(original(scan(),ID,0,0));
+        Files.write(file,new byte[1]);assertThrows(IOException.class,()->scan(),"A nonempty truncated header must still stop loading");
+    }
     @Test void duplicateUuidAcrossDimensionsAbortsInsteadOfGuessing() throws Exception {region("",body(ID));region("DIM-1",body(ID));assertThrows(IOException.class,()->scan());}
     @Test void newDimensionsAreScannedOnLaterStarts() throws Exception {region("",body(ID));scan();UUID id=UUID.fromString("00000000-1111-4111-8111-000000000003");region("DIM1",body(id));assertEquals("DIM1",original(scan(),id,0,0).getString("Dimension"));}
     @Test void chunkCoordinateMismatchCannotApplyAnOldPayload() throws Exception {region("",body(ID));assertNull(original(scan(),ID,32,0));}

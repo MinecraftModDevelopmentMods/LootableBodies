@@ -25,7 +25,7 @@ final class VisibilitySkinClientChecks {
     void tick(Minecraft mc) throws Exception {
         if(stage==0 && mc.currentScreen instanceof MainMenuScreen) {
             mc.gameSettings.pauseOnLostFocus=false;mc.gameSettings.framerateLimit=30;mc.gameSettings.renderDistanceChunks=4;
-            mc.launchIntegratedServer("skin-fixture","Skin fixture",new WorldSettings(4267321,GameType.SURVIVAL,false,false,WorldType.FLAT).enableCommands());stage=1;
+            FixtureApi.ClientWorlds.create(mc,"skin-fixture","Skin fixture",net.minecraft.world.GameType.SURVIVAL,true);stage=1;
         } else if(stage==1 && mc.world!=null && mc.player!=null && ++frames>60) {
             VisibilitySkinChecks.run(mc);
             for(Field field:Minecraft.class.getDeclaredFields())if(field.getType()==SkinManager.class){skinField=field;skinField.setAccessible(true);}
@@ -43,12 +43,12 @@ final class VisibilitySkinClientChecks {
     private static final class Panel extends Screen {
         private final EntityLootableBody[] bodies=new EntityLootableBody[3];
         Panel(Minecraft mc){super(new net.minecraft.util.text.StringTextComponent("Skin visibility fixture"));for(int i=0;i<3;i++){bodies[i]=new EntityLootableBody(mc.world);bodies[i].setGameProfile(new GameProfile(new UUID(0,512+i),"VisibilityModel"));}}
-        @Override public void render(int mouseX,int mouseY,float partial) {
-            fill(0,0,width,height,0xff304050);
+        @Override public void render(com.mojang.blaze3d.matrix.MatrixStack matrices,int mouseX,int mouseY,float partial) {
+            fill(matrices,0,0,width,height,0xff304050);
             String[] names={"Failed skin: wide arms","Failed skin: slim arms","Local texture"};boolean local=LootableBodies.useLocalSkin;
             try {for(int i=0;i<3;i++) {
                 LootableBodies.useLocalSkin=i==2;int x=(2*i+1)*width/6;
-                drawCenteredString(font,names[i],x,35,0xffffff);
+                drawCenteredString(matrices,font,names[i],x,35,0xffffff);
                 InventoryScreen.drawEntityOnScreen(x,height*2/3,65,20,-20,bodies[i]);
             }} finally {LootableBodies.useLocalSkin=local;}
         }

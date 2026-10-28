@@ -18,7 +18,7 @@ import cyano.lootable.entities.EntityLootableBody;
 import java.io.*;
 import java.util.*;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.SharedMonsterAttributes;
+import net.minecraft.entity.ai.attributes.Attributes;
 import net.minecraft.entity.ai.attributes.*;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.*;
@@ -74,6 +74,10 @@ final class HealthAttributeChecks {
         check("finite_modifier_overflow_not_activated",HealthAttributeChecks::overflow);
         check("valid_signed_modifiers_all_three_operations",HealthAttributeChecks::validModifiers);
         check("valid_zero_UUID_and_integral_modifier_numbers",HealthAttributeChecks::zeroUuid);
+        check("native116_modifier_uuid_arrays_survive_reload",()->nativeUuid(false,false));
+        check("native116_conflicting_modifier_uuid_is_retained",()->nativeUuid(true,false));
+        check("native116_malformed_modifier_uuid_is_retained",()->nativeUuid(false,true));
+        check("legacy115_forge_attribute_names_keep_values_and_wounded_health",HealthAttributeChecks::legacyForgeAttributes);
         check("valid_base_numeric_types_and_fractional_health",HealthAttributeChecks::validBases);
         check("repeated_load_restores_constructor_defaults",HealthAttributeChecks::repeated);
         check("repeated_load_clears_saved_modifiers",HealthAttributeChecks::repeatedModifiers);
@@ -93,7 +97,8 @@ final class HealthAttributeChecks {
     static CompoundNBT base(){EntityLootableBody b=new EntityLootableBody(world);b.setPosition(160.5,80,160.5);b.setNoGravity(true);b.setUserName("HealthFixture");b.setInventorySlotContents(6,NbtRecoveryChecks.item(120,17));RuntimeChecks.disableVacuum(b);return NameLifetimeChecks.saved(b);}
     static EntityLootableBody read(CompoundNBT n){CompoundNBT before=n.copy();EntityLootableBody b=new EntityLootableBody(world);b.read(n);RuntimeChecks.require(NameLifetimeChecks.same(before,n),"Input NBT mutated");return b;}
     static CompoundNBT attribute(String name,double base){CompoundNBT n=new CompoundNBT();n.putString("Name",name);n.putDouble("Base",base);return n;}
-    static CompoundNBT modifier(double amount,int operation){CompoundNBT n=new CompoundNBT();n.putString("Name","Fixture modifier");n.putDouble("Amount",amount);n.putInt("Operation",operation);n.putUniqueId("UUID",MOD);return n;}
+    private static void legacyUuid(CompoundNBT n,UUID id){n.remove("UUID");n.putLong("UUIDMost",id.getMostSignificantBits());n.putLong("UUIDLeast",id.getLeastSignificantBits());}
+    static CompoundNBT modifier(double amount,int operation){CompoundNBT n=new CompoundNBT();n.putString("Name","Fixture modifier");n.putDouble("Amount",amount);n.putInt("Operation",operation);legacyUuid(n,MOD);return n;}
     static CompoundNBT with(CompoundNBT a){CompoundNBT n=base();n.put("Attributes",NbtRecoveryChecks.list(a));return n;}
     private static void value(double a,double b,String why){RuntimeChecks.require(Double.isFinite(a) && Math.abs(a-b)<1e-6,why+" expected="+b+" actual="+a);}
     private static void inventoryKept(EntityLootableBody b){RuntimeChecks.require(RuntimeChecks.sameStack(b.getStackInSlot(6),NbtRecoveryChecks.item(120,17)),"Complete recoverable inventory changed");}
@@ -103,21 +108,21 @@ final class HealthAttributeChecks {
     private static void numeric(int type){INBT[] values={ByteNBT.valueOf((byte)1),ShortNBT.valueOf((short)1),IntNBT.valueOf(1),LongNBT.valueOf(1),FloatNBT.valueOf(1),DoubleNBT.valueOf(1)};CompoundNBT n=base();n.put("Health",values[type]);n.put("AbsorptionAmount",values[type].copy());EntityLootableBody b=read(n);value(b.getHealth(),1,"Valid Health changed");value(b.getAbsorptionAmount(),1,"Valid absorption changed");stable(b);}
     private static void zero(){CompoundNBT n=base();n.putFloat("Health",0);EntityLootableBody b=read(n);value(b.getHealth(),0,"Legitimate zero revived");RuntimeChecks.require(!b.isAlive(),"Zero health no longer starts death handling");inventoryKept(b);}
     private static void missingHealth(){CompoundNBT n=with(attribute("generic.maxHealth",30));n.remove("Health");EntityLootableBody b=read(n);value(b.getHealth(),30,"Missing Health did not use loaded max");stable(b);}
-    private static void configured(){LootableBodies.corpseHP=37;CompoundNBT n=base();n.remove("Attributes");n.remove("Health");EntityLootableBody b=read(n);value(b.getMaxHealth(),37,"Config health changed");value(b.getAttribute(SharedMonsterAttributes.FOLLOW_RANGE).getBaseValue(),16,"EntityLiving follow-range default changed");stable(b);}
+    private static void configured(){LootableBodies.corpseHP=37;CompoundNBT n=base();n.remove("Attributes");n.remove("Health");EntityLootableBody b=read(n);value(b.getMaxHealth(),37,"Config health changed");value(b.getAttribute(Attributes.FOLLOW_RANGE).getBaseValue(),16,"EntityLiving follow-range default changed");stable(b);}
     private static void configuredCap(){LootableBodies.corpseHP=Short.MAX_VALUE;EntityLootableBody original=new EntityLootableBody(world);CompoundNBT n=NameLifetimeChecks.saved(original);EntityLootableBody b=read(n);value(b.getMaxHealth(),original.getMaxHealth(),"Existing configured health clamp changed");RuntimeChecks.require(!NameLifetimeChecks.saved(b).contains(NameLifetimeChecks.RECOVERY),"Healthy configured base quarantined");}
     private static void configuredHistory(){LootableBodies.corpseHP=Short.MAX_VALUE;EntityLootableBody old=new EntityLootableBody(world);old.setInventorySlotContents(6,NbtRecoveryChecks.item(120,17));CompoundNBT n=NameLifetimeChecks.saved(old);LootableBodies.corpseHP=20;EntityLootableBody b=read(n);value(b.getMaxHealth(),old.getMaxHealth(),"Valid old configured base was replaced by today's default");value(b.getHealth(),old.getHealth(),"Valid old configured health changed");RuntimeChecks.require(!NameLifetimeChecks.saved(b).contains(NameLifetimeChecks.RECOVERY),"Healthy historical config quarantined");stable(b);}
     private static void badList(INBT raw){CompoundNBT n=base();n.put("Attributes",raw.copy());EntityLootableBody b=read(n);value(b.getMaxHealth(),20,"Bad list changed max health");retained(b,"Attributes",raw);stable(b);}
     private static void badAttribute(String field,INBT raw){CompoundNBT a=attribute("generic.maxHealth",30);if(raw==null)a.remove(field);else a.put(field,raw.copy());EntityLootableBody b=read(with(a));value(b.getMaxHealth(),20,"Bad attribute changed default");retained(b,"Attribute",a);stable(b);}
-    private static void validTail(){CompoundNBT a=attribute("generic.maxHealth",Double.NaN),n=base();n.put("Attributes",NbtRecoveryChecks.list(a,attribute("generic.maxHealth",30),attribute("generic.followRange",24)));EntityLootableBody b=read(n);value(b.getMaxHealth(),30,"Invalid first entry hid valid max health");value(b.getAttribute(SharedMonsterAttributes.FOLLOW_RANGE).getBaseValue(),24,"Valid tail lost");retained(b,"Attribute",a);stable(b);}
+    private static void validTail(){CompoundNBT a=attribute("generic.maxHealth",Double.NaN),n=base();n.put("Attributes",NbtRecoveryChecks.list(a,attribute("generic.maxHealth",30),attribute("generic.followRange",24)));EntityLootableBody b=read(n);value(b.getMaxHealth(),30,"Invalid first entry hid valid max health");value(b.getAttribute(Attributes.FOLLOW_RANGE).getBaseValue(),24,"Valid tail lost");retained(b,"Attribute",a);stable(b);}
     private static void duplicateAttribute(){CompoundNBT duplicate=attribute("generic.maxHealth",40),n=base();n.put("Attributes",NbtRecoveryChecks.list(attribute("generic.maxHealth",30),duplicate));EntityLootableBody b=read(n);value(b.getMaxHealth(),30,"Duplicate overwrote first max health");retained(b,"Attribute",duplicate);stable(b);}
     private static void unknownAttributeData(){CompoundNBT a=attribute("generic.maxHealth",30);a.putString("Opaque","retain");EntityLootableBody b=read(with(a));value(b.getMaxHealth(),30,"Known fields lost with unknown sibling");retained(b,"Attribute",a);stable(b);}
     private static void badModifierList(INBT raw){CompoundNBT a=attribute("generic.maxHealth",30);a.put("Modifiers",raw.copy());EntityLootableBody b=read(with(a));value(b.getMaxHealth(),30,"Invalid modifiers lost valid base");retained(b,"Attribute",a);stable(b);}
     private static void badModifier(String field,INBT raw){CompoundNBT m=modifier(5,0);if(raw==null)m.remove(field);else m.put(field,raw.copy());CompoundNBT a=attribute("generic.maxHealth",30);a.put("Modifiers",NbtRecoveryChecks.list(m));EntityLootableBody b=read(with(a));value(b.getMaxHealth(),30,"Malformed modifier activated");retained(b,"Attribute",a);stable(b);}
     private static void duplicateModifier(){CompoundNBT a=attribute("generic.maxHealth",20);a.put("Modifiers",NbtRecoveryChecks.list(modifier(2,0),modifier(7,0)));EntityLootableBody b=read(with(a));value(b.getMaxHealth(),22,"Duplicate modifier replaced first");retained(b,"Attribute",a);stable(b);}
-    private static void modifierTail(){CompoundNBT bad=modifier(Double.NaN,0),good=modifier(5,0),a=attribute("generic.maxHealth",30);good.putUniqueId("UUID",new UUID(0,142));a.put("Modifiers",NbtRecoveryChecks.list(bad,good));EntityLootableBody b=read(with(a));value(b.getMaxHealth(),35,"Invalid modifier hid valid tail or base");retained(b,"Attribute",a);stable(b);}
+    private static void modifierTail(){CompoundNBT bad=modifier(Double.NaN,0),good=modifier(5,0),a=attribute("generic.maxHealth",30);legacyUuid(good,new UUID(0,142));a.put("Modifiers",NbtRecoveryChecks.list(bad,good));EntityLootableBody b=read(with(a));value(b.getMaxHealth(),35,"Invalid modifier hid valid tail or base");retained(b,"Attribute",a);stable(b);}
     private static void unknownModifierData(){CompoundNBT m=modifier(5,0),a=attribute("generic.maxHealth",30);m.putString("Opaque","retain");a.put("Modifiers",NbtRecoveryChecks.list(m));EntityLootableBody b=read(with(a));value(b.getMaxHealth(),35,"Known modifier fields lost");retained(b,"Attribute",a);stable(b);}
     private static void overflow(){CompoundNBT a=attribute("generic.maxHealth",30);a.put("Modifiers",NbtRecoveryChecks.list(modifier(Double.MAX_VALUE,2)));EntityLootableBody b=read(with(a));value(b.getMaxHealth(),30,"Overflowing modifier activated");retained(b,"Attribute",a);stable(b);}
-    private static void validModifiers(){CompoundNBT a=attribute("generic.maxHealth",30);CompoundNBT m0=modifier(-2,0),m1=modifier(.5,1),m2=modifier(.25,2);m1.putUniqueId("UUID",new UUID(0,142));m2.putUniqueId("UUID",new UUID(0,143));a.put("Modifiers",NbtRecoveryChecks.list(m0,m1,m2));EntityLootableBody b=read(with(a));value(b.getMaxHealth(),52.5,"Valid signed/three-operation modifiers changed");RuntimeChecks.require(!NameLifetimeChecks.saved(b).contains(NameLifetimeChecks.RECOVERY),"Valid modifiers quarantined");stable(b);}
+    private static void validModifiers(){CompoundNBT a=attribute("generic.maxHealth",30);CompoundNBT m0=modifier(-2,0),m1=modifier(.5,1),m2=modifier(.25,2);legacyUuid(m1,new UUID(0,142));legacyUuid(m2,new UUID(0,143));a.put("Modifiers",NbtRecoveryChecks.list(m0,m1,m2));EntityLootableBody b=read(with(a));value(b.getMaxHealth(),52.5,"Valid signed/three-operation modifiers changed");RuntimeChecks.require(!NameLifetimeChecks.saved(b).contains(NameLifetimeChecks.RECOVERY),"Valid modifiers quarantined");stable(b);}
     private static void zeroUuid(){CompoundNBT a=attribute("generic.maxHealth",30),m=modifier(5,0);m.putLong("UUIDMost",0);m.putLong("UUIDLeast",0);m.putByte("Operation",(byte)0);m.putInt("Amount",5);a.put("Modifiers",NbtRecoveryChecks.list(m));EntityLootableBody b=read(with(a));value(b.getMaxHealth(),35,"Zero UUID or lossless numbers rejected");stable(b);}
     private static void validBases(){for(INBT raw:new INBT[]{ByteNBT.valueOf((byte)30),ShortNBT.valueOf((short)30),IntNBT.valueOf(30),LongNBT.valueOf(30),FloatNBT.valueOf(30.5F),DoubleNBT.valueOf(30.5)}){CompoundNBT a=attribute("generic.maxHealth",30);a.put("Base",raw);CompoundNBT n=with(a);n.putDouble("Health",12.5);EntityLootableBody b=read(n);value(b.getMaxHealth(),((NumberNBT)raw).getDouble(),"Valid base changed");value(b.getHealth(),12.5,"Fractional Health changed");stable(b);}}
     private static void repeated(){EntityLootableBody b=read(with(attribute("generic.maxHealth",30)));CompoundNBT n=base();n.remove("Attributes");n.remove("Health");n.remove("AbsorptionAmount");b.setAbsorptionAmount(5);b.read(n);value(b.getMaxHealth(),20,"Missing Attributes retained previous max");value(b.getHealth(),20,"Missing Health retained previous value");value(b.getAbsorptionAmount(),0,"Missing absorption retained previous value");stable(b);}
@@ -127,16 +132,37 @@ final class HealthAttributeChecks {
     private static void empty(){CompoundNBT n=base();n.put("Equipment",new ListNBT());n.putDouble("Health",Double.NaN);EntityLootableBody b=read(n);RuntimeChecks.require(b.isEmpty(),"Health evidence counted as inventory");retained(b,"Health",n.get("Health"));}
     private static void healthy(){CompoundNBT n=base();EntityLootableBody b=read(n);RuntimeChecks.require(!NameLifetimeChecks.saved(b).contains(NameLifetimeChecks.RECOVERY),"Healthy save gained recovery records");stable(b);}
 
+    private static void nativeUuid(boolean conflict,boolean malformed){
+        CompoundNBT modifier=modifier(5,0);modifier.remove("UUIDMost");modifier.remove("UUIDLeast");
+        modifier.putUniqueId("UUID",MOD);
+        if(conflict){modifier.putLong("UUIDMost",3);modifier.putLong("UUIDLeast",4);}
+        if(malformed)modifier.putIntArray("UUID",new int[]{1,2,3});
+        CompoundNBT attribute=attribute("minecraft:generic.max_health",30);attribute.put("Modifiers",NbtRecoveryChecks.list(modifier));
+        EntityLootableBody body=read(with(attribute));value(body.getMaxHealth(),conflict||malformed?30:35,"Native UUID modifier handling changed");
+        if(conflict||malformed)retained(body,"Attribute",attribute);
+        else RuntimeChecks.require(!NameLifetimeChecks.saved(body).contains(NameLifetimeChecks.RECOVERY),"Valid native modifier quarantined");
+        stable(body);
+    }
+    private static void legacyForgeAttributes(){
+        String[][] names={{"forge.swimSpeed","forge:swim_speed"},{"forge.nameTagDistance","forge:nametag_distance"},{"forge.entity_gravity","forge:entity_gravity"}};
+        double[] bases={1.75D,70D,.12D};ListNBT list=new ListNBT();for(int i=0;i<names.length;i++)list.add(attribute(names[i][0],bases[i]));
+        CompoundNBT source=base();source.put("Attributes",list);source.putFloat("Health",7.5F);CompoundNBT before=source.copy();EntityLootableBody body=read(source);
+        value(body.getHealth(),7.5D,"Legacy Forge attributes healed a wounded corpse");
+        for(int i=0;i<names.length;i++)value(body.getAttribute(net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getValue(new net.minecraft.util.ResourceLocation(names[i][1]))).getBaseValue(),bases[i],"Legacy Forge attribute changed");
+        RuntimeChecks.require(!NameLifetimeChecks.saved(body).contains(NameLifetimeChecks.RECOVERY),"Known legacy Forge attributes were quarantined");
+        RuntimeChecks.require(TypedNbt.same(before,source),"Legacy attribute source mutated");stable(body);
+    }
+
     static CompoundNBT malformedFields(){
         CompoundNBT n=new CompoundNBT();n.putDouble("Health",Double.NaN);n.putString("AbsorptionAmount","opaque saved absorption");
         CompoundNBT max=attribute("generic.maxHealth",Double.NaN),follow=attribute("generic.followRange",24),unknown=attribute("absentfixture:attribute",7);
-        CompoundNBT bad=modifier(Double.NaN,0),good=modifier(2,0);good.putUniqueId("UUID",new UUID(0,144));
+        CompoundNBT bad=modifier(Double.NaN,0),good=modifier(2,0);legacyUuid(good,new UUID(0,144));
         follow.put("Modifiers",NbtRecoveryChecks.list(bad,good));unknown.putString("Opaque","retain original attribute");
         n.put("Attributes",NbtRecoveryChecks.list(max,follow,unknown));return n;
     }
     static void verifyWorldFields(EntityLootableBody b){
         value(b.getHealth(),20,"Disk health unsafe");value(b.getMaxHealth(),20,"Disk max health unsafe");value(b.getAbsorptionAmount(),0,"Disk absorption unsafe");
-        value(b.getAttribute(SharedMonsterAttributes.FOLLOW_RANGE).getValue(),26,"Valid attribute/modifier tail lost on disk");
+        value(b.getAttribute(Attributes.FOLLOW_RANGE).getValue(),26,"Valid attribute/modifier tail lost on disk");
         CompoundNBT raw=malformedFields();retained(b,"Health",raw.get("Health"));retained(b,"AbsorptionAmount",raw.get("AbsorptionAmount"));
         ListNBT entries=raw.getList("Attributes",10);for(int i=0;i<entries.size();i++)retained(b,"Attribute",entries.getCompound(i));
     }

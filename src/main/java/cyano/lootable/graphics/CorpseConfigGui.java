@@ -29,7 +29,7 @@ public final class CorpseConfigGui extends Screen {
     private Button button(int id,int x,int y,int width,String label,Runnable click){return addButton(new SettingButton(id,x,y,width,label,click));}
     public static final class SettingButton extends Button {
         public final int id;
-        SettingButton(int id,int x,int y,int width,String label,Runnable action){super(x,y,width,20,label,button->action.run());this.id=id;}
+        SettingButton(int id,int x,int y,int width,String label,Runnable action){super(x,y,width,20,new net.minecraft.util.text.StringTextComponent(label),button->action.run());this.id=id;}
     }
     @Override protected void init(){
         fields.clear();rows.clear();int left=width/2-155;
@@ -42,7 +42,7 @@ public final class CorpseConfigGui extends Screen {
             for(int i=start;i<end;i++){
                 String key=keys[i];Property value=property(key);int y=48+(i-start)*26;rows.put(key,y);
                 if(value.getType()=='B')button(20+i,width/2+70,y,85,booleanLabel(key),()->{capture();pending.put(key,Boolean.toString(!Boolean.parseBoolean(pending.get(key))));init(minecraft,width,height);});
-                else {TextFieldWidget field=new TextFieldWidget(font,width/2+60,y+1,95,18,property(key).getLanguageKey());field.setMaxStringLength(64);field.setText(pending.get(key));fields.put(key,field);children.add(field);}
+                else {TextFieldWidget field=new TextFieldWidget(font,width/2+60,y+1,95,18,new net.minecraft.util.text.TranslationTextComponent(property(key).getLanguageKey()));field.setMaxStringLength(64);field.setText(pending.get(key));fields.put(key,field);children.add(field);}
             }
             if(page>0)button(3,left,height-56,80,"<",()->changePage(-1));
             if(end<keys.length)button(4,width/2+75,height-56,80,">",()->changePage(1));
@@ -65,20 +65,20 @@ public final class CorpseConfigGui extends Screen {
         }return true;
     }
     @Override public void tick(){for(TextFieldWidget field:fields.values())field.tick();}
-    @Override public void render(int mouseX,int mouseY,float partialTicks){
-        renderBackground();drawCenteredString(font,LootableBodies.NAME,width/2,12,0xffffff);
-        drawCenteredString(font,I18n.format(group==null?"lootablebodies.config.local_file":"lootablebodies.config."+group),width/2,28,0xcccccc);
+    @Override public void render(com.mojang.blaze3d.matrix.MatrixStack matrices,int mouseX,int mouseY,float partialTicks){
+        renderBackground(matrices);drawCenteredString(matrices,font,LootableBodies.NAME,width/2,12,0xffffff);
+        drawCenteredString(matrices,font,I18n.format(group==null?"lootablebodies.config.local_file":"lootablebodies.config."+group),width/2,28,0xcccccc);
         for(Map.Entry<String,Integer> row:rows.entrySet()){
-            String text=I18n.format(property(row.getKey()).getLanguageKey());drawString(font,font.trimStringToWidth(text,205),width/2-155,row.getValue()+6,0xffffff);
+            String text=I18n.format(property(row.getKey()).getLanguageKey());drawString(matrices,font,font.trimStringToWidth(text,205),width/2-155,row.getValue()+6,0xffffff);
         }
-        super.render(mouseX,mouseY,partialTicks);for(TextFieldWidget field:fields.values())field.render(mouseX,mouseY,partialTicks);
+        super.render(matrices,mouseX,mouseY,partialTicks);for(TextFieldWidget field:fields.values())field.render(matrices,mouseX,mouseY,partialTicks);
         for(Map.Entry<String,Integer> row:rows.entrySet())if(mouseX>=width/2-155 && mouseX<width/2+155 && mouseY>=row.getValue() && mouseY<row.getValue()+22)
-            renderTooltip(font.listFormattedStringToWidth(I18n.format(property(row.getKey()).getLanguageKey()+".tooltip"),300),mouseX,mouseY);
+            renderTooltip(matrices,font.trimStringToWidth(new net.minecraft.util.text.TranslationTextComponent(property(row.getKey()).getLanguageKey()+".tooltip"),300),mouseX,mouseY);
         if(group==null && mouseX>=width/2-155 && mouseX<width/2+155 && mouseY>=95 && mouseY<115)
-            renderTooltip(font.listFormattedStringToWidth(I18n.format("lootablebodies.config.rules.tooltip"),300),mouseX,mouseY);
-        if(invalid)drawCenteredString(font,I18n.format("lootablebodies.config.invalid"),width/2,height-72,0xff5555);
+            renderTooltip(matrices,font.trimStringToWidth(new net.minecraft.util.text.TranslationTextComponent("lootablebodies.config.rules.tooltip"),300),mouseX,mouseY);
+        if(invalid)drawCenteredString(matrices,font,I18n.format("lootablebodies.config.invalid"),width/2,height-72,0xff5555);
     }
-    @Override public void onClose(){capture();minecraft.displayGuiScreen(parent);}
+    @Override public void closeScreen(){capture();minecraft.displayGuiScreen(parent);}
     public static boolean isValidDecayTime(String value) {
         if (!value.matches("\\s*[0-9]+\\s*:\\s*[0-9]+\\s*(?::\\s*[0-9]+\\s*)?")) return false;
         String[] parts = value.trim().split(":");

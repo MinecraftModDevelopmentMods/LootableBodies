@@ -73,7 +73,7 @@ final class ConnectedClientChecks {
             screenshot(mc,"connected-corpse-after-shift-recovery.png");
             quit(mc); next(7);
         } else if(stage==7 && FixtureConnections.stopped(mc)) {
-            mc.launchIntegratedServer("build-fixture","Build fixture",null); next(8);
+            mc.loadWorld("build-fixture"); next(8);
         } else if(stage==8 && ready(mc) && frames>30) {
             schedule(mc,() -> {
                 verifyReload(mc,"connected-after-recovery","connected-player-after-recovery");
@@ -104,7 +104,7 @@ final class ConnectedClientChecks {
             screenshot(mc,"connected-corpse-after-normal-recovery.png");
             quit(mc); next(13);
         } else if(stage==13 && FixtureConnections.stopped(mc)) {
-            mc.launchIntegratedServer("build-fixture","Build fixture",null); next(14);
+            mc.loadWorld("build-fixture"); next(14);
         } else if(stage==14 && ready(mc) && frames>30) {
             schedule(mc,() -> {
                 verifyReload(mc,"connected-final","connected-player-final");
@@ -155,7 +155,7 @@ final class ConnectedClientChecks {
         RuntimeChecks.saveExpected(folder(mc),after,corpse);visibleExpected=actual.copy();
     }
     private void verifyReload(Minecraft mc,String corpseName,String playerName) throws Exception {
-        mc.getIntegratedServer().getWorld(net.minecraft.world.dimension.DimensionType.getById(0)).getChunk(1,0);
+        mc.getIntegratedServer().getWorld(FixtureApi.dimensionKey(0)).getChunk(1,0);
         EntityLootableBody corpse=corpse(mc);RuntimeChecks.require(corpse.isAlive(),"Saved corpse is no longer accessible");
         corpse.baseTick();RuntimeChecks.verifyExpected(folder(mc),corpseName,corpse);
         CompoundNBT expected=read(folder(mc),playerName);
@@ -185,8 +185,8 @@ final class ConnectedClientChecks {
         RuntimeChecks.require(count==expected.getCount(),"Recovered stack lost/duplicated: "+index+" count="+count);
     }
     private ServerPlayerEntity player(Minecraft mc){return mc.getIntegratedServer().getPlayerList().getPlayerByUUID(playerId);}
-    private EntityLootableBody corpse(Minecraft mc){return RuntimeChecks.find(mc.getIntegratedServer().getWorld(net.minecraft.world.dimension.DimensionType.getById(0)),corpseId);}
-    private File folder(Minecraft mc){return mc.getIntegratedServer().getWorld(net.minecraft.world.dimension.DimensionType.getById(0)).getSaveHandler().getWorldDirectory();}
+    private EntityLootableBody corpse(Minecraft mc){return RuntimeChecks.find(mc.getIntegratedServer().getWorld(FixtureApi.dimensionKey(0)),corpseId);}
+    private File folder(Minecraft mc){return mc.getIntegratedServer().getWorld(FixtureApi.dimensionKey(0)).getServer().func_240776_a_(net.minecraft.world.storage.FolderName.DOT).toFile();}
     private static CompoundNBT read(File folder,String name) throws Exception {
         try(FileInputStream in=new FileInputStream(new File(folder,name+".nbt"))){return CompressedStreamTools.readCompressed(in);}
     }

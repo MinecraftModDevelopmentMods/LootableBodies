@@ -11,15 +11,25 @@ import net.minecraft.world.gen.feature.structure.LegacyStructureDataUtil;
 /** Installs preservation before native save handlers and chunk readers run. */
 public final class ChunkVersionContext {
     private ChunkVersionContext() { }
+    public static void installClient(Object client,Object saveFormat) {
+        installFixer(client,null);installFixer(saveFormat,null);
+    }
     public static void installServer(MinecraftServer server) {
         installFixer(server,null);
-        installFixer(server.getActiveAnvilConverter(),null);
+        installFixer(related(server,net.minecraft.world.storage.PlayerData.class),null);
     }
     public static void installWorld(ServerWorld world) {
         Object loader=world.getChunkProvider().chunkManager;
         if(!(loader instanceof ChunkLoader))throw new IllegalStateException("Unsupported chunk reader; refusing unprotected world loading");
-        installFixer(world.getSaveHandler(),null);
-        installFixer(loader,chunk->LegacyStructureDataUtil.func_215130_a(world.getDimension().getType(),world.getServer().getWorld(net.minecraft.world.dimension.DimensionType.OVERWORLD).getSavedData()).func_212181_a(chunk));
+        installFixer(loader,chunk->LegacyStructureDataUtil.func_236992_a_(world.getDimensionKey(),world.getServer().getWorld(net.minecraft.world.World.OVERWORLD).getSavedData()).func_212181_a(chunk));
+    }
+    private static Object related(Object owner,Class<?> expected) {
+        java.util.List<Field> matches=new java.util.ArrayList<>();
+        for(Class<?> type=owner.getClass();type!=null;type=type.getSuperclass())for(Field field:type.getDeclaredFields())
+            if(!Modifier.isStatic(field.getModifiers()) && field.getType()==expected)matches.add(field);
+        if(matches.size()!=1)throw new IllegalStateException("Cannot identify a unique native save reader");
+        try {Field field=matches.get(0);field.setAccessible(true);return field.get(owner);}
+        catch(ReflectiveOperationException failure){throw new IllegalStateException("Cannot access native save reader",failure);}
     }
     static void installFixer(Object owner,UnaryOperator<CompoundNBT> structures) {
         List<Field> fields=new ArrayList<>();

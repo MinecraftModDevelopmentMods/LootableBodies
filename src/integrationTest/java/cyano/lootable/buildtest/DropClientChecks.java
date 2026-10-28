@@ -83,7 +83,7 @@ final class DropClientChecks {
                 CompoundNBT expected=new CompoundNBT();expected.put("Inventory",savedPlayer.copy());try(FileOutputStream out=new FileOutputStream(new File(folder(mc),"drop-creative-player.nbt"))){CompressedStreamTools.writeCompressed(expected,out);}
                 mc.getIntegratedServer().getPlayerList().saveAllPlayerData();mc.getIntegratedServer().save(false,true,false);});next(20);
         } else if(stage==20 && done()){quit(mc);next(21);}
-        else if(stage==21 && FixtureConnections.stopped(mc)){mc.launchIntegratedServer("build-fixture","Build fixture",null);next(22);}
+        else if(stage==21 && FixtureConnections.stopped(mc)){mc.loadWorld("build-fixture");next(22);}
         else if(stage==22 && ready(mc) && frames>20){schedule(mc,()->{
             player(mc).world.getChunk(2,0);body(mc).baseTick();RuntimeChecks.verifyExpected(folder(mc),"drop-creative-final",body(mc));
             RuntimeChecks.require(savedPlayer.equals(player(mc).inventory.write(new ListNBT())),"Creative player inventory changed on disk reload");player(mc).connection.setPlayerLocation(40.5,80,7.5,0,0);
@@ -110,8 +110,8 @@ final class DropClientChecks {
     private static boolean ready(Minecraft mc){return mc.world!=null && mc.player!=null && mc.getIntegratedServer()!=null;}
     private boolean open(Minecraft mc){for(Entity e:FixtureApi.entities(mc.world))if(e.getUniqueID().equals(bodyId)){mc.playerController.interactWithEntity(mc.player,e,Hand.MAIN_HAND);return true;}return false;}
     private ServerPlayerEntity player(Minecraft mc){return mc.getIntegratedServer().getPlayerList().getPlayerByUUID(playerId);}
-    private EntityLootableBody body(Minecraft mc){return RuntimeChecks.find(mc.getIntegratedServer().getWorld(net.minecraft.world.dimension.DimensionType.getById(0)),bodyId);}
-    private File folder(Minecraft mc){return player(mc).getServerWorld().getSaveHandler().getWorldDirectory();}
+    private EntityLootableBody body(Minecraft mc){return RuntimeChecks.find(mc.getIntegratedServer().getWorld(FixtureApi.dimensionKey(0)),bodyId);}
+    private File folder(Minecraft mc){return player(mc).getServerWorld().getServer().func_240776_a_(net.minecraft.world.storage.FolderName.DOT).toFile();}
     private void refresh(Minecraft mc){player(mc).openContainer.detectAndSendChanges();player(mc).sendContainerToPlayer(player(mc).openContainer);}
     private void schedule(Minecraft mc,Action action){pending=mc.getIntegratedServer().runAsync(()->{try{action.run();}catch(Exception e){throw new RuntimeException(e);}});}
     private boolean done() throws Exception {if(!pending.isDone())return false;pending.get();return true;}

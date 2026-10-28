@@ -6,6 +6,11 @@ from audit_runtime_logs import audit, FORGE_UPGRADE_RENAME
 
 
 class RuntimeLogAuditTests(unittest.TestCase):
+    def test_config_parser_failures_on_info_stderr_are_never_platform_exceptions(self):
+        line='[12:20:17] [Thread-1/INFO] [STDERR]: [com.electronwill.nightconfig.core.file.FileWatcher$WatcherThread:run:183]: com.electronwill.nightconfig.core.io.ParsingException: Invalid TOML data: entry "[maxThreads]" defined twice in its table.\n'
+        for options in ({},{'development':True},{'native':True},{'development':True,'native':True},{'upgrade':True,'native':True}):
+            with self.subTest(options=options),self.assertRaises(RuntimeError):self.check_log(line,**options)
+
     def native31_dead_player_movement(self):
         return (Path(__file__).parent/'fixtures/forge31-dead-player-movement.txt').read_text()
 

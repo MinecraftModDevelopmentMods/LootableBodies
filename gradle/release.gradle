@@ -5,8 +5,8 @@ def expectedIdentity = [
         mod_id: 'lootablebodies', mod_artifact: 'LootableBodies',
         mod_group: 'zone.moddev.mc.lootablebodies', mod_vendor: 'Cyanobacterium',
         mod_name: "DrCyano's Lootable Bodies", mod_authors: 'Cyanobacterium,SkyBlade1978',
-        minecraft_version: '1.15.2', forge_version: '31.2.57',
-        mapping_channel: 'snapshot', mapping_version: '20200514-1.15.1',
+        minecraft_version: '1.16.5', forge_version: '36.2.42',
+        mapping_channel: 'snapshot', mapping_version: '20210309-1.16.5',
         loader_name: 'forge', loader_code: '1', curseforge_project_id: '240968',
         java_version: '8', java_toolchain_version: '8.0.502+7', gradle_java_version: '17',
         mod_license: 'LGPL-2.1-only', mod_license_name: 'GNU Lesser General Public License, Version 2.1',
@@ -165,6 +165,7 @@ gradle.taskGraph.whenReady { graph ->
             throw new GradleException('Publication is disabled outside the confirmed MMD release workflow')
     }
 }
+
 tasks.register('validateMavenRelease') {
     doLast {
         def expectedSha = System.getenv('LOOTABLEBODIES_RELEASE_SHA') ?: ''

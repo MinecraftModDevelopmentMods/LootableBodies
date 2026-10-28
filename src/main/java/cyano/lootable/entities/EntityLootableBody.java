@@ -11,9 +11,9 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.MobEntity;
 import net.minecraft.entity.CreatureAttribute;
-import net.minecraft.entity.SharedMonsterAttributes;
+import net.minecraft.entity.ai.attributes.Attributes;
 import net.minecraft.entity.ai.attributes.AttributeModifier;
-import net.minecraft.entity.ai.attributes.IAttributeInstance;
+import net.minecraft.entity.ai.attributes.ModifiableAttributeInstance;
 import net.minecraft.entity.item.ItemEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.inventory.EquipmentSlotType;
@@ -92,12 +92,16 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 
 	public EntityLootableBody(World w) {
 		super(LootableBodies.CORPSE,w);
+		// The native type map is registered once; retain the legacy constructor's
+		// configured base and full initial health for each newly created corpse.
+		getAttribute(Attributes.MAX_HEALTH).setBaseValue(LootableBodies.corpseHP);
+		setHealth(getMaxHealth());
 		// Keep MobEntity's actual defaults (including follow range 16 and
 		// configured corpse health), rather than the generic attribute defaults.
-		for(IAttributeInstance attribute : getAttributes().getAllAttributes()) {
-			String name = attribute.getAttribute().getName();
+		for(ModifiableAttributeInstance attribute : corpseAttributes()) {
+			String name = attribute.getAttribute().getRegistryName().toString();
 			defaultAttributeBases.put(name,attribute.getBaseValue());
-			defaultAttributeModifiers.put(name,new ArrayList<>(attribute.func_225505_c_()));
+			defaultAttributeModifiers.put(name,new ArrayList<>(attribute.getModifierListCopy()));
 		}
 		deathTimestamp = w.getGameTime();
 		decayTimestamp = deathTimestamp;
@@ -254,9 +258,8 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 
 	}
 
-	@Override
 	public boolean handleWaterMovement() {
-		if (this.handleFluidAcceleration(net.minecraft.tags.FluidTags.WATER)) 		{
+		if (this.handleFluidAcceleration(net.minecraft.tags.FluidTags.WATER,0.014D)) 		{
 			this.fallDistance = 0.0F;
 			this.inWater = true;
 			this.extinguish();
@@ -271,7 +274,7 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 		World world = this.world;
 		BlockPos testPos = new BlockPos((int)this.getPosX(), 0, (int)this.getPosZ());
 		
-		BlockState platformBlockstate = getPlatformBlock(this.dimension.getId());
+		BlockState platformBlockstate = getPlatformBlock(world.getDimensionKey()==World.THE_NETHER?-1:world.getDimensionKey()==World.THE_END?1:0);
 		
 		for(int j = -1; j <= 1; j++) {
 			for(int k = -1; k <= 1; k++)	{
@@ -468,12 +471,37 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 	}
 
 
-	@Override
-	protected void registerAttributes() {
-		// called during constructor of LivingEntity
-		super.registerAttributes();
-		this.getAttribute(SharedMonsterAttributes.MAX_HEALTH).setBaseValue(LootableBodies.corpseHP);
-	}
+    public static net.minecraft.entity.ai.attributes.AttributeModifierMap.MutableAttribute corpseAttributeDefaults() {
+        return net.minecraft.entity.MobEntity.func_233666_p_().createMutableAttribute(Attributes.MAX_HEALTH,LootableBodies.corpseHP);
+    }
+    private java.util.List<ModifiableAttributeInstance> corpseAttributes() {
+        java.util.List<ModifiableAttributeInstance> result=new java.util.ArrayList<>();
+        for(net.minecraft.entity.ai.attributes.Attribute key:net.minecraft.util.registry.Registry.ATTRIBUTE)
+            if(getAttributeManager().hasAttributeInstance(key))result.add(getAttribute(key));
+        return result;
+    }
+    private ModifiableAttributeInstance attributeNamed(String name) {
+        switch(name) {
+        case "generic.maxHealth":name="minecraft:generic.max_health";break;
+        case "generic.followRange":name="minecraft:generic.follow_range";break;
+        case "generic.knockbackResistance":name="minecraft:generic.knockback_resistance";break;
+        case "generic.movementSpeed":name="minecraft:generic.movement_speed";break;
+        case "generic.flyingSpeed":name="minecraft:generic.flying_speed";break;
+        case "generic.attackDamage":name="minecraft:generic.attack_damage";break;
+        case "generic.attackKnockback":name="minecraft:generic.attack_knockback";break;
+        case "generic.attackSpeed":name="minecraft:generic.attack_speed";break;
+        case "generic.armorToughness":name="minecraft:generic.armor_toughness";break;
+        case "horse.jumpStrength":name="minecraft:horse.jump_strength";break;
+        case "zombie.spawnReinforcements":name="minecraft:zombie.spawn_reinforcements";break;
+        case "forge.swimSpeed":name="forge:swim_speed";break;
+        case "forge.nameTagDistance":name="forge:nametag_distance";break;
+        case "forge.entity_gravity":name="forge:entity_gravity";break;
+        default:break;
+        }
+        net.minecraft.util.ResourceLocation id=net.minecraft.util.ResourceLocation.tryCreate(name);
+        net.minecraft.entity.ai.attributes.Attribute key=id==null?null:net.minecraft.util.registry.Registry.ATTRIBUTE.getOptional(id).orElse(null);
+        return key!=null && getAttributeManager().hasAttributeInstance(key)?getAttribute(key):null;
+    }
 
 	public float getRotation(){
 		return this.rotationYaw;
@@ -559,7 +587,7 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 
 	@Override
 	protected ResourceLocation getLootTable() {
-		return net.minecraft.world.storage.loot.LootTables.EMPTY;
+		return net.minecraft.loot.LootTables.EMPTY;
 	}
 
 	@Override
@@ -696,12 +724,12 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 	}
 
 	@Override
-	public boolean processInteract(PlayerEntity player, Hand hand){
+	public net.minecraft.util.ActionResultType getEntityInteractionResult(PlayerEntity player, Hand hand){
 		if(isUsableByPlayer(player)) {
 			GUIHandler.open(player,this);
-			return true;
-		}
-		return false;
+            return net.minecraft.util.ActionResultType.SUCCESS;
+        }
+        return net.minecraft.util.ActionResultType.PASS;
 	}
 
     @Override public net.minecraft.inventory.container.Container createMenu(int windowId, net.minecraft.entity.player.PlayerInventory inventory, PlayerEntity player){return new cyano.lootable.graphics.CorpseContainer(windowId,inventory,this);}
@@ -973,7 +1001,7 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 		// NBT replaces state. Clear the old map without effect callbacks: saved
 		// attributes and absorption are restored below, just as on a fresh entity.
 		getActivePotionEffects().clear();
-		for(IAttributeInstance attribute : getAttributes().getAllAttributes()) restoreAttribute(attribute);
+		for(ModifiableAttributeInstance attribute : corpseAttributes()) restoreAttribute(attribute);
 		vanilla.put("Attributes",readAttributes(root.get("Attributes")));
 		vanilla.put("ActiveEffects",readEffects(root.get("ActiveEffects")));
 		vanilla.putShort("HurtTime",(short)readTimer(root,"HurtTime",Short.MAX_VALUE,0));
@@ -982,7 +1010,7 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 		vanilla.putFloat("AbsorptionAmount",readLivingFloat(root,"AbsorptionAmount",0F,Float.MAX_VALUE));
 		super.readAdditional(vanilla);
 		updatePotionMetadata();
-		for(IAttributeInstance attribute : getAttributes().getAllAttributes()) {
+		for(ModifiableAttributeInstance attribute : corpseAttributes()) {
 			if(!Double.isFinite(attribute.getValue())) {
 				// Also protect against engine ordering/parent-attribute arithmetic.
 				if(root.contains("Attributes")) retainInvalid("Attributes",root.get("Attributes"));
@@ -1033,12 +1061,12 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 		if(!invalidFields.contains(record)) invalidFields.add(record);
 	}
 
-	private void restoreAttribute(IAttributeInstance attribute) {
-		String name = attribute.getAttribute().getName();
-		for(AttributeModifier modifier : new ArrayList<>(attribute.func_225505_c_())) attribute.removeModifier(modifier);
+	private void restoreAttribute(ModifiableAttributeInstance attribute) {
+		String name = attribute.getAttribute().getRegistryName().toString();
+		for(AttributeModifier modifier : new ArrayList<>(attribute.getModifierListCopy())) attribute.removeModifier(modifier);
 		attribute.setBaseValue(defaultAttributeBases.getOrDefault(name,attribute.getAttribute().getDefaultValue()));
 		List<AttributeModifier> defaults = defaultAttributeModifiers.get(name);
-		if(defaults != null) for(AttributeModifier modifier : defaults) attribute.applyModifier(modifier);
+		if(defaults != null) for(AttributeModifier modifier : defaults) attribute.applyPersistentModifier(modifier);
 	}
 
 	private ListNBT readEffects(INBT raw) {
@@ -1118,17 +1146,21 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 		ListNBT list = (ListNBT)raw;
 		for(int i = 0; i < list.size(); i++) {
 			CompoundNBT record = list.getCompound(i);
-			IAttributeInstance attribute = record.contains("Name",8)
-					? getAttributes().getAttributeInstanceByName(record.getString("Name")) : null;
+			ModifiableAttributeInstance attribute = record.contains("Name",8)
+					? attributeNamed(record.getString("Name")) : null;
 			Double base = finiteNumber(record.get("Base"));
 			if(attribute == null || base == null) { retainInvalid("Attribute",record); continue; }
-			String name = attribute.getAttribute().getName();
+			String name = attribute.getAttribute().getRegistryName().toString();
 			// corpse_HP has always allowed 1..Short.MAX_VALUE. Preserve a base
 			// saved under an older config, including vanilla's existing cap.
-			boolean configuredHealth = attribute.getAttribute() == SharedMonsterAttributes.MAX_HEALTH
+			boolean configuredHealth = attribute.getAttribute() == Attributes.MAX_HEALTH
 					&& base >= 1D && base <= Short.MAX_VALUE;
+            // Forge15 allowed this base up to Float.MAX_VALUE. Native16 caps
+            // the effective distance at64; keep the valid saved base unchanged.
+            boolean legacyNameDistance=attribute.getAttribute()==net.minecraftforge.common.ForgeMod.NAMETAG_DISTANCE.get()
+                    && base>=0D && base<=Float.MAX_VALUE;
 			if((attribute.getAttribute().clampValue(base) != base
-					&& !configuredHealth && !base.equals(defaultAttributeBases.get(name))) || !seen.add(name)) {
+					&& !configuredHealth && !legacyNameDistance && !base.equals(defaultAttributeBases.get(name))) || !seen.add(name)) {
 				retainInvalid("Attribute",record); continue;
 			}
 			boolean changed = !Arrays.asList("Name","Base","Modifiers").containsAll(record.keySet());
@@ -1144,13 +1176,12 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 					for(int m = 0; m < entries.size(); m++) {
 						CompoundNBT entry = entries.getCompound(m);
 						Long operation = integral(entry.get("Operation"));
-						Long most = integral(entry.get("UUIDMost")), least = integral(entry.get("UUIDLeast"));
+						UUID id=attributeUuid(entry);
 						Double amount = finiteNumber(entry.get("Amount"));
 						if(!entry.contains("Name",8) || entry.getString("Name").isEmpty() || operation == null
-								|| operation < 0 || operation > 2 || most == null || least == null || amount == null) {
+								|| operation < 0 || operation > 2 || id == null || amount == null) {
 							changed = true; continue;
 						}
-						UUID id = new UUID(most,least);
 						if(ids.contains(id)) { changed = true; continue; }
 						CompoundNBT modifier = new CompoundNBT();
 						modifier.putString("Name",entry.getString("Name")); modifier.putDouble("Amount",amount);
@@ -1158,7 +1189,7 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 						ListNBT candidate = modifiers.copy(); candidate.add(modifier);
 						if(!finiteAttributeValue(base,candidate)) { changed = true; continue; }
 						ids.add(id); modifiers.add(modifier);
-						if(!Arrays.asList("Name","Amount","Operation","UUIDMost","UUIDLeast").containsAll(entry.keySet())) changed = true;
+						if(!Arrays.asList("Name","Amount","Operation","UUIDMost","UUIDLeast","UUID").containsAll(entry.keySet())) changed = true;
 					}
 				}
 				accepted.put("Modifiers",modifiers);
@@ -1169,6 +1200,19 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 		return clean;
 	}
 
+	private static UUID attributeUuid(CompoundNBT entry) {
+        UUID current=null,legacy=null;
+        if(entry.contains("UUID")) {
+            if(!entry.hasUniqueId("UUID"))return null;
+            current=entry.getUniqueId("UUID");
+        }
+        if(entry.contains("UUIDMost") || entry.contains("UUIDLeast")) {
+            Long most=integral(entry.get("UUIDMost")),least=integral(entry.get("UUIDLeast"));
+            if(most==null || least==null)return null;
+            legacy=new UUID(most,least);
+        }
+        return current!=null?(legacy!=null && !current.equals(legacy)?null:current):legacy;
+    }
 	private static boolean finiteAttributeValue(double base, ListNBT modifiers) {
 		double value = base;
 		for(int i = 0; i < modifiers.size(); i++) {
@@ -1211,7 +1255,7 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
             String name=root.getString(key);
             if(key.equals("CustomName") && root.getInt(UpgradePreservation.VERSION)>=3) {
                 try {
-                    net.minecraft.util.text.ITextComponent text=net.minecraft.util.text.ITextComponent.Serializer.fromJson(name);
+                    net.minecraft.util.text.ITextComponent text=net.minecraft.util.text.ITextComponent.Serializer.getComponentFromJson(name);
                     if(text==null){retainInvalid(key,raw);return null;}name=text.getString();
                 }catch(RuntimeException malformed){retainInvalid(key,raw);return null;}
             }
@@ -1271,8 +1315,19 @@ public class EntityLootableBody extends MobEntity implements IInventory, net.min
 			ItemStack stack = ItemStack.read(input);
 			if(emptyStack(stack) || stack.getItem() != registered || stack.getCount() != count.intValue()
 					|| stack.getDamage() != damage.intValue() || stack.getMaxStackSize() <= 0) return null;
+			// Forge16 lazily echoes capability NBT before gathering providers.
+			// Resolve them before comparing: unsupported payloads must remain raw,
+			// rather than disappearing later during an inventory transaction.
+			if(raw.contains("ForgeCaps"))
+				stack.getCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY);
 			CompoundNBT encoded = stack.write(new CompoundNBT());
-            if(!Objects.equals(raw.get("tag"),encoded.get("tag"))
+            INBT expectedTag=raw.get("tag");
+            // Native16 writes an explicit zero for missing tool durability.
+            // Allow only that canonical default, retaining every other byte.
+            if(registered.isDamageable(stack) && !raw.getCompound("tag").contains("Damage") && damage==0L) {
+                CompoundNBT canonical=raw.getCompound("tag").copy();canonical.putInt("Damage",0);expectedTag=canonical;
+            }
+            if(!Objects.equals(expectedTag,encoded.get("tag"))
                     || !Objects.equals(raw.get("ForgeCaps"),encoded.get("ForgeCaps"))) return null;
 			return stack;
 		} catch(RuntimeException unreadable) { return null; }

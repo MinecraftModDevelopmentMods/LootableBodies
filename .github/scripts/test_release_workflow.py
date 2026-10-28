@@ -24,6 +24,7 @@ MATRIX114 = MATRIX113 + [origin + ' / ' + stamps for origin in
              ['released-113', 'recovery-113', 'via113-110', 'via113-111', 'via113-112']
              for stamps in ['normal', 'stamps']]
 MATRIX115 = ['World upgrade matrix', 'Prepare verified migration inputs', 'Validate release workflow'] + ['Historical world shard ' + str(i) for i in range(6)]
+MATRIX116 = ['World upgrade matrix', 'Prepare verified migration inputs', 'Validate release workflow'] + ['Historical world shard ' + str(i) for i in range(12)]
 MATRIX = [origin + ' / ' + stamps for origin in
           ['original-110', 'released-110', 'original-111', 'recovery-110']
           for stamps in ['normal', 'stamps']]
@@ -59,7 +60,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
             '1.12.2': ('112021', 'master-1.12', '14.23.5.2859'),
             '1.13.2': ('113021', 'master-1.13.2', '25.0.223'),
             '1.14.4': ('114041', 'master-1.14.4', '28.2.26'),
-            '1.15.2': ('115021', 'master-1.15.2', '31.2.57')}[minecraft]
+            '1.15.2': ('115021', 'master-1.15.2', '31.2.57'),
+            '1.16.5': ('116051', 'master-1.16.5', '36.2.42')}[minecraft]
         version = '2.4.2.' + suffix
         values = dict(minecraft_version=minecraft, forge_version=forge, loader_name='forge', loader_code='1',
             java_version='8', java_toolchain_version='8.0.502+7', gradle_java_version='17', mod_id='lootablebodies',
@@ -70,7 +72,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         checks = CORE + {'1.11.2': MATRIX, '1.12.2': MATRIX112,
                          '1.13.2': MATRIX113 + ['Validate release workflow'],
                          '1.14.4': MATRIX114 + ['Validate release workflow'],
-                         '1.15.2': MATRIX115}.get(minecraft, []) if names is None else names
+                         '1.15.2': MATRIX115, '1.16.5': MATRIX116}.get(minecraft, []) if names is None else names
         def command(args, **options):
             if args[0] == 'git':
                 return SHA + '\n'
@@ -93,8 +95,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 patch('subprocess.check_output', side_effect=command), patch('subprocess.run', side_effect=existing):
             exec(compile(code, 'release-preflight', 'exec'), {})
 
-    def test_future_116_candidate_cannot_dispatch_publication(self):
-        code, values = self.select('2.4.7.116051')
+    def test_future_117_candidate_cannot_dispatch_publication(self):
+        code, values = self.select('2.4.8.117011')
         self.assertNotEqual(0, code)
         self.assertEqual({}, values)
 
@@ -192,6 +194,28 @@ class ReleaseWorkflowTests(unittest.TestCase):
         audit = WORKFLOW.with_name('artifact-audit-1.15.yml').read_text()
         names = audit.split('workflows: [',1)[1].split(']',1)[0].split(',')
         self.assertIn('LootableBodies 1.12 CI', [name.strip() for name in names])
+
+    def test_116_routes_to_its_own_branch(self):
+        code, values = self.select('2.4.7.116051')
+        self.assertEqual(0, code)
+        self.assertEqual('1.16.5', values['minecraft_version'])
+        self.assertEqual('master-1.16.5', values['source_branch'])
+
+    def test_116_requires_preparation_all_twelve_shards_and_the_aggregate(self):
+        self.validate('1.16.5')
+        for missing in MATRIX116:
+            with self.subTest(missing=missing), self.assertRaises(SystemExit):
+                self.validate('1.16.5', names=CORE + [name for name in MATRIX116 if name != missing])
+
+    def test_116_requires_its_independent_exact_artifact_audit(self):
+        with self.assertRaises(SystemExit):
+            self.validate('1.16.5', audit_success=False)
+
+    def test_116_audit_handles_both_registered_workflow_names(self):
+        audit = WORKFLOW.with_name('artifact-audit-1.16.yml').read_text()
+        names = audit.split('workflows: [',1)[1].split(']',1)[0].split(',')
+        self.assertIn('LootableBodies 1.12 CI', [name.strip() for name in names])
+        self.assertIn('LootableBodies 1.16 CI', [name.strip() for name in names])
 
     def test_identity_changes_are_rejected(self):
         for mutation in [{'mod_id': 'other'}, {'minecraft_version': '1.10.2'}, {'mod_license': 'CC0-1.0'}]:

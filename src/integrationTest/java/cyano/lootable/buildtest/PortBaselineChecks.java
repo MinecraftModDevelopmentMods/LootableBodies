@@ -15,7 +15,7 @@ import net.minecraft.nbt.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.DamageSource;
 import net.minecraft.world.server.ServerWorld;
-import net.minecraft.world.WorldType;
+
 import net.minecraft.world.GameType;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.util.FakePlayerFactory;
@@ -35,7 +35,7 @@ public final class PortBaselineChecks {
     private static void require(boolean ok, String message) { if (!ok) throw new AssertionError(message); }
     public static void run(MinecraftServer server) throws Exception {
         failures=0;
-        ServerWorld world=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));
+        ServerWorld world=server.getWorld(FixtureApi.dimensionKey(0));
         check("native_received_packet_observer_is_non_destructive", () -> {
             net.minecraft.network.PacketBuffer buffer=new net.minecraft.network.PacketBuffer(io.netty.buffer.Unpooled.buffer());
             try {
@@ -46,11 +46,11 @@ public final class PortBaselineChecks {
                 require(RespawnPacketTrace.describe(sent).equals(RespawnPacketTrace.describe(received)),"Spawn observer differs before/after native decoding");
                 require(RespawnPacketTrace.describe(received).contains("mod=lootablebodies "),"Negative control cannot identify corpse spawns");
                 buffer.clear();
-                net.minecraft.network.play.server.SRespawnPacket outgoing=new net.minecraft.network.play.server.SRespawnPacket(net.minecraft.world.dimension.DimensionType.OVERWORLD,0x13572468ABCDEF01L,WorldType.DEFAULT,GameType.SURVIVAL);
+                net.minecraft.network.play.server.SRespawnPacket outgoing=new net.minecraft.network.play.server.SRespawnPacket(world.getDimensionType(),world.getDimensionKey(),0x13572468ABCDEF01L,GameType.SURVIVAL,GameType.CREATIVE,false,true,true);
                 outgoing.writePacketData(buffer);
                 net.minecraft.network.play.server.SRespawnPacket incoming=new net.minecraft.network.play.server.SRespawnPacket();incoming.readPacketData(buffer);
                 require(RespawnPacketTrace.describe(outgoing).equals(RespawnPacketTrace.describe(incoming)),"Respawn observer differs before/after native decoding");
-                require(RespawnPacketTrace.describe(incoming).equals("RESPAWN dimension=0 hashedSeed="+0x13572468ABCDEF01L),"Native 1.15 hashed seed missing from the packet observation");
+                require(RespawnPacketTrace.describe(incoming).equals("RESPAWN dimension=minecraft:overworld hashedSeed="+0x13572468ABCDEF01L),"Native 1.16 hashed seed missing from the packet observation");
             } finally {buffer.release();}
         });
         check("rejected_spawn_keeps_death_inventory", () -> {

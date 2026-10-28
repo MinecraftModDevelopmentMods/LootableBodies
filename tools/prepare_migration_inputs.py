@@ -18,6 +18,8 @@ MODS = {
                          'C82CC329BA53A218CADB681D646F64A9C457341577BC4F9AA07E2F9926434CCF'),
 }
 MODS.update({
+    'released-115.jar': ('https://mediafilez.forgecdn.net/files/9343/448/LootableBodies-2.4.6.115021.jar',
+                         'DC7798F3E165EC369D8092324C9F85F51D7E633824D1BD04D946A60ADA3DDDA7'),
     'released-114.jar': ('https://mediafilez.forgecdn.net/files/9336/927/LootableBodies-2.4.5.114041.jar',
                          '1C4C153A2F67B9F0BC85913A33FBBC9575C4C6EF8EF49DF901120DF811484E7D'),
     'released-113.jar': ('https://github.com/MinecraftModDevelopmentMods/LootableBodies/releases/download/2.4.4.113021/LootableBodies-2.4.4.113021.jar',
@@ -118,6 +120,10 @@ def main():
     runtime=historical_runtime(Path(__file__).resolve().parents[1])
     runtime.install(args.java.resolve(),root/'forge114')
     report['forge114']=json.loads((root/'forge114/runtime-inputs.json').read_text())
+    from prepare_native115_tools import historical_runtime
+    runtime=historical_runtime(Path(__file__).resolve().parents[1])
+    runtime.install(args.java.resolve(),root/'forge115')
+    report['forge115']=json.loads((root/'forge115/runtime-inputs.json').read_text())
     (root / 'inputs.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     print('MIGRATION_INPUTS_VERIFIED', flush=True)
 

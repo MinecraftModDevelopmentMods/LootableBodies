@@ -18,6 +18,13 @@ ORIGINS = {
     'recovery-110': ('1.10.2', '2.4.1.110021', '7F9F0EE7BF09F943ED85398982EB7C2207F3DD55B75E9E92A7531C393BE1045B'),
 }
 ORIGINS.update({
+    'released-115': ('1.15.2','2.4.6.115021','DC7798F3E165EC369D8092324C9F85F51D7E633824D1BD04D946A60ADA3DDDA7'),
+    'recovery-115': ('1.15.2','2.4.6.115021','DC7798F3E165EC369D8092324C9F85F51D7E633824D1BD04D946A60ADA3DDDA7'),
+    'via115-110': ('1.10.2','2.2.0','688AFBBF4485D1F3746C68903C9E0885D57F42CCFBFA0CB4A0FC42982C0B3F2B'),
+    'via115-111': ('1.11.2','2.4.2.111021','59ACF5652505F08A7F011307B3CD68F3754FCFC14C4C330BD952475351AEC932'),
+    'via115-112': ('1.12.2','2.4.3.112021','A9F4B115828834F60C5905526A8A99794B1DFE4802AB4D48858F2D597F3FCBCA'),
+    'via115-113': ('1.13.2','2.4.4.113021','464CC1CDDA6C04CD72F5F1A2A504EB8A665E6E48AC255918437262DB2A22A4C1'),
+    'via115-114': ('1.14.4','2.4.5.114041','1C4C153A2F67B9F0BC85913A33FBBC9575C4C6EF8EF49DF901120DF811484E7D'),
     'released-114': ('1.14.4', '2.4.5.114041', '1C4C153A2F67B9F0BC85913A33FBBC9575C4C6EF8EF49DF901120DF811484E7D'),
     'recovery-114': ('1.14.4', '2.4.5.114041', '1C4C153A2F67B9F0BC85913A33FBBC9575C4C6EF8EF49DF901120DF811484E7D'),
     'via114-110': ('1.10.2', '2.2.0', '688AFBBF4485D1F3746C68903C9E0885D57F42CCFBFA0CB4A0FC42982C0B3F2B'),
@@ -45,6 +52,17 @@ FORGE_SHA = {'1.12.2': 'BD8314729D787E35164476D75AFB337AFB9783917E4F6FA1F77F049A
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+
+
+def prepare_historical_server(runtime, home, *args, **kwargs):
+    result=runtime.prepare_server(home, *args, **kwargs)
+    # Frozen writers retain their original API and jars. Complete only the
+    # fresh, owned launch settings before Forge's config watcher starts.
+    from native_runtime import seed_loader_defaults
+    # Forge25 predates defaultConfigPath; an extra key also needs correction.
+    seed_loader_defaults(home, deterministic=True,
+        include_default_path=not getattr(runtime,'FORGE','').startswith('forge-1.13.2-'))
+    return result
 
 
 def fingerprint(path):
@@ -123,6 +141,21 @@ def seed_native114(java, home, recovery=False):
     return fingerprint(home/'world')
 
 
+def seed_native115(java, home, recovery=False):
+    from prepare_native115_tools import historical_runtime
+    runtime=historical_runtime(Path(__file__).resolve().parents[1])
+    with (home/'seed.log').open('w',encoding='utf-8') as log:
+        result=subprocess.run([str(java),'-Xmx2G','-Dlootablebodies.fixture.version=2.4.6.115021',
+            '-Dlootablebodies.fixture.recovery='+str(recovery).lower(),'-jar',runtime.FORGE+'.jar','--nogui'],
+            cwd=home,stdout=log,stderr=subprocess.STDOUT,timeout=240)
+    expected='LOOTABLE_BODIES_LEGACY_SEED_PASS minecraft=1.15.2 mod=2.4.6.115021 corpses=9 dimensions=3'
+    if result.returncode or expected not in (home/'seed.log').read_text(errors='replace') or not (home/'world/legacy-seed.pass').is_file():
+        raise RuntimeError('Released 1.15 writer failed: '+str(home/'seed.log'))
+    if list((home/'crash-reports').glob('*')):raise RuntimeError('Released 1.15 writer crashed')
+    for path in [home/'seed.log',home/'logs/latest.log',home/'logs/debug.log']:audit(path,native=True)
+    return fingerprint(home/'world')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--java', type=Path, required=True)
@@ -132,6 +165,7 @@ def main():
     parser.add_argument('--forge113-home', type=Path)
     parser.add_argument('--forge114-home', type=Path)
     parser.add_argument('--forge115-home', type=Path)
+    parser.add_argument('--forge116-home', type=Path)
     for origin in ORIGINS:
         if origin.startswith('recovery-') or origin.startswith('via'):
             continue
@@ -154,6 +188,28 @@ def main():
     for origin, (minecraft, version, expected) in ORIGINS.items():
         if origin not in args.origins:
             continue
+        if origin.startswith('via115-'):
+            original=getattr(args,'original_110' if minecraft=='1.10.2' else 'released_'+origin[-3:]).resolve()
+            if digest(original)!=expected:raise RuntimeError('Incorrect historical source jar for '+origin)
+            source_home=root/(origin+'-source')
+            if minecraft in ('1.13.2','1.14.4'):
+                family='113' if minecraft=='1.13.2' else '114'
+                runtime=__import__('prepare_native'+family+'_tools',fromlist=['historical_runtime']).historical_runtime(project)
+                distribution=getattr(args,'forge'+family+'_home')
+                if not distribution:raise ValueError('Missing historical Forge distribution')
+                prepare_historical_server(runtime,source_home,distribution.resolve(),original,
+                    project/('build/native'+family+'-seed/lootablebodies-native'+family+'-world-fixtures-reobf.jar'))
+                sealed=(seed_native113 if family=='113' else seed_native114)(args.java.resolve(),source_home)
+            else:
+                distribution={'1.10.2':args.forge110_home,'1.11.2':args.forge111_home,'1.12.2':args.forge112_home}[minecraft]
+                prepare(source_home,distribution.resolve(),minecraft,original,seeder)
+                sealed=seed(args.java.resolve(),source_home,minecraft,version)
+            details=transition115(args.java.resolve(),project,source_home/'world',sealed,
+                root/origin,args.forge115_home,args.released_115.resolve(),minecraft,version,expected)
+            report['origins'][origin]=details
+            (root/'seed-report.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+            print('LEGACY_WORLD_SEALED',origin,len(details['world']),'files',flush=True)
+            continue
         if origin.startswith('via114-'):
             original=getattr(args, 'original_110' if minecraft=='1.10.2' else 'released_'+origin[-3:]).resolve()
             if digest(original)!=expected:
@@ -163,7 +219,7 @@ def main():
                 from prepare_native113_tools import historical_runtime
                 runtime=historical_runtime(project)
                 if not args.forge113_home: raise ValueError('--forge113-home is required')
-                runtime.prepare_server(source_home,args.forge113_home.resolve(),original,
+                prepare_historical_server(runtime,source_home,args.forge113_home.resolve(),original,
                     project/'build/native113-seed/lootablebodies-native113-world-fixtures-reobf.jar')
                 sealed=seed_native113(args.java.resolve(),source_home)
             else:
@@ -207,6 +263,20 @@ def main():
         source = getattr(args, origin.replace('recovery-', 'released-').replace('-', '_')).resolve()
         if digest(source) != expected:
             raise RuntimeError('Historical jar checksum mismatch: ' + origin)
+        if minecraft=='1.15.2':
+            from prepare_native115_tools import historical_runtime,SOURCE
+            runtime=historical_runtime(project)
+            if not args.forge115_home:raise ValueError('--forge115-home is required for the released 1.15 writer')
+            home=root/origin;native_seeder=project/'build/native115-seed/lootablebodies-native115-world-fixtures-reobf.jar'
+            record=json.loads((project/'.gradle/legacy-tools/released-115/tools.json').read_text())
+            if record['source']!=SOURCE or digest(native_seeder)!=record['sha256']:raise RuntimeError('Released 1.15 writer changed')
+            prepare_historical_server(runtime,home,args.forge115_home.resolve(),source,native_seeder)
+            hashes=seed_native115(args.java.resolve(),home,origin.startswith('recovery-'))
+            report['origins'][origin]={'minecraft':minecraft,'mod_version':version,'jar_sha256':expected,
+                'seeder_sha256':digest(native_seeder),'writer_source_commit':SOURCE,'world':hashes}
+            (root/'seed-report.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+            print('LEGACY_WORLD_SEALED',origin,len(hashes),'files',flush=True)
+            continue
         if minecraft=='1.14.4':
             from prepare_native114_tools import historical_runtime, SOURCE
             runtime=historical_runtime(project)
@@ -216,7 +286,7 @@ def main():
             record=json.loads((project/'.gradle/legacy-tools/released-114/tools.json').read_text())
             if record['source']!=SOURCE or digest(native_seeder)!=record['sha256']:
                 raise RuntimeError('Released 1.14 writer source or artifact changed')
-            runtime.prepare_server(home,args.forge114_home.resolve(),source,native_seeder)
+            prepare_historical_server(runtime,home,args.forge114_home.resolve(),source,native_seeder)
             hashes=seed_native114(args.java.resolve(),home,origin.startswith('recovery-'))
             report['origins'][origin]={'minecraft':minecraft,'mod_version':version,
                 'jar_sha256':expected,'seeder_sha256':digest(native_seeder),
@@ -231,7 +301,7 @@ def main():
                 raise ValueError('--forge113-home is required for the released 1.13 writer')
             home = root/origin
             native_seeder = project/'build/native113-seed/lootablebodies-native113-world-fixtures-reobf.jar'
-            runtime.prepare_server(home, args.forge113_home.resolve(), source, native_seeder)
+            prepare_historical_server(runtime,home, args.forge113_home.resolve(), source, native_seeder)
             hashes = seed_native113(args.java.resolve(), home, origin.startswith('recovery-'))
             report['origins'][origin] = {'minecraft': minecraft, 'mod_version': version,
                 'jar_sha256': expected, 'seeder_sha256': digest(native_seeder),
@@ -286,7 +356,7 @@ def transition113(java, project, source, sealed, target, distribution, released,
         raise RuntimeError('Released 1.13 transition tool or artifact changed')
     if fingerprint(source) != sealed or not distribution:
         raise RuntimeError('Missing or changed historical transition source')
-    runtime.prepare_server(target, distribution.resolve(), released, probe)
+    prepare_historical_server(runtime,target, distribution.resolve(), released, probe)
     shutil.copytree(source, target/'world')
     world = target/'world'
     shutil.copy2(next((world/'playerdata').glob('*.dat')), world/'upgrade-player-source.nbt')
@@ -313,7 +383,7 @@ def transition114(java, project, source, sealed, target, distribution, released,
         raise RuntimeError('Released 1.14 transition tool or artifact changed')
     if fingerprint(source)!=sealed or not distribution:
         raise RuntimeError('Missing or changed historical transition source')
-    runtime.prepare_server(target,distribution.resolve(),released,probe)
+    prepare_historical_server(runtime,target,distribution.resolve(),released,probe)
     shutil.copytree(source,target/'world'); world=target/'world'
     shutil.copy2(next((world/'playerdata').glob('*.dat')),world/'upgrade-player-source.nbt')
     distant={str(p.relative_to(world)):digest(p) for p in world.rglob('region/r.*.mca')
@@ -325,6 +395,27 @@ def transition114(java, project, source, sealed, target, distribution, released,
             'jar_sha256':expected,'intermediate_jar_sha256':digest(released),
             'transition_probe_sha256':digest(probe),'source_world_unchanged':True,
             'distant_regions_unchanged':distant,'world':fingerprint(world)}
+
+
+def transition115(java,project,source,sealed,target,distribution,released,minecraft,version,expected):
+    """Use the released 1.15 writer; preserve six unopened historical regions."""
+    from prepare_native115_tools import historical_runtime,SOURCE
+    runtime=historical_runtime(project)
+    record=json.loads((project/'.gradle/legacy-tools/released-115/tools.json').read_text())
+    probe=project/'.gradle/legacy-tools/released-115/source/build'/record['probe']
+    if record['source']!=SOURCE or digest(probe)!=record['probe_sha256'] or digest(released)!=ORIGINS['released-115'][2]:
+        raise RuntimeError('Released 1.15 transition tool or artifact changed')
+    if fingerprint(source)!=sealed or not distribution:raise RuntimeError('Missing or changed historical transition source')
+    prepare_historical_server(runtime,target,distribution.resolve(),released,probe)
+    shutil.copytree(source,target/'world');world=target/'world'
+    shutil.copy2(next((world/'playerdata').glob('*.dat')),world/'upgrade-player-source.nbt')
+    distant={str(p.relative_to(world)):digest(p) for p in world.rglob('region/r.*.mca') if p.name in ('r.8.8.mca','r.16.16.mca')}
+    runtime.run_server(java,target,'upgrade-near',message='LOOTABLE_BODIES_WORLD_UPGRADE_PASS phase=upgrade-near')
+    if fingerprint(source)!=sealed or len(distant)!=6 or any(digest(world/p)!=sha for p,sha in distant.items()):
+        raise RuntimeError('Released 1.15 transition changed its source or unopened regions')
+    return {'minecraft':minecraft+' via 1.15.2','mod_version':version+' via 2.4.6.115021',
+        'jar_sha256':expected,'intermediate_jar_sha256':digest(released),'transition_probe_sha256':digest(probe),
+        'source_world_unchanged':True,'distant_regions_unchanged':distant,'world':fingerprint(world)}
 
 
 def seed_transition112(args,project,root,seeder,origin):
@@ -426,8 +517,8 @@ def preserve_historical_markers(home):
 def verify(args, project):
     if not args.seeds:
         raise ValueError('--seeds is required for the upgrade matrix')
-    if not args.forge115_home:
-        raise ValueError('--forge115-home is required for the native upgrade matrix')
+    if not args.forge116_home:
+        raise ValueError('--forge116-home is required for the native upgrade matrix')
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     candidate = project / 'build/libs' / MAIN_JAR
@@ -456,7 +547,7 @@ def verify(args, project):
             name = origin + '-' + variant
             home = root / name
             from native_runtime import prepare_server
-            prepare_server(home,args.forge115_home.resolve(),candidate,probe)
+            prepare_server(home,args.forge116_home.resolve(),candidate,probe)
             shutil.copytree(source, home / 'world')
             world = home / 'world'
             historical_markers=preserve_historical_markers(home)
@@ -482,7 +573,7 @@ def verify(args, project):
                             if entity.value.get('id', Tag(8, '')).value not in ('lootablebodies.Corpse', 'lootablebodies:corpse'):
                                 continue
                             if wave >= 0 or phase in ('upgrade-return', 'upgrade-final', 'upgrade-final-reload'):
-                                if entity.value['id'].value != 'lootablebodies:corpse' or entity.value.get('LootableBodiesDataVersion') != Tag(3, 5):
+                                if entity.value['id'].value != 'lootablebodies:corpse' or entity.value.get('LootableBodiesDataVersion') != Tag(3, 6):
                                     raise RuntimeError('A loaded corpse was not actually saved in the new format')
                                 persisted += 1
                 if persisted < (3 if wave >= 0 else 8):

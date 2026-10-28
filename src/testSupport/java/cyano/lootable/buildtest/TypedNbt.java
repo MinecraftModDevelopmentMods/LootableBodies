@@ -9,6 +9,23 @@ public final class TypedNbt {
     public static boolean same(INBT left, INBT right) {
         return canonical(left).equals(canonical(right));
     }
+    /** Native Attributes is a map; inventory and recovery lists stay ordered. */
+    public static boolean sameEntity(CompoundNBT left,CompoundNBT right) {
+        return same(entityCopy(left),entityCopy(right));
+    }
+    private static CompoundNBT entityCopy(CompoundNBT input) {
+        CompoundNBT copy=input.copy();
+        if(!copy.contains("Attributes",9))return copy;
+        ListNBT attributes=copy.getList("Attributes",10);
+        if(attributes.size()!=((ListNBT)copy.get("Attributes")).size())return copy;
+        java.util.List<INBT> entries=new java.util.ArrayList<>();
+        for(INBT value:attributes) {
+            if(!(value instanceof CompoundNBT) || !((CompoundNBT)value).contains("Name",8))return copy;
+            entries.add(value);
+        }
+        entries.sort(java.util.Comparator.comparing(TypedNbt::canonical));
+        ListNBT sorted=new ListNBT();entries.forEach(sorted::add);copy.put("Attributes",sorted);return copy;
+    }
     public static String canonical(INBT tag) {
         if(tag==null)return "null";
         StringBuilder text=new StringBuilder().append(tag.getId()).append(':');

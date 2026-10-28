@@ -1,0 +1,15 @@
+{
+  "minecraft": "1.15.2",
+  "forge": "31.2.57",
+  "mod_version": "2.4.6.115021",
+  "released_source_commit": "b544c684e4a9b68fe76637e34f5c257b5829aa80",
+  "public_file": "https://www.curseforge.com/minecraft/mc-mods/drcyanos-lootable-bodies/files/9343448",
+  "production_jar_sha256": "DC7798F3E165EC369D8092324C9F85F51D7E633824D1BD04D946A60ADA3DDDA7",
+  "historical_writer_sha256": "891E3B2DC43A51D456D08BBD98C3130CA03099FF584AE82F8B2AD4A6D36A9E3A",
+  "origin": "released-115",
+  "dimension": "minecraft:overworld",
+  "region": "region/r.0.0.mca",
+  "chunk": [8, 8],
+  "fixture_sha256": "B6D03C7E0962715745FCD93A31EA27C01B4601020A51F542898BCE09F14C10C2",
+  "encoding": "Original typed chunk NBT, gzip with timestamp zero. Captured read-only from the checksum-locked disposable historical world."
+}

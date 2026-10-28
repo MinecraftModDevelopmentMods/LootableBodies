@@ -1,4 +1,4 @@
-"""Run the exact production jar and isolated verifier in official Forge 31."""
+"""Run the exact production jar and isolated verifier in official Forge 36."""
 import argparse
 import hashlib
 import json
@@ -28,7 +28,9 @@ def main():
     probe=project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar'
     candidate_hash=hashlib.sha256(main.read_bytes()).hexdigest().upper()
     prepare_client(root,main,probe);(root/'config').mkdir(exist_ok=True)
-    local='true' if args.mode in ('default','names') else 'false'
+    # Inventory/death fixtures exercise gameplay, independent of live skin HTTP.
+    # The dedicated skin and config modes still exercise the player-skin path.
+    local='true' if args.mode in ('default','names','issues') else 'false'
     (root/'config/lootablebodies.cfg').write_text('options {\n B:local_texture='+local+'\n}\n')
     extra=['-Dlootablebodies.clientCheck=true','-Dlog4j.configurationFile='+(project/'src/integrationTest/resources/log4j2.xml').as_uri()]
     if args.hidden_agent:extra.append('-javaagent:'+str(args.hidden_agent.resolve()))

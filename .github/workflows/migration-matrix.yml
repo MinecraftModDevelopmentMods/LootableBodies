@@ -1,17 +1,17 @@
-name: LootableBodies 1.15 world upgrades
+name: LootableBodies 1.16 world upgrades
 
 on:
   push:
-    branches: [master-1.15.2]
+    branches: [master-1.16.5]
   pull_request:
-    branches: [master-1.15.2]
+    branches: [master-1.16.5]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: lootablebodies-1.15-upgrades-${{ github.ref }}
+  group: lootablebodies-1.16-upgrades-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -48,8 +48,10 @@ jobs:
         run: python3 tools/prepare_native113_tools.py --java17-home "$JAVA_HOME" --java8-home "$JAVA_HOME_8_X64" --java25-home "$JAVA_HOME_25_X64"
       - name: Build the released 1.14 fixture tools
         run: python3 tools/prepare_native114_tools.py --java17-home "$JAVA_HOME" --java8-home "$JAVA_HOME_8_X64" --java25-home "$JAVA_HOME_25_X64"
+      - name: Build the released 1.15 fixture tools
+        run: python3 tools/prepare_native115_tools.py --java17-home "$JAVA_HOME" --java8-home "$JAVA_HOME_8_X64" --java25-home "$JAVA_HOME_25_X64"
       - name: Build candidate and isolated fixture writers
-        run: ./gradlew assemble test prepareLegacyWorldFixtures preparePackagedIntegrationProbe --no-daemon
+        run: python3 tools/command_logs.py --log build/preparation-inputs.log -- ./gradlew assemble test prepareLegacyWorldFixtures preparePackagedIntegrationProbe --no-daemon --console=plain
       - name: Download and verify historical artifacts
         run: python3 tools/prepare_migration_inputs.py --java "$JAVA_HOME_8_X64/bin/java" --output build/migration-inputs
       - name: Install the native Forge target
@@ -57,15 +59,15 @@ jobs:
       - name: Create worlds with historical mod writers
         run: >-
           python3 tools/verify_world_upgrades.py --java "$JAVA_HOME_8_X64/bin/java"
-          --forge110-home build/migration-inputs/forge110 --forge111-home build/migration-inputs/forge111 --forge112-home build/migration-inputs/forge112 --forge113-home build/migration-inputs/forge113 --forge114-home build/migration-inputs/forge114
+          --forge110-home build/migration-inputs/forge110 --forge111-home build/migration-inputs/forge111 --forge112-home build/migration-inputs/forge112 --forge113-home build/migration-inputs/forge113 --forge114-home build/migration-inputs/forge114 --forge115-home build/migration-inputs/forge115
           --original-110 build/migration-inputs/original-110.jar --released-110 build/migration-inputs/released-110.jar
-          --original-111 build/migration-inputs/original-111.jar --released-111 build/migration-inputs/released-111.jar --original-112 build/migration-inputs/original-112.jar --released-112 build/migration-inputs/released-112.jar --released-113 build/migration-inputs/released-113.jar --released-114 build/migration-inputs/released-114.jar
+          --original-111 build/migration-inputs/original-111.jar --released-111 build/migration-inputs/released-111.jar --original-112 build/migration-inputs/original-112.jar --released-112 build/migration-inputs/released-112.jar --released-113 build/migration-inputs/released-113.jar --released-114 build/migration-inputs/released-114.jar --released-115 build/migration-inputs/released-115.jar
           --seed-only --output build/migration-seeds
       - name: Seal the explicit inputs without Gradle caches
         run: python3 tools/migration_ci.py seal --commit "$GITHUB_SHA"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: LootableBodies-1.15.2-migration-inputs-${{ github.sha }}
+          name: LootableBodies-1.16.5-migration-inputs-${{ github.sha }}
           if-no-files-found: error
           retention-days: 7
           path: |
@@ -75,7 +77,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: LootableBodies-1.15.2-migration-preparation-failure-${{ github.sha }}
+          name: LootableBodies-1.16.5-migration-preparation-failure-${{ github.sha }}-${{ github.run_attempt }}
           if-no-files-found: error
           include-hidden-files: true
           path: |
@@ -85,6 +87,20 @@ jobs:
             .gradle/legacy-tools/released-112/build.log
             .gradle/legacy-tools/released-113/build.log
             .gradle/legacy-tools/released-114/build.log
+            .gradle/legacy-tools/released-115/build.log
+      - name: Keep every preparation download attempt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: LootableBodies-1.16.5-preparation-logs-${{ github.sha }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          include-hidden-files: true
+          path: |
+            .gradle/legacy-tools/released-112/build*.log
+            .gradle/legacy-tools/released-113/build*.log
+            .gradle/legacy-tools/released-114/build*.log
+            .gradle/legacy-tools/released-115/build*.log
+            build/preparation-inputs*.log
 
   upgrade:
     name: Historical world shard ${{ matrix.shard }}
@@ -94,7 +110,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
@@ -103,7 +119,7 @@ jobs:
           java-version: '8.0.502+7'
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: LootableBodies-1.15.2-migration-inputs-${{ github.sha }}
+          name: LootableBodies-1.16.5-migration-inputs-${{ github.sha }}
           path: build/migration-ci-inputs
       - name: Verify and restore exact inputs
         run: python3 tools/migration_ci.py restore --commit "$GITHUB_SHA"
@@ -111,7 +127,7 @@ jobs:
         run: python3 tools/migration_ci.py shard --commit "$GITHUB_SHA" --shard ${{ matrix.shard }} --java "$JAVA_HOME/bin/java"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: LootableBodies-1.15.2-upgrade-shard-${{ matrix.shard }}-${{ github.sha }}
+          name: LootableBodies-1.16.5-upgrade-shard-${{ matrix.shard }}-${{ github.sha }}
           if-no-files-found: error
           path: |
             build/migration-ci/report.json
@@ -125,7 +141,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: LootableBodies-1.15.2-upgrade-shard-failure-${{ matrix.shard }}-${{ github.sha }}
+          name: LootableBodies-1.16.5-upgrade-shard-failure-${{ matrix.shard }}-${{ github.sha }}
           if-no-files-found: error
           include-hidden-files: true
           path: |
@@ -151,12 +167,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          pattern: LootableBodies-1.15.2-upgrade-shard-*-${{ github.sha }}
+          pattern: LootableBodies-1.16.5-upgrade-shard-*-${{ github.sha }}
           path: build/migration-shards
-      - name: Require all 46 cases, 460 JVM phases and 92 safe refusals
+      - name: Require all 60 cases, 600 JVM phases and 120 safe refusals
         run: python3 tools/migration_ci.py aggregate --commit "$GITHUB_SHA" --folder build/migration-shards
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: LootableBodies-1.15.2-world-upgrades-${{ github.sha }}
+          name: LootableBodies-1.16.5-world-upgrades-${{ github.sha }}
           if-no-files-found: error
           path: build/migration-summary.json

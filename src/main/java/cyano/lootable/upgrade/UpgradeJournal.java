@@ -181,6 +181,9 @@ public final class UpgradeJournal {
         }
         try(RandomAccessFile input=new RandomAccessFile(file.toFile(),"r")) {
             long length=input.length();
+            // Native16 leaves a zero-byte placeholder when a region is opened
+            // only to look up an absent chunk. It contains no allocated data.
+            if(length==0)return regionRecord(relative,hash,preserved);
             if(length<8192 || length%4096!=0) throw new IOException("Incomplete region: "+relative);
             int[] offsets=new int[1024];for(int i=0;i<1024;i++) offsets[i]=input.readInt();
             Set<Integer> allocated=new HashSet<>();allocated.add(0);allocated.add(1);
@@ -243,6 +246,9 @@ public final class UpgradeJournal {
                 }
             }
         } catch(RuntimeException damaged) { throw new IOException("Cannot safely preserve "+relative,damaged); }
+        return regionRecord(relative,hash,preserved);
+    }
+    private static CompoundNBT regionRecord(String relative,String hash,ListNBT preserved) {
         CompoundNBT record=new CompoundNBT();record.putString("Path",relative);record.putString("Digest",hash);record.put("Snapshots",preserved);return record;
     }
 
@@ -255,6 +261,8 @@ public final class UpgradeJournal {
             if(data.contains("Version"))context.put("WorldVersion",data.get("Version").copy());
             if(root.contains("FML")) context.put("WorldFML",root.get("FML").copy());
             else if(data.contains("FML")) context.put("WorldFML",data.get("FML").copy());
+            else if(root.contains("fml")) context.put("WorldFML",root.get("fml").copy());
+            else if(data.contains("fml")) context.put("WorldFML",data.get("fml").copy());
         }
         return context;
     }
@@ -274,13 +282,17 @@ public final class UpgradeJournal {
         else if(marker==3)version=1631;
         else if(marker==4)version=1976;
         else if(marker==5)version=2230;
+        else if(marker==6)version=2586;
         if(legacy) {if(version!=512)context.putBoolean("Inferred",true);version=512;}
+        if(legacy || (marker>=1 && marker<=UpgradePreservation.DATA_VERSION))
+            context.putInt("CorpseWriterDataVersion",version);
         int family=-1;
-        ListNBT mods=world.getCompound("WorldFML").getList("ModList",10);
+        ListNBT mods=UpgradePreservation.modList(world.getCompound("WorldFML"));
         for(int i=0;i<mods.size();i++) {
             CompoundNBT mod=mods.getCompound(i);if(!mod.getString("ModId").equals("lootablebodies"))continue;
             String release=mod.getString("ModVersion");
-            if(release.endsWith(".115021"))family=2230;
+            if(release.endsWith(".116051"))family=2586;
+            else if(release.endsWith(".115021"))family=2230;
             else if(release.endsWith(".114041"))family=1976;
             else if(release.endsWith(".113021"))family=1631;
             else if(release.endsWith(".112021") || release.equals("2.4.0"))family=1139;
@@ -297,7 +309,7 @@ public final class UpgradeJournal {
         if(version<512 || version>UpgradePreservation.MINECRAFT_VERSION) {
             // Keep ambiguous records retriable without guessing a bed colour or
             // discarding known items whose conversion agrees in both families.
-            context.putBoolean("Ambiguous",true);context.putIntArray("CandidateDataVersions",new int[]{922,1343,1631,1976,2230});version=922;
+            context.putBoolean("Ambiguous",true);context.putIntArray("CandidateDataVersions",new int[]{922,1343,1631,1976,2230,2586});version=922;
         }
         context.putInt("DataVersion",version);return context;
     }
@@ -341,8 +353,10 @@ public final class UpgradeJournal {
         uuid(nbt.getCompound("Entity"));return nbt;
     }
     private static UUID uuid(CompoundNBT entity) throws IOException {
-        if(!entity.contains("UUIDMost",4) || !entity.contains("UUIDLeast",4)) throw new IOException("Corpse UUID is missing or malformed; original region has not been changed");
-        return entity.getUniqueId("UUID");
+        try {return CorpseIdentity.read(entity);}
+        catch(IllegalArgumentException invalid) {
+            throw new IOException("Corpse UUID is missing, conflicting or malformed; original region has not been changed",invalid);
+        }
     }
     private static boolean compoundList(INBT value) {return value instanceof ListNBT && (((ListNBT)value).size()==0 || ((ListNBT)value).getTagType()==10);}
     private static CompoundNBT readCompressed(Path path) throws IOException {

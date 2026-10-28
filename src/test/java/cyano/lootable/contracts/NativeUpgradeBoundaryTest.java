@@ -53,7 +53,7 @@ class NativeUpgradeBoundaryTest {
     }
     @Test void legacyIdentityAndEveryRawInventoryEntrySurviveBothAnvilPasses()throws Exception {
         CompoundNBT body=corpse(),source=chunk(body,true);byte[] before=encoded(source);CompoundNBT result=update(source),saved=findCorpse(result);
-        assertEquals("lootablebodies:corpse",saved.getString("id"));assertEquals(5,saved.getInt("LootableBodiesDataVersion"));assertEquals(ID,saved.getUniqueId("UUID"));
+        assertEquals("lootablebodies:corpse",saved.getString("id"));assertEquals(6,saved.getInt("LootableBodiesDataVersion"));assertEquals(ID,saved.getUniqueId("UUID"));
         ListNBT records=saved.getList("LootableBodiesUnresolved",10);assertEquals(49,records.size());
         for(int i=0;i<48;i++){CompoundNBT record=records.getCompound(i);assertEquals("Equipment",record.getString("Source"));assertArrayEquals(encoded(body.getList("Equipment",10).getCompound(i)),encoded(record.getCompound("Data")));assertEquals(512,record.getCompound("SourceVersions").getInt("DataVersion"));}
         assertEquals("Aux",records.getCompound(48).getString("Source"));assertArrayEquals(before,encoded(source));assertFalse(saved.contains("LootableBodiesUpgradePayload"));assertFalse(saved.contains("LootableBodiesInventorySource"));

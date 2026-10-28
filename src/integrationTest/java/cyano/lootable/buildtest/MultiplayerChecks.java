@@ -54,7 +54,7 @@ public final class MultiplayerChecks {
             if(new File(sync,"abort").exists())throw new AssertionError("Runner aborted multiplayer fixture");
             ServerPlayerEntity a=player("A"),b=player("B");
             if(phase==0 && a!=null && b!=null){
-                ServerWorld w=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));
+                ServerWorld w=server.getWorld(FixtureApi.dimensionKey(0));
                 for(int x=93;x<=100;x++)for(int z=93;z<=100;z++)w.setBlockState(new BlockPos(x,79,z),Blocks.STONE.getDefaultState());
                 w.getGameRules().get(net.minecraft.world.GameRules.DO_MOB_SPAWNING).set(false,null);
                 body=new EntityLootableBody(w);body.setUniqueId(BODY);body.setPosition(96.5,80.5,96.5);body.setNoGravity(true);body.setUserName("SharedFixture");RuntimeChecks.disableVacuum(body);
@@ -78,7 +78,7 @@ public final class MultiplayerChecks {
             }else if(phase==6 && ack("A",6)){
                 equal(a.inventory.getItemStack(),null,"TCP deposit cursor not empty");RuntimeChecks.require(count(a,19)==5,"TCP drag remainder deposit");setPhase(7);
             }else if(phase==7 && ack("A",7) && ack("B",7)){
-                File folder=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0)).getSaveHandler().getWorldDirectory();
+                File folder=server.getWorld(FixtureApi.dimensionKey(0)).getServer().func_240776_a_(net.minecraft.world.storage.FolderName.DOT).toFile();
                 RuntimeChecks.saveExpected(folder,"multiplayer-body",body);savePlayer(folder,a,"A");savePlayer(folder,b,"B");
                 server.getPlayerList().saveAllPlayerData();server.save(false,true,false);mark("two_tcp_clients_final_gui_and_saved_nbt");
                 setPhase(8);
@@ -103,8 +103,8 @@ public final class MultiplayerChecks {
         try(FileOutputStream out=new FileOutputStream(new File(folder,"multiplayer-player-"+role+".nbt"))){CompressedStreamTools.writeCompressed(n,out);}
     }
     static void verifyReload(MinecraftServer server) throws Exception {
-        ServerWorld world=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));world.getChunk(6,6);EntityLootableBody body=RuntimeChecks.find(world,BODY);body.baseTick();
-        File folder=world.getSaveHandler().getWorldDirectory();RuntimeChecks.verifyExpected(folder,"multiplayer-body",body);
+        ServerWorld world=server.getWorld(FixtureApi.dimensionKey(0));world.getChunk(6,6);EntityLootableBody body=RuntimeChecks.find(world,BODY);body.baseTick();
+        File folder=world.getServer().func_240776_a_(net.minecraft.world.storage.FolderName.DOT).toFile();RuntimeChecks.verifyExpected(folder,"multiplayer-body",body);
         for(String role:new String[]{"A","B"}){
             CompoundNBT expected;try(FileInputStream in=new FileInputStream(new File(folder,"multiplayer-player-"+role+".nbt"))){expected=CompressedStreamTools.readCompressed(in);}
             CompoundNBT actual;try(FileInputStream in=new FileInputStream(new File(folder,"playerdata/"+expected.getString("UUID")+".dat"))){actual=CompressedStreamTools.readCompressed(in);}

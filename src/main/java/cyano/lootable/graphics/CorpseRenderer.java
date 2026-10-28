@@ -8,7 +8,7 @@ import cyano.lootable.entities.EntityLootableBody;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.IRenderTypeBuffer;
-import net.minecraft.client.renderer.Vector3f;
+import net.minecraft.util.math.vector.Vector3f;
 import net.minecraft.client.renderer.entity.EntityRendererManager;
 import net.minecraft.client.renderer.entity.LivingRenderer;
 import net.minecraft.client.renderer.entity.layers.ArrowLayer;
@@ -87,7 +87,7 @@ public class CorpseRenderer extends LivingRenderer<EntityLootableBody, PlayerMod
     @Override protected boolean canRenderName(EntityLootableBody entity) {
         return LootableBodies.displayNameTag && super.canRenderName(entity);
     }
-    @Override protected void renderName(EntityLootableBody entity, String name, MatrixStack matrices,
+    @Override protected void renderName(EntityLootableBody entity, net.minecraft.util.text.ITextComponent name, MatrixStack matrices,
             IRenderTypeBuffer buffers, int light) {
         if (LootableBodies.displayNameTag) super.renderName(entity, name, matrices, buffers, light);
     }

@@ -16,7 +16,7 @@ final class Recovery112Checks {
         int checks=0;
         try {
             for(int dimension:new int[]{0,-1,1})for(boolean dimensionBlocks:new boolean[]{false,true}) {
-                ServerWorld world=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(dimension));int coordinate=264+checks*16;
+                ServerWorld world=server.getWorld(FixtureApi.dimensionKey(dimension));int coordinate=264+checks*16;
                 world.getChunk(coordinate>>4,coordinate>>4);BlockPos center=new BlockPos(coordinate,0,coordinate);
                 for(int x=-1;x<=1;x++)for(int z=-1;z<=1;z++)world.removeBlock(center.add(x,0,z),false);
                 world.setBlockState(center,Blocks.STONE.getDefaultState());
@@ -30,7 +30,7 @@ final class Recovery112Checks {
                     RuntimeChecks.require(world.getBlockState(center.add(x,0,z)).getBlock()==(x==0 && z==0?Blocks.STONE:expected),"Void platform changed existing terrain or dimension block");
                 conserved(body);checks++;
             }
-            ServerWorld world=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));world.getChunk(30,30);
+            ServerWorld world=server.getWorld(FixtureApi.dimensionKey(0));world.getChunk(30,30);
             for(int x=487;x<=489;x++)for(int z=487;z<=489;z++)for(int y=79;y<=82;y++)world.setBlockState(new BlockPos(x,y,z),Blocks.WATER.getDefaultState());
             EntityLootableBody body=body(world,488,80);
             RuntimeChecks.require(body.handleWaterMovement(),"Water fixture was not submerged");

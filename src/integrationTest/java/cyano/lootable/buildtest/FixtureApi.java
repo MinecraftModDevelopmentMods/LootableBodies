@@ -14,12 +14,46 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 /** Read-only entity snapshots across the target's separate world APIs. */
 final class FixtureApi {
     private FixtureApi() { }
+    static void spawn(net.minecraft.entity.player.ServerPlayerEntity player,net.minecraft.util.math.BlockPos position,boolean forced,boolean notify,net.minecraft.util.RegistryKey<World> dimension) {
+        player.func_242111_a(dimension,position,0F,forced,notify);
+    }
+    static net.minecraft.util.RegistryKey<World> dimensionKey(int id) {
+        if(id==0)return World.OVERWORLD;if(id==-1)return World.THE_NETHER;if(id==1)return World.THE_END;
+        throw new IllegalArgumentException("Unknown fixture dimension "+id);
+    }
+    static int dimensionId(World world) {
+        if(world.getDimensionKey()==World.OVERWORLD)return 0;
+        if(world.getDimensionKey()==World.THE_NETHER)return -1;
+        if(world.getDimensionKey()==World.THE_END)return 1;
+        throw new IllegalArgumentException("Unknown fixture dimension "+world.getDimensionKey());
+    }
+    static net.minecraft.world.storage.PlayerData playerData(MinecraftServer server) {
+        java.util.List<java.lang.reflect.Field> fields=new java.util.ArrayList<>();
+        for(Class<?> type=server.getClass();type!=null;type=type.getSuperclass())for(java.lang.reflect.Field field:type.getDeclaredFields())
+            if(field.getType()==net.minecraft.world.storage.PlayerData.class)fields.add(field);
+        if(fields.size()!=1)throw new IllegalStateException("Ambiguous fixture player reader");
+        try {java.lang.reflect.Field field=fields.get(0);field.setAccessible(true);return (net.minecraft.world.storage.PlayerData)field.get(server);}
+        catch(ReflectiveOperationException failure){throw new IllegalStateException(failure);}
+    }
+    @OnlyIn(Dist.CLIENT)
+    static final class ClientWorlds {
+        static void create(net.minecraft.client.Minecraft client,String folder,String title,net.minecraft.world.GameType mode,boolean commands) {
+            net.minecraft.util.registry.DynamicRegistries.Impl registries=net.minecraft.util.registry.DynamicRegistries.func_239770_b_();
+            net.minecraft.util.registry.Registry<net.minecraft.world.DimensionType> types=registries.getRegistry(net.minecraft.util.registry.Registry.DIMENSION_TYPE_KEY);
+            net.minecraft.util.registry.Registry<net.minecraft.world.biome.Biome> biomes=registries.getRegistry(net.minecraft.util.registry.Registry.BIOME_KEY);
+            net.minecraft.world.gen.settings.DimensionGeneratorSettings settings=new net.minecraft.world.gen.settings.DimensionGeneratorSettings(4267321L,false,false,
+                net.minecraft.world.gen.settings.DimensionGeneratorSettings.func_242749_a(types,
+                    net.minecraft.world.DimensionType.getDefaultSimpleRegistry(types,biomes,registries.getRegistry(net.minecraft.util.registry.Registry.NOISE_SETTINGS_KEY),4267321L),
+                    new net.minecraft.world.gen.FlatChunkGenerator(net.minecraft.world.gen.FlatGenerationSettings.func_242869_a(biomes))));
+            client.createWorld(folder,new net.minecraft.world.WorldSettings(title,mode,false,net.minecraft.world.Difficulty.NORMAL,commands,new net.minecraft.world.GameRules(),net.minecraft.util.datafix.codec.DatapackCodec.VANILLA_CODEC),registries,settings);
+        }
+    }
     static List<Entity> entities(World world) {
         if (world instanceof ServerWorld) return ((ServerWorld) world).getEntities().collect(Collectors.toList());
         return ClientEntities.read(world);
     }
     static Entity loadEntity(CompoundNBT data, World world) {
-        return net.minecraft.entity.EntityType.func_220335_a(data, world, entity -> entity);
+        return net.minecraft.entity.EntityType.loadEntityAndExecute(data, world, entity -> entity);
     }
     static Entity readChunkEntity(CompoundNBT data, ServerWorld world, net.minecraft.world.chunk.Chunk chunk) {
         // Invoke the actual native chunk serializer; do not replace its admission callback.

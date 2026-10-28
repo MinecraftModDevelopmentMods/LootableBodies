@@ -91,6 +91,7 @@ def main():
         ("changed-changelog", "changelog differs"),
         ("extra-jar", "exactly the declared jars"),
         ("deobfuscated-main", "runtime SRG mappings"),
+        ("wrong-world-reader-boundary", "native world-reader access boundary"),
         ("changed-license", "licence or attribution"),
         ("foreign-class", "Foreign production class"),
     ]:
@@ -109,8 +110,14 @@ def main():
         elif name == "extra-jar":
             (folder / "unexpected.jar").write_bytes(b"unexpected")
         elif name == "deobfuscated-main":
-            shutil.copyfile(PROJECT / "build/libs-dev" / MAIN_JAR.replace(".jar", "-deobf.jar"), folder / MAIN_JAR)
-            sums(folder)
+            # Keep valid archive metadata/access rules so this proves the
+            # independent class-mapping check, rather than an earlier check.
+            entry = "cyano/lootable/entities/EntityLootableBody.class"
+            with zipfile.ZipFile(PROJECT / "build/libs-dev" / MAIN_JAR.replace(".jar", "-deobf.jar")) as development:
+                rewrite_jar(folder, entry, development.read(entry))
+        elif name == "wrong-world-reader-boundary":
+            rewrite_jar(folder, "META-INF/accesstransformer.cfg",
+                        b"public-f net.minecraft.util.datafix.DataFixesManager DATA_FIXER\n")
         elif name == "changed-license":
             rewrite_jar(folder, "META-INF/LICENSE", b"wrong licence\n")
         elif name == "foreign-class":

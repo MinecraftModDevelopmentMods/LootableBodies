@@ -26,7 +26,7 @@ import net.minecraftforge.fml.loading.FMLPaths;
 public final class LootableBodies {
     public static final String MODID = "lootablebodies";
     public static final String NAME = "DrCyano's Lootable Bodies";
-    public static final String VERSION = "2.4.6.115021";
+    public static final String VERSION = "2.4.7.116051";
     public static final ResourceLocation CORPSE_ID = new ResourceLocation("lootablebodies:corpse");
     public static EntityType<EntityLootableBody> CORPSE;
     public static Item CORPSE_EGG;
@@ -52,11 +52,15 @@ public final class LootableBodies {
 
     public LootableBodies() {
         INSTANCE=this;
+        UpgradePreservation.register(net.minecraft.util.datafix.DataFixesManager.getDataFixer());
+        cyano.lootable.upgrade.EarlyWorldPreservation.install();
         loadConfiguration(FMLPaths.CONFIGDIR.get().resolve("lootablebodies.cfg").toFile());
         net.minecraftforge.eventbus.api.IEventBus bus=FMLJavaModLoadingContext.get().getModEventBus();
         bus.addListener(cyano.lootable.upgrade.LegacyProfessionRegistry::create);
+        bus.addListener((net.minecraftforge.event.entity.EntityAttributeCreationEvent event)->event.put(corpseType(),EntityLootableBody.corpseAttributeDefaults().create()));
         bus.addGenericListener(EntityType.class,this::registerEntities);
         bus.addGenericListener(Item.class,this::registerItems);
+        bus.addGenericListener(net.minecraft.entity.ai.brain.memory.MemoryModuleType.class,cyano.lootable.upgrade.LegacyRegistryMappings::retiredMemories);
         bus.addGenericListener(net.minecraft.inventory.container.ContainerType.class,this::registerContainers);
         MinecraftForge.EVENT_BUS.register(new PlayerDeathEventHandler());
         MinecraftForge.EVENT_BUS.register(this);
@@ -90,10 +94,10 @@ public final class LootableBodies {
     }
     public static LootableBodies getInstance(){return INSTANCE;}
     @SubscribeEvent public void beforeWorldLoading(FMLServerAboutToStartEvent event) {
-        File world=event.getServer().getActiveAnvilConverter().getFile(event.getServer().getFolderName(),"");
+        File world=event.getServer().func_240776_a_(net.minecraft.world.storage.FolderName.DOT).toFile();
         try {
             UpgradePreservation.register(event.getServer().getDataFixer());
-            int count=UpgradePreservation.prepare(world.toPath()).size();
+            int count=UpgradePreservation.prepareForStart(world.toPath()).size();
             ChunkVersionContext.installServer(event.getServer());
             ModLog.info("Lootable Bodies preserved %s existing corpses before world loading",count);
         } catch(java.io.IOException unsafe) {

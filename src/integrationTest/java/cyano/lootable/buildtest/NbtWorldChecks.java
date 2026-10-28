@@ -28,7 +28,7 @@ final class NbtWorldChecks {
         }
     }
     static void run(MinecraftServer server,String phase) throws Exception {
-        ServerWorld world=server.getWorld(net.minecraft.world.dimension.DimensionType.getById(0));File folder=world.getSaveHandler().getWorldDirectory();
+        ServerWorld world=server.getWorld(FixtureApi.dimensionKey(0));File folder=world.getServer().func_240776_a_(net.minecraft.world.storage.FolderName.DOT).toFile();
         if(phase.equals("nbt-seed")) {
             seed(world,NEAR,160,folder,"near");seed(world,FAR,4096,folder,"far");
             System.out.println("NBT_WORLD_CHECK_PASS raw_region_seed");return;
