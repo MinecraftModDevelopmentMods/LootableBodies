@@ -61,6 +61,16 @@ tasks.register('prepareLegacyWorldFixtures') {
     }
 }
 
+// Complete settings before Forge starts watching a fresh disposable home.
+// Ordinary development and packaged launches retain their own native settings.
+def prepareOwnedLoaderConfig = { File root ->
+    File config = new File(root, 'config/fml.toml')
+    config.parentFile.mkdirs()
+    if (config.createNewFile()) {
+        config.setText('versionCheck = false\nsplashscreen = true\nmaxThreads = -1\ndefaultConfigPath = "defaultconfigs"\n', 'UTF-8')
+    }
+}
+
 def runDirectory = layout.dir(providers.provider { file(providers.gradleProperty('integrationDirectory').getOrElse('build/integration-run')) })
 tasks.register('prepareIntegrationTest') {
     dependsOn probeJar
@@ -72,6 +82,7 @@ tasks.register('prepareIntegrationTest') {
             if (!root.renameTo(history)) throw new GradleException('Cannot preserve previous runtime evidence')
         }
         new File(root,'mods').mkdirs()
+        prepareOwnedLoaderConfig(root)
         copy { from probeJar; into new File(root,'mods') }
         new File(root,'eula.txt').text = 'eula=true\n'
         ['ops','whitelist','banned-players','banned-ips'].each { new File(root,"${it}.json").text='[]\n' }
@@ -182,6 +193,7 @@ tasks.register('clientIntegrationTest') {
         if(root.exists()) throw new GradleException('Preserve the previous client evidence before rerunning')
         new File(root,'mods').mkdirs()
         new File(root,'config').mkdirs()
+        prepareOwnedLoaderConfig(root)
         new File(root,'options.txt').text='realmsNotifications:false\nsoundCategory_master:0.0\n'
         copy { from probeJar; into new File(root,'mods') }
         new File(root,'config/lootablebodies.cfg').text = tasks.getByName('runClient').systemProperties['lootablebodies.configUiCheck']=='true' ? '' : 'options {\n B:local_texture=true\n}\n'
@@ -254,11 +266,8 @@ minecraft.runs.register('platformControl') {
     String root=layout.buildDirectory.dir('forge16-development/control').get().asFile.absolutePath
     environment.put('MOD_CLASSES',"forgeplatformcontrol%%${root}${File.pathSeparator}forgeplatformcontrol%%${root}")
 }
-tasks.register('forgeControlServer') {
-    group='verification'
-    timeout=java.time.Duration.ofMinutes(2)
+def prepareForgeControl = tasks.register('prepareForgeControl') {
     dependsOn controlJar
-    dependsOn { def run=tasks.getByName('runPlatformControl'); run.taskDependencies.getDependencies(run) }
     doLast {
         File root=layout.buildDirectory.dir('forge-control-run').get().asFile
         if(root.exists()) {
@@ -266,11 +275,29 @@ tasks.register('forgeControlServer') {
             history.parentFile.mkdirs();if(!root.renameTo(history))throw new GradleException('Cannot preserve previous control evidence')
         }
         new File(root,'mods').mkdirs()
+        prepareOwnedLoaderConfig(root)
         File controlOutput=layout.buildDirectory.dir('forge16-development/control').get().asFile
         copy { from controlClasses;from 'src/controlTest/resources';into controlOutput }
         new File(root,'eula.txt').text='eula=true\n'
         new File(root,'server.properties').text='level-name=world\nlevel-type=FLAT\nserver-ip=127.0.0.1\nserver-port=0\nonline-mode=false\n'
         ['ops','whitelist','banned-players','banned-ips'].each { new File(root,"${it}.json").text='[]\n' }
+    }
+}
+
+tasks.named('test') {
+    dependsOn 'prepareIntegrationTest', prepareForgeControl
+    systemProperty 'lootablebodies.integrationFixtureRoot', runDirectory.get().asFile.absolutePath
+}
+
+tasks.register('forgeControlServer') {
+    group='verification'
+    timeout=java.time.Duration.ofMinutes(2)
+    dependsOn prepareForgeControl
+    dependsOn { def run=tasks.getByName('runPlatformControl'); run.taskDependencies.getDependencies(run) }
+    mustRunAfter tasks.named('test')
+    doLast {
+        File root=layout.buildDirectory.dir('forge-control-run').get().asFile
+        File controlOutput=layout.buildDirectory.dir('forge16-development/control').get().asFile
         JavaExec run=tasks.getByName('runPlatformControl')
         def options = minecraft.runs.getByName('platformControl')
         File previousDir = options.workingDir.get().asFile

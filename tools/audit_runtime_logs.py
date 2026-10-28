@@ -208,7 +208,7 @@ def audit(path, development=False, upgrade=False, fixture_logins=False, native=F
             for message in (FORGE_UPGRADE_RENAME, FORGE_UPGRADE_RENAME.replace(']:', '/]:'), FORGE_UPGRADE_RENAME.replace('FML.ModTracker','fml.ModTracker'), FORGE_UPGRADE_RENAME.replace('FML.ModTracker','fml.ModTracker').replace(']:','/]:')))
         if re.search(r'/ERROR\]|/FATAL\]|\bERROR (?:Error processing|Unable to locate)|^AL lib: \(EE\)',line) and number not in proven and not known_upgrade_rename and not (native and native_control_line(line)) and not any(message in line for message in platform):
             failures.append(line)
-        if re.search(r'Can.t serialize unregistered packet|AssertionError|NoSuchMethodError|NoSuchFieldError|NoClassDefFoundError|ClassNotFoundException|NullPointerException|OutOfMemoryError|Exception stopping server|Encountered an unexpected exception|Couldn.t render entity|Missing sound for event:|Patcher expecting empty class data|Skipping Entity with id|Unidentified mapping|Unable to load model',line):
+        if re.search(r'Can.t serialize unregistered packet|AssertionError|NoSuchMethodError|NoSuchFieldError|NoClassDefFoundError|ClassNotFoundException|NullPointerException|OutOfMemoryError|com\.electronwill\.nightconfig\.core\.io\.ParsingException|Exception stopping server|Encountered an unexpected exception|Couldn.t render entity|Missing sound for event:|Patcher expecting empty class data|Skipping Entity with id|Unidentified mapping|Unable to load model',line):
             failures.append(line)
         # Reproduced in the Forge-only control's complete DEBUG log: its old
         # HTTP promotions URL returns "Moved Permanently" instead of JSON.
