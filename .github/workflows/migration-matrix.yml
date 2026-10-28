@@ -11,7 +11,21 @@ permissions:
   contents: read
 
 jobs:
+  runtime-scope:
+    name: Check runtime inputs
+    runs-on: ubuntu-latest
+    outputs:
+      required: ${{ steps.scope.outputs.required }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - id: scope
+        run: python3 .github/scripts/release_scope.py --event "$GITHUB_EVENT_PATH" --output "$GITHUB_OUTPUT"
+
   upgrade:
+    needs: runtime-scope
+    if: needs.runtime-scope.outputs.required == 'true'
     name: ${{ matrix.origin }} / ${{ matrix.stamps }}
     runs-on: ubuntu-latest
     timeout-minutes: 90

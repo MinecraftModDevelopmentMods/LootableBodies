@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: Complete version from gradle.properties, ending in 110021, 111021, 112021, 113021, 114041 or 115021.
+        description: Complete version from gradle.properties, ending in 110021, 111021, 112021, 113021, 114041, 115021 or 116051.
         required: true
         type: string
       curseforge_release_level:
@@ -48,7 +48,7 @@ jobs:
           set -euo pipefail
           [[ "$GITHUB_REPOSITORY" == 'MinecraftModDevelopmentMods/LootableBodies' ]]
           [[ "$GITHUB_REF" == 'refs/heads/master-1.12' ]]
-          [[ "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(110021|111021|112021|113021|114041|115021)$ ]]
+          [[ "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(110021|111021|112021|113021|114041|115021|116051)$ ]]
           case "$RELEASE_VERSION" in
             *.110021) minecraft_version=1.10.2; source_branch=1.10.2 ;;
             *.111021) minecraft_version=1.11.2; source_branch=1.11.2-dev ;;
@@ -56,6 +56,7 @@ jobs:
             *.113021) minecraft_version=1.13.2; source_branch=master-1.13.2 ;;
             *.114041) minecraft_version=1.14.4; source_branch=master-1.14.4 ;;
             *.115021) minecraft_version=1.15.2; source_branch=master-1.15.2 ;;
+            *.116051) minecraft_version=1.16.5; source_branch=master-1.16.5 ;;
             *) exit 1 ;;
           esac
           echo "minecraft_version=$minecraft_version" >> "$GITHUB_OUTPUT"
@@ -85,7 +86,8 @@ jobs:
                      '1.12.2': ('master-1.12', '14.23.5.2859', '112021'),
                      '1.13.2': ('master-1.13.2', '25.0.223', '113021'),
                      '1.14.4': ('master-1.14.4', '28.2.26', '114041'),
-                     '1.15.2': ('master-1.15.2', '31.2.57', '115021')}
+                     '1.15.2': ('master-1.15.2', '31.2.57', '115021'),
+                     '1.16.5': ('master-1.16.5', '36.2.42', '116051')}
           branch, forge, suffix = targets[minecraft]
           if os.environ['SOURCE_BRANCH'] != branch:
               raise SystemExit('The selected branch does not match its Minecraft version')
@@ -115,14 +117,14 @@ jobs:
           if minecraft in ('1.11.2', '1.12.2', '1.13.2', '1.14.4'):
               required.update(origin + ' / ' + stamps for origin in origins
                               for stamps in ['normal', 'stamps'])
-          if minecraft == '1.15.2':
+          if minecraft in ('1.15.2', '1.16.5'):
               required.update(['Validate release workflow', 'Prepare verified migration inputs', 'World upgrade matrix'] +
-                              ['Historical world shard ' + str(i) for i in range(6)])
+                              ['Historical world shard ' + str(i) for i in range(6 if minecraft == '1.15.2' else 12)])
           for name in required:
               matching = [check for check in checks if check['name'] == name]
               if not matching or max(matching, key=lambda c: c['id'])['conclusion'] != 'success':
                   raise SystemExit(f'The selected commit has no successful {name} check')
-          if minecraft in ('1.11.2', '1.12.2', '1.13.2', '1.14.4', '1.15.2'):
+          if minecraft in ('1.11.2', '1.12.2', '1.13.2', '1.14.4', '1.15.2', '1.16.5'):
               target = minecraft.rsplit('.', 1)[0]
               audits = json.loads(subprocess.check_output(['gh', 'api',
                   f'repos/{repo}/actions/workflows/artifact-audit-{target}.yml/runs?event=workflow_run&per_page=100'], text=True))['workflow_runs']
