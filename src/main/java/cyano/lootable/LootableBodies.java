@@ -53,9 +53,10 @@ public final class LootableBodies {
     public LootableBodies() {
         INSTANCE=this;
         UpgradePreservation.register(net.minecraft.util.datafix.DataFixesManager.getDataFixer());
-        cyano.lootable.upgrade.EarlyWorldPreservation.install();
         loadConfiguration(FMLPaths.CONFIGDIR.get().resolve("lootablebodies.cfg").toFile());
         net.minecraftforge.eventbus.api.IEventBus bus=FMLJavaModLoadingContext.get().getModEventBus();
+        bus.addListener((net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent event) ->
+            event.enqueueWork(cyano.lootable.upgrade.EarlyWorldPreservation::install));
         bus.addListener(cyano.lootable.upgrade.LegacyProfessionRegistry::create);
         bus.addListener((net.minecraftforge.event.entity.EntityAttributeCreationEvent event)->event.put(corpseType(),EntityLootableBody.corpseAttributeDefaults().create()));
         bus.addGenericListener(EntityType.class,this::registerEntities);

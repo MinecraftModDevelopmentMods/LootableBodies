@@ -448,8 +448,9 @@ PHASES = ['upgrade-near', 'upgrade-near-reload', 'upgrade-near-recover', 'upgrad
 
 
 def run_upgrade(java, home, phase):
-    from native_runtime import run_server
-    run_server(java,home,phase,message='LOOTABLE_BODIES_WORLD_UPGRADE_PASS phase='+phase)
+    from native_runtime import run_server, HISTORICAL_JVM_ARGS
+    run_server(java,home,phase,extra=HISTORICAL_JVM_ARGS,
+               message='LOOTABLE_BODIES_WORLD_UPGRADE_PASS phase='+phase)
 
 
 

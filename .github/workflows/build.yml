@@ -288,6 +288,8 @@ jobs:
             build/reports/**
             build/test-results/**
             build/**/*.log
+            build/**/*.log.gz
+            build/**/*.diagnostics/**
             build/**/crash-reports/**
             build/**/screenshots/*.png
             build/**/result.json

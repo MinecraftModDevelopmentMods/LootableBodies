@@ -10,10 +10,15 @@ import urllib.error
 import urllib.request
 import zipfile
 from command_logs import run_logged
+from runtime_diagnostics import run_monitored
 
 FORGE = 'forge-1.16.5-36.2.42'
 INSTALLER_SHA256 = 'DFA90C681F30BE2406548B6429BCCB68D95AF4F64AB19B8C58F6128FD50FF857'
 SERVER_INPUTS = {'forge-1.16.5-36.2.42.jar': 'DFEAB9C7D582FCE5B1112E9D3038FA0E7075296E467031CE1E2C0BA9FDCF441F', 'libraries/net/minecraftforge/forge/1.16.5-36.2.42/forge-1.16.5-36.2.42-server.jar': '487536E867F5D4287121BAB75600C980A8313E458DE2B2C392C7201EB5648EA1', 'minecraft_server.1.16.5.jar': '58F329C7D2696526F948470AA6FD0B45545039B64CB75015E64C12194B373DA6'}
+# Native 1.16 Main applies resource-stage completions directly to an
+# unsynchronised HashSet. Two visible CPUs give its preparation pool one worker.
+# Apply this budget only to disposable historical preservation/refusal fixtures.
+HISTORICAL_JVM_ARGS = ('-XX:ActiveProcessorCount=2',)
 
 
 def project_assets(project):
@@ -84,17 +89,47 @@ def prepare_server(home, distribution, candidate=None, probe=None):
         (home / (name + '.json')).write_text('[]\n', encoding='utf-8')
 
 
+def run_java(java, home, phase, *, timeout=240, jvm_args=()):
+    """Run one owned Forge JVM, retaining failure evidence before returning."""
+    java = Path(java).resolve()
+    home = home.resolve()
+    log = home / (phase + '.log')
+    diagnostics = home / (phase + '.diagnostics')
+    copies = [home / (phase + '.' + name) for name in ('latest.log', 'debug.log')]
+    if log.exists() or diagnostics.exists() or any(p.exists() for p in copies):
+        raise RuntimeError('Refusing stale runtime evidence for ' + phase)
+    jstack = java.with_name('jstack.exe' if os.name == 'nt' else 'jstack')
+    jstat = java.with_name('jstat.exe' if os.name == 'nt' else 'jstat')
+    for tool in (jstack, jstat):
+        if not tool.is_file():
+            raise FileNotFoundError('Native runtime diagnostics require the pinned JDK tool: '+str(tool))
+    gc = diagnostics / 'gc.txt'
+    command = [str(java), '-XX:+PrintGCDetails', '-XX:+PrintGCTimeStamps',
+               '-XX:+PrintGCDateStamps', '-XX:+PrintGCApplicationStoppedTime',
+               '-Xloggc:' + str(gc), *jvm_args,
+               '-jar', FORGE + '.jar', '--nogui']
+    try:
+        completed = run_monitored(command, cwd=home, log=log, timeout=timeout,
+                                  diagnostics=diagnostics,
+                                  diagnostic_command=[str(jstack), '-l'],
+                                  metric_command=[str(jstat), '-gc'])
+    finally:
+        # Failed and timed-out phases need their complete native logs too.
+        for name, destination in zip(('latest.log', 'debug.log'), copies):
+            runtime_log = home / 'logs' / name
+            if runtime_log.is_file():
+                shutil.copy2(runtime_log, destination)
+    return completed
+
+
 def run_server(java, home, phase, *, timeout=240, extra=(), marker=None, message=None):
     home = home.resolve()
     log = home / (phase + '.log')
     marker = home / (marker or 'world/' + phase + '.pass')
-    if marker.exists() or log.exists():
+    if marker.exists():
         raise RuntimeError('Refusing stale runtime evidence for ' + phase)
-    command = [str(java), '-Xmx2G', '-Dlootablebodies.phase=' + phase, *extra,
-               '-jar', FORGE + '.jar', '--nogui']
-    with log.open('w', encoding='utf-8') as output:
-        completed = subprocess.run(command, cwd=home, stdout=output,
-                                   stderr=subprocess.STDOUT, timeout=timeout)
+    completed = run_java(java, home, phase, timeout=timeout,
+                         jvm_args=['-Xmx2G', '-Dlootablebodies.phase='+phase, *extra])
     text = log.read_text(encoding='utf-8', errors='replace')
     if completed.returncode or not marker.is_file() or (message and message not in text):
         raise RuntimeError('Native packaged ' + phase + ' failed: ' + str(log))
@@ -105,7 +140,6 @@ def run_server(java, home, phase, *, timeout=240, extra=(), marker=None, message
     for name in ('latest.log', 'debug.log'):
         runtime_log = home / 'logs' / name
         if runtime_log.is_file():
-            shutil.copy2(runtime_log, home / (phase + '.' + name))
             audit(runtime_log,native=True)
     return log
 
