@@ -135,6 +135,10 @@ jobs:
             build/migration-abort/result.json
             build/migration-results/**/*.log
             build/migration-abort/**/*.log
+            build/migration-results/**/*.log.gz
+            build/migration-abort/**/*.log.gz
+            build/migration-results/**/*.diagnostics/**
+            build/migration-abort/**/*.diagnostics/**
             build/migration-abort/**/crash-reports/**
             build/migration-abort/**/comparison.json
       - name: Retain failed world evidence
@@ -146,8 +150,12 @@ jobs:
           include-hidden-files: true
           path: |
             build/migration-results/**/*.log
+            build/migration-results/**/*.log.gz
+            build/migration-results/**/*.diagnostics/**
             build/migration-results/**/crash-reports/**
             build/migration-abort/**/*.log
+            build/migration-abort/**/*.log.gz
+            build/migration-abort/**/*.diagnostics/**
             build/migration-abort/**/crash-reports/**
             build/migration-abort/**/comparison.json
             build/migration-ci-inputs/inputs.json

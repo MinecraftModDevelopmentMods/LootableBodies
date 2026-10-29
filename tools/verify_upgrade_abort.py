@@ -3,9 +3,8 @@ import argparse
 import json
 from pathlib import Path
 import shutil
-import subprocess
 import tomllib
-from native_runtime import prepare_server as prepare, fingerprint, digest, FORGE
+from native_runtime import prepare_server as prepare, fingerprint, digest
 from release_identity import MAIN_JAR
 
 
@@ -97,6 +96,12 @@ def inject_unsafe_journal(world, case):
         journal.write_bytes(b'cannot create a journal directory here')
 
 
+def run_abort(java, home):
+    from native_runtime import run_java, HISTORICAL_JVM_ARGS
+    return run_java(java, home, 'abort', timeout=180,
+                    jvm_args=['-Xmx1G', *HISTORICAL_JVM_ARGS])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--java', type=Path, required=True)
@@ -123,10 +128,7 @@ def main():
         original_config = config.read_bytes() if config.is_file() else None
         lock=world/'session.lock';original_lock=lock.read_bytes() if lock.is_file() else None
         log = home / 'abort.log'
-        with log.open('w', encoding='utf-8') as output:
-            result = subprocess.run([str(args.java.resolve()), '-Xmx1G', '-jar',
-                                     FORGE + '.jar', '--nogui'],
-                                    cwd=home, stdout=output, stderr=subprocess.STDOUT, timeout=180)
+        result = run_abort(args.java.resolve(), home)
         text = log.read_text(encoding='utf-8', errors='replace')
         if "Lootable Bodies could not preserve this world's corpses" not in text:
             raise RuntimeError('Missing explicit preservation abort: ' + str(log))
