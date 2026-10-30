@@ -1,9 +1,9 @@
 package cyano.lootable.upgrade;
 
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.datafix.DataFixesManager;
-import net.minecraft.util.datafix.TypeReferences;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.datafix.DataFixers;
+import net.minecraft.util.datafix.fixes.References;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -14,8 +14,8 @@ class Native114RegistryRenameTest {
             ResourceLocation old = new ResourceLocation("minecraft", names[0]);
             ResourceLocation current = new ResourceLocation("minecraft", names[1]);
             assertEquals(current, LegacyRegistryMappings.itemReplacement(old));
-            CompoundNBT input = new CompoundNBT(); input.putString("id", old.toString()); input.putByte("Count", (byte)11);
-            CompoundNBT converted = NativeNbt.update(DataFixesManager.getDataFixer(), TypeReferences.ITEM_STACK, input, 1631, 1976);
+            CompoundTag input = new CompoundTag(); input.putString("id", old.toString()); input.putByte("Count", (byte)11);
+            CompoundTag converted = NativeNbt.update(DataFixers.getDataFixer(), References.ITEM_STACK, input, 1631, 1976);
             assertEquals(current.toString(), converted.getString("id")); assertEquals(11, converted.getByte("Count"));
         }
     }

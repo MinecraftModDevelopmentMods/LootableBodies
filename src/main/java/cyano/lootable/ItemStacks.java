@@ -1,5 +1,5 @@
 package cyano.lootable;
-import net.minecraft.item.ItemStack;
+import net.minecraft.world.item.ItemStack;
 /** Shared guard for legacy integrations and the native empty-stack sentinel. */
 public final class ItemStacks {
     private ItemStacks() { }

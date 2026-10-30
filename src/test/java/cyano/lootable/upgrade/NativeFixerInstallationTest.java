@@ -1,12 +1,12 @@
 package cyano.lootable.upgrade;
 import com.mojang.datafixers.DataFixer;
-import net.minecraft.util.datafix.DataFixesManager;
+import net.minecraft.util.datafix.DataFixers;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 class NativeFixerInstallationTest {
-    static class Parent {private final DataFixer fixer=DataFixesManager.getDataFixer();DataFixer value(){return fixer;}}
+    static class Parent {private final DataFixer fixer=DataFixers.getDataFixer();DataFixer value(){return fixer;}}
     static class Child extends Parent { }
-    static class Duplicate extends Parent {private final DataFixer second=DataFixesManager.getDataFixer();}
+    static class Duplicate extends Parent {private final DataFixer second=DataFixers.getDataFixer();}
     @Test void wrapsTheUniqueInheritedFixerAndDoesNotDoubleWrap() {
         Child owner=new Child();ChunkVersionContext.installFixer(owner,null);DataFixer fixed=owner.value();assertInstanceOf(NativeSafeFixer.class,fixed);ChunkVersionContext.installFixer(owner,null);assertSame(fixed,owner.value());
     }

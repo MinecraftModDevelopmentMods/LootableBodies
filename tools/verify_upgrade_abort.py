@@ -74,6 +74,32 @@ def allowed_native_session_lock(before, after, world, original=None):
     return [name] if actual==marker+original[3:] else []
 
 
+def allowed_native37_platform_additions(before,after,world,original_config=None):
+    """Exact pinned Forge37 spec corrections, proved with the actual native spec."""
+    name='serverconfig/forge-server.toml'
+    if name not in after:return []
+    actual=(world/name).read_bytes()
+    if digest(world/name)!=after[name]:return []
+    try:
+        defaults=tomllib.loads((Path(__file__).parent/'fixtures/forge37-server-default.toml').read_text())
+        upgraded=tomllib.loads(actual.decode('utf-8'))
+        if name not in before:return [name] if same_typed_values(defaults,upgraded) else []
+        if original_config is None or before[name]!=__import__('hashlib').sha256(original_config).hexdigest().upper():return []
+        previous=tomllib.loads(original_config.decode('utf-8'));server=previous['server']
+        retired={'removeErroringEntities':bool,'removeErroringTileEntities':bool,
+                 'logCascadingWorldGeneration':bool,'fixVanillaCascading':bool,
+                 'dimensionUnloadQueueDelay':int,'clumpingThreshold':int}
+        for key,kind in retired.items():
+            if key not in server:continue
+            value=server.pop(key)
+            if type(value) is not kind:return []
+            if key=='dimensionUnloadQueueDelay' and value<0:return []
+            if key=='clumpingThreshold' and not 64<=value<=1024:return []
+        for key,value in defaults['server'].items():server.setdefault(key,value)
+        return [name] if same_typed_values(previous,upgraded) else []
+    except (ValueError,KeyError,UnicodeError):return []
+
+
 def inject_unsafe_journal(world, case):
     if case not in ('damaged-index', 'blocked-journal'):
         raise ValueError('Unknown abort fixture: ' + case)
@@ -98,8 +124,10 @@ def inject_unsafe_journal(world, case):
 
 def run_abort(java, home):
     from native_runtime import run_java, HISTORICAL_JVM_ARGS
+    logging=Path(__file__).resolve().parents[1]/'src/integrationTest/resources/log4j2.xml'
     return run_java(java, home, 'abort', timeout=180,
-                    jvm_args=['-Xmx1G', *HISTORICAL_JVM_ARGS])
+                    jvm_args=['-Xmx1G', *HISTORICAL_JVM_ARGS,
+                              '-Dlog4j.configurationFile='+logging.as_uri()])
 
 
 def main():
@@ -137,7 +165,7 @@ def main():
             raise RuntimeError('World loading continued after unsafe preservation')
         after = source_files(world)
         raw_after = dict(after)
-        platform_additions = allowed_platform_additions(before, after, world, original_config)
+        platform_additions = allowed_native37_platform_additions(before, after, world, original_config)
         lock_updates=allowed_native_session_lock(before,after,world,original_lock)
         for name in platform_additions+lock_updates:
             if name in before: after[name] = before[name]

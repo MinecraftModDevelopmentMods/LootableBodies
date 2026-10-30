@@ -45,6 +45,16 @@ ORIGINS.update({
     'original-112': ('1.12.2', '2.4.0', 'DE701F657A03BFFE08D6F9FEB1516B37B23B0171B91716087C7C84D9C19B9B5C'),
     'recovery-111': ('1.11.2', '2.4.2.111021', '59ACF5652505F08A7F011307B3CD68F3754FCFC14C4C330BD952475351AEC932'),
 })
+ORIGINS.update({
+    'released-116': ('1.16.5','2.4.7.116051','E545CF725650E8A01C5863A4C92BCB2D23437D61C9441C2F5D27A5272EDDA229'),
+    'recovery-116': ('1.16.5','2.4.7.116051','E545CF725650E8A01C5863A4C92BCB2D23437D61C9441C2F5D27A5272EDDA229'),
+    'via116-110': ORIGINS['original-110'],
+    'via116-111': ORIGINS['released-111'],
+    'via116-112': ORIGINS['released-112'],
+    'via116-113': ORIGINS['released-113'],
+    'via116-114': ORIGINS['released-114'],
+    'via116-115': ORIGINS['released-115'],
+})
 FORGE = {'1.12.2': 'forge-1.12.2-14.23.5.2859','1.10.2': 'forge-1.10.2-12.18.3.2511', '1.11.2': 'forge-1.11.2-13.20.1.2588'}
 FORGE_SHA = {'1.12.2': 'BD8314729D787E35164476D75AFB337AFB9783917E4F6FA1F77F049ADBA22F2D','1.10.2': '809C2EA5B4D4F3E5A294D3A326744F20FEC412A1263E708297D00F512E377542',
              '1.11.2': 'B6DFF35B5CCB0E6353FB89B5330FE930DB8FBE8B63787C9FC2F70196BD108998'}
@@ -159,21 +169,23 @@ def seed_native115(java, home, recovery=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--java', type=Path, required=True)
-    parser.add_argument('--forge110-home', type=Path, required=True)
-    parser.add_argument('--forge111-home', type=Path, required=True)
-    parser.add_argument('--forge112-home', type=Path, required=True)
+    parser.add_argument('--forge110-home', type=Path)
+    parser.add_argument('--forge111-home', type=Path)
+    parser.add_argument('--forge112-home', type=Path)
     parser.add_argument('--forge113-home', type=Path)
     parser.add_argument('--forge114-home', type=Path)
     parser.add_argument('--forge115-home', type=Path)
     parser.add_argument('--forge116-home', type=Path)
+    parser.add_argument('--forge117-home', type=Path)
     for origin in ORIGINS:
         if origin.startswith('recovery-') or origin.startswith('via'):
             continue
-        parser.add_argument('--' + origin, type=Path, required=True)
+        parser.add_argument('--' + origin, type=Path)
     parser.add_argument('--origins', nargs='+', choices=list(ORIGINS), default=list(ORIGINS))
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--seed-only', action='store_true')
     parser.add_argument('--seeds', nargs='+', type=Path)
+    parser.add_argument('--prepared-sources', type=Path, help='Exact sealed38-origin paths; reuse original writer worlds')
     parser.add_argument('--variants', nargs='+', choices=['normal', 'stamps'], default=['normal', 'stamps'])
     parser.add_argument('--control-report', type=Path)
     args = parser.parse_args()
@@ -181,6 +193,8 @@ def main():
     if not args.seed_only:
         verify(args, project)
         return
+    if any(name in args.origins for name in ('released-116','recovery-116')) or any(name.startswith('via116-') for name in args.origins):
+        raise ValueError('Native16 sources require the genuine public16 writer/transition preparation, then --prepared-sources')
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     seeder = project / 'build/legacy-seed/lootablebodies-world-fixtures-reobf.jar'
@@ -449,7 +463,8 @@ PHASES = ['upgrade-near', 'upgrade-near-reload', 'upgrade-near-recover', 'upgrad
 
 def run_upgrade(java, home, phase):
     from native_runtime import run_server, HISTORICAL_JVM_ARGS
-    run_server(java,home,phase,extra=HISTORICAL_JVM_ARGS,
+    logging=Path(__file__).resolve().parents[1]/'src/integrationTest/resources/log4j2.xml'
+    run_server(java,home,phase,extra=[*HISTORICAL_JVM_ARGS,'-Dlog4j.configurationFile='+logging.as_uri()],
                message='LOOTABLE_BODIES_WORLD_UPGRADE_PASS phase='+phase)
 
 
@@ -516,18 +531,23 @@ def preserve_historical_markers(home):
 
 
 def verify(args, project):
-    if not args.seeds:
-        raise ValueError('--seeds is required for the upgrade matrix')
-    if not args.forge116_home:
-        raise ValueError('--forge116-home is required for the native upgrade matrix')
+    prepared=getattr(args,'prepared_sources',None)
+    if not args.seeds and not prepared:
+        raise ValueError('--prepared-sources or --seeds is required for the upgrade matrix')
+    if prepared and args.seeds:raise ValueError('Choose one unambiguous source route')
+    if not args.forge117_home:
+        raise ValueError('--forge117-home is required for the native17 upgrade matrix')
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     candidate = project / 'build/libs' / MAIN_JAR
     probe = project / 'build/integration-test-mod/lootablebodies-build-tests-reobf.jar'
     candidate_hash = digest(candidate)
     probe_hash = digest(probe)
-    sources = {}
-    for seed_root in args.seeds:
+    sources = {};prepared_proof=None
+    if prepared:
+        from prepared_worlds import load
+        sources,prepared_proof=load(prepared,ORIGINS,args.origins)
+    for seed_root in args.seeds or []:
         seed_root = seed_root.resolve()
         report = json.loads((seed_root / 'seed-report.json').read_text(encoding='utf-8'))
         for name, details in report['origins'].items():
@@ -541,14 +561,14 @@ def verify(args, project):
             sources[name] = (source, details)
     if set(sources) != set(args.origins):
         raise RuntimeError('Missing requested historical fixture')
-    report = {'candidate_sha256': candidate_hash, 'probe_sha256':probe_hash, 'cases': {}}
+    report = {'candidate_sha256': candidate_hash, 'probe_sha256':probe_hash, 'prepared_sources':prepared_proof, 'cases': {}}
     for origin in args.origins:
         source,details=sources[origin]
         for variant in args.variants:
             name = origin + '-' + variant
             home = root / name
             from native_runtime import prepare_server
-            prepare_server(home,args.forge116_home.resolve(),candidate,probe)
+            prepare_server(home,args.forge117_home.resolve(),candidate,probe)
             shutil.copytree(source, home / 'world')
             world = home / 'world'
             historical_markers=preserve_historical_markers(home)
@@ -565,18 +585,8 @@ def verify(args, project):
             for phase in PHASES:
                 run_upgrade(args.java.resolve(), home, phase)
                 wave = 0 if phase.startswith('upgrade-near') else 1 if phase.startswith('upgrade-far') else 2 if phase == 'upgrade-late' else -1
-                persisted = 0
-                for region in world.rglob('region/r.*.mca'):
-                    if wave >= 0 and region.name != ['r.0.0.mca', 'r.8.8.mca', 'r.16.16.mca'][wave]:
-                        continue
-                    for chunk in read_region(region).values():
-                        for entity in chunk['root'].value['Level'].value.get('Entities', Tag(9, (10, []))).value[1]:
-                            if entity.value.get('id', Tag(8, '')).value not in ('lootablebodies.Corpse', 'lootablebodies:corpse'):
-                                continue
-                            if wave >= 0 or phase in ('upgrade-return', 'upgrade-final', 'upgrade-final-reload'):
-                                if entity.value['id'].value != 'lootablebodies:corpse' or entity.value.get('LootableBodiesDataVersion') != Tag(3, 6):
-                                    raise RuntimeError('A loaded corpse was not actually saved in the new format')
-                                persisted += 1
+                from native117_persistence import count_persisted
+                persisted = count_persisted(world,wave)
                 if persisted < (3 if wave >= 0 else 8):
                     raise RuntimeError('Missing persisted corpses after world save')
                 for relative, original in distant.items():

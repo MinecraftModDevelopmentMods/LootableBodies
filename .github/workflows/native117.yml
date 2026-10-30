@@ -1,0 +1,289 @@
+name: LootableBodies 1.17 CI
+
+on:
+  push:
+    branches: [master-1.17.1]
+  pull_request:
+    branches: [master-1.17.1]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: native117-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  quick:
+    name: Fast build and contracts
+    if: github.repository != 'MinecraftModDevelopmentMods/LootableBodies'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '25.0.3+9.0.LTS'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '16.0.2+7'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17.0.1+12'
+      - name: Test tools and audit the native117 archives
+        env:
+          LOOTABLEBODIES_JAVA16_HOME: ${{ env.JAVA_HOME_16_X64 }}
+          LOOTABLEBODIES_MAVENIZER_JAVA_HOME: ${{ env.JAVA_HOME_25_X64 }}
+        run: |
+          chmod +x gradlew
+          python3 -B -m unittest discover -s tools -p 'test_*.py' -v
+          ./gradlew test assemble javadoc verifyProductionRuntimeClasspath prepareReleaseBundle --no-daemon --no-build-cache --stacktrace
+      - name: Retain fast-check evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: native117-fast-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            build/test-results/**
+            build/reports/**
+            build/release/bundle/*
+
+  prepare:
+    name: Prepare verified migration inputs
+    if: github.repository == 'MinecraftModDevelopmentMods/LootableBodies'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '25.0.3+9.0.LTS'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '8.0.502+7'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '16.0.2+7'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17.0.1+12'
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+        with:
+          cache-disabled: true
+      - name: Pin separate runtimes and test tools
+        run: |
+          chmod +x gradlew
+          echo "GRADLE_USER_HOME=$RUNNER_TEMP/lootablebodies117-gradle" >> "$GITHUB_ENV"
+          echo "LOOTABLEBODIES_JAVA16_HOME=$JAVA_HOME_16_X64" >> "$GITHUB_ENV"
+          echo "LOOTABLEBODIES_JAVA8_HOME=$JAVA_HOME_8_X64" >> "$GITHUB_ENV"
+          echo "LOOTABLEBODIES_MAVENIZER_JAVA_HOME=$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
+          python3 -B -m unittest discover -s tools -p 'test_*.py' -v
+      - name: Two clean uncached builds with offline replay
+        run: python3 -B tools/native117_ci.py build
+      - name: Install graphical runtime support
+        run: |
+          sudo apt-get update -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+          sudo apt-get install --yes --no-install-recommends xvfb x11-xserver-utils libgl1-mesa-dri libglu1-mesa libopenal1 pulseaudio pulseaudio-utils
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=minecraft
+          echo "PULSE_SINK=minecraft" >> "$GITHUB_ENV"
+          echo "ALSOFT_DRIVERS=pulse" >> "$GITHUB_ENV"
+          echo "LIBGL_ALWAYS_SOFTWARE=true" >> "$GITHUB_ENV"
+      - name: Download the original sealed thirty-world bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: LootableBodies-1.16.5-migration-inputs-9edcc246bc156d93dabd51970b5a832d7d53a511
+          run-id: 40909860288
+          github-token: ${{ github.token }}
+          path: build/prior116-download
+      - name: Qualify mapped launches and prepare immutable native inputs once
+        run: xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 -B tools/native117_ci.py prepare
+      - name: Upload the exact six qualified files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: LootableBodies-1.17.1-${{ github.sha }}
+          if-no-files-found: error
+          path: build/release/bundle/*
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: native117-history-inputs-${{ github.sha }}
+          if-no-files-found: error
+          path: build/migration-ci-inputs/*
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: native117-platform-inputs-${{ github.sha }}
+          if-no-files-found: error
+          path: build/ci117-platform-inputs/*
+      - name: Retain preparation and mapped-runtime evidence on every outcome
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: native117-preparation-evidence-${{ github.sha }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          include-hidden-files: true
+          path: |
+            build/ci117-commands/**
+            build/ci117-build-proof/**
+            build/test-results/**
+            build/reports/**
+            build/integration-run/**
+            build/upgrade-contract-run/**
+            build/client-integration-run/**
+            build/ordinary-development/**
+            build/native37-resource-budget/**/*.log
+            build/native37-resource-budget/**/*.json
+            build/native37-resource-budget/**/*.diagnostics/**
+            ${{ runner.temp }}/lootablebodies117-first-build/**
+            build/migration-seeds/**/*.log
+            build/migration-seeds/**/*.diagnostics/**
+            build/migration-seeds/**/crash-reports/**
+            build/migration-seeds/*report.json
+            build/migration-seeds/provenance.json
+            .gradle/legacy-tools/released-116/build*.log
+
+  upgrade:
+    name: Historical world shard ${{ matrix.shard }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '16.0.2+7'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: native117-history-inputs-${{ github.sha }}
+          path: build/migration-ci-inputs
+      - name: Restore and qualify assigned original worlds
+        run: |
+          python3 -B tools/migration_ci.py restore --commit "$GITHUB_SHA"
+          python3 -B tools/migration_ci.py shard --commit "$GITHUB_SHA" --shards 12 --shard ${{ matrix.shard }} --java "$JAVA_HOME/bin/java"
+      - name: Retain full successful and failed world evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: native117-upgrade-shard-${{ matrix.shard }}-${{ github.sha }}
+          if-no-files-found: error
+          include-hidden-files: true
+          path: |
+            build/migration-ci/report.json
+            build/migration-ci-inputs/inputs.json
+            build/migration-results/**/*.log
+            build/migration-results/**/*.log.gz
+            build/migration-results/**/*.json
+            build/migration-results/**/*.properties
+            build/migration-results/**/*.diagnostics/**
+            build/migration-results/**/world/**
+            build/migration-results/**/mods/*.jar
+            build/migration-results/**/config/**
+            build/migration-results/**/crash-reports/**
+            build/migration-abort/**/*.log
+            build/migration-abort/**/*.log.gz
+            build/migration-abort/**/*.json
+            build/migration-abort/**/*.properties
+            build/migration-abort/**/*.diagnostics/**
+            build/migration-abort/**/world/**
+            build/migration-abort/**/mods/*.jar
+            build/migration-abort/**/config/**
+            build/migration-abort/**/original-journal/**
+            build/migration-abort/**/crash-reports/**
+
+  scenarios:
+    name: Native117 ${{ matrix.group }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [servers, default, config, skin, issues, names, rejected, multiplayer, visibility, respawn, control]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '16.0.2+7'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: native117-platform-inputs-${{ github.sha }}
+          path: build/ci117-platform-inputs
+      - name: Restore exact qualified runtime inputs
+        run: python3 -B tools/migration_ci.py restore --commit "$GITHUB_SHA" --folder build/ci117-platform-inputs
+      - name: Install graphical runtime support
+        run: |
+          sudo apt-get update -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+          sudo apt-get install --yes --no-install-recommends xvfb x11-xserver-utils libgl1-mesa-dri libglu1-mesa libopenal1 pulseaudio pulseaudio-utils
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=minecraft
+          echo "PULSE_SINK=minecraft" >> "$GITHUB_ENV"
+          echo "ALSOFT_DRIVERS=pulse" >> "$GITHUB_ENV"
+          echo "LIBGL_ALWAYS_SOFTWARE=true" >> "$GITHUB_ENV"
+      - name: Run the assigned native scenario once
+        run: xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 -B tools/native117_ci.py scenario --group ${{ matrix.group }}
+      - name: Retain complete successful and failed scenario evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: native117-scenario-${{ matrix.group }}-${{ github.sha }}
+          if-no-files-found: error
+          include-hidden-files: true
+          path: |
+            build/ci117-commands/**
+            build/ci117-scenarios/**/*.log
+            build/ci117-scenarios/**/*.log.gz
+            build/ci117-scenarios/**/*.json
+            build/ci117-scenarios/**/*.txt
+            build/ci117-scenarios/**/*.diagnostics/**
+            build/ci117-scenarios/**/world/**
+            build/ci117-scenarios/**/saves/**
+            build/ci117-scenarios/**/mods/*.jar
+            build/ci117-scenarios/**/config/**
+            build/ci117-scenarios/**/crash-reports/**
+            build/ci117-scenarios/**/screenshots/*.png
+            build/ci117-platform-inputs/inputs.json
+
+  aggregate:
+    name: Build, test, and audit
+    needs: [prepare, upgrade, scenarios]
+    if: always() && github.repository == 'MinecraftModDevelopmentMods/LootableBodies'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Every required execution must succeed
+        env:
+          PREPARE: ${{ needs.prepare.result }}
+          UPGRADE: ${{ needs.upgrade.result }}
+          SCENARIOS: ${{ needs.scenarios.result }}
+        run: test "$PREPARE" = success && test "$UPGRADE" = success && test "$SCENARIOS" = success
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: native117-upgrade-shard-*-${{ github.sha }}
+          path: build/migration-shards
+      - name: Independently audit all 76 cases and 912 native receipts
+        run: python3 -B tools/migration_ci.py aggregate --commit "$GITHUB_SHA" --shards 12 --folder build/migration-shards
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: native117-world-upgrades-${{ github.sha }}
+          if-no-files-found: error
+          path: build/migration-summary.json

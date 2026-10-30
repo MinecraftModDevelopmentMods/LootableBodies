@@ -50,9 +50,9 @@ class BuildContractTest {
         assertTrue(info.contains("modId=\"lootablebodies\""));
         Properties release=new Properties();try(java.io.InputStream input=Files.newInputStream(Paths.get("gradle.properties"))){release.load(input);}
         assertTrue(info.contains("version=\""+release.getProperty("mod_version")+"\""));
-        assertTrue(info.contains("versionRange=\"[1.16.5]\""));assertTrue(info.contains("Cyanobacterium"));assertFalse(info.contains("${"));
+        assertTrue(info.contains("versionRange=\"[1.17.1]\""));assertTrue(info.contains("Cyanobacterium"));assertFalse(info.contains("${"));
         assertFalse(Files.exists(Paths.get("build/resources/main/mcmod.info")));
-        assertEquals(6,new com.google.gson.JsonParser().parse(text("build/resources/main/pack.mcmeta")).getAsJsonObject().getAsJsonObject("pack").get("pack_format").getAsInt());
+        assertEquals(7,new com.google.gson.JsonParser().parse(text("build/resources/main/pack.mcmeta")).getAsJsonObject().getAsJsonObject("pack").get("pack_format").getAsInt());
     }
     @Test void everyOriginalTranslationSurvivesTheNativeJsonFormat() throws Exception {
         try(DirectoryStream<Path> locales=Files.newDirectoryStream(Paths.get("src/test/resources/legacy-translations"),"*.lang")){
@@ -69,7 +69,7 @@ class BuildContractTest {
         for (String key : Arrays.asList("Equipment", "Aux", "Slot", "Vac", "Name", "DeathTime", "DecayTime"))
             assertTrue(source.contains("\"" + key + "\""), key);
         assertTrue(source.contains("NonNullList.withSize(6*7, ItemStack.EMPTY)"));
-        assertTrue(source.contains("EquipmentSlotType.HEAD, EquipmentSlotType.CHEST, EquipmentSlotType.LEGS, EquipmentSlotType.FEET, EquipmentSlotType.MAINHAND, EquipmentSlotType.OFFHAND"));
+        assertTrue(source.contains("EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET, EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND"));
     }
     @Test void configurationNamesAndDefaultsRemainStable() throws Exception {
         String source = text("src/main/java/cyano/lootable/LootableBodies.java");

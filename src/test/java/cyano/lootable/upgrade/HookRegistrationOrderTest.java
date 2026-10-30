@@ -4,10 +4,10 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.*;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.world.storage.IServerConfiguration;
-import net.minecraft.world.storage.SaveFormat;
-import net.minecraftforge.fml.WorldPersistenceHooks;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.level.storage.WorldData;
+import net.minecraft.world.level.storage.LevelStorageSource;
+import net.minecraftforge.fmllegacy.WorldPersistenceHooks;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -18,8 +18,8 @@ class HookRegistrationOrderTest {
         private final String id;
         Hook(String id){this.id=id;}
         public String getModId(){return id;}
-        public void readData(SaveFormat.LevelSave save,IServerConfiguration info,CompoundNBT tag){}
-        public CompoundNBT getDataForWriting(SaveFormat.LevelSave save,IServerConfiguration info){return new CompoundNBT();}
+        public void readData(LevelStorageSource.LevelStorageAccess save,WorldData info,CompoundTag tag){}
+        public CompoundTag getDataForWriting(LevelStorageSource.LevelStorageAccess save,WorldData info){return new CompoundTag();}
     }
     @Test void serialRegistrationKeepsEveryNativeHookAndRemainsIdempotent() throws Exception {
         Field registry=WorldPersistenceHooks.class.getDeclaredField("worldPersistenceHooks");registry.setAccessible(true);
@@ -35,8 +35,8 @@ class HookRegistrationOrderTest {
                 assertEquals(3,hooks.size());assertFalse(hooks.contains(null));
                 Set<String> ids=new HashSet<>();for(WorldPersistenceHooks.WorldPersistenceHook hook:hooks)ids.add(hook.getModId());
                 assertEquals(new HashSet<>(Arrays.asList("forge","fml","lootablebodies")),ids);
-                CompoundNBT saved=new CompoundNBT();WorldPersistenceHooks.handleWorldDataSave(null,null,saved);
-                assertEquals(ids,saved.keySet());
+                CompoundTag saved=new CompoundTag();WorldPersistenceHooks.handleWorldDataSave(null,null,saved);
+                assertEquals(ids,saved.getAllKeys());
             }
         } finally {registry.set(null,original);installed.setBoolean(null,wasInstalled);}
     }

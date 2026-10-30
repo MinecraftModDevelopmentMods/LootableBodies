@@ -1,30 +1,31 @@
 package cyano.lootable.graphics;
 
 import cyano.lootable.LootableBodies;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.inventory.IInventory;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.Container;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
-import com.mojang.blaze3d.platform.GlStateManager;
-import net.minecraft.util.text.ITextComponent;
-import net.minecraft.util.text.StringTextComponent;
+import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextComponent;
 
 /**
  * Created by Chris on 4/12/2016.
  */
 @OnlyIn(Dist.CLIENT)
-public class CorpseGUIContainer extends net.minecraft.client.gui.screen.inventory.ContainerScreen<CorpseContainer>{
+public class CorpseGUIContainer extends net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<CorpseContainer>{
 
 	private final ResourceLocation image = new ResourceLocation(LootableBodies.MODID+":textures/gui/corpse.png");
 
-	public CorpseGUIContainer(PlayerInventory playerItems, IInventory entity) {
-		this(new CorpseContainer(playerItems,entity),playerItems,entity instanceof net.minecraft.entity.Entity?((net.minecraft.entity.Entity)entity).getDisplayName():new StringTextComponent(LootableBodies.NAME));
+	public CorpseGUIContainer(Inventory playerItems, Container entity) {
+		this(new CorpseContainer(playerItems,entity),playerItems,entity instanceof net.minecraft.world.entity.Entity?((net.minecraft.world.entity.Entity)entity).getDisplayName():new TextComponent(LootableBodies.NAME));
     }
-    public CorpseGUIContainer(CorpseContainer container, PlayerInventory playerItems, ITextComponent title){
+    public CorpseGUIContainer(CorpseContainer container, Inventory playerItems, Component title){
         super(container,playerItems,title);
-		this.xSize = 176;
-		this.ySize = 222;
+		this.imageWidth = 176;
+		this.imageHeight = 222;
 	}
 
 	/**
@@ -36,16 +37,17 @@ public class CorpseGUIContainer extends net.minecraft.client.gui.screen.inventor
 	 * @param mouseY       Mouse y coordinate
 	 */
 	@Override
-	protected void drawGuiContainerBackgroundLayer(com.mojang.blaze3d.matrix.MatrixStack matrices, float partialTicks, int mouseX, int mouseY) {
-		GlStateManager.color4f(1.0F, 1.0F, 1.0F, 1.0F);
-		int x = (width - xSize) / 2;
-		int y = (height - ySize) / 2;
-		this.minecraft.getTextureManager().bindTexture(image);
-		this.blit(matrices, x, y, 0, 0, this.xSize, this.ySize); // x, y, textureOffsetX, textureOffsetY, width, height)
+	protected void renderBg(com.mojang.blaze3d.vertex.PoseStack matrices, float partialTicks, int mouseX, int mouseY) {
+		RenderSystem.setShader(GameRenderer::getPositionTexShader);
+		RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+		int x = (width - imageWidth) / 2;
+		int y = (height - imageHeight) / 2;
+		RenderSystem.setShaderTexture(0,image);
+		this.blit(matrices, x, y, 0, 0, this.imageWidth, this.imageHeight); // x, y, textureOffsetX, textureOffsetY, width, height)
 	}
 
     @Override
-    protected void drawGuiContainerForegroundLayer(com.mojang.blaze3d.matrix.MatrixStack matrices,int mouseX,int mouseY) {
+    protected void renderLabels(com.mojang.blaze3d.vertex.PoseStack matrices,int mouseX,int mouseY) {
         // This seven-row layout has no label strip. Keep the original screen's
         // foreground; the new vanilla labels would overlap corpse item slots.
     }

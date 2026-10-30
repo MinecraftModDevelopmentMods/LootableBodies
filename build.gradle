@@ -14,18 +14,18 @@ group = project.mod_group
 version = project.mod_version
 base.archivesName = project.mod_artifact
 
-// Gradle uses Java 17; every compiler, test and game process uses this JDK 8.
+// Gradle uses Java 17; every compiler, test and game process uses this JDK 16.
 // Eclipse does not inherit the command-line helper's environment. Keep its
 // machine-specific toolchain selection in an ignored local properties file.
 Properties localJavaSetup = new Properties()
 File localJavaSetupFile = file('gradle-local.properties')
 if (localJavaSetupFile.isFile()) localJavaSetupFile.withInputStream { localJavaSetup.load(it) }
-def pinnedJava8 = providers.environmentVariable('LOOTABLEBODIES_JAVA8_HOME')
-        .orElse(providers.gradleProperty('lootablebodies.java8.home'))
-        .orElse(providers.provider { localJavaSetup.getProperty('lootablebodies.java8.home') })
-def exactJava8Spec = pinnedJava8.isPresent() ?
+def pinnedJava16 = providers.environmentVariable('LOOTABLEBODIES_JAVA16_HOME')
+        .orElse(providers.gradleProperty('lootablebodies.java16.home'))
+        .orElse(providers.provider { localJavaSetup.getProperty('lootablebodies.java16.home') })
+def exactJava16Spec = pinnedJava16.isPresent() ?
         org.gradle.jvm.toolchain.internal.SpecificInstallationToolchainSpec.fromJavaHome(
-                project.services.get(org.gradle.api.internal.provider.PropertyFactory), file(pinnedJava8.get())) : null
+                project.services.get(org.gradle.api.internal.provider.PropertyFactory), file(pinnedJava16.get())) : null
 def pinnedJava25 = providers.environmentVariable('LOOTABLEBODIES_MAVENIZER_JAVA_HOME')
         .orElse(providers.gradleProperty('lootablebodies.mavenizer.java.home'))
         .orElse(providers.provider { localJavaSetup.getProperty('lootablebodies.mavenizer.java.home') })
@@ -37,18 +37,18 @@ ext.mavenizerLauncher = exactJava25Spec != null ? javaToolchains.launcherFor(exa
 fgtools.configure('mavenizer') { javaLauncher.set(mavenizerLauncher) }
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(8)
+        languageVersion = JavaLanguageVersion.of(16)
         vendor = JvmVendorSpec.ADOPTIUM
     }
     withSourcesJar()
     withJavadocJar()
 }
-ext.productionLauncher = exactJava8Spec != null ? javaToolchains.launcherFor(exactJava8Spec) :
+ext.productionLauncher = exactJava16Spec != null ? javaToolchains.launcherFor(exactJava16Spec) :
         javaToolchains.launcherFor(java.toolchain)
 fgtools.configure('slimelauncher') { javaLauncher.set(productionLauncher) }
-def productionCompiler = exactJava8Spec != null ? javaToolchains.compilerFor(exactJava8Spec) :
+def productionCompiler = exactJava16Spec != null ? javaToolchains.compilerFor(exactJava16Spec) :
         javaToolchains.compilerFor(java.toolchain)
-def productionJavadoc = exactJava8Spec != null ? javaToolchains.javadocToolFor(exactJava8Spec) :
+def productionJavadoc = exactJava16Spec != null ? javaToolchains.javadocToolFor(exactJava16Spec) :
         javaToolchains.javadocToolFor(java.toolchain)
 
 tasks.register('verifyJavaSetup') {
@@ -58,9 +58,9 @@ tasks.register('verifyJavaSetup') {
         def metadata = productionLauncher.get().metadata
         Properties release = new Properties()
         metadata.installationPath.file('release').asFile.withInputStream { release.load(it) }
-        if (release.getProperty('SEMANTIC_VERSION') != '"8.0.502+7"' ||
-                release.getProperty('IMPLEMENTOR') != '"Eclipse Adoptium"') {
-            throw new GradleException("Production requires Temurin 8.0.502+7, found ${metadata.javaRuntimeVersion} ${metadata.vendor}")
+        if (release.getProperty('SEMANTIC_VERSION') != '"16.0.2+7"' ||
+                release.getProperty('IMPLEMENTOR') != '"Eclipse Foundation"') {
+            throw new GradleException("Production requires Temurin 16.0.2+7, found ${metadata.javaRuntimeVersion} ${metadata.vendor}")
         }
         logger.lifecycle("Gradle Java: ${System.getProperty('java.runtime.version')}; production: ${metadata}")
         def worker = mavenizerLauncher.get().metadata
@@ -69,14 +69,14 @@ tasks.register('verifyJavaSetup') {
         if (workerRelease.getProperty('JAVA_RUNTIME_VERSION') != '"25.0.3+9-LTS"' ||
                 workerRelease.getProperty('IMPLEMENTOR') != '"Eclipse Adoptium"')
             throw new GradleException('The separate Mavenizer worker requires Temurin 25.0.3+9-LTS')
-        logger.lifecycle("Mavenizer worker: ${worker}; game/compilation remain on Java 8")
+        logger.lifecycle("Mavenizer worker: ${worker}; game/compilation remain on Java 16")
     }
 }
 tasks.withType(JavaCompile).configureEach {
     dependsOn 'verifyJavaSetup'
     javaCompiler = productionCompiler
-    sourceCompatibility = '1.8'
-    targetCompatibility = '1.8'
+    sourceCompatibility = '16'
+    targetCompatibility = '16'
     options.encoding = 'UTF-8'
     options.compilerArgs.addAll(['-Xmaxerrs','1000'])
 }
@@ -85,6 +85,16 @@ tasks.withType(Test).configureEach {
     useJUnitPlatform()
     javaLauncher = productionLauncher
     workingDir = projectDir
+}
+
+// Focused native-boundary regressions need no graphical/control probe build.
+// The full test task retains its archive/isolation prerequisites and all tests.
+tasks.register('nativeBoundaryTest', Test) {
+    group = 'verification'
+    description = 'Runs native 1.17 conversion and storage regressions without launching Minecraft.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    include '**/Native117*Test.class'
 }
 tasks.withType(JavaExec).configureEach { javaLauncher = productionLauncher }
 tasks.withType(Javadoc).configureEach {
@@ -100,7 +110,7 @@ tasks.withType(AbstractArchiveTask).configureEach {
     filteringCharset = 'UTF-8'
 }
 ext.archiveTextPatterns = ['**/*.info', '**/*.java', '**/*.json', '**/*.toml', '**/*.mcmeta', '**/*.html',
-        '**/*.css', '**/*.js', '**/*.md', '**/*.txt', '**/package-list', '**/LICENSE', '**/LICENSE-CC0', '**/NOTICE']
+        '**/*.css', '**/*.js', '**/*.md', '**/*.txt', '**/*.xml', '**/*.properties', '**/package-list', '**/LICENSE', '**/LICENSE-CC0', '**/NOTICE']
 ext.normalizeArchiveText = { details ->
     details.filter(FixCrLfFilter, eol: FixCrLfFilter.CrLf.newInstance('lf'),
             eof: FixCrLfFilter.AddAsisRemove.newInstance('asis'))
@@ -113,49 +123,19 @@ minecraft {
     accessTransformer = 'META-INF/accesstransformer.cfg'
     runs {
         configureEach {
-            mainClass = 'net.minecraftforge.userdev.LaunchTesting'
             workingDir.convention layout.projectDirectory.dir(
                     providers.gradleProperty('gameRunDirectory').getOrElse('run'))
+            jvmArgs '--add-opens', 'java.base/java.lang.invoke=ALL-UNNAMED'
             systemProperty 'log4j.configurationFile', file('gradle/log4j2.xml').toURI().toString()
+            mods { lootablebodies { source sourceSets.main } }
         }
-        register('client') { client=true; args '--assetsDir', minecraftAssets.asFile.absolutePath, '--assetIndex', '1.16' }
-        register('server') { client=false; args '--nogui' }
+        register('client')
+        register('server') { args '--nogui' }
     }
 }
-minecraft.runs.configureEach { options ->
-    systemProperties.put('user.home',minecraftGameHome.asFile.absolutePath)
-    environment.put('APPDATA',minecraftGameHome.asFile.absolutePath)
-    environment.put('target',options.name=='client'?'fmluserdevclient':'fmluserdevserver')
-    environment.put('MCP_MAPPINGS',"${mapping_channel}_${mapping_version}")
-    environment.put('MCP_VERSION',mcp_version.toString())
-    environment.put('FORGE_VERSION',forge_version.toString())
-    environment.put('FORGE_GROUP','net.minecraftforge')
-    environment.put('MC_VERSION',minecraft_version.toString())
-    String root=layout.buildDirectory.dir('forge16-development/main').get().asFile.absolutePath
-    environment.put('MOD_CLASSES',"${mod_id}%%${root}${File.pathSeparator}${mod_id}%%${root}")
-    if(options.name=='client') {
-        environment.put('assetDirectory',minecraftAssets.asFile.absolutePath)
-        environment.put('assetIndex','1.16')
-        environment.put('nativesDirectory',new File(gradle.gradleUserHomeDir,"caches/minecraftforge/forgegradle/slime-launcher/cache/net/minecraftforge/forge/${minecraft_version}-${forge_version}/natives").absolutePath)
-    }
-}
-
 tasks.withType(JavaExec).configureEach { run ->
     if (run.name in ['runClient','runServer']) {
-        environment 'target', run.name=='runClient'?'fmluserdevclient':'fmluserdevserver'
-        environment 'MCP_MAPPINGS', "${mapping_channel}_${mapping_version}"
-        environment 'MCP_VERSION', mcp_version
-        environment 'FORGE_VERSION', forge_version
-        environment 'FORGE_GROUP', 'net.minecraftforge'
-        environment 'MC_VERSION', minecraft_version
-        String root=layout.buildDirectory.dir('forge16-development/main').get().asFile.absolutePath
-        environment 'MOD_CLASSES', "${mod_id}%%${root}${File.pathSeparator}${mod_id}%%${root}"
-        if(run.name=='runClient') {
-            File cache=new File(gradle.gradleUserHomeDir,'caches/forge_gradle')
-            environment 'assetDirectory',minecraftAssets.asFile.absolutePath
-            environment 'assetIndex','1.16'
-            environment 'nativesDirectory',new File(cache,"minecraftforge/forgegradle/slime-launcher/cache/net/minecraftforge/forge/${minecraft_version}-${forge_version}/natives").absolutePath
-        }
+        environment 'MOD_CLASSES', "${mod_id}%%${layout.buildDirectory.dir('forge17-development/main').get().asFile.absolutePath}"
     }
 }
 
@@ -172,7 +152,7 @@ tasks.register('prepareProductionRunDirectory') {
 }
 
 // Legacy FML discovers classes and processed resources from a single root.
-ext.developmentOutput = layout.buildDirectory.dir('forge16-development/main')
+ext.developmentOutput = layout.buildDirectory.dir('forge17-development/main')
 tasks.register('syncDevelopmentOutput', Sync) {
     dependsOn 'classes'
     from tasks.named('compileJava', JavaCompile).flatMap { it.destinationDirectory }
@@ -208,6 +188,7 @@ repositories {
 dependencies {
     implementation minecraft.dependency("net.minecraftforge:forge:${minecraft_version}-${forge_version}")
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
+    testImplementation 'org.junit.platform:junit-platform-launcher:1.12.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.12.2'
 }
@@ -230,7 +211,7 @@ tasks.named('jar', Jar) {
             'Implementation-Version': project.version, 'Implementation-Vendor': project.mod_vendor,
             'Maven-Artifact': "${project.group}:${base.archivesName.get()}:${project.version}",
             'Implementation-License': project.mod_license,
-            'Built-On-Java': '8', 'Built-On': "${minecraft_version}-${forge_version}",
+            'Built-On-Java': '16', 'Built-On': "${minecraft_version}-${forge_version}",
             'FMLAT': 'accesstransformer.cfg')
     filesMatching(archiveTextPatterns, normalizeArchiveText)
 }

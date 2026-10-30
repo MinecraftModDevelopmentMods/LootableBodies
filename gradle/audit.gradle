@@ -33,7 +33,7 @@ ext.auditReleaseArchives = { File directory ->
                     if (!path.startsWith('cyano/lootable/')) throw new GradleException("Foreign production class ${path}")
                     byte[] bytes = zip.getInputStream(entry).bytes
                     int major = ((bytes[6] & 255) << 8) | (bytes[7] & 255)
-                    if (major != 52) throw new GradleException("${path} is class major ${major}")
+                    if (major != 60) throw new GradleException("${path} is class major ${major}")
                 }
                 if (path.endsWith('.lang')) {
                     java.nio.charset.StandardCharsets.UTF_8.newDecoder().decode(
@@ -60,15 +60,17 @@ ext.auditReleaseArchives = { File directory ->
                     if (!names.contains(it)) throw new GradleException("Missing production entry ${it}")
                 }
                 String info=zip.getInputStream(zip.getEntry('META-INF/mods.toml')).getText('UTF-8')
-                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.16.5]"'].each {
+                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.17.1]"'].each {
                     if(!info.contains(it))throw new GradleException("Incorrect production metadata: ${it}")
                 }
-                if(new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack.pack_format!=6)
-                    throw new GradleException('Native resource pack format must be 6')
+                if(new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack.pack_format!=7)
+                    throw new GradleException('Native resource pack format must be 7')
                 def atEntry=zip.getEntry('META-INF/accesstransformer.cfg')
                 def atRules=atEntry?zip.getInputStream(atEntry).getText('UTF-8').readLines()
                         .collect {it.split('#',2)[0].trim()}.findAll {!it.isEmpty()}:[]
-                if(atRules!=['public-f net.minecraft.util.datafix.DataFixesManager field_210902_d'] ||
+                if(atRules!=['public-f net.minecraft.util.datafix.DataFixers f_14510_',
+                        'public net.minecraft.world.level.block.entity.SkullBlockEntity f_59755_',
+                        'public net.minecraft.world.level.block.entity.SkullBlockEntity f_59756_'] ||
                         manifest.getValue('FMLAT')!='accesstransformer.cfg')
                     throw new GradleException('Missing or changed native world-reader access boundary')
                 def languages=names.findAll {it.startsWith('assets/lootablebodies/lang/') && !it.endsWith('/')}
@@ -78,7 +80,7 @@ ext.auditReleaseArchives = { File directory ->
                     throw new GradleException('Bundled sources or dependencies in main jar')
                 String entity = new String(zip.getInputStream(zip.getEntry(
                         'cyano/lootable/entities/EntityLootableBody.class')).bytes, 'ISO-8859-1')
-                if (!entity.contains('func_70037_a') || !entity.contains('func_213281_b'))
+                if (!entity.contains('m_7378_') || !entity.contains('m_7380_'))
                     throw new GradleException('Production jar does not have runtime SRG mappings')
             } else if (index == 1 && !names.contains('cyano/lootable/LootableBodies.java')) {
                 throw new GradleException('Sources jar does not contain production sources')

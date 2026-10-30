@@ -7,7 +7,7 @@ public final class NativeVanillaDataFixer {
     private static DataFixer captured;
     public static synchronized DataFixer get() {
         if(captured!=null)return captured;
-        DataFixer result=unwrap(net.minecraft.util.datafix.DataFixesManager.getDataFixer());
+        DataFixer result=unwrap(net.minecraft.util.datafix.DataFixers.getDataFixer());
         if(!result.getClass().getName().equals("com.mojang.datafixers.DataFixerUpper"))throw new AssertionError("Historical oracle is not the native fixer");
         // Keep this independent reference when a synthetic counter later wraps
         // the global reader. Never accept that test wrapper as the oracle.

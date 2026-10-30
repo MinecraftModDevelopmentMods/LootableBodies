@@ -2,3 +2,6 @@ plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 rootProject.name = 'LootableBodies'
+
+// Publication remains restricted to the confirmed MMD release controller in
+// gradle/release.gradle; local Maven and unconfirmed uploads are rejected there.

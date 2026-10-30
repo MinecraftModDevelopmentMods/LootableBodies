@@ -6,6 +6,9 @@ import subprocess
 import time
 from pathlib import Path
 import shutil
+import os
+from native_runtime import seed_flat_fixture
+from owned_process import native_process
 from audit_runtime_logs import audit
 from fixture_login import LoginMonitor, start_clients, write_receipts, archive_live_logs
 from verify_multiplayer import client_command
@@ -17,6 +20,10 @@ def main():
     parser.add_argument('--java',type=Path,required=True)
     parser.add_argument('--forge-home',type=Path,required=True)
     parser.add_argument('--forge-client-home',type=Path,required=True)
+    parser.add_argument('--client-inputs',type=Path,required=True)
+    parser.add_argument('--assets',type=Path)
+    parser.add_argument('--flat-header',type=Path,required=True)
+    parser.add_argument('--flat-header-sha256',required=True)
     parser.add_argument('--hidden-agent',type=Path)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--mode',choices=['visibility','respawn'],required=True)
@@ -38,17 +45,20 @@ def main():
         from verify_world_upgrades import fingerprint
         source_before=fingerprint(args.source_server/'world')
         shutil.copytree(args.source_server/'world',home/'server/world')
+    else:
+        seed_flat_fixture(home/'server',args.flat_header,args.flat_header_sha256)
     with socket.socket() as reservation:
         reservation.bind(('127.0.0.1',0)); port=reservation.getsockname()[1]
     props=(home/'server/server.properties').read_text().replace('server-port=0','server-port='+str(port))+'view-distance=4\n'
     (home/'server/server.properties').write_text(props)
     commands={'server':[str(java),'-Xmx1G','-Dlootablebodies.'+args.mode+'=true',
+        '-Dlog4j.configurationFile='+(project/'src/integrationTest/resources/log4j2.xml').as_uri(),
         '-Dlootablebodies.multiplayer.sync='+str(shared),'-Dlootablebodies.respawn.cases='+str(args.cases),
-        '-jar',FORGE+'.jar','--nogui']}
+        '@libraries/net/minecraftforge/forge/1.17.1-37.1.1/'+('win_args.txt' if os.name=='nt' else 'unix_args.txt'),'--nogui']}
     if args.source_server: commands['server'].insert(2,'-Dlootablebodies.visibility.reload=true')
     if args.simultaneous: commands['server'].insert(2,'-Dlootablebodies.respawn.simultaneous=true')
     for role in ['A','B']:
-        command=client_command(project,java,args.forge_client_home.resolve(),home/('client'+role),None,shared,port,role,args.hidden_agent,probe)
+        command=client_command(project,java,args.forge_client_home.resolve(),home/('client'+role),None,shared,port,role,args.hidden_agent,probe,prepared=args.client_inputs.resolve(),assets=args.assets.resolve() if args.assets else None)
         command.insert(2,'-Dlootablebodies.'+args.mode+'=true')
         if args.simultaneous: command.insert(2,'-Dlootablebodies.respawn.simultaneous=true')
         if args.counter_collision: command.insert(2,'-Dlootablebodies.respawn.counterCollision=true')
@@ -57,14 +67,13 @@ def main():
         (home/('client'+role)/'config/lootablebodies.cfg').write_text('options {\n B:local_texture=false\n}\n')
     processes={}; logs=[]
     def start(name):
-        log=(home/(name+'.log')).open('w',encoding='utf-8');logs.append(log)
-        processes[name]=subprocess.Popen(commands[name],cwd=home/name,stdout=log,stderr=subprocess.STDOUT)
+        processes[name]=native_process(commands[name],cwd=home/name,log=home/(name+'.log'),timeout=710 if name=='server' else 650)
     try:
         start('server');deadline=time.monotonic()+60
         while not (shared/'server.ready').is_file():
             if processes['server'].poll() is not None or time.monotonic()>deadline: raise RuntimeError('Server did not start')
             time.sleep(.2)
-        monitor=LoginMonitor(home)
+        monitor=LoginMonitor(home,legacy_recovery=False)
         start_clients(start);deadline=time.monotonic()+650
         while any(process.poll() is None for process in processes.values()):
             monitor.poll()

@@ -18,6 +18,20 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
 
 
+def native_input_paths(project, expected=None):
+    from native_runtime import SERVER_INPUTS
+    native=project/'build/native-server-distribution'
+    expected=SERVER_INPUTS if expected is None else expected
+    if not expected:raise ValueError('Missing native SDK manifest')
+    paths=[]
+    for name,sha in sorted(expected.items()):
+        path=native/name
+        if not path.resolve().is_relative_to(native.resolve()) or path.is_symlink() or not path.is_file() or digest(path)!=sha:
+            raise ValueError('Missing or changed pinned native SDK input: '+name)
+        paths.append(safe_name(path.relative_to(project).as_posix()))
+    return paths
+
+
 def partition(origins, shard, total=6):
     if total < 1 or not 0 <= shard < total or len(origins) != len(set(origins)):
         raise ValueError('Invalid or duplicate migration shard')
@@ -129,7 +143,7 @@ def run_shard(project, java, shard, commit, total=12):
         if digest(project / name) != manifest['files'][name]['sha256']:
             raise ValueError('Prepared candidate/probe changed')
     args = SimpleNamespace(java=java, origins=origins, variants=['normal','stamps'], seeds=[seeds],
-        forge116_home=project/'build/native-server-distribution', output=project/'build/migration-results')
+        forge117_home=project/'build/native-server-distribution', prepared_sources=None, output=project/'build/migration-results')
     verify(args, project)
     abort_root = project / 'build/migration-abort';abort_root.mkdir(exist_ok=False)
     aborts = {}
@@ -142,7 +156,7 @@ def run_shard(project, java, shard, commit, total=12):
                 shutil.copytree(source, selected);changes = patch_stamps(selected, abort_root)
             with (abort_root / (name + '.log')).open('x') as log:
                 subprocess.run([sys.executable,str(project/'tools/verify_upgrade_abort.py'),'--java',str(java),
-                    '--forge-home',str(args.forge116_home),'--source-world',str(selected),
+                    '--forge-home',str(args.forge117_home),'--source-world',str(selected),
                     '--output',str(abort_root/name)],cwd=project,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=600)
             result = json.loads((abort_root/name/'result.json').read_text())
             aborts[name] = {'conditions':result['cases'], 'stamp_mutations':changes}
@@ -156,6 +170,10 @@ def run_shard(project, java, shard, commit, total=12):
     report = dict(positive, head=commit, aborts=aborts, source_seals={origin:seed_report[origin]['world'] for origin in origins},
                   elapsed_seconds=round(time.monotonic()-started,3))
     aggregate([report],origins,commit)
+    from native_evidence import audit_shard
+    report['native_audit']=audit_shard(project/'build',report)
+    if len(report['native_audit']['receipts'])!=len(report['cases'])*12:
+        raise ValueError('Every native positive/refusal receipt is required')
     destination = project/'build/migration-ci/report.json';destination.parent.mkdir(exist_ok=True)
     destination.write_text(json.dumps(report,indent=2)+'\n')
     print('MIGRATION_SHARD_PASS',shard,'cases='+str(len(report['cases'])),'seconds='+str(report['elapsed_seconds']),flush=True)
@@ -174,9 +192,7 @@ def main():
     if actual != args.commit:raise ValueError('Checkout does not match the declared input commit')
     if args.mode=='seal':
         paths=['build/libs/'+MAIN_JAR,'build/integration-test-mod/lootablebodies-build-tests-reobf.jar','build/migration-seeds/seed-report.json']
-        native=project/'build/native-server-distribution'
-        paths += [p.relative_to(project).as_posix() for p in native.glob('*.jar') if 'installer' not in p.name]
-        paths += [p.relative_to(project).as_posix() for p in (native/'libraries').rglob('*.jar')]
+        paths += native_input_paths(project)
         report=json.loads((project/'build/migration-seeds/seed-report.json').read_text())['origins']
         if set(report)!=set(ORIGINS):raise ValueError('Missing prepared historical worlds')
         for origin,details in report.items():
@@ -189,9 +205,16 @@ def main():
         if args.java is None or args.shard is None:parser.error('--java and --shard are required')
         run_shard(project,args.java.resolve(),args.shard,args.commit,total=args.shards)
     else:
-        reports=[json.loads(p.read_text()) for p in sorted(args.folder.glob('*/migration-ci/report.json'))]
+        reports=[];audits=[]
+        from native_evidence import audit_shard
+        for path in sorted(args.folder.glob('*/migration-ci/report.json')):
+            report=json.loads(path.read_text());proof=audit_shard(path.parent.parent,report,relocated=True)
+            if len(proof['receipts'])!=len(report['cases'])*12:raise ValueError('Missing downloaded native receipts')
+            reports.append(report);audits.append(proof)
         if len(reports)!=args.shards:raise ValueError('Every declared migration shard is required')
         result=aggregate(reports,list(ORIGINS),args.commit)
+        result['native_audits']=audits
+        if sum(len(proof['receipts']) for proof in audits)!=len(ORIGINS)*24:raise ValueError('Incomplete native receipt total')
         output=project/'build/migration-summary.json';output.write_text(json.dumps(result,indent=2)+'\n')
         print('MIGRATION_MATRIX_PASS cases='+str(len(result['cases']))+' phases='+str(result['jvm_phases'])+' unsafe_aborts='+str(result['abort_cases']))
 

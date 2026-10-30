@@ -1,4 +1,4 @@
-"""Run the exact production jar and isolated verifier in official Forge 36."""
+"""Run the exact production jar and isolated verifier in official Forge 37."""
 import argparse
 import hashlib
 import json
@@ -8,6 +8,22 @@ import subprocess
 from audit_runtime_logs import audit
 from native_runtime import project_assets,prepare_client,client_command
 from release_identity import MAIN_JAR
+from runtime_diagnostics import run_monitored
+
+
+def run_client(command,root,label,timeout):
+    diagnostics=root/(label+'.diagnostics')
+    gc='-Xlog:gc*,safepoint:file='+label+'.diagnostics/gc.txt:time,uptime,level,tags'
+    launch=[command[0],gc,*command[1:]]
+    java=Path(command[0]);suffix='.exe' if java.suffix=='.exe' else ''
+    try:
+        return run_monitored(launch,cwd=root,log=root/(label+'.log'),timeout=timeout,
+            diagnostics=diagnostics,diagnostic_command=[str(java.with_name('jstack'+suffix)),'-l'],
+            metric_command=[str(java.with_name('jstat'+suffix)),'-gc'])
+    finally:
+        for name in ('latest.log','debug.log'):
+            log=root/'logs'/name
+            if log.is_file():shutil.copy2(log,root/(label+'.'+name))
 
 
 def audit_client(root,console):
@@ -21,9 +37,14 @@ def main():
     parser.add_argument('--java',type=Path,required=True)
     parser.add_argument('--forge-client-home',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--client-inputs',type=Path,required=True)
+    parser.add_argument('--assets',type=Path)
+    parser.add_argument('--rejected-displaced-viewer',action='store_true')
     parser.add_argument('--hidden-agent',type=Path)
     parser.add_argument('--mode',choices=['default','config','skin','issues','names'],default='default')
     args=parser.parse_args();project=Path(__file__).resolve().parents[1]
+    if args.rejected_displaced_viewer and args.mode!='issues':
+        raise ValueError('Rejected/displaced viewer control requires issues mode')
     root=args.output.resolve();main=project/'build/libs'/MAIN_JAR
     probe=project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar'
     candidate_hash=hashlib.sha256(main.read_bytes()).hexdigest().upper()
@@ -33,13 +54,14 @@ def main():
     local='true' if args.mode in ('default','names','issues') else 'false'
     (root/'config/lootablebodies.cfg').write_text('options {\n B:local_texture='+local+'\n}\n')
     extra=['-Dlootablebodies.clientCheck=true','-Dlog4j.configurationFile='+(project/'src/integrationTest/resources/log4j2.xml').as_uri()]
+    if args.rejected_displaced_viewer:
+        extra+=['-Dlootablebodies.rejectFirstCorpseOpen=true','-Dlootablebodies.issueClient.offsetViewer=true']
     if args.hidden_agent:extra.append('-javaagent:'+str(args.hidden_agent.resolve()))
     if args.mode!='default':
         option={'config':'configUiCheck','skin':'visibilitySkinCheck','issues':'issueClientCheck','names':'namelessClientCheck'}[args.mode]
         extra.append('-Dlootablebodies.'+option+'=true')
-    command=client_command(args.java.resolve(),root,args.forge_client_home.resolve(),project_assets(project),extra=extra)
-    with (root/'client.log').open('w',encoding='utf-8') as log:
-        result=subprocess.run(command,cwd=root,stdout=log,stderr=subprocess.STDOUT,timeout=180)
+    command=client_command(args.java.resolve(),root,args.forge_client_home.resolve(),args.assets.resolve() if args.assets else project_assets(project),extra=extra,prepared=args.client_inputs.resolve())
+    result=run_client(command,root,'client',180)
     text=(root/'client.log').read_text(errors='replace')
     expected={'default':'LOOTABLE_BODIES_CLIENT_PASS','config':'LOOTABLE_BODIES_CONFIG_CLIENT_PASS',
               'skin':'LOOTABLE_BODIES_VISIBILITY_SKIN_PASS','issues':'LOOTABLE_BODIES_ISSUE5_CLIENT_PASS','names':'LOOTABLE_BODIES_NAME_TRANSLATION_PASS'}[args.mode]
@@ -55,16 +77,20 @@ def main():
             raise RuntimeError('Missing graphical mode assertions: '+str(report))
         if args.mode=='config':
             command.insert(2,'-Dlootablebodies.configUiReload=true')
-            with (root/'restart.log').open('w',encoding='utf-8') as log:
-                restart=subprocess.run(command,cwd=root,stdout=log,stderr=subprocess.STDOUT,timeout=120)
+            restart=run_client(command,root,'restart',120)
             if restart.returncode or not (root/'config-restart.pass').is_file():
                 raise RuntimeError('Configuration did not survive process restart')
             audit_client(root,'restart.log')
+        if args.rejected_displaced_viewer:
+            if text.count('CORPSE_GUI_FIRST_INTERACTION_REJECTED_CONTROL')!=1:
+                raise RuntimeError('Missing or duplicate first-open rejection control')
+            for token in ('ISSUE5_VIEWER_APPROACH corpse=','ISSUE5_DISTANT_VIEWER_CONFIRMED corpse='):
+                if token not in text:raise RuntimeError('Missing rejected/displaced control evidence: '+token)
         if list((root/'crash-reports').glob('*')) or hashlib.sha256(main.read_bytes()).hexdigest().upper()!=candidate_hash:
             raise RuntimeError('Crash or candidate mutation in graphical mode')
         (root/'result.json').write_text(json.dumps({'candidate_sha256':candidate_hash,'mode':args.mode,
             'checks':report.read_text().splitlines(),'screenshots':sorted(p.name for p in (root/'screenshots').glob('*.png')),
-            'computer_control':'none'},indent=2)+'\n')
+            'computer_control':'none','rejected_displaced_control':args.rejected_displaced_viewer},indent=2)+'\n')
         print('PACKAGED_CLIENT_MODE_PASS',args.mode,flush=True)
         return
     checks=['connected_player_death_and_respawn','network_shift_click_exact_nbt',

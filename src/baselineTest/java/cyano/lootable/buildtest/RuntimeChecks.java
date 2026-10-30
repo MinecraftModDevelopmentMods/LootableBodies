@@ -1,10 +1,10 @@
 package cyano.lootable.buildtest;
-import net.minecraft.item.ItemStack;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.nbt.*;
 import net.minecraft.init.Items;
 final class RuntimeChecks { static void require(boolean value,String message){if(!value)throw new AssertionError(message);}
     static ItemStack stack(int index) {
-        ItemStack stack = index < 4 ? new ItemStack(new net.minecraft.item.Item[]{Items.DIAMOND_HELMET, Items.DIAMOND_CHESTPLATE, Items.DIAMOND_LEGGINGS, Items.DIAMOND_BOOTS}[index],1,index+2) :
+        ItemStack stack = index < 4 ? new ItemStack(new net.minecraft.world.item.Item[]{Items.DIAMOND_HELMET, Items.DIAMOND_CHESTPLATE, Items.DIAMOND_LEGGINGS, Items.DIAMOND_BOOTS}[index],1,index+2) :
                 index == 4 ? new ItemStack(Items.DIAMOND_SWORD,1,17) : index == 5 ? new ItemStack(Items.SHIELD,1,9) :
                 new ItemStack(Items.DYE, 1 + index % 32, index % 16);
         NBTTagCompound custom = new NBTTagCompound();

@@ -1,10 +1,10 @@
 package cyano.lootable.buildtest;
 import java.util.UUID;
-import net.minecraft.nbt.CompoundNBT;
+import net.minecraft.nbt.CompoundTag;
 /** Independent source-fixture identity reader; never rewrites historical NBT. */
 public final class HistoricalUuid {
     private HistoricalUuid() { }
-    public static UUID read(CompoundNBT n,String key) {
+    public static UUID read(CompoundTag n,String key) {
         UUID array=null,pair=null;
         if(n.contains(key)) {
             if(!n.contains(key,11) || n.getIntArray(key).length!=4)throw new IllegalArgumentException("Malformed fixture identity array");

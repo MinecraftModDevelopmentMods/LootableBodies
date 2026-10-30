@@ -1,0 +1,26 @@
+// Compile historical fixtures with the released 1.16 API, never the candidate API.
+gradle.projectsEvaluated {
+    def p = gradle.rootProject
+    File writerRoot = p.file(p.property('historicalWriterSource'))
+    def classes = p.layout.buildDirectory.dir('native116-seed/classes')
+    def compile = p.tasks.register('compileNative116Seed', JavaCompile) {
+        dependsOn 'classes'
+        source p.fileTree(new File(writerRoot, 'src/nativeSeed116/java'))
+        classpath = p.files(p.sourceSets.main.output, p.sourceSets.main.compileClasspath)
+        destinationDirectory = classes
+        options.compilerArgs.add('-proc:none')
+    }
+    def jar = p.tasks.register('native116SeedJar', Jar) {
+        dependsOn compile
+        archiveFileName = 'lootablebodies-native116-world-fixtures.jar'
+        destinationDirectory = p.layout.buildDirectory.dir('native116-seed')
+        from classes
+        from new File(writerRoot, 'src/nativeSeed116/resources')
+    }
+    def packaged = p.renamer.classes(jar) {
+        map.from p.minecraft.dependency.toSrgFile
+        libraries.from(p.tasks.named('jar'), p.sourceSets.main.compileClasspath)
+        output = p.layout.buildDirectory.file('native116-seed/lootablebodies-native116-world-fixtures-reobf.jar')
+    }
+    p.tasks.register('prepareNative116WorldFixtures') { dependsOn packaged }
+}

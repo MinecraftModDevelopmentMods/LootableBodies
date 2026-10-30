@@ -3,11 +3,11 @@ import com.mojang.datafixers.DataFixer;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.function.UnaryOperator;
-import net.minecraft.nbt.CompoundNBT;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.server.ServerWorld;
-import net.minecraft.world.chunk.storage.ChunkLoader;
-import net.minecraft.world.gen.feature.structure.LegacyStructureDataUtil;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.chunk.storage.ChunkStorage;
+import net.minecraft.world.level.levelgen.structure.LegacyStructureDataHandler;
 /** Installs preservation before native save handlers and chunk readers run. */
 public final class ChunkVersionContext {
     private ChunkVersionContext() { }
@@ -16,12 +16,12 @@ public final class ChunkVersionContext {
     }
     public static void installServer(MinecraftServer server) {
         installFixer(server,null);
-        installFixer(related(server,net.minecraft.world.storage.PlayerData.class),null);
+        installFixer(related(server,net.minecraft.world.level.storage.PlayerDataStorage.class),null);
     }
-    public static void installWorld(ServerWorld world) {
-        Object loader=world.getChunkProvider().chunkManager;
-        if(!(loader instanceof ChunkLoader))throw new IllegalStateException("Unsupported chunk reader; refusing unprotected world loading");
-        installFixer(loader,chunk->LegacyStructureDataUtil.func_236992_a_(world.getDimensionKey(),world.getServer().getWorld(net.minecraft.world.World.OVERWORLD).getSavedData()).func_212181_a(chunk));
+    public static void installWorld(ServerLevel world) {
+        Object loader=world.getChunkSource().chunkMap;
+        if(!(loader instanceof ChunkStorage))throw new IllegalStateException("Unsupported chunk reader; refusing unprotected world loading");
+        installFixer(loader,chunk->LegacyStructureDataHandler.getLegacyStructureHandler(world.dimension(),world.getServer().getLevel(net.minecraft.world.level.Level.OVERWORLD).getDataStorage()).updateFromLegacy(chunk));
     }
     private static Object related(Object owner,Class<?> expected) {
         java.util.List<Field> matches=new java.util.ArrayList<>();
@@ -31,7 +31,7 @@ public final class ChunkVersionContext {
         try {Field field=matches.get(0);field.setAccessible(true);return field.get(owner);}
         catch(ReflectiveOperationException failure){throw new IllegalStateException("Cannot access native save reader",failure);}
     }
-    static void installFixer(Object owner,UnaryOperator<CompoundNBT> structures) {
+    static void installFixer(Object owner,UnaryOperator<CompoundTag> structures) {
         List<Field> fields=new ArrayList<>();
         for(Class<?> type=owner.getClass();type!=null;type=type.getSuperclass())for(Field field:type.getDeclaredFields())
             if(!Modifier.isStatic(field.getModifiers()) && field.getType()==DataFixer.class)fields.add(field);

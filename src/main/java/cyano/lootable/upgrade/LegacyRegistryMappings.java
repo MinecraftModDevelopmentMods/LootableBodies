@@ -1,8 +1,8 @@
 package cyano.lootable.upgrade;
 
 import cyano.lootable.LootableBodies;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.SoundEvent;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraftforge.event.RegistryEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -17,6 +17,7 @@ public final class LegacyRegistryMappings {
             case "rose_red": return new ResourceLocation("minecraft:red_dye");
             case "cactus_green": return new ResourceLocation("minecraft:green_dye");
             case "dandelion_yellow": return new ResourceLocation("minecraft:yellow_dye");
+            case "grass_path": return new ResourceLocation("minecraft:dirt_path");
             case "zombie_pigman_spawn_egg":return new ResourceLocation("minecraft:zombified_piglin_spawn_egg");
             default: return null;
         }
@@ -26,6 +27,7 @@ public final class LegacyRegistryMappings {
         switch (old.getPath()) {
             case "sign": return new ResourceLocation("minecraft:oak_sign");
             case "wall_sign": return new ResourceLocation("minecraft:oak_wall_sign");
+            case "grass_path": return new ResourceLocation("minecraft:dirt_path");
             default: return null;
         }
     }
@@ -52,41 +54,42 @@ public final class LegacyRegistryMappings {
     public static ResourceLocation soundReplacement(ResourceLocation old) {
         if(old.equals(OLD_XP_SOUND))return XP_SOUND;
         if(!old.getNamespace().equals("minecraft"))return null;
+        if(old.getPath().equals("item.sweet_berries.pick_from_bush"))return new ResourceLocation("minecraft:block.sweet_berry_bush.pick_berries");
         if(old.getPath().equals("music.nether"))return new ResourceLocation("minecraft:music.nether.nether_wastes");
         for(String suffix:new String[]{"ambient","angry","death","hurt"})
             if(old.getPath().equals("entity.zombie_pigman."+suffix))return new ResourceLocation("minecraft:entity.zombified_piglin."+suffix);
         return null;
     }
     /** This old Long memory had no serializer or saved values in vanilla1.15. */
-    public static void retiredMemories(RegistryEvent.Register<net.minecraft.entity.ai.brain.memory.MemoryModuleType<?>> event) {
-        event.getRegistry().register(new net.minecraft.entity.ai.brain.memory.MemoryModuleType<Long>(java.util.Optional.empty())
+    public static void retiredMemories(RegistryEvent.Register<net.minecraft.world.entity.ai.memory.MemoryModuleType<?>> event) {
+        event.getRegistry().register(new net.minecraft.world.entity.ai.memory.MemoryModuleType<Long>(java.util.Optional.empty())
                 .setRegistryName("minecraft:golem_last_seen_time"));
     }
 
-    @SubscribeEvent public static void items(RegistryEvent.MissingMappings<net.minecraft.item.Item> event) {
-        if(!event.getRegistry().getRegistrySuperType().equals(net.minecraft.item.Item.class))return;
-        for (RegistryEvent.MissingMappings.Mapping<net.minecraft.item.Item> mapping : event.getAllMappings()) {
+    @SubscribeEvent public static void items(RegistryEvent.MissingMappings<net.minecraft.world.item.Item> event) {
+        if(!event.getRegistry().getRegistrySuperType().equals(net.minecraft.world.item.Item.class))return;
+        for (RegistryEvent.MissingMappings.Mapping<net.minecraft.world.item.Item> mapping : event.getAllMappings()) {
             ResourceLocation replacement = itemReplacement(mapping.key);
             if (replacement != null) mapping.remap(requireMappingTarget(net.minecraftforge.registries.ForgeRegistries.ITEMS.containsKey(replacement),()->net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(replacement)));
         }
     }
-    @SubscribeEvent public static void blocks(RegistryEvent.MissingMappings<net.minecraft.block.Block> event) {
-        if(!event.getRegistry().getRegistrySuperType().equals(net.minecraft.block.Block.class))return;
-        for (RegistryEvent.MissingMappings.Mapping<net.minecraft.block.Block> mapping : event.getAllMappings()) {
+    @SubscribeEvent public static void blocks(RegistryEvent.MissingMappings<net.minecraft.world.level.block.Block> event) {
+        if(!event.getRegistry().getRegistrySuperType().equals(net.minecraft.world.level.block.Block.class))return;
+        for (RegistryEvent.MissingMappings.Mapping<net.minecraft.world.level.block.Block> mapping : event.getAllMappings()) {
             ResourceLocation replacement = blockReplacement(mapping.key);
             if (replacement != null) mapping.remap(requireMappingTarget(net.minecraftforge.registries.ForgeRegistries.BLOCKS.containsKey(replacement),()->net.minecraftforge.registries.ForgeRegistries.BLOCKS.getValue(replacement)));
         }
     }
-    @SubscribeEvent public static void entities(RegistryEvent.MissingMappings<net.minecraft.entity.EntityType<?>> event) {
-        if(!event.getRegistry().getRegistrySuperType().equals(net.minecraft.entity.EntityType.class))return;
-        for(RegistryEvent.MissingMappings.Mapping<net.minecraft.entity.EntityType<?>> mapping:event.getAllMappings()) {
+    @SubscribeEvent public static void entities(RegistryEvent.MissingMappings<net.minecraft.world.entity.EntityType<?>> event) {
+        if(!event.getRegistry().getRegistrySuperType().equals(net.minecraft.world.entity.EntityType.class))return;
+        for(RegistryEvent.MissingMappings.Mapping<net.minecraft.world.entity.EntityType<?>> mapping:event.getAllMappings()) {
             ResourceLocation replacement=entityReplacement(mapping.key);
             if(replacement!=null)mapping.remap(requireMappingTarget(net.minecraftforge.registries.ForgeRegistries.ENTITIES.containsKey(replacement),()->net.minecraftforge.registries.ForgeRegistries.ENTITIES.getValue(replacement)));
         }
     }
-    @SubscribeEvent public static void memories(RegistryEvent.MissingMappings<net.minecraft.entity.ai.brain.memory.MemoryModuleType<?>> event) {
-        if(!event.getRegistry().getRegistrySuperType().equals(net.minecraft.entity.ai.brain.memory.MemoryModuleType.class))return;
-        for(RegistryEvent.MissingMappings.Mapping<net.minecraft.entity.ai.brain.memory.MemoryModuleType<?>> mapping:event.getAllMappings())
+    @SubscribeEvent public static void memories(RegistryEvent.MissingMappings<net.minecraft.world.entity.ai.memory.MemoryModuleType<?>> event) {
+        if(!event.getRegistry().getRegistrySuperType().equals(net.minecraft.world.entity.ai.memory.MemoryModuleType.class))return;
+        for(RegistryEvent.MissingMappings.Mapping<net.minecraft.world.entity.ai.memory.MemoryModuleType<?>> mapping:event.getAllMappings())
             if(mapping.key.equals(new ResourceLocation("minecraft:opened_doors")))
                 mapping.remap(requireMappingTarget(net.minecraftforge.registries.ForgeRegistries.MEMORY_MODULE_TYPES.containsKey(new ResourceLocation("minecraft:doors_to_close")),()->net.minecraftforge.registries.ForgeRegistries.MEMORY_MODULE_TYPES.getValue(new ResourceLocation("minecraft:doors_to_close"))));
     }

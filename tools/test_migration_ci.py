@@ -36,10 +36,13 @@ class MigrationCiTests(unittest.TestCase):
         for value in [-1,6]:
             with self.assertRaises(ValueError):ci.partition(list(ORIGINS),value)
 
-    def test_all_600_phases_and_120_refusals_are_required(self):
+    def test_all_760_phases_and_152_refusals_are_required(self):
         result = ci.aggregate(self.reports(), list(ORIGINS), 'a'*40)
-        self.assertEqual((60,600,120),(len(result['cases']),result['jvm_phases'],result['abort_cases']))
-        earlier=[name for name in result['cases'] if not name.startswith(('released-115-','recovery-115-','via115-'))]
+        self.assertEqual((76,760,152),(len(result['cases']),result['jvm_phases'],result['abort_cases']))
+        native16=[name for name in result['cases'] if not name.startswith(('released-116-','recovery-116-','via116-'))]
+        self.assertEqual(60,len(native16));self.assertEqual(600,sum(len(result['cases'][name]['phases']) for name in native16))
+        self.assertEqual(120,sum(len(result['aborts'][name]['conditions']) for name in native16))
+        earlier=[name for name in native16 if not name.startswith(('released-115-','recovery-115-','via115-'))]
         self.assertEqual(46,len(earlier))
         self.assertEqual(460,sum(len(result['cases'][name]['phases']) for name in earlier))
         self.assertEqual(92,sum(len(result['aborts'][name]['conditions']) for name in earlier))
@@ -99,6 +102,29 @@ class MigrationCiTests(unittest.TestCase):
             bundle=root/'bundle';ci.seal(source,['build/main.jar'],bundle,'a'*40)
             (source/'tools/check.py').write_text('different check')
             with self.assertRaises(ValueError):ci.restore(source,bundle,'a'*40)
+
+    def native_inputs(self,root):
+        folder=root/'build/native-server-distribution';expected={}
+        for name in ['libraries/forge/server.jar','libraries/forge/win_args.txt','libraries/forge/unix_args.txt']:
+            path=folder/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(name.encode());expected[name]=ci.digest(path)
+        return folder,expected
+
+    def test_native_preparation_seals_both_module_argument_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);folder,expected=self.native_inputs(root)
+            paths=ci.native_input_paths(root,expected)
+            self.assertEqual({(folder/name).relative_to(root).as_posix() for name in expected},set(paths))
+            bundle=root/'bundle';ci.seal(root,paths,bundle,'a'*40)
+            restored=root/'restored';restored.mkdir();ci.restore(restored,bundle,'a'*40)
+            self.assertEqual(set(expected),{p.relative_to(restored/'build/native-server-distribution').as_posix() for p in (restored/'build/native-server-distribution').rglob('*') if p.is_file()})
+
+    def test_missing_or_changed_native_preparation_input_is_fatal(self):
+        for mutation in ['missing','changed']:
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);folder,expected=self.native_inputs(root);path=folder/'libraries/forge/unix_args.txt'
+                if mutation=='missing':path.unlink()
+                else:path.write_bytes(b'other native arguments')
+                with self.assertRaises(ValueError):ci.native_input_paths(root,expected)
 
 
 if __name__=='__main__':unittest.main()

@@ -1,4 +1,4 @@
-"""Disposable official Forge 36 launches, separate from the development bootstrap."""
+"""Disposable official Forge 37 launches, separate from the development bootstrap."""
 import hashlib
 import json
 import os
@@ -12,12 +12,16 @@ import zipfile
 from command_logs import run_logged
 from runtime_diagnostics import run_monitored
 
-FORGE = 'forge-1.16.5-36.2.42'
-INSTALLER_SHA256 = 'DFA90C681F30BE2406548B6429BCCB68D95AF4F64AB19B8C58F6128FD50FF857'
-SERVER_INPUTS = {'forge-1.16.5-36.2.42.jar': 'DFEAB9C7D582FCE5B1112E9D3038FA0E7075296E467031CE1E2C0BA9FDCF441F', 'libraries/net/minecraftforge/forge/1.16.5-36.2.42/forge-1.16.5-36.2.42-server.jar': '487536E867F5D4287121BAB75600C980A8313E458DE2B2C392C7201EB5648EA1', 'minecraft_server.1.16.5.jar': '58F329C7D2696526F948470AA6FD0B45545039B64CB75015E64C12194B373DA6'}
-# Native 1.16 Main applies resource-stage completions directly to an
-# unsynchronised HashSet. Two visible CPUs give its preparation pool one worker.
-# Apply this budget only to disposable historical preservation/refusal fixtures.
+FORGE = 'forge-1.17.1-37.1.1'
+INSTALLER_SHA256 = '31F2319B1B9CA491AACCC020887240F8524A4FF2A8E0F8B795E17E889CBC043B'
+SERVER_INPUTS = json.loads(Path(__file__).with_name('native117_server_inputs.json').read_text(encoding='utf-8'))
+# Qualified by 200 actual packaged native37 resource reloads in four bounded
+# JVMs, without this mod or a world. Ordinary gameplay retains native defaults.
+WORKER_BUDGET_PROOF = json.loads(Path(__file__).with_name('native117_worker_budget.json').read_text(encoding='utf-8'))
+if (WORKER_BUDGET_PROOF['minecraft'], WORKER_BUDGET_PROOF['forge'],
+        WORKER_BUDGET_PROOF['reloads'], WORKER_BUDGET_PROOF['jvms'],
+        WORKER_BUDGET_PROOF['native_preparation_workers']) != ('1.17.1', '37.1.1', 200, 4, 1):
+    raise RuntimeError('Missing native37 worker-budget qualification')
 HISTORICAL_JVM_ARGS = ('-XX:ActiveProcessorCount=2',)
 
 
@@ -50,18 +54,16 @@ def seed_loader_defaults(home, deterministic=False, include_default_path=True):
 def prepare_server(home, distribution, candidate=None, probe=None):
     home = home.resolve()
     distribution = distribution.resolve()
-    launcher = distribution / (FORGE + '.jar')
     libraries = distribution / 'libraries'
-    if not launcher.is_file() or not libraries.is_dir():
-        raise FileNotFoundError('Incomplete official Forge 36 server installation')
+    if not libraries.is_dir():
+        raise FileNotFoundError('Incomplete official Forge 37 server installation')
     for name, expected in SERVER_INPUTS.items():
         artifact = distribution / name
         if not artifact.is_file() or digest(artifact) != expected:
-            raise RuntimeError('Incorrect official Forge 36 server input: ' + name)
+            raise RuntimeError('Incorrect official Forge 37 server input: ' + name)
     home.mkdir(parents=True, exist_ok=False)
     (home / 'mods').mkdir()
     seed_loader_defaults(home, deterministic=probe is not None)
-    shutil.copy2(launcher, home / launcher.name)
     # Share this disposable installation's immutable libraries, not a user
     # installation or Gradle cache. Every matrix run fingerprints the inputs.
     link = home / 'libraries'
@@ -80,8 +82,11 @@ def prepare_server(home, distribution, candidate=None, probe=None):
                 raise FileNotFoundError(artifact)
             shutil.copy2(artifact, home / 'mods' / artifact.name)
     (home / 'eula.txt').write_text('eula=true\n', encoding='utf-8')
+    # Native37's flat server-property codec uses bare JsonOps and logs errors.
+    # Existing copied headers remain authoritative. Fresh flat fixtures need
+    # an explicitly prepared native-codec header before their first launch.
     (home / 'server.properties').write_text(
-        'level-name=world\nlevel-seed=4267321\nlevel-type=FLAT\nonline-mode=false\n'
+        'level-name=world\nlevel-seed=4267321\nlevel-type=DEFAULT\nonline-mode=false\n'
         'server-ip=127.0.0.1\nserver-port=0\ngenerate-structures=false\n'
         'spawn-animals=false\nspawn-monsters=false\nspawn-protection=0\n'
         'max-tick-time=120000\n', encoding='utf-8')
@@ -93,6 +98,13 @@ def run_java(java, home, phase, *, timeout=240, jvm_args=()):
     """Run one owned Forge JVM, retaining failure evidence before returning."""
     java = Path(java).resolve()
     home = home.resolve()
+    release = java.parent.parent / 'release'
+    if not release.is_file():
+        raise RuntimeError('Native runtime requires exact Temurin 16.0.2+7 JDK metadata')
+    version = dict(line.split('=', 1) for line in release.read_text(encoding='utf-8').splitlines() if '=' in line)
+    if (version.get('SEMANTIC_VERSION') != '"16.0.2+7"' or
+            version.get('IMPLEMENTOR') != '"Eclipse Foundation"'):
+        raise RuntimeError('Native runtime requires exact Temurin 16.0.2+7')
     log = home / (phase + '.log')
     diagnostics = home / (phase + '.diagnostics')
     copies = [home / (phase + '.' + name) for name in ('latest.log', 'debug.log')]
@@ -103,11 +115,11 @@ def run_java(java, home, phase, *, timeout=240, jvm_args=()):
     for tool in (jstack, jstat):
         if not tool.is_file():
             raise FileNotFoundError('Native runtime diagnostics require the pinned JDK tool: '+str(tool))
-    gc = diagnostics / 'gc.txt'
-    command = [str(java), '-XX:+PrintGCDetails', '-XX:+PrintGCTimeStamps',
-               '-XX:+PrintGCDateStamps', '-XX:+PrintGCApplicationStoppedTime',
-               '-Xloggc:' + str(gc), *jvm_args,
-               '-jar', FORGE + '.jar', '--nogui']
+    # Relative output avoids the drive-letter delimiter in unified logging.
+    gc = diagnostics.relative_to(home) / 'gc.txt'
+    arguments = 'win_args.txt' if os.name == 'nt' else 'unix_args.txt'
+    command = [str(java), '-Xlog:gc*,safepoint:file=' + gc.as_posix() + ':time,uptime,level,tags',
+               *jvm_args, '@libraries/net/minecraftforge/forge/1.17.1-37.1.1/' + arguments, '--nogui']
     try:
         completed = run_monitored(command, cwd=home, log=log, timeout=timeout,
                                   diagnostics=diagnostics,
@@ -120,6 +132,35 @@ def run_java(java, home, phase, *, timeout=240, jvm_args=()):
             if runtime_log.is_file():
                 shutil.copy2(runtime_log, destination)
     return completed
+
+
+def seed_flat_fixture(home, header, expected_sha256):
+    """Copy one sealed native-codec header into a new owned fixture world."""
+    import gzip
+    from nbt_regions import decode
+    home, header = Path(home).resolve(), Path(header).resolve()
+    if not (home/'server.properties').is_file():
+        raise RuntimeError('Prepare the owned server home before seeding its header')
+    world = home/'world'
+    if world.exists():
+        raise FileExistsError('Refusing to overwrite an existing fixture world')
+    if not header.is_file() or digest(header) != expected_sha256:
+        raise RuntimeError('Native flat fixture header checksum mismatch')
+    _, root = decode(gzip.decompress(header.read_bytes()))
+    data = root.value.get('Data')
+    try:
+        version = data.value['DataVersion']
+        generator = data.value['WorldGenSettings'].value['dimensions'].value[
+            'minecraft:overworld'].value['generator'].value['type']
+        if version.kind != 3 or version.value != 2730 or generator.kind != 8 or generator.value != 'minecraft:flat':
+            raise ValueError('Wrong native version or generator')
+    except (AttributeError, KeyError, ValueError) as error:
+        raise RuntimeError('Expected an explicit native2730 flat codec header') from error
+    world.mkdir()
+    shutil.copy2(header, world/'level.dat')
+    (home/'native-flat-header-input.json').write_text(json.dumps({
+        'sha256':expected_sha256, 'native_data_version':2730, 'generator':'minecraft:flat',
+        'only_header_copied':True}, indent=2)+'\n', encoding='utf-8')
 
 
 def run_server(java, home, phase, *, timeout=240, extra=(), marker=None, message=None):
@@ -189,83 +230,14 @@ def validate_client_paths(paths):
             raise RuntimeError('Development, testing or incompatible legacy library in packaged client: '+str(path))
 
 
-def client_inputs(runtime):
-    runtime = runtime.resolve()
-    base_path = runtime / 'versions/1.16.5/1.16.5.json'
-    if not base_path.is_file() or hashlib.sha1(base_path.read_bytes()).hexdigest() != 'fba9f7833e858a1257d810d21a3a9e3c967f9077':
-        raise RuntimeError('Missing or incorrect official Minecraft 1.16.5 descriptor')
-    base = json.loads(base_path.read_text(encoding='utf-8'))
-    forge = json.loads((runtime / 'versions/1.16.5-forge-36.2.42/1.16.5-forge-36.2.42.json').read_text(encoding='utf-8'))
-    system = {'Windows': 'windows', 'Darwin': 'osx', 'Linux': 'linux'}[platform.system()]
-    architecture = 'x86' if platform.architecture()[0] == '32bit' else 'amd64'
-    native_directory = runtime / ('natives-' + system + '-' + architecture)
-    native_directory.mkdir(exist_ok=True)
-    modules = {}
-    for metadata in (base, forge):
-        for library in metadata['libraries']:
-            if not allowed(library, system, architecture):
-                continue
-            downloads = library.get('downloads', {})
-            artifact = downloads.get('artifact')
-            if artifact:
-                path = runtime / 'libraries' / artifact['path']
-                _download(artifact, path)
-                parts = library['name'].split(':')
-                key = ':'.join(parts[:2] + parts[3:])
-                modules[key] = path
-            classifier = library.get('natives', {}).get(system)
-            if classifier:
-                classifier = classifier.replace('${arch}', '32' if architecture == 'x86' else '64')
-                native = downloads['classifiers'][classifier]
-                archive = runtime / 'libraries' / native['path']
-                _download(native, archive)
-                with zipfile.ZipFile(archive) as jar:
-                    for entry in jar.infolist():
-                        if entry.is_dir() or entry.filename.startswith('META-INF/'):
-                            continue
-                        if Path(entry.filename).suffix.lower() not in ('.dll', '.so', '.dylib', '.jnilib'):
-                            continue
-                        target = native_directory / Path(entry.filename).name
-                        content = jar.read(entry)
-                        if target.exists():
-                            if target.read_bytes() != content:
-                                raise RuntimeError('Conflicting native runtime input: ' + target.name)
-                        else:
-                            target.write_bytes(content)
-    base_jar = runtime / 'versions/1.16.5/1.16.5.jar'
-    _download(base['downloads']['client'], base_jar)
-    paths = list(modules.values()) + [base_jar]
-    validate_client_paths(paths)
-    return base, forge, paths, native_directory
+def client_inputs(runtime, prepared):
+    from native117_client import load
+    base, forge, record = load(runtime, prepared)
+    return base, forge, [Path(p) for p in record['classpath']], Path(record['natives'])
 
 
 def prepare_assets(runtime, cache=None):
-    """Hydrate owned assets from official hashes, reusing verified cache objects."""
-    from concurrent.futures import ThreadPoolExecutor
-    runtime = runtime.resolve()
-    base = json.loads((runtime / 'versions/1.16.5/1.16.5.json').read_text(encoding='utf-8'))
-    assets = runtime / 'assets'
-    index = assets / 'indexes/1.16.json'
-    _download(base['assetIndex'], index)
-    objects = json.loads(index.read_text(encoding='utf-8'))['objects']
-    unique = {item['hash'] for item in objects.values()}
-
-    def hydrate(checksum):
-        relative = checksum[:2] + '/' + checksum
-        destination = assets / 'objects' / relative
-        if not destination.exists() and cache is not None:
-            previous = cache / 'objects' / relative
-            if previous.is_file() and hashlib.sha1(previous.read_bytes()).hexdigest() == checksum:
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(previous, destination)
-        _download({'sha1': checksum, 'url': 'https://resources.download.minecraft.net/' + relative}, destination)
-
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        for count, _ in enumerate(pool.map(hydrate, sorted(unique)), 1):
-            if count % 250 == 0:
-                print('Verified native asset objects', count, '/', len(unique), flush=True)
-    print('Official native assets ready:', len(unique), 'objects', flush=True)
-    return assets
+    raise RuntimeError('Use the pinned native1.17 prepareMinecraftAssets task; inherited cache-copy hydration is disabled')
 
 
 def prepare_client(home, candidate=None, probe=None):
@@ -281,41 +253,34 @@ def prepare_client(home, candidate=None, probe=None):
     (home / 'options.txt').write_text('realmsNotifications:false\npauseOnLostFocus:false\nrenderDistance:4\nmaxFps:30\nsoundCategory_master:0.0\n', encoding='utf-8')
 
 
-def client_command(java, home, runtime, assets, *, username='LootableTest', extra=()):
-    base, forge, paths, natives = client_inputs(runtime)
-    index = assets / 'indexes/1.16.json'
-    if not index.is_file() or hashlib.sha1(index.read_bytes()).hexdigest() != base['assetIndex']['sha1']:
-        raise RuntimeError('Missing or incorrect official Minecraft asset index')
-    return [str(java), '-Xmx2G', '-Djava.library.path=' + str(natives),
-            '-DlibraryDirectory=' + str(runtime.resolve() / 'libraries'), *extra,
-            '-cp', os.pathsep.join(str(path) for path in paths), forge['mainClass'],
-            *forge['arguments']['game'], '--username', username,
-            '--version', '1.16.5-forge-36.2.42', '--gameDir', str(home.resolve()),
-            '--assetsDir', str(assets.resolve()), '--assetIndex', '1.16',
-            '--uuid', '00000000-0000-4000-8000-000000000001', '--accessToken', 'disposable-test',
-            '--userType', 'legacy', '--versionType', 'release', '--width', '854', '--height', '480']
+def client_command(java, home, runtime, assets, *, username='LootableTest', extra=(), prepared=None):
+    from native117_client import command
+    if prepared is None:
+        prepared=Path(__file__).resolve().parents[1]/'.gradle/native117-client-inputs'
+    return command(java,home,runtime,assets,prepared,username=username,extra=extra)
 
 
-def install(java,home,client=False):
-    """Install an official pinned distribution into a new, owned directory."""
+def install(java, home, client=False):
+    """Install the pinned native37 distribution into a new owned directory."""
     from prepare_migration_inputs import fetch
     home=home.resolve();home.mkdir(parents=True,exist_ok=False)
     installer=home/(FORGE+'-installer.jar')
-    fetch('https://maven.minecraftforge.net/net/minecraftforge/forge/1.16.5-36.2.42/'+installer.name,installer,INSTALLER_SHA256)
+    fetch('https://maven.minecraftforge.net/net/minecraftforge/forge/1.17.1-37.1.1/'+installer.name,installer,INSTALLER_SHA256)
     if client:
-        base=home/'versions/1.16.5/1.16.5.json'
-        _download({'sha1':'fba9f7833e858a1257d810d21a3a9e3c967f9077','url':'https://piston-meta.mojang.com/v1/packages/fba9f7833e858a1257d810d21a3a9e3c967f9077/1.16.5.json'},base)
+        from native117_client import BASE_VERSION,BASE_SHA1
+        base=home/'versions'/BASE_VERSION/(BASE_VERSION+'.json')
+        _download({'sha1':BASE_SHA1,'url':'https://piston-meta.mojang.com/v1/packages/'+BASE_SHA1+'/1.17.1.json'},base)
         metadata=json.loads(base.read_text());_download(metadata['downloads']['client'],base.with_suffix('.jar'))
         (home/'launcher_profiles.json').write_text('{"profiles":{}}\n')
     run_logged([str(java),'-Djava.awt.headless=true','-jar',installer.name,
-                        '--installClient' if client else '--installServer',str(home)],
-                       cwd=home,path=home/'install.log',timeout=600)
+                '--installClient' if client else '--installServer',str(home)],
+                cwd=home,path=home/'install.log',timeout=600)
     if client:
-        base,forge,paths,natives=client_inputs(home)
-        inputs={str(path.relative_to(home)):digest(path) for path in paths}
+        from native117_client import prepare
+        inputs=prepare(home,home/'prepared-inputs')['files']
     else:
         inputs={name:digest(home/name) for name in SERVER_INPUTS}
-        if inputs!=SERVER_INPUTS:raise RuntimeError('Official Forge server installation checksum mismatch')
+        if inputs!=SERVER_INPUTS:raise RuntimeError('Official Forge37 server installation checksum mismatch')
     (home/'runtime-inputs.json').write_text(json.dumps({'installer_sha256':INSTALLER_SHA256,'client':client,'files':inputs},indent=2)+'\n')
     return home
 

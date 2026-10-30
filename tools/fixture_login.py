@@ -41,8 +41,8 @@ def planned_disconnect(home, role, phase):
                for line in plain(log.read_text(encoding='utf-8',errors='replace')).splitlines())
 
 class LoginMonitor:
-    def __init__(self, home):
-        self.home=Path(home);self.seen=0;self.counts={'A':0,'B':0};self.visibility_phase=None
+    def __init__(self, home, legacy_recovery=True):
+        self.home=Path(home);self.seen=0;self.counts={'A':0,'B':0};self.visibility_phase=None;self.legacy_recovery=legacy_recovery
     def poll(self):
         text=(self.home/'server.log').read_text(encoding='utf-8',errors='replace')
         lines=plain(text[:text.rfind('\n')+1]).splitlines()
@@ -54,6 +54,7 @@ class LoginMonitor:
                 (self.home/'sync/client-A-joined').touch()
             match=FAILURE.fullmatch(line)
             if match:
+                if not self.legacy_recovery:raise RuntimeError('Legacy login recovery is disabled for native17: '+line)
                 role=match[1];self.counts[role]+=1
                 if self.counts[role]>LIMIT:raise RuntimeError('Forge login retry limit: '+role)
                 (self.home/'sync'/('login-retry-'+role)).write_text(str(self.counts[role]))

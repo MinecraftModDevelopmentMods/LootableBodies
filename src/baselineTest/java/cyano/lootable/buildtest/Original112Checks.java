@@ -5,7 +5,7 @@ import cyano.lootable.entities.EntityLootableBody;
 import java.io.*;
 import java.util.*;
 import net.minecraft.init.Items;
-import net.minecraft.item.ItemStack;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.nbt.*;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.fml.common.*;
