@@ -562,7 +562,10 @@ def verify(args, project):
     if set(sources) != set(args.origins):
         raise RuntimeError('Missing requested historical fixture')
     report = {'candidate_sha256': candidate_hash, 'probe_sha256':probe_hash, 'prepared_sources':prepared_proof, 'cases': {}}
-    for origin in args.origins:
+    from historical_workers import run_origins
+    from threading import Lock
+    report_lock=Lock()
+    def run_origin(origin):
         source,details=sources[origin]
         for variant in args.variants:
             name = origin + '-' + variant
@@ -594,14 +597,16 @@ def verify(args, project):
                         relative.endswith('r.16.16.mca') and phase in PHASES[:6])
                     if unopened and digest(world / relative) != original:
                         raise RuntimeError('Unopened distant region was modified: ' + relative)
-                phases.append(phase)
                 if fingerprint(source) != details['world'] or digest(candidate) != candidate_hash or digest(probe) != probe_hash:
                     raise RuntimeError('Sealed source/candidate changed')
-                report['cases'][name] = {'phases': phases, 'distant_regions': distant, 'stamp_mutations': changes,
-                                        'source_unchanged': True, 'origin_jar_sha256': details['jar_sha256'],
-                                        'preserved_historical_markers':historical_markers}
-                (root / 'result.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
+                with report_lock:
+                    phases.append(phase)
+                    report['cases'][name] = {'phases': list(phases), 'distant_regions': distant, 'stamp_mutations': changes,
+                                            'source_unchanged': True, 'origin_jar_sha256': details['jar_sha256'],
+                                            'preserved_historical_markers':historical_markers}
+                    (root / 'result.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
                 print('WORLD_UPGRADE_PASS', name, phase, flush=True)
+    run_origins(args.origins,run_origin,workers=getattr(args,'workers',1))
     print('WORLD_UPGRADE_MATRIX_PASS cases=' + str(len(report['cases'])), flush=True)
 
 
