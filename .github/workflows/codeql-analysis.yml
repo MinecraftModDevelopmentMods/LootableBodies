@@ -16,6 +16,10 @@ permissions:
   contents: read
   security-events: write
 
+concurrency:
+  group: lootablebodies-1.17-codeql-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     name: Analyze Java

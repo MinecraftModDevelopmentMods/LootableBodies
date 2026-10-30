@@ -232,6 +232,14 @@ ext.releaseJar = renamer.classes(tasks.named('jar', Jar)) {
         filesMatching(archiveTextPatterns, normalizeArchiveText)
     }
 }
+// Java 16 writes this extensionless index with the host line separator. Keep
+// the accepted 1.17 documentation bytes identical on Windows and Linux.
+tasks.named('javadocJar', Jar) {
+    filesMatching('element-list') {
+        filter(FixCrLfFilter, eol: FixCrLfFilter.CrLf.newInstance('crlf'),
+                eof: FixCrLfFilter.AddAsisRemove.newInstance('asis'))
+    }
+}
 ['apiElements', 'runtimeElements'].each { name ->
     configurations.named(name) { artifacts.clear() }
     artifacts { add(name, releaseJar) }
