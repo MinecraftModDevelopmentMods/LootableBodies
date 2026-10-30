@@ -120,10 +120,19 @@ class RuntimeDeadlineTests(unittest.TestCase):
             with self.assertRaises(subprocess.TimeoutExpired):
                 self.run_child(home, 'import time; time.sleep(30)',
                     collector=[sys.executable, '-c',
-                               'import sys; print("attach refused"); sys.exit(9)'])
+                               'from pathlib import Path; import sys,time; '
+                               'seen=Path("attach-seen"); '
+                               'time.sleep(30) if seen.exists() else None; '
+                               'seen.touch(); print("attach refused", flush=True); sys.exit(9)'])
             report = json.loads((home/'phase.diagnostics/result.json').read_text())
             self.assertTrue(report['timed_out'])
-            self.assertTrue(all(c['returncode'] == 9 for c in report['captures']))
+            self.assertTrue(any(c['returncode'] == 9 for c in report['captures']))
+            # A later attach may still be running at the fixed deadline. It
+            # must be reaped, rather than extending the runtime to obtain 9.
+            self.assertTrue(any(c['timed_out'] for c in report['captures']))
+            self.assertTrue(all(c['returncode'] == 9 or
+                                (c['timed_out'] and c['returncode'] is not None)
+                                for c in report['captures']))
             self.assertIn('attach refused',
                           (home/'phase.diagnostics'/report['captures'][0]['file']).read_text())
 

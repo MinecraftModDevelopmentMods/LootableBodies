@@ -36,7 +36,7 @@ def build():
     first=Path(os.environ.get('RUNNER_TEMP',tempfile.gettempdir()))/'lootablebodies117-first-build'
     first.mkdir(exist_ok=False)
     # Commands survive clean; no previous evidence directory is overwritten.
-    tasks=('clean','build','javadoc','verifyEclipseProductionClasspath','preparePackagedIntegrationProbe','preparePackagedForgeControl','prepareReleaseBundle')
+    tasks=('clean','build','javadoc','preparePackagedIntegrationProbe','preparePackagedForgeControl','prepareReleaseBundle')
     for number in (1,2):
         log=first/('build-'+str(number)+'.log')
         args=[str(PROJECT/('gradlew.bat' if os.name=='nt' else 'gradlew')),*tasks,'--no-daemon','--console=plain','--stacktrace','--no-build-cache']
@@ -54,11 +54,16 @@ def build():
     target=PROJECT/'build/ci117-build-proof';shutil.copytree(first,target)
     (target/'result.json').write_text(json.dumps({'two_clean_uncached_builds':True,'second_build_offline':True,'junit_each':tests,'files':expected},indent=2)+'\n')
 
+def native_sdk_and_eclipse(java):
+    python('native-server-install.log','native_runtime.py','--java',java,'--output','build/native-server-distribution')
+    python('native-client-install.log','native_runtime.py','--java',java,'--output','build/native-client-distribution','--client')
+    gradle('eclipse-and-assets.log','prepareMinecraftAssets','verifyEclipseProductionClasspath',
+           '-PminecraftNativesDirectory=build/native-client-distribution/prepared-inputs/natives')
+
 def prepare():
     java=Path(os.environ['JAVA_HOME_16_X64'])/'bin/java'
     java8=Path(os.environ['JAVA_HOME_8_X64'])/'bin/java'
-    python('native-server-install.log','native_runtime.py','--java',java,'--output','build/native-server-distribution')
-    python('native-client-install.log','native_runtime.py','--java',java,'--output','build/native-client-distribution','--client')
+    native_sdk_and_eclipse(java)
     from native_runtime import prepare_server,run_java,HISTORICAL_JVM_ARGS
     from audit_runtime_logs import audit
     control=PROJECT/'build/control-test-mod/forge-platform-control-reobf.jar'
