@@ -76,7 +76,7 @@ jobs:
           echo "LIBGL_ALWAYS_SOFTWARE=true" >> "$GITHUB_ENV"
           python3 -B tools/native_runtime.py --java "$JAVA_HOME_16_X64/bin/java" --output build/native-server-distribution
           python3 -B tools/native_runtime.py --java "$JAVA_HOME_16_X64/bin/java" --output build/native-client-distribution --client
-          ./gradlew prepareMinecraftAssets --no-daemon --offline --console=plain
+          ./gradlew preparePackagedIntegrationProbe prepareMinecraftAssets -PminecraftAssetsDirectory=build/native-assets --no-daemon --offline --console=plain
       - name: Run only the labelled Linux visibility investigation
         if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'native117-visibility-diagnostic')
         run: xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 -B tools/native117_ci.py scenario --group visibility
