@@ -4,7 +4,9 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -281,6 +283,45 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 (bundle/'extra.txt').write_text('unapproved')
                 with self.assertRaises(SystemExit):exec(compile(code,'extra-native117-promotion','exec'),{})
             finally:os.chdir(previous)
+
+    def run_staging_fixture(self,root,version,mutation=None):
+        bundle=root/'build/release/bundle';bundle.mkdir(parents=True)
+        prefix='LootableBodies-'+version
+        names=[prefix+s for s in ['.jar','-sources.jar','-javadoc.jar','.pom']]+['CHANGELOG.txt']
+        for name in names:(bundle/name).write_text('qualified '+name)
+        (bundle/'SHA256SUMS').write_bytes(''.join(hashlib.sha256((bundle/name).read_bytes()).hexdigest()+'  '+name+'\n' for name in names if name.endswith('.jar')).encode())
+        if mutation=='missing':(bundle/(prefix+'.pom')).unlink()
+        if mutation=='extra':(bundle/'unapproved.txt').write_text('extra')
+        runner=root/'runner';runner.mkdir()
+        env=dict(os.environ,RUNNER_TEMP=runner.as_posix(),RELEASE_VERSION=version,RELEASE_SHA=SHA,
+                 GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT='1',GITHUB_OUTPUT=(root/'output.txt').as_posix(),
+                 GITHUB_STEP_SUMMARY=(root/'summary.txt').as_posix(),CHERE_INVOKING='1')
+        shell=shutil.which('bash')
+        if os.name=='nt':
+            # Use the installed Git Bash, not the Windows WSL launcher.
+            shell=next((str(parent/'bin/bash.exe') for parent in Path(shutil.which('git')).parents
+                        if (parent/'bin/bash.exe').is_file()),None)
+        if not shell:raise RuntimeError('Bash is required to test actual release staging')
+        code=script('Stage the exact audited bundle')
+        # Only select this test interpreter; execute the actual shell staging,
+        # checksum checks and summary without a legacy parent checksum file.
+        code=code.replace("python3 - <<'PY'",shlex.quote(Path(sys.executable).as_posix())+" - <<'PY'")
+        return subprocess.run([shell,'-lc',code],cwd=root,env=env,capture_output=True,text=True)
+
+    def test_staging_uses_only_the_promoted_six_file_bundle(self):
+        for version in ['2.4.7.116051','2.4.8.117011']:
+            with self.subTest(version=version),tempfile.TemporaryDirectory() as d:
+                root=Path(d);result=self.run_staging_fixture(root,version)
+                self.assertEqual(0,result.returncode,result.stdout+'\n'+result.stderr)
+                self.assertFalse((root/'build/release/SHA256SUMS').exists())
+                self.assertIn('LootableBodies-'+version+'.jar',(root/'summary.txt').read_text())
+
+    def test_staging_missing_or_extra_file_fails_before_upload(self):
+        for mutation in ['missing','extra']:
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as d:
+                root=Path(d);result=self.run_staging_fixture(root,'2.4.8.117011',mutation)
+                self.assertNotEqual(0,result.returncode)
+                self.assertIn('missing or unexpected files',result.stdout+result.stderr)
 
     def test_identity_changes_are_rejected(self):
         for mutation in [{'mod_id': 'other'}, {'minecraft_version': '1.10.2'}, {'mod_license': 'CC0-1.0'}]:
