@@ -20,7 +20,9 @@ env:
 jobs:
   quick:
     name: Fast build and contracts
-    if: github.repository != 'MinecraftModDevelopmentMods/LootableBodies'
+    # Full Linux qualification runs once on the merged MMD source, before
+    # publication. PRs retain deterministic build, test and archive checks.
+    if: github.repository != 'MinecraftModDevelopmentMods/LootableBodies' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -43,7 +45,7 @@ jobs:
           LOOTABLEBODIES_MAVENIZER_JAVA_HOME: ${{ env.JAVA_HOME_25_X64 }}
         run: |
           chmod +x gradlew
-          python3 -B -m unittest discover -s tools -p 'test_*.py' -v
+          python3 -B -m unittest discover -s tools -p 'test_*.py' -v 2>&1 | tee "$RUNNER_TEMP/native117-python-tools.log"
           ./gradlew test assemble javadoc verifyProductionRuntimeClasspath prepareReleaseBundle --no-daemon --no-build-cache --stacktrace
       - name: Retain fast-check evidence
         if: always()
@@ -55,10 +57,11 @@ jobs:
             build/test-results/**
             build/reports/**
             build/release/bundle/*
+            ${{ runner.temp }}/native117-python-tools.log
 
   prepare:
     name: Prepare verified migration inputs
-    if: github.repository == 'MinecraftModDevelopmentMods/LootableBodies'
+    if: github.repository == 'MinecraftModDevelopmentMods/LootableBodies' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -91,7 +94,7 @@ jobs:
           echo "LOOTABLEBODIES_JAVA16_HOME=$JAVA_HOME_16_X64" >> "$GITHUB_ENV"
           echo "LOOTABLEBODIES_JAVA8_HOME=$JAVA_HOME_8_X64" >> "$GITHUB_ENV"
           echo "LOOTABLEBODIES_MAVENIZER_JAVA_HOME=$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
-          python3 -B -m unittest discover -s tools -p 'test_*.py' -v
+          python3 -B -m unittest discover -s tools -p 'test_*.py' -v 2>&1 | tee "$RUNNER_TEMP/native117-python-tools.log"
       - name: Two clean uncached builds with offline replay
         run: python3 -B tools/native117_ci.py build
       - name: Install graphical runtime support
@@ -148,6 +151,7 @@ jobs:
             build/native37-resource-budget/**/*.json
             build/native37-resource-budget/**/*.diagnostics/**
             ${{ runner.temp }}/lootablebodies117-first-build/**
+            ${{ runner.temp }}/native117-python-tools.log
             build/migration-seeds/**/*.log
             build/migration-seeds/**/*.diagnostics/**
             build/migration-seeds/**/crash-reports/**
@@ -265,7 +269,7 @@ jobs:
   aggregate:
     name: Build, test, and audit
     needs: [prepare, upgrade, scenarios]
-    if: always() && github.repository == 'MinecraftModDevelopmentMods/LootableBodies'
+    if: always() && github.repository == 'MinecraftModDevelopmentMods/LootableBodies' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

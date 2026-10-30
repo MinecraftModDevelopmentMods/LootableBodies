@@ -4,15 +4,21 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 import native_runtime
 
 
 class Native117LaunchTests(unittest.TestCase):
+    def test_posix_native_diagnostics_fixture_uses_the_posix_tools(self):
+        with patch.object(native_runtime,'os',SimpleNamespace(name='posix')):
+            self.test_packaged_server_uses_installer_module_arguments_and_java16_gc()
+
     def jdk(self, root, version='16.0.2+7'):
-        java = root/'jdk/bin/java.exe'
+        suffix='.exe' if native_runtime.os.name=='nt' else ''
+        java = root/('jdk/bin/java'+suffix)
         java.parent.mkdir(parents=True)
-        for name in ('java.exe', 'jstack.exe', 'jstat.exe'):
-            (java.parent/name).touch()
+        for name in ('java', 'jstack', 'jstat'):
+            (java.parent/(name+suffix)).touch()
         (java.parent.parent/'release').write_text(
             'SEMANTIC_VERSION="'+version+'"\nIMPLEMENTOR="Eclipse Foundation"\n')
         return java
@@ -30,8 +36,9 @@ class Native117LaunchTests(unittest.TestCase):
             self.assertIn('gc*,safepoint',gc)
             self.assertFalse(any('PrintGC' in arg or 'Xloggc' in arg for arg in command))
             self.assertEqual(240,run.call_args.kwargs['timeout'])
-            self.assertEqual([str(java.with_name('jstack.exe')),'-l'],run.call_args.kwargs['diagnostic_command'])
-            self.assertEqual([str(java.with_name('jstat.exe')),'-gc'],run.call_args.kwargs['metric_command'])
+            suffix='.exe' if native_runtime.os.name=='nt' else ''
+            self.assertEqual([str(java.with_name('jstack'+suffix)),'-l'],run.call_args.kwargs['diagnostic_command'])
+            self.assertEqual([str(java.with_name('jstat'+suffix)),'-gc'],run.call_args.kwargs['metric_command'])
 
     def test_runtime_rejects_a_different_jdk_before_launch(self):
         with tempfile.TemporaryDirectory() as directory:
