@@ -33,25 +33,73 @@ final class VisibilityClientChecks {
     private boolean connecting,respawnSent,finished;
     private final Set<Integer> done=new HashSet<>();
     private final Set<UUID> rendered=new HashSet<>();
+    private final Set<UUID> deathRendered=new HashSet<>();
+    private net.minecraft.network.Connection traced;
+    private net.minecraft.client.multiplayer.ClientLevel profileWorld;
     void register(){if(Boolean.getBoolean("lootablebodies.visibility")&&role!=null){net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);MinecraftForge.EVENT_BUS.register(this);}}
     @SubscribeEvent public void mouse(net.minecraftforge.client.event.GuiScreenEvent.MouseClickedEvent.Pre e){e.setCanceled(true);}
     @SubscribeEvent public void key(net.minecraftforge.client.event.GuiScreenEvent.KeyboardKeyPressedEvent.Pre e){e.setCanceled(true);}
-    @SubscribeEvent public void rendered(RenderLivingEvent.Post<?,?> e){if(e.getEntity() instanceof EntityLootableBody)rendered.add(e.getEntity().getUUID());}
+    @SubscribeEvent public void rendered(RenderLivingEvent.Post<?,?> e){
+        if(e.getEntity() instanceof EntityLootableBody) {
+            rendered.add(e.getEntity().getUUID());
+            if(Minecraft.getInstance().screen instanceof DeathScreen && !e.getEntity().isRemoved() && !e.getEntity().isInvisible())deathRendered.add(e.getEntity().getUUID());
+        }
+    }
+    @SubscribeEvent public void deathScreenDrawn(net.minecraftforge.client.event.GuiScreenEvent.DrawScreenEvent.Post e) {
+        if(!role.equals("A") || !(e.getGui() instanceof DeathScreen) || (phase!=2&&phase!=14) || done.contains(phase))return;
+        Minecraft mc=Minecraft.getInstance();
+        try {
+            EntityLootableBody b=body(mc,phase==2?"first":"second");
+            if(b==null || !deathRendered.contains(b.getUUID()))return;
+            RuntimeChecks.require(!b.isRemoved()&&!b.isInvisible(),"Rendered death-screen corpse is dead/invisible");
+            shot(mc,"death-"+phase+".png");
+            String receipt="{\"phase\":"+phase+",\"uuid\":\""+b.getUUID()+"\",\"death_screen_drawn\":true,\"live_corpse_rendered\":true}";
+            Files.write(VisibilityChecks.file(role+".death-render-"+phase+".json").toPath(),receipt.getBytes(StandardCharsets.UTF_8));
+            System.out.println("VISIBILITY_DEATH_RENDER_PROOF "+role+" "+receipt);ack();
+        } catch(Throwable error){error.printStackTrace();finished=true;mc.stop();}
+    }
+    @SubscribeEvent public void removed(net.minecraftforge.event.entity.EntityLeaveWorldEvent e) {
+        Entity entity=e.getEntity();
+        if(entity instanceof EntityLootableBody && entity.level.isClientSide) {
+            System.out.println("VISIBILITY_CLIENT_REMOVAL "+role+" phase="+phase+" uuid="+entity.getUUID()+" reason="+entity.getRemovalReason()+" rendered="+rendered.contains(entity.getUUID()));
+            StackWalker.getInstance().forEach(frame->System.out.println("VISIBILITY_REMOVAL_FRAME "+frame));
+        }
+    }
     @SubscribeEvent public void tick(TickEvent.ClientTickEvent e) {
-        if(e.phase!=TickEvent.Phase.END)return;Minecraft mc=Minecraft.getInstance();
+        Minecraft mc=Minecraft.getInstance();
+        if(e.phase==TickEvent.Phase.START) {
+            if(mc.level!=null&&mc.level!=profileWorld) {
+                profileWorld=mc.level;
+                // These two offline fixture accounts use explicit empty native
+                // texture properties. Visibility does not depend on Mojang HTTP.
+                net.minecraft.server.players.GameProfileCache cache=new net.minecraft.server.players.GameProfileCache(null,new File(mc.gameDirectory,"visibility-usercache.json"));
+                cache.setExecutor(mc::execute);
+                for(String name:new String[]{"ContainerA","ContainerB"}) {
+                    UUID id=UUID.nameUUIDFromBytes(("OfflinePlayer:"+name).getBytes(StandardCharsets.UTF_8));
+                    com.mojang.authlib.GameProfile profile=new com.mojang.authlib.GameProfile(id,name);
+                    String texture="{\"timestamp\":0,\"profileId\":\""+id.toString().replace("-","")+"\",\"profileName\":\""+name+"\",\"textures\":{}}";
+                    profile.getProperties().put("textures",new com.mojang.authlib.properties.Property("textures",Base64.getEncoder().encodeToString(texture.getBytes(StandardCharsets.UTF_8))));
+                    cache.add(profile);
+                }
+                net.minecraft.world.level.block.entity.SkullBlockEntity.setProfileCache(cache);
+            }
+            return;
+        }
         if(mc.isWindowActive())mc.mouseHandler.releaseMouse();net.minecraft.client.KeyMapping.releaseAll();
         try {
             if(finished){mc.stop();return;}
             RuntimeChecks.require(++ticks<15000,"Visibility client timeout role="+role+" phase="+phase);
             RuntimeChecks.require(!VisibilityChecks.file("abort").exists(),"Visibility runner aborted");
             int n=Integer.parseInt(new String(Files.readAllBytes(VisibilityChecks.file("phase").toPath()),StandardCharsets.UTF_8).trim());
-            if(n!=phase){phase=n;frames=0;guiFrames=0;respawnSent=false;rendered.clear();System.out.println("VISIBILITY_CLIENT_PHASE "+role+" "+phase);}frames++;
+            if(n!=phase){phase=n;frames=0;guiFrames=0;respawnSent=false;rendered.clear();deathRendered.clear();System.out.println("VISIBILITY_CLIENT_PHASE "+role+" "+phase);}frames++;
             if(FixtureConnections.retry(mc,role))connecting=false;
             if(!connecting && FixtureConnections.ready(role) && mc.level==null && mc.screen instanceof TitleScreen && (phase==0 || phase==9 || phase==11)) {
                 connecting=true;mc.options.pauseOnLostFocus=false;mc.options.framerateLimit=30;mc.options.renderDistance=4;
                 FixtureConnections.connect(mc);
             }
             if(mc.level==null || mc.player==null)return;
+            net.minecraft.network.Connection connection=mc.getConnection().getConnection();
+            if(connection!=traced){RespawnPacketTrace.install(connection,new File(mc.gameDirectory,"client-packets.txt"),null);traced=connection;}
             if(frames%200==0)System.out.println("VISIBILITY_CLIENT_STATE "+role+" phase="+phase+" position="+mc.player.blockPosition()+" rendered="+rendered+" screen="+(mc.screen==null?null:mc.screen.getClass().getName())+" deathScreen="+(mc.screen instanceof DeathScreen)+" done="+done+" firstBody="+body(mc,"first")+" secondBody="+body(mc,"second")+" container="+mc.player.containerMenu.getClass().getSimpleName());
             if(phase==12 && frames%200==0) {
                 EntityLootableBody b=body(mc,"first");RuntimeChecks.require(b!=null&&!b.isRemoved()&&!b.isInvisible(),"Corpse disappeared during five-minute wait");
@@ -59,8 +107,11 @@ final class VisibilityClientChecks {
             if(done.contains(phase) || frames<20)return;
             if(phase==0 || phase==1 || phase==13){ack();return;}
             if(phase==2 || phase==14) {
+                // The owner proves the live corpse at the actual rendered death
+                // screen. Native tracking may remove it before a later tick.
+                if(role.equals("A"))return;
                 EntityLootableBody b=body(mc,phase==2?"first":"second");if(b==null)return;
-                if(role.equals("A") && !(mc.screen instanceof DeathScreen))return;
+                if(!rendered.contains(b.getUUID()))return;
                 RuntimeChecks.require(!b.isRemoved()&&!b.isInvisible(),"Received corpse is dead/invisible");shot(mc,"death-"+phase+".png");ack();
             } else if(phase==3 || phase==15) {
                 if(role.equals("A")) {

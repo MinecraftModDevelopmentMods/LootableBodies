@@ -57,13 +57,21 @@ class RuntimeDeadlineTests(unittest.TestCase):
             home = Path(directory)
             with self.assertRaises(subprocess.TimeoutExpired):
                 self.run_child(home, 'import time; time.sleep(30)', metric=[
-                    sys.executable, '-c', 'import sys; print("HEAP_TARGET="+sys.argv[1])'])
+                    sys.executable, '-c', 'from pathlib import Path; import sys,time; '
+                    'seen=Path("heap-seen"); time.sleep(30) if seen.exists() else None; '
+                    'seen.touch(); print("HEAP_TARGET="+sys.argv[1],flush=True)'])
             report = json.loads((home/'phase.diagnostics/result.json').read_text())
             self.assertTrue(report['metrics'])
+            self.assertTrue(any(m['returncode']==0 for m in report['metrics']))
+            self.assertTrue(any(m['timed_out'] for m in report['metrics']))
             for metric in report['metrics']:
-                self.assertEqual(0, metric['returncode'])
-                self.assertIn('HEAP_TARGET='+str(report['pid']),
-                              (home/'phase.diagnostics'/metric['file']).read_text())
+                # A later collector must stop at the existing runtime deadline.
+                # Require actual heap output and retain every bounded stop.
+                self.assertTrue(metric['returncode']==0 or
+                                (metric['timed_out'] and metric['returncode'] is not None))
+                if metric['returncode']==0:
+                    self.assertIn('HEAP_TARGET='+str(report['pid']),
+                                  (home/'phase.diagnostics'/metric['file']).read_text())
 
     def test_a_stuck_heap_collector_is_killed_without_extending_the_deadline(self):
         with tempfile.TemporaryDirectory() as directory:
