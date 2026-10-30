@@ -170,7 +170,7 @@ jobs:
             .gradle/legacy-tools/released-116/source.json
             .gradle/legacy-tools/released-116/tools.json
       - name: Preserve incomplete SDK inputs after preparation failure
-        if: failure()
+        if: failure() && hashFiles('build/native-server-distribution/**', 'build/native-client-distribution/**', 'build/ci117-platform-inputs/**', 'build/migration-ci-inputs/**') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: native117-preparation-failure-inputs-${{ github.sha }}-${{ github.run_attempt }}
