@@ -1,5 +1,6 @@
 """Test the dispatcher's actual selection and publication preflight scripts offline."""
 import json
+import hashlib
 import os
 from pathlib import Path
 import shutil
@@ -24,6 +25,8 @@ MATRIX114 = MATRIX113 + [origin + ' / ' + stamps for origin in
              ['released-113', 'recovery-113', 'via113-110', 'via113-111', 'via113-112']
              for stamps in ['normal', 'stamps']]
 MATRIX115 = ['World upgrade matrix', 'Prepare verified migration inputs', 'Validate release workflow'] + ['Historical world shard ' + str(i) for i in range(6)]
+CORE117 = ['Build, test, and audit', 'Analyze Java', 'Validation']
+MATRIX117 = ['Prepare verified migration inputs', 'Validate release workflow'] + ['Historical world shard ' + str(i) for i in range(12)] + ['Native117 ' + x for x in ['servers','default','config','skin','issues','names','rejected','multiplayer','visibility','respawn','control']]
 MATRIX116 = ['World upgrade matrix', 'Prepare verified migration inputs', 'Validate release workflow'] + ['Historical world shard ' + str(i) for i in range(12)]
 MATRIX = [origin + ' / ' + stamps for origin in
           ['original-110', 'released-110', 'original-111', 'recovery-110']
@@ -53,7 +56,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             values = dict(line.split('=', 1) for line in output.read_text().splitlines()) if output.exists() else {}
             return result.returncode, values
 
-    def validate(self, minecraft, names=None, mutation=None, release_exists=False, wrong_tag=False, audit_success=True):
+    def validate(self, minecraft, names=None, mutation=None, release_exists=False, wrong_tag=False, audit_success=True, qualification=None):
         suffix, branch, forge = {
             '1.10.2': ('110021', '1.10.2', '12.18.3.2511'),
             '1.11.2': ('111021', '1.11.2-dev', '13.20.1.2588'),
@@ -61,10 +64,11 @@ class ReleaseWorkflowTests(unittest.TestCase):
             '1.13.2': ('113021', 'master-1.13.2', '25.0.223'),
             '1.14.4': ('114041', 'master-1.14.4', '28.2.26'),
             '1.15.2': ('115021', 'master-1.15.2', '31.2.57'),
-            '1.16.5': ('116051', 'master-1.16.5', '36.2.42')}[minecraft]
+            '1.16.5': ('116051', 'master-1.16.5', '36.2.42'),
+            '1.17.1': ('117011', 'master-1.17.1', '37.1.1')}[minecraft]
         version = '2.4.2.' + suffix
         values = dict(minecraft_version=minecraft, forge_version=forge, loader_name='forge', loader_code='1',
-            java_version='8', java_toolchain_version='8.0.502+7', gradle_java_version='17', mod_id='lootablebodies',
+            java_version='16' if minecraft=='1.17.1' else '8', java_toolchain_version='16.0.2+7' if minecraft=='1.17.1' else '8.0.502+7', gradle_java_version='17', mod_id='lootablebodies',
             mod_artifact='LootableBodies', mod_group='zone.moddev.mc.lootablebodies', mod_license='LGPL-2.1-only',
             curseforge_project_id='240968', mod_version=version)
         if mutation:
@@ -73,9 +77,15 @@ class ReleaseWorkflowTests(unittest.TestCase):
                          '1.13.2': MATRIX113 + ['Validate release workflow'],
                          '1.14.4': MATRIX114 + ['Validate release workflow'],
                          '1.15.2': MATRIX115, '1.16.5': MATRIX116}.get(minecraft, []) if names is None else names
+        if minecraft=='1.17.1' and names is None:checks=CORE117+MATRIX117
+
         def command(args, **options):
             if args[0] == 'git':
                 return SHA + '\n'
+            if '/actions/workflows/native117.yml/' in args[-1]:
+                row=dict(id=117,head_sha=SHA,head_branch='master-1.17.1',event='push',path='.github/workflows/native117.yml',conclusion='success')
+                if qualification:row.update(qualification)
+                return json.dumps({'workflow_runs':[row]})
             if '/actions/workflows/' in args[-1]:
                 return json.dumps({'workflow_runs': [{'id': 1, 'display_title': 'Audit ' + minecraft + ' artifacts from ' + SHA,
                     'conclusion': 'success' if audit_success else 'failure'}]})
@@ -95,8 +105,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 patch('subprocess.check_output', side_effect=command), patch('subprocess.run', side_effect=existing):
             exec(compile(code, 'release-preflight', 'exec'), {})
 
-    def test_future_117_candidate_cannot_dispatch_publication(self):
-        code, values = self.select('2.4.8.117011')
+    def test_future_118_candidate_cannot_dispatch_publication(self):
+        code, values = self.select('2.4.9.118021')
         self.assertNotEqual(0, code)
         self.assertEqual({}, values)
 
@@ -216,6 +226,44 @@ class ReleaseWorkflowTests(unittest.TestCase):
         names = audit.split('workflows: [',1)[1].split(']',1)[0].split(',')
         self.assertIn('LootableBodies 1.12 CI', [name.strip() for name in names])
         self.assertIn('LootableBodies 1.16 CI', [name.strip() for name in names])
+
+    def test_117_routes_to_the_accepted_target(self):
+        code,values=self.select('2.4.8.117011')
+        self.assertEqual(0,code);self.assertEqual('master-1.17.1',values['source_branch'])
+
+    def test_117_requires_all_native_scenarios_and_twelve_historical_shards(self):
+        self.validate('1.17.1')
+        for missing in CORE117+MATRIX117:
+            with self.subTest(missing=missing),self.assertRaises(SystemExit):
+                self.validate('1.17.1',names=[x for x in CORE117+MATRIX117 if x!=missing])
+
+    def test_117_requires_an_exact_successful_merged_native_run(self):
+        for mutation in [{'head_sha':'b'*40},{'head_branch':'master-1.16.5'},{'event':'pull_request'},{'path':'.github/workflows/build.yml'},{'conclusion':'failure'}]:
+            with self.subTest(mutation=mutation),self.assertRaises(SystemExit):
+                self.validate('1.17.1',qualification=mutation)
+
+    def test_117_requires_the_independent_audit_and_java16(self):
+        with self.assertRaises(SystemExit):self.validate('1.17.1',audit_success=False)
+        with self.assertRaises(SystemExit):self.validate('1.17.1',mutation={'java_version':'8'})
+
+    def test_117_promotes_exact_six_files_and_rejects_changed_or_extra_bytes(self):
+        code=script('Verify all six native117 bytes before publication').split("python3 - <<'PY'\n",1)[1].split('\nPY',1)[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);bundle=root/'build/release/bundle';bundle.mkdir(parents=True);meta=root/'.github';meta.mkdir()
+            names=['main.jar','sources.jar','javadoc.jar','release.pom','CHANGELOG.txt','SHA256SUMS'];expected={}
+            for name in names:
+                data=('approved '+name).encode();(bundle/name).write_bytes(data);expected[name]=hashlib.sha256(data).hexdigest().upper()
+            (meta/'release117.json').write_text(json.dumps({'files':expected}))
+            previous=Path.cwd()
+            try:
+                os.chdir(root);exec(compile(code,'immutable-native117-promotion','exec'),{})
+                for name in names:
+                    f=bundle/name;data=f.read_bytes();f.write_bytes(data+b'changed')
+                    with self.assertRaises(SystemExit):exec(compile(code,'changed-native117-promotion','exec'),{})
+                    f.write_bytes(data)
+                (bundle/'extra.txt').write_text('unapproved')
+                with self.assertRaises(SystemExit):exec(compile(code,'extra-native117-promotion','exec'),{})
+            finally:os.chdir(previous)
 
     def test_identity_changes_are_rejected(self):
         for mutation in [{'mod_id': 'other'}, {'minecraft_version': '1.10.2'}, {'mod_license': 'CC0-1.0'}]:
