@@ -52,7 +52,7 @@ final class VisibilityClientChecks {
                 FixtureConnections.connect(mc);
             }
             if(mc.level==null || mc.player==null)return;
-            if(frames%200==0)System.out.println("VISIBILITY_CLIENT_STATE "+role+" phase="+phase+" position="+mc.player.blockPosition()+" rendered="+rendered+" screen="+(mc.screen==null?null:mc.screen.getClass().getSimpleName())+" container="+mc.player.containerMenu.getClass().getSimpleName());
+            if(frames%200==0)System.out.println("VISIBILITY_CLIENT_STATE "+role+" phase="+phase+" position="+mc.player.blockPosition()+" rendered="+rendered+" screen="+(mc.screen==null?null:mc.screen.getClass().getName())+" deathScreen="+(mc.screen instanceof DeathScreen)+" done="+done+" firstBody="+body(mc,"first")+" secondBody="+body(mc,"second")+" container="+mc.player.containerMenu.getClass().getSimpleName());
             if(phase==12 && frames%200==0) {
                 EntityLootableBody b=body(mc,"first");RuntimeChecks.require(b!=null&&!b.isRemoved()&&!b.isInvisible(),"Corpse disappeared during five-minute wait");
             }

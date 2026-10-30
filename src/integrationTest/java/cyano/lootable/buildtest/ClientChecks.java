@@ -69,8 +69,22 @@ public final class ClientChecks {
                 mc.options.pauseOnLostFocus=false;
                 mc.options.framerateLimit=30;
                 mc.options.renderDistance=4;
-                stage=1;
-                FixtureApi.ClientWorlds.create(mc,"build-fixture","Build fixture",net.minecraft.world.level.GameType.CREATIVE,false);
+                if(Boolean.getBoolean("lootablebodies.clientResumeDrops")) {
+                    RuntimeChecks.require(!Boolean.getBoolean("lootablebodies.clientStopBeforeDrops") &&
+                            new File(mc.gameDirectory,"client-connected.pass").isFile(),"Missing connected phase for graphical continuation");
+                    RuntimeChecks.require(cyano.lootable.LootableBodies.allowCorpseDecay &&
+                            cyano.lootable.LootableBodies.ticksPerItemDecay==6000,"Continuation did not start with default timers");
+                    // Restore the same verifier-only clock freeze applied by
+                    // RuntimeChecks.run in the original continuous process.
+                    cyano.lootable.LootableBodies.allowCorpseDecay=false;
+                    cyano.lootable.LootableBodies.ticksPerItemDecay=-1;
+                    stage=40; mc.loadLevel("build-fixture");
+                } else {
+                    stage=1;
+                    FixtureApi.ClientWorlds.create(mc,"build-fixture","Build fixture",net.minecraft.world.level.GameType.CREATIVE,false);
+                }
+            } else if(stage==40 && mc.level!=null && mc.player!=null && mc.getSingleplayerServer()!=null) {
+                drops.start(mc);stage=21;
             } else if(stage==1 && mc.level!=null && mc.player!=null && mc.getSingleplayerServer()!=null) {
                 stage=2;
                 pending=mc.getSingleplayerServer().submitAsync(() -> {
@@ -109,7 +123,16 @@ public final class ClientChecks {
                 Screenshot.grab(mc.gameDirectory,"corpse-gui-reload.png",mc.getMainRenderTarget(),message->System.out.println(message.getString()));
                 mc.player.closeContainer(); stage=20; connected.start(mc);
             } else if(stage==20 && connected.tick(mc)) {
-                mc.player.closeContainer();drops.start(mc);stage=21;
+                mc.player.closeContainer();
+                if(Boolean.getBoolean("lootablebodies.clientStopBeforeDrops")) {
+                    RuntimeChecks.require(!cyano.lootable.LootableBodies.allowCorpseDecay &&
+                            cyano.lootable.LootableBodies.ticksPerItemDecay==-1,"Connected inventory fixture timer context changed");
+                    try(FileWriter out=new FileWriter(new File(mc.gameDirectory,"client-connected.pass"))) {
+                        out.write("fresh/reload GUI and all connected inventory checks complete\n");
+                    }
+                    System.out.println("LOOTABLE_BODIES_CONNECTED_STAGE_PASS");
+                    stage=8;FixtureConnections.disconnect(mc);
+                } else {drops.start(mc);stage=21;}
             } else if(stage==21 && drops.tick(mc)) {
                 mc.player.closeContainer();nbt.start(mc);stage=22;
             } else if(stage==22 && nbt.tick(mc)) {

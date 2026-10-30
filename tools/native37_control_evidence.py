@@ -11,17 +11,24 @@ def normalized_stack(text):
 
 def residual(text):
     expected=(Path(__file__).parent/'fixtures/native37-delayed-movement-stack.txt').read_text()
-    lines=text.splitlines();out=[];count=0;i=0
+    # The retained Linux control additionally emitted one initial PosRot packet.
+    # Classify only that exact observed sequence, outside the clean-log auditor.
+    rotation=expected.replace('ServerboundMovePlayerPacket$Pos.m_5797_(SourceFile:42)',
+                              'ServerboundMovePlayerPacket$PosRot.m_5797_(SourceFile:16)')
+    lines=text.splitlines();out=[];sequence=[];i=0
     while i<len(lines):
         if re.search(r'\[Server thread/FATAL\].*\]: Error executing task on Server$',lines[i]):
             end=i+1
             while end<len(lines) and not lines[end].startswith('['):end+=1
             stack='\n'.join(lines[i+1:end]).strip()
-            if normalized_stack(stack)!=normalized_stack(expected):raise ValueError('Unclassified native37 control stack')
-            count+=1;i=end
+            if normalized_stack(stack)==normalized_stack(expected):sequence.append('Pos')
+            elif normalized_stack(stack)==normalized_stack(rotation):sequence.append('PosRot')
+            else:raise ValueError('Unclassified native37 control stack')
+            i=end
         else:out.append(lines[i]);i+=1
-    if count not in (0,8):raise ValueError('Incomplete native37 delayed-packet baseline')
-    return '\n'.join(out)+'\n',count
+    if sequence not in ([],['Pos']*8,['PosRot']+['Pos']*8):
+        raise ValueError('Incomplete or unclassified native37 delayed-packet baseline')
+    return '\n'.join(out)+'\n',len(sequence)
 
 def classify(root,probe,exit_code):
     root=Path(root);probe=Path(probe);output=root/'classification';output.mkdir(exist_ok=False)
@@ -52,6 +59,6 @@ def classify(root,probe,exit_code):
             records.append({'path':str(path),'sha256':digest(path),'strict_clean_audit_passed':count==0,'native37_baseline_exceptions':count})
     counts=[r['native37_baseline_exceptions'] for r in records[:3]]
     if len(set(counts))!=1 or (counts[0]==0 and exit_code!=0):raise ValueError('Unclassified control exit or incomplete log set')
-    result={'independent_control_actions_complete':True,'lootable_bodies_installed':False,'native_respawns':8,'fifo_batches':batches,'original_strict_clean_runtime_pass':counts[0]==0,'classified_native37_negative_baseline':counts[0]==8,'ordinary_runtime_allowance_added':False,'raw_logs':records,'verifier_exit':exit_code}
+    result={'independent_control_actions_complete':True,'lootable_bodies_installed':False,'native_respawns':8,'fifo_batches':batches,'original_strict_clean_runtime_pass':counts[0]==0,'classified_native37_negative_baseline':counts[0] in (8,9),'native37_baseline_exceptions':counts[0],'ordinary_runtime_allowance_added':False,'raw_logs':records,'verifier_exit':exit_code}
     (output/'native-platform-baseline.json').write_text(json.dumps(result,indent=2)+'\n')
     return result

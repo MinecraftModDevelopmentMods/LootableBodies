@@ -5,6 +5,7 @@ on:
     branches: [master-1.17.1]
   pull_request:
     branches: [master-1.17.1]
+    types: [opened, synchronize, reopened, labeled]
 
 permissions:
   contents: read
@@ -58,6 +59,52 @@ jobs:
             build/reports/**
             build/release/bundle/*
             ${{ runner.temp }}/native117-python-tools.log
+      # A labelled PR can investigate the Linux display/packet seam without
+      # repeating preparation, historical worlds or unrelated graphical modes.
+      - name: Prepare a labelled Linux visibility investigation
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'native117-visibility-diagnostic')
+        env:
+          LOOTABLEBODIES_JAVA16_HOME: ${{ env.JAVA_HOME_16_X64 }}
+          LOOTABLEBODIES_MAVENIZER_JAVA_HOME: ${{ env.JAVA_HOME_25_X64 }}
+        run: |
+          sudo apt-get update -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+          sudo apt-get install --yes --no-install-recommends xvfb x11-xserver-utils libgl1-mesa-dri libglu1-mesa libopenal1 pulseaudio pulseaudio-utils
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=minecraft
+          echo "PULSE_SINK=minecraft" >> "$GITHUB_ENV"
+          echo "ALSOFT_DRIVERS=pulse" >> "$GITHUB_ENV"
+          echo "LIBGL_ALWAYS_SOFTWARE=true" >> "$GITHUB_ENV"
+          python3 -B tools/native_runtime.py --java "$JAVA_HOME_16_X64/bin/java" --output build/native-server-distribution
+          python3 -B tools/native_runtime.py --java "$JAVA_HOME_16_X64/bin/java" --output build/native-client-distribution --client
+          ./gradlew prepareMinecraftAssets --no-daemon --offline --console=plain
+      - name: Run only the labelled Linux visibility investigation
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'native117-visibility-diagnostic')
+        run: xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' python3 -B tools/native117_ci.py scenario --group visibility
+      - name: Retain the labelled investigation on every outcome
+        if: always() && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'native117-visibility-diagnostic')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: native117-diagnostic-visibility-${{ github.sha }}
+          if-no-files-found: error
+          include-hidden-files: true
+          path: |
+            build/ci117-commands/**
+            build/ci117-scenarios/**/*.log
+            build/ci117-scenarios/**/*.log.gz
+            build/ci117-scenarios/**/*.txt
+            build/ci117-scenarios/**/*.json
+            build/ci117-scenarios/**/*.pass
+            build/ci117-scenarios/**/*.properties
+            build/ci117-scenarios/**/*.diagnostics/**
+            build/ci117-scenarios/**/sync/**
+            build/ci117-scenarios/**/world/**
+            build/ci117-scenarios/**/saves/**
+            build/ci117-scenarios/**/mods/*.jar
+            build/ci117-scenarios/**/config/**
+            build/ci117-scenarios/**/crash-reports/**
+            build/ci117-scenarios/**/screenshots/*.png
+            build/native-server-distribution/*.log
+            build/native-client-distribution/*.log
 
   prepare:
     name: Prepare verified migration inputs
@@ -280,13 +327,17 @@ jobs:
             build/ci117-scenarios/**/*.log.gz
             build/ci117-scenarios/**/*.json
             build/ci117-scenarios/**/*.txt
+            build/ci117-scenarios/**/*.pass
+            build/ci117-scenarios/**/*.properties
             build/ci117-scenarios/**/*.diagnostics/**
+            build/ci117-scenarios/**/sync/**
             build/ci117-scenarios/**/world/**
             build/ci117-scenarios/**/saves/**
             build/ci117-scenarios/**/mods/*.jar
             build/ci117-scenarios/**/config/**
             build/ci117-scenarios/**/crash-reports/**
             build/ci117-scenarios/**/screenshots/*.png
+            build/ci117-scenarios/**/connected-screenshots/*.png
             build/ci117-platform-inputs/inputs.json
 
   aggregate:
