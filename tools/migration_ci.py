@@ -19,9 +19,9 @@ def digest(path):
 
 
 def native_input_paths(project, expected=None):
-    from native_runtime import SERVER_INPUTS
+    from native_runtime import verify_server_inputs
     native=project/'build/native-server-distribution'
-    expected=SERVER_INPUTS if expected is None else expected
+    expected=verify_server_inputs(native) if expected is None else expected
     if not expected:raise ValueError('Missing native SDK manifest')
     paths=[]
     for name,sha in sorted(expected.items()):

@@ -1,0 +1,14 @@
+{
+  "libraries/net/minecraft/server/1.17.1-20210706.113038/server-1.17.1-20210706.113038-srg.jar": {
+    "entries": 4677,
+    "content_and_metadata_sha256": "38885B270B4072A6F4C61764FEF61C2839C00505E58C7A193F5C896EB3834F7D",
+    "timestamp_policy": "installer-times",
+    "canonical_archive_sha256": "A00E5004F190A0F221D8001B2E04609CE744A129F7764181AD10FBEFB1237EAA"
+  },
+  "libraries/net/minecraftforge/forge/1.17.1-37.1.1/forge-1.17.1-37.1.1-server.jar": {
+    "entries": 1252,
+    "content_and_metadata_sha256": "AF6A206D4398A373937D85C240CD16ACC2833A9A8493F483FA31E95870DFF3F0",
+    "timestamp_policy": "exact",
+    "canonical_archive_sha256": "35DB91BCD011CAD8B812BA165CD7F5AD934CEEEE9050621423F9E5D227D7F895"
+  }
+}
