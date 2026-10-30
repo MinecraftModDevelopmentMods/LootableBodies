@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: Complete version from gradle.properties, ending in 110021, 111021, 112021, 113021, 114041, 115021 or 116051.
+        description: Complete version from gradle.properties, ending in 110021, 111021, 112021, 113021, 114041, 115021, 116051 or 117011.
         required: true
         type: string
       curseforge_release_level:
@@ -37,6 +37,7 @@ jobs:
     outputs:
       release_sha: ${{ steps.validate.outputs.release_sha }}
       release_version: ${{ steps.validate.outputs.release_version }}
+      qualification_run: ${{ steps.validate.outputs.qualification_run }}
       minecraft_version: ${{ steps.target.outputs.minecraft_version }}
       source_branch: ${{ steps.target.outputs.source_branch }}
     steps:
@@ -48,7 +49,7 @@ jobs:
           set -euo pipefail
           [[ "$GITHUB_REPOSITORY" == 'MinecraftModDevelopmentMods/LootableBodies' ]]
           [[ "$GITHUB_REF" == 'refs/heads/master-1.12' ]]
-          [[ "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(110021|111021|112021|113021|114041|115021|116051)$ ]]
+          [[ "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(110021|111021|112021|113021|114041|115021|116051|117011)$ ]]
           case "$RELEASE_VERSION" in
             *.110021) minecraft_version=1.10.2; source_branch=1.10.2 ;;
             *.111021) minecraft_version=1.11.2; source_branch=1.11.2-dev ;;
@@ -57,6 +58,7 @@ jobs:
             *.114041) minecraft_version=1.14.4; source_branch=master-1.14.4 ;;
             *.115021) minecraft_version=1.15.2; source_branch=master-1.15.2 ;;
             *.116051) minecraft_version=1.16.5; source_branch=master-1.16.5 ;;
+            *.117011) minecraft_version=1.17.1; source_branch=master-1.17.1 ;;
             *) exit 1 ;;
           esac
           echo "minecraft_version=$minecraft_version" >> "$GITHUB_OUTPUT"
@@ -87,13 +89,15 @@ jobs:
                      '1.13.2': ('master-1.13.2', '25.0.223', '113021'),
                      '1.14.4': ('master-1.14.4', '28.2.26', '114041'),
                      '1.15.2': ('master-1.15.2', '31.2.57', '115021'),
-                     '1.16.5': ('master-1.16.5', '36.2.42', '116051')}
+                     '1.16.5': ('master-1.16.5', '36.2.42', '116051'),
+                     '1.17.1': ('master-1.17.1', '37.1.1', '117011')}
           branch, forge, suffix = targets[minecraft]
           if os.environ['SOURCE_BRANCH'] != branch:
               raise SystemExit('The selected branch does not match its Minecraft version')
+          native17 = minecraft == '1.17.1'
           expected = {'minecraft_version': minecraft, 'forge_version': forge,
-                      'loader_name': 'forge', 'loader_code': '1', 'java_version': '8',
-                      'java_toolchain_version': '8.0.502+7', 'gradle_java_version': '17',
+                      'loader_name': 'forge', 'loader_code': '1', 'java_version': '16' if native17 else '8',
+                      'java_toolchain_version': '16.0.2+7' if native17 else '8.0.502+7', 'gradle_java_version': '17',
                       'mod_id': 'lootablebodies', 'mod_artifact': 'LootableBodies',
                       'mod_group': 'zone.moddev.mc.lootablebodies', 'mod_license': 'LGPL-2.1-only',
                       'curseforge_project_id': '240968'}
@@ -120,11 +124,26 @@ jobs:
           if minecraft in ('1.15.2', '1.16.5'):
               required.update(['Validate release workflow', 'Prepare verified migration inputs', 'World upgrade matrix'] +
                               ['Historical world shard ' + str(i) for i in range(6 if minecraft == '1.15.2' else 12)])
+          qualification_run = ''
+          if native17:
+              required = {'Prepare verified migration inputs', 'Build, test, and audit',
+                          'Analyze Java', 'Validation', 'Validate release workflow'}
+              required.update('Historical world shard ' + str(i) for i in range(12))
+              required.update('Native117 ' + group for group in
+                              ['servers', 'default', 'config', 'skin', 'issues', 'names',
+                               'rejected', 'multiplayer', 'visibility', 'respawn', 'control'])
+              runs = json.loads(subprocess.check_output(['gh', 'api',
+                  f'repos/{repo}/actions/workflows/native117.yml/runs?event=push&branch=master-1.17.1&head_sha={sha}&per_page=100'], text=True))['workflow_runs']
+              exact = [r for r in runs if r['head_sha'] == sha and r['head_branch'] == 'master-1.17.1'
+                       and r['event'] == 'push' and r['path'] == '.github/workflows/native117.yml']
+              if not exact or max(exact, key=lambda r:r['id'])['conclusion'] != 'success':
+                  raise SystemExit('No successful exact-merge native117 qualification')
+              qualification_run = str(max(exact, key=lambda r:r['id'])['id'])
           for name in required:
               matching = [check for check in checks if check['name'] == name]
               if not matching or max(matching, key=lambda c: c['id'])['conclusion'] != 'success':
                   raise SystemExit(f'The selected commit has no successful {name} check')
-          if minecraft in ('1.11.2', '1.12.2', '1.13.2', '1.14.4', '1.15.2', '1.16.5'):
+          if minecraft in ('1.11.2', '1.12.2', '1.13.2', '1.14.4', '1.15.2', '1.16.5', '1.17.1'):
               target = minecraft.rsplit('.', 1)[0]
               audits = json.loads(subprocess.check_output(['gh', 'api',
                   f'repos/{repo}/actions/workflows/artifact-audit-{target}.yml/runs?event=workflow_run&per_page=100'], text=True))['workflow_runs']
@@ -142,7 +161,7 @@ jobs:
           if tag.returncode != 0 and '404' not in tag.stderr:
               raise SystemExit('Could not verify the release tag')
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
-              out.write(f'release_sha={sha}\nrelease_version={version}\n')
+              out.write(f'release_sha={sha}\nrelease_version={version}\nqualification_run={qualification_run}\n')
           PY
 
   build:
@@ -166,7 +185,7 @@ jobs:
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: '8.0.502+7'
+          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.17.1' && '16.0.2+7' || '8.0.502+7' }}
       - name: Install Gradle Java
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
@@ -174,16 +193,41 @@ jobs:
           java-version: '17.0.1+12'
       - name: Pin the production toolchain
         run: |
-          echo "LOOTABLEBODIES_JAVA8_HOME=$JAVA_HOME_8_X64" >> "$GITHUB_ENV"
+          if [ '${{ needs.preflight.outputs.minecraft_version }}' = '1.17.1' ]; then
+            echo "LOOTABLEBODIES_JAVA16_HOME=$JAVA_HOME_16_X64" >> "$GITHUB_ENV"
+          else
+            echo "LOOTABLEBODIES_JAVA8_HOME=$JAVA_HOME_8_X64" >> "$GITHUB_ENV"
+          fi
           echo "LOOTABLEBODIES_MAVENIZER_JAVA_HOME=$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+      - name: Download the qualified native117 six-file bundle
+        if: needs.preflight.outputs.minecraft_version == '1.17.1'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: LootableBodies-1.17.1-${{ needs.preflight.outputs.release_sha }}
+          run-id: ${{ needs.preflight.outputs.qualification_run }}
+          github-token: ${{ github.token }}
+          path: build/release/bundle
+      - name: Verify all six native117 bytes before publication
+        if: needs.preflight.outputs.minecraft_version == '1.17.1'
+        run: |
+          python3 - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          expected=json.loads(Path('.github/release117.json').read_text())['files']
+          actual={p.name:hashlib.sha256(p.read_bytes()).hexdigest().upper() for p in Path('build/release/bundle').iterdir() if p.is_file()}
+          if actual != expected:raise SystemExit('Qualified native117 bundle differs from the accepted six files')
+          PY
+          chmod +x ./gradlew
+          ./gradlew verifyPreparedReleaseArtifacts -PpreparedReleaseDir=build/release/bundle --no-daemon --stacktrace
       - name: Build, test and audit the release
+        if: needs.preflight.outputs.minecraft_version != '1.17.1'
         run: |
           chmod +x ./gradlew
           ./gradlew clean build javadoc verifyEclipseProductionClasspath prepareReleaseBundle \
             --no-daemon --stacktrace \
-            -Dorg.gradle.java.installations.paths="$JAVA_HOME,$JAVA_HOME_8_X64,$JAVA_HOME_25_X64" \
+            -Dorg.gradle.java.installations.paths="$JAVA_HOME,${LOOTABLEBODIES_JAVA16_HOME:-${LOOTABLEBODIES_JAVA8_HOME:-}},$JAVA_HOME_25_X64" \
             -Dorg.gradle.java.installations.auto-detect=false \
             -Dorg.gradle.java.installations.auto-download=false
       - name: Stage the exact audited bundle
@@ -283,7 +327,7 @@ jobs:
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: '8.0.502+7'
+          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.17.1' && '16.0.2+7' || '8.0.502+7' }}
       - name: Install Gradle Java
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
@@ -291,7 +335,11 @@ jobs:
           java-version: '17.0.1+12'
       - name: Pin the production toolchain
         run: |
-          echo "LOOTABLEBODIES_JAVA8_HOME=$JAVA_HOME_8_X64" >> "$GITHUB_ENV"
+          if [ '${{ needs.preflight.outputs.minecraft_version }}' = '1.17.1' ]; then
+            echo "LOOTABLEBODIES_JAVA16_HOME=$JAVA_HOME_16_X64" >> "$GITHUB_ENV"
+          else
+            echo "LOOTABLEBODIES_JAVA8_HOME=$JAVA_HOME_8_X64" >> "$GITHUB_ENV"
+          fi
           echo "LOOTABLEBODIES_MAVENIZER_JAVA_HOME=$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
@@ -313,7 +361,7 @@ jobs:
           chmod +x ./gradlew
           ./gradlew publishMavenJavaPublicationToReleaseRepository \
             -PpreparedReleaseDir="$RUNNER_TEMP/release-input" --no-daemon --stacktrace \
-            -Dorg.gradle.java.installations.paths="$JAVA_HOME,$JAVA_HOME_8_X64,$JAVA_HOME_25_X64" \
+            -Dorg.gradle.java.installations.paths="$JAVA_HOME,${LOOTABLEBODIES_JAVA16_HOME:-${LOOTABLEBODIES_JAVA8_HOME:-}},$JAVA_HOME_25_X64" \
             -Dorg.gradle.java.installations.auto-detect=false \
             -Dorg.gradle.java.installations.auto-download=false
 
@@ -343,7 +391,7 @@ jobs:
           game-versions: ${{ needs.preflight.outputs.minecraft_version }}
           game-version-filter: none
           environment: client | server
-          java: Java 8
+          java: ${{ needs.preflight.outputs.minecraft_version == '1.17.1' && 'Java 16' || 'Java 8' }}
           fail-mode: fail
           files: |
             ${{ runner.temp }}/release-input/LootableBodies-${{ needs.preflight.outputs.release_version }}.jar
