@@ -25,8 +25,8 @@ MATRIX114 = MATRIX113 + [origin + ' / ' + stamps for origin in
              ['released-113', 'recovery-113', 'via113-110', 'via113-111', 'via113-112']
              for stamps in ['normal', 'stamps']]
 MATRIX115 = ['World upgrade matrix', 'Prepare verified migration inputs', 'Validate release workflow'] + ['Historical world shard ' + str(i) for i in range(6)]
-CORE117 = ['Build, test, and audit', 'Analyze Java', 'Validation']
-MATRIX117 = ['Prepare verified migration inputs', 'Validate release workflow'] + ['Historical world shard ' + str(i) for i in range(12)] + ['Native117 ' + x for x in ['servers','default','config','skin','issues','names','rejected','multiplayer','visibility','respawn','control']]
+CORE117 = ['Build, test, and audit', 'Analyze Java', 'Validation', 'Validate release workflow']
+MATRIX117 = []
 MATRIX116 = ['World upgrade matrix', 'Prepare verified migration inputs', 'Validate release workflow'] + ['Historical world shard ' + str(i) for i in range(12)]
 MATRIX = [origin + ' / ' + stamps for origin in
           ['original-110', 'released-110', 'original-111', 'recovery-110']
@@ -56,7 +56,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             values = dict(line.split('=', 1) for line in output.read_text().splitlines()) if output.exists() else {}
             return result.returncode, values
 
-    def validate(self, minecraft, names=None, mutation=None, release_exists=False, wrong_tag=False, audit_success=True, qualification=None):
+    def validate(self, minecraft, names=None, mutation=None, release_exists=False, wrong_tag=False, audit_success=True, qualification=None, local_receipt=None):
         suffix, branch, forge = {
             '1.10.2': ('110021', '1.10.2', '12.18.3.2511'),
             '1.11.2': ('111021', '1.11.2-dev', '13.20.1.2588'),
@@ -67,6 +67,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
             '1.16.5': ('116051', 'master-1.16.5', '36.2.42'),
             '1.17.1': ('117011', 'master-1.17.1', '37.1.1')}[minecraft]
         version = '2.4.2.' + suffix
+        files={name:'C'*64 for name in ['main.jar','sources.jar','javadoc.jar','release.pom','CHANGELOG.txt','SHA256SUMS']}
+        receipt={'schema':1,'source':SHA,'version':version,'files':files,'evidence_sha256':'F'*64,'qualified_locally':True,'manual_accepted':True}
+        if local_receipt is not None:receipt=local_receipt
         values = dict(minecraft_version=minecraft, forge_version=forge, loader_name='forge', loader_code='1',
             java_version='16' if minecraft=='1.17.1' else '8', java_toolchain_version='16.0.2+7' if minecraft=='1.17.1' else '8.0.502+7', gradle_java_version='17', mod_id='lootablebodies',
             mod_artifact='LootableBodies', mod_group='zone.moddev.mc.lootablebodies', mod_license='LGPL-2.1-only',
@@ -100,8 +103,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {
                 'RELEASE_VERSION': version, 'GITHUB_REPOSITORY': REPOSITORY,
                 'MINECRAFT_VERSION': minecraft, 'SOURCE_BRANCH': branch,
-                'GITHUB_OUTPUT': str(Path(directory) / 'output')}), \
-                patch('pathlib.Path.read_text', return_value='\n'.join(k+'='+v for k,v in values.items())), \
+                'GITHUB_OUTPUT': str(Path(directory) / 'output'),
+                'LOCAL_QUALIFICATION':json.dumps(receipt) if receipt else ''}), \
+                patch('pathlib.Path.read_text', side_effect=['\n'.join(k+'='+v for k,v in values.items()),json.dumps({'files':files})]), \
                 patch('subprocess.check_output', side_effect=command), patch('subprocess.run', side_effect=existing):
             exec(compile(code, 'release-preflight', 'exec'), {})
 
@@ -231,11 +235,24 @@ class ReleaseWorkflowTests(unittest.TestCase):
         code,values=self.select('2.4.8.117011')
         self.assertEqual(0,code);self.assertEqual('master-1.17.1',values['source_branch'])
 
-    def test_117_requires_all_native_scenarios_and_twelve_historical_shards(self):
+    def test_117_requires_build_security_and_archive_checks_without_hosted_games(self):
         self.validate('1.17.1')
         for missing in CORE117+MATRIX117:
             with self.subTest(missing=missing),self.assertRaises(SystemExit):
                 self.validate('1.17.1',names=[x for x in CORE117+MATRIX117 if x!=missing])
+
+    def test_117_requires_a_complete_hash_bound_local_qualification_receipt(self):
+        self.validate('1.17.1')
+        files={name:'C'*64 for name in ['main.jar','sources.jar','javadoc.jar','release.pom','CHANGELOG.txt','SHA256SUMS']}
+        good={'schema':1,'source':SHA,'version':'2.4.2.117011','files':files,'evidence_sha256':'F'*64,'qualified_locally':True,'manual_accepted':True}
+        for mutation in [{'source':'b'*40},{'version':'2.4.8.117011'},{'files':{}},{'evidence_sha256':''},{'evidence_sha256':'0'*64},{'qualified_locally':False},{'manual_accepted':False},{'schema':True}]:
+            with self.subTest(mutation=mutation),self.assertRaises(SystemExit):
+                self.validate('1.17.1',local_receipt=dict(good,**mutation))
+        with self.assertRaises(SystemExit):self.validate('1.17.1',local_receipt={})
+
+    def test_local_receipt_is_passed_to_the_actual_preflight_step(self):
+        step=WORKFLOW.read_text().split('- name: Validate identity, exact commit and successful checks',1)[1].split('        run: |',1)[0]
+        self.assertIn('LOCAL_QUALIFICATION: ${{ inputs.local_qualification }}',step)
 
     def test_117_requires_an_exact_successful_merged_native_run(self):
         for mutation in [{'head_sha':'b'*40},{'head_branch':'master-1.16.5'},{'event':'pull_request'},{'path':'.github/workflows/build.yml'},{'conclusion':'failure'}]:
