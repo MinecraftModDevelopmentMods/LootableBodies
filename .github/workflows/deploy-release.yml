@@ -270,7 +270,7 @@ jobs:
           {
             echo "Prepared Lootable Bodies $RELEASE_VERSION from commit $RELEASE_SHA."
             echo
-            cat build/release/SHA256SUMS
+            cat "$RUNNER_TEMP/release-bundle/SHA256SUMS"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload the immutable release bundle
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
