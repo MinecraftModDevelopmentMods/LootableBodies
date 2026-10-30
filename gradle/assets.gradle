@@ -1,7 +1,8 @@
 // Keep development launches independent of any installed Minecraft instance.
 ext.minecraftGameHome = layout.projectDirectory.dir('.gradle/minecraft-home')
 String assetFolder=org.gradle.internal.os.OperatingSystem.current().isMacOsX()?'Library/Application Support/minecraft/assets':'.minecraft/assets'
-ext.minecraftAssets = minecraftGameHome.dir(assetFolder)
+ext.minecraftAssets = providers.gradleProperty('minecraftAssetsDirectory').isPresent() ?
+        layout.projectDirectory.dir(providers.gradleProperty('minecraftAssetsDirectory').get()) : minecraftGameHome.dir(assetFolder)
 tasks.register('prepareMinecraftAssets') {
     group = 'ide'
     doLast {
@@ -16,10 +17,10 @@ tasks.register('prepareMinecraftAssets') {
                 java.nio.file.Files.move(pending.toPath(),output.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING)
             }
         }
-        File descriptor=new File(root,'1.16.5.json')
-        download('https://piston-meta.mojang.com/v1/packages/fba9f7833e858a1257d810d21a3a9e3c967f9077/1.16.5.json','fba9f7833e858a1257d810d21a3a9e3c967f9077',descriptor)
+        File descriptor=new File(root,'1.17.1.json')
+        download('https://piston-meta.mojang.com/v1/packages/e0e7ab5ed6f55bbd874ef95be3c9356d67e64b57/1.17.1.json','e0e7ab5ed6f55bbd874ef95be3c9356d67e64b57',descriptor)
         def version=new groovy.json.JsonSlurper().parse(descriptor)
-        File index=new File(root,'indexes/1.16.json')
+        File index=new File(root,'indexes/1.17.json')
         download(version.assetIndex.url,version.assetIndex.sha1,index)
         Set<String> hashes=new groovy.json.JsonSlurper().parse(index).objects.values().collect {it.hash} as Set
         hashes.each {hash ->

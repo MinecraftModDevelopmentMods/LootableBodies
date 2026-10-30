@@ -1,0 +1,13 @@
+modLoader="javafml"
+loaderVersion="[36,)"
+license="LGPL-2.1-only"
+[[mods]]
+modId="lootablebodiesbuildtest"
+version="1"
+displayName="Disposable historical world writer"
+[[dependencies.lootablebodiesbuildtest]]
+modId="lootablebodies"
+mandatory=true
+versionRange="[2.4.7.116051]"
+ordering="AFTER"
+side="BOTH"

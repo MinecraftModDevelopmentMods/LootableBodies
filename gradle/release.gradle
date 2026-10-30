@@ -5,10 +5,10 @@ def expectedIdentity = [
         mod_id: 'lootablebodies', mod_artifact: 'LootableBodies',
         mod_group: 'zone.moddev.mc.lootablebodies', mod_vendor: 'Cyanobacterium',
         mod_name: "DrCyano's Lootable Bodies", mod_authors: 'Cyanobacterium,SkyBlade1978',
-        minecraft_version: '1.16.5', forge_version: '36.2.42',
-        mapping_channel: 'snapshot', mapping_version: '20210309-1.16.5',
+        minecraft_version: '1.17.1', forge_version: '37.1.1',
+        mapping_channel: 'official', mapping_version: '1.17.1',
         loader_name: 'forge', loader_code: '1', curseforge_project_id: '240968',
-        java_version: '8', java_toolchain_version: '8.0.502+7', gradle_java_version: '17',
+        java_version: '16', java_toolchain_version: '16.0.2+7', gradle_java_version: '17',
         mod_license: 'LGPL-2.1-only', mod_license_name: 'GNU Lesser General Public License, Version 2.1',
         mod_license_url: 'https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt',
         mod_url: 'https://github.com/MinecraftModDevelopmentMods/LootableBodies',
@@ -181,4 +181,10 @@ tasks.register('validateMavenRelease') {
 }
 tasks.withType(AbstractPublishToMaven).configureEach {
     dependsOn 'validateMavenRelease', 'verifyPreparedReleaseArtifacts'
+}
+
+tasks.withType(org.gradle.api.publish.maven.tasks.GenerateMavenPom).configureEach {
+    doLast {
+        destination.setText(destination.getText('UTF-8').replace('\r\n','\n'), 'UTF-8')
+    }
 }

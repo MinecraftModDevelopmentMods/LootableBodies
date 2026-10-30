@@ -12,7 +12,8 @@ import time
 
 
 def run_monitored(command, *, cwd, log, timeout, diagnostics,
-                  diagnostic_command, metric_command=None):
+                  diagnostic_command, metric_command=None, stop_requested=None,
+                  stdin=None, process_started=None):
     if timeout <= 0:
         raise ValueError('Runtime deadline must be positive')
     cwd, log, diagnostics = Path(cwd), Path(log), Path(diagnostics)
@@ -80,11 +81,22 @@ def run_monitored(command, *, cwd, log, timeout, diagnostics,
     try:
         with log.open('x', encoding='utf-8') as output:
             process = subprocess.Popen(command, cwd=cwd, stdout=output,
-                                       stderr=subprocess.STDOUT)
+                                       stderr=subprocess.STDOUT, stdin=stdin,
+                                       text=stdin is not None)
             record['pid'] = process.pid
             save()
+            if process_started is not None:process_started(process)
             while process.poll() is None:
                 now = time.monotonic()
+                if stop_requested is not None and stop_requested():
+                    record['stopped_reason'] = 'owned_group_abort'
+                    end_collector('owned_group_abort')
+                    process.terminate()
+                    try:
+                        process.wait(timeout=min(2,max(.01,deadline-now)))
+                    except subprocess.TimeoutExpired:
+                        process.kill();process.wait()
+                    break
                 if now >= deadline:
                     record['timed_out'] = True
                     end_collector('runtime_deadline')

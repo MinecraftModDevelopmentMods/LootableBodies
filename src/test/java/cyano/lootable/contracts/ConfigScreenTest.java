@@ -110,7 +110,7 @@ class ConfigScreenTest {
     @Test void cancelledChildEditsCannotLeakIntoTheRootDraft()throws Exception {
         load("");cyano.lootable.graphics.CorpseConfigGui root=new cyano.lootable.graphics.CorpseConfigGui(null);
         java.lang.reflect.Field pending=root.getClass().getDeclaredField("pending");pending.setAccessible(true);
-        java.lang.reflect.Constructor<?> ctor=root.getClass().getDeclaredConstructor(net.minecraft.client.gui.screen.Screen.class,String.class,Map.class,int.class);ctor.setAccessible(true);
+        java.lang.reflect.Constructor<?> ctor=root.getClass().getDeclaredConstructor(net.minecraft.client.gui.screens.Screen.class,String.class,Map.class,int.class);ctor.setAccessible(true);
         @SuppressWarnings("unchecked") Map<String,String> original=(Map<String,String>)pending.get(root);
         Object child=ctor.newInstance(root,"rules",original,0);
         @SuppressWarnings("unchecked") Map<String,String> edits=(Map<String,String>)pending.get(child);
@@ -121,16 +121,16 @@ class ConfigScreenTest {
         load("");cyano.lootable.graphics.CorpseConfigGui root=new cyano.lootable.graphics.CorpseConfigGui(null);
         java.lang.reflect.Field pending=root.getClass().getDeclaredField("pending");pending.setAccessible(true);
         @SuppressWarnings("unchecked") Map<String,String> edits=(Map<String,String>)pending.get(root);
-        edits.put("corpse_HP","31");root.onClose();
+        edits.put("corpse_HP","31");root.removed();
         assertEquals("31",edits.get("corpse_HP"));assertEquals(20,LootableBodies.corpseHP);
     }
     @Test void corpseLayoutKeepsItsOriginalUnlabelledForeground()throws Exception {
         cyano.lootable.graphics.CorpseGUIContainer screen=new cyano.lootable.graphics.CorpseGUIContainer(
-            (cyano.lootable.graphics.CorpseContainer)null,null,new net.minecraft.util.text.StringTextComponent("Saved owner"));
-        java.lang.reflect.Method foreground=net.minecraft.client.gui.screen.inventory.ContainerScreen.class.getDeclaredMethod(
-            "drawGuiContainerForegroundLayer",com.mojang.blaze3d.matrix.MatrixStack.class,int.class,int.class);foreground.setAccessible(true);
-        // The original layout uses all seven rows. Vanilla16 labels would draw
+            (cyano.lootable.graphics.CorpseContainer)null,new net.minecraft.world.entity.player.Inventory(null),new net.minecraft.network.chat.TextComponent("Saved owner"));
+        java.lang.reflect.Method foreground=cyano.lootable.graphics.CorpseGUIContainer.class.getDeclaredMethod(
+            "renderLabels",com.mojang.blaze3d.vertex.PoseStack.class,int.class,int.class);foreground.setAccessible(true);
+        // The original layout uses all seven rows. Native labels would draw
         // over those slots; its original foreground needs no font or item state.
-        foreground.invoke(screen,new com.mojang.blaze3d.matrix.MatrixStack(),0,0);
+        foreground.invoke(screen,new com.mojang.blaze3d.vertex.PoseStack(),0,0);
     }
 }

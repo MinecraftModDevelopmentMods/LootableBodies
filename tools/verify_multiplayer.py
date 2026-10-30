@@ -10,18 +10,29 @@ import subprocess
 import time
 from audit_runtime_logs import audit
 from fixture_login import LoginMonitor, start_clients, write_receipts, archive_live_logs
-from native_runtime import project_assets,FORGE,digest,prepare_server as prepare,run_server as run,client_command as native_client_command,prepare_client
+from native_runtime import project_assets,FORGE,digest,prepare_server as prepare,run_server as run,client_command as native_client_command,prepare_client,seed_flat_fixture
+from owned_process import native_process
 from release_identity import MAIN_JAR as MAIN
 
 
-def client_command(project,java,distribution,root,cache,shared,port,role,hidden_agent=None,probe=None):
+def reload_server(java, server, logging):
+    log=run(java,server,'multiplayer-reload',extra=['-Dlog4j.configurationFile='+logging.resolve().as_uri()],
+            message='LOOTABLE_BODIES_RUNTIME_PASS phase=multiplayer-reload')
+    for suffix in ['.log','.latest.log','.debug.log']:
+        complete=server/('multiplayer-reload'+suffix)
+        if not complete.is_file() or not complete.stat().st_size:raise FileNotFoundError(complete)
+        audit(complete,native=True)
+    return log
+
+
+def client_command(project,java,distribution,root,cache,shared,port,role,hidden_agent=None,probe=None,prepared=None,assets=None):
     prepare_client(root,project/'build/libs'/MAIN,probe or project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar')
     (root/'config').mkdir(exist_ok=True);(root/'config/lootablebodies.cfg').write_text('options {\n B:local_texture=true\n}\n')
     extra=['-Dlootablebodies.multiplayer.role='+role,'-Dlootablebodies.multiplayer.sync='+str(shared),
            '-Dlootablebodies.multiplayer.port='+str(port),
            '-Dlog4j.configurationFile='+(project/'src/integrationTest/resources/log4j2.xml').as_uri()]
     if hidden_agent:extra.append('-javaagent:'+str(hidden_agent.resolve()))
-    return native_client_command(java,root,distribution,project_assets(project),username='Container'+role,extra=extra)
+    return native_client_command(java,root,distribution,assets or project_assets(project),username='Container'+role,extra=extra,prepared=prepared)
 
 
 def main():
@@ -29,6 +40,10 @@ def main():
     parser.add_argument('--java',type=Path,required=True)
     parser.add_argument('--forge-home',type=Path,required=True)
     parser.add_argument('--forge-client-home',type=Path,required=True)
+    parser.add_argument('--client-inputs',type=Path,required=True)
+    parser.add_argument('--assets',type=Path)
+    parser.add_argument('--flat-header',type=Path,required=True)
+    parser.add_argument('--flat-header-sha256',required=True)
     parser.add_argument('--hidden-agent',type=Path)
     parser.add_argument('--output',type=Path,required=True)
     args=parser.parse_args();project=Path(__file__).resolve().parents[1]
@@ -36,24 +51,25 @@ def main():
     shared=root/'sync';shared.mkdir();server=root/'server'
     jar=project/'build/libs'/MAIN;before=digest(jar)
     prepare(server,distribution,jar,project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar')
+    seed_flat_fixture(server,args.flat_header,args.flat_header_sha256)
     with socket.socket() as reservation:
         reservation.bind(('127.0.0.1',0));port=reservation.getsockname()[1]
     properties=(server/'server.properties').read_text().replace('server-port=0','server-port='+str(port))
     (server/'server.properties').write_text(properties+'view-distance=4\n')
     commands={'server':[str(java),'-Xmx1G','-Dlootablebodies.multiplayer.server=true',
-        '-Dlootablebodies.multiplayer.sync='+str(shared),'-jar',FORGE+'.jar','--nogui']}
+        '-Dlog4j.configurationFile='+(project/'src/integrationTest/resources/log4j2.xml').as_uri(),
+        '-Dlootablebodies.multiplayer.sync='+str(shared),'@libraries/net/minecraftforge/forge/1.17.1-37.1.1/'+('win_args.txt' if os.name=='nt' else 'unix_args.txt'),'--nogui']}
     for role in ('A','B'):
-        commands['client'+role]=client_command(project,java,args.forge_client_home.resolve(),root/('client'+role),None,shared,port,role,args.hidden_agent)
+        commands['client'+role]=client_command(project,java,args.forge_client_home.resolve(),root/('client'+role),None,shared,port,role,args.hidden_agent,prepared=args.client_inputs.resolve(),assets=args.assets.resolve() if args.assets else None)
     processes={};logs=[]
     def start(name):
-        log=(root/(name+'.log')).open('w',encoding='utf-8');logs.append(log)
-        processes[name]=subprocess.Popen(commands[name],cwd=server if name=='server' else root/name,stdout=log,stderr=subprocess.STDOUT)
+        processes[name]=native_process(commands[name],cwd=server if name=='server' else root/name,log=root/(name+'.log'),timeout=240 if name=='server' else 180)
     try:
         start('server');deadline=time.monotonic()+60
         while not (shared/'server.ready').is_file():
             if processes['server'].poll() is not None or time.monotonic()>deadline: raise RuntimeError('Disposable server did not start')
             time.sleep(.2)
-        monitor=LoginMonitor(root)
+        monitor=LoginMonitor(root,legacy_recovery=False)
         start_clients(start);deadline=time.monotonic()+180
         while any(p.poll() is None for p in processes.values()):
             monitor.poll()
@@ -89,7 +105,7 @@ def main():
             if not (home/'screenshots'/shot).is_file(): raise RuntimeError('Missing screenshot '+role+' '+shot)
     (server/'server.properties').write_text(properties.replace('server-port='+str(port),'server-port=0')+'view-distance=4\n')
     archive_live_logs(root)
-    run(java,server,'multiplayer-reload',message='LOOTABLE_BODIES_RUNTIME_PASS phase=multiplayer-reload')
+    reload_server(java,server,project/'src/integrationTest/resources/log4j2.xml')
     if digest(jar)!=before: raise RuntimeError('Candidate changed')
     (root/'result.json').write_text(json.dumps({'candidate_sha256':before,'two_real_tcp_clients':True,
         'checks':(shared/'checks.txt').read_text().splitlines(),'corpse_and_real_player_disk_reload':True},indent=2)+'\n')

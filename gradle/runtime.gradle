@@ -5,7 +5,11 @@ tasks.register('compileIntegrationTestMod', JavaCompile) {
     group = 'verification'
     dependsOn 'classes'
     source fileTree('src/integrationTest/java')
-    source fileTree('src/testSupport/java')
+    source fileTree('src/testSupport/java') {
+        // Native37 mod modules cannot define a production package twice.
+        // This native-codec fixture belongs to unit/private-writer classpaths.
+        exclude 'cyano/lootable/upgrade/**'
+    }
     classpath = files(sourceSets.main.output, sourceSets.main.compileClasspath)
     destinationDirectory = probeClasses
     options.compilerArgs.add('-proc:none')
@@ -71,6 +75,18 @@ def prepareOwnedLoaderConfig = { File root ->
     }
 }
 
+// Native37 cannot decode a bare FLAT generator through the ordinary properties
+// path. Seed the exact native codec header in a newly owned fixture world.
+def prepareOwnedFlatWorld = { File root ->
+    File header = file('tools/fixtures/native117-flat-level.dat')
+    if (!header.isFile() || releaseDigest(header) != '358E4B91F290AFB219D85B09435B4A641035412686E31A09CF5C69F5A28515CB')
+        throw new GradleException('Missing or changed native flat fixture header')
+    File world = new File(root,'world')
+    if (world.exists()) throw new GradleException('Refusing to replace an existing fixture world')
+    world.mkdirs()
+    new File(world,'level.dat').bytes = header.bytes
+}
+
 def runDirectory = layout.dir(providers.provider { file(providers.gradleProperty('integrationDirectory').getOrElse('build/integration-run')) })
 tasks.register('prepareIntegrationTest') {
     dependsOn probeJar
@@ -83,12 +99,13 @@ tasks.register('prepareIntegrationTest') {
         }
         new File(root,'mods').mkdirs()
         prepareOwnedLoaderConfig(root)
+        prepareOwnedFlatWorld(root)
         copy { from probeJar; into new File(root,'mods') }
         new File(root,'eula.txt').text = 'eula=true\n'
         ['ops','whitelist','banned-players','banned-ips'].each { new File(root,"${it}.json").text='[]\n' }
         new File(root,'server.properties').text = '''level-name=world
 level-seed=4267321
-level-type=FLAT
+level-type=DEFAULT
 online-mode=false
 server-ip=127.0.0.1
 server-port=0
@@ -105,6 +122,7 @@ max-tick-time=120000
 def phaseTask = { String phase, Object prerequisite ->
     tasks.register("integration${phase.capitalize()}Process", JavaExec) {
         group = 'verification'
+        timeout = java.time.Duration.ofSeconds(240)
         dependsOn prerequisite
         dependsOn { def run = tasks.getByName('runServer'); run.taskDependencies.getDependencies(run) }
         actions.clear()
@@ -115,12 +133,14 @@ def phaseTask = { String phase, Object prerequisite ->
             def previousProperties = new LinkedHashMap(run.systemProperties)
             def previousClasspath = files(run.classpath)
             def previousArgs = new ArrayList(run.args)
+            def previousJvmArgs = new ArrayList(run.jvmArgs)
             def previousMain = run.mainClass.orNull
             try {
                 options.workingDir.set(runDirectory)
                 run.workingDir(runDirectory)
                 run.systemProperty('lootablebodies.phase', phase)
                 run.systemProperty('log4j.configurationFile', file('src/integrationTest/resources/log4j2.xml').toURI())
+                run.jvmArgs('-Xlog:gc*,safepoint:file=integration-'+phase+'.gc.txt:time,uptime,pid,level,tags')
                 run.executable = productionLauncher.get().executablePath.asFile.path
                 run.setClasspath(files(developmentOutput, run.classpath.filter { !sourceSets.main.output.files.contains(it) }))
                 run.exec()
@@ -130,6 +150,7 @@ def phaseTask = { String phase, Object prerequisite ->
                 run.setSystemProperties(previousProperties)
                 run.setClasspath(previousClasspath)
                 run.setArgs(previousArgs)
+                run.setJvmArgs(previousJvmArgs)
                 run.mainClass.set(previousMain)
             }
             File marker = new File(runDirectory.get().asFile,"world/${phase}.pass")
@@ -138,6 +159,9 @@ def phaseTask = { String phase, Object prerequisite ->
             if (!logs.isFile() || logs.text =~ /(?i)(AssertionError|Encountered an unexpected exception|Exception stopping server)/)
                 throw new GradleException("Runtime failure in ${logs}")
             copy { from logs; into runDirectory; rename { "${phase}.log" } }
+            File debug = new File(runDirectory.get().asFile,'logs/debug.log')
+            if (!debug.isFile() || !debug.length()) throw new GradleException('Missing complete native debug log')
+            copy { from debug; into runDirectory; rename { "${phase}.debug.log" } }
             if (!fileTree(new File(runDirectory.get().asFile,'crash-reports')).isEmpty())
                 throw new GradleException('Runtime crash reports found')
         }
@@ -261,9 +285,22 @@ tasks.register('preparePackagedForgeControl') { dependsOn packagedControl }
 // Eclipse generation has finalized the production models' environment.
 minecraft.runs.register('platformControl') {
     client=false
-    args '--nogui'
+    // Native37 supplies BootstrapLauncher only inside its named run configs.
+    // This separate model needs the exact pinned server metadata parameters.
+    mainClass.set('cpw.mods.bootstraplauncher.BootstrapLauncher')
+    args '--launchTarget','forgeserveruserdev','--gameDir','.',
+        '--fml.forgeVersion',project.forge_version,'--fml.mcVersion',project.minecraft_version,
+        '--fml.forgeGroup','net.minecraftforge','--fml.mcpVersion','20210706.113038','--nogui'
+    jvmArgs '-p','{modules}','--add-modules','ALL-MODULE-PATH',
+        '--add-opens','java.base/java.util.jar=cpw.mods.securejarhandler',
+        '--add-exports','java.base/sun.security.util=cpw.mods.securejarhandler',
+        '--add-exports','jdk.naming.dns/com.sun.jndi.dns=java.naming'
+    systemProperty 'legacyClassPath.file','{minecraft_classpath_file}'
+    systemProperty 'ignoreList','bootstraplauncher,securejarhandler,asm-commons,asm-util,asm-analysis,asm-tree,asm,client-extra,fmlcore,javafmllanguage,mclanguage,forge-'
+    systemProperty 'mergeModules','jna-5.8.0.jar,jna-platform-58.0.jar,java-objc-bridge-1.0.0.jar'
+    environment 'MCP_MAPPINGS','{mcp_mappings}'
     workingDir=layout.buildDirectory.dir('forge-control-run')
-    String root=layout.buildDirectory.dir('forge16-development/control').get().asFile.absolutePath
+    String root=layout.buildDirectory.dir('forge17-development/control').get().asFile.absolutePath
     environment.put('MOD_CLASSES',"forgeplatformcontrol%%${root}${File.pathSeparator}forgeplatformcontrol%%${root}")
 }
 def prepareForgeControl = tasks.register('prepareForgeControl') {
@@ -276,10 +313,11 @@ def prepareForgeControl = tasks.register('prepareForgeControl') {
         }
         new File(root,'mods').mkdirs()
         prepareOwnedLoaderConfig(root)
-        File controlOutput=layout.buildDirectory.dir('forge16-development/control').get().asFile
+        File controlOutput=layout.buildDirectory.dir('forge17-development/control').get().asFile
+        prepareOwnedFlatWorld(root)
         copy { from controlClasses;from 'src/controlTest/resources';into controlOutput }
         new File(root,'eula.txt').text='eula=true\n'
-        new File(root,'server.properties').text='level-name=world\nlevel-type=FLAT\nserver-ip=127.0.0.1\nserver-port=0\nonline-mode=false\n'
+        new File(root,'server.properties').text='level-name=world\nlevel-type=DEFAULT\nserver-ip=127.0.0.1\nserver-port=0\nonline-mode=false\n'
         ['ops','whitelist','banned-players','banned-ips'].each { new File(root,"${it}.json").text='[]\n' }
     }
 }
@@ -297,7 +335,7 @@ tasks.register('forgeControlServer') {
     mustRunAfter tasks.named('test')
     doLast {
         File root=layout.buildDirectory.dir('forge-control-run').get().asFile
-        File controlOutput=layout.buildDirectory.dir('forge16-development/control').get().asFile
+        File controlOutput=layout.buildDirectory.dir('forge17-development/control').get().asFile
         JavaExec run=tasks.getByName('runPlatformControl')
         def options = minecraft.runs.getByName('platformControl')
         File previousDir = options.workingDir.get().asFile

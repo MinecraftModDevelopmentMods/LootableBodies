@@ -3,17 +3,17 @@ package cyano.lootable.graphics;
 import static cyano.lootable.ItemStacks.emptyStack;
 
 import cyano.lootable.entities.EntityLootableBody;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.item.ItemEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.ServerPlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.inventory.EquipmentSlotType;
-import net.minecraft.inventory.IInventory;
-import net.minecraft.inventory.container.Slot;
-import net.minecraft.inventory.container.ClickType;
-import net.minecraft.item.ArmorItem;
-import net.minecraft.item.ItemStack;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.Container;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.item.ArmorItem;
+import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.common.MinecraftForge;
@@ -22,29 +22,29 @@ import net.minecraftforge.event.entity.item.ItemTossEvent;
 /**
  * Created by Chris on 4/12/2016.
  */
-public class CorpseContainer extends net.minecraft.inventory.container.Container {
+public class CorpseContainer extends net.minecraft.world.inventory.AbstractContainerMenu {
 
-	private static final EquipmentSlotType[] EQUIPMENT_SLOTS = EntityLootableBody.EQUIPMENT_SLOTS;
+	private static final EquipmentSlot[] EQUIPMENT_SLOTS = EntityLootableBody.EQUIPMENT_SLOTS;
 
-	private final IInventory targetInventory;
+	private final Container targetInventory;
 	private boolean dragging;
-	public CorpseContainer(PlayerInventory playerItems, IInventory entity){this(0,playerItems,entity);}
-	public CorpseContainer(int windowId, PlayerInventory playerItems, IInventory entity){
+	public CorpseContainer(Inventory playerItems, Container entity){this(0,playerItems,entity);}
+	public CorpseContainer(int windowId, Inventory playerItems, Container entity){
         super(cyano.lootable.LootableBodies.CORPSE_CONTAINER,windowId);
 		this.targetInventory = entity;
 		int index = 0;
 		while(index < 4) {
 			// armor
 			final int i = index;
-			this.addSlot(new net.minecraft.inventory.container.Slot(targetInventory, i, 8, 8 + 18*i) {
+			this.addSlot(new net.minecraft.world.inventory.Slot(targetInventory, i, 8, 8 + 18*i) {
 				@Override
-				public int getSlotStackLimit() {
+				public int getMaxStackSize() {
 					return 1;
 				}
 
 				@Override
-				public boolean isItemValid(ItemStack item) {
-					return !emptyStack(item) && item.getCount() > 0 && super.isItemValid(item) && item.canEquip(EQUIPMENT_SLOTS[i], (Entity) targetInventory);
+				public boolean mayPlace(ItemStack item) {
+					return !emptyStack(item) && item.getCount() > 0 && super.mayPlace(item) && item.canEquip(EQUIPMENT_SLOTS[i], (Entity) targetInventory);
 				}
 				@OnlyIn(Dist.CLIENT)
 				public String getSlotTexture()
@@ -57,7 +57,7 @@ public class CorpseContainer extends net.minecraft.inventory.container.Container
 		while(index < EQUIPMENT_SLOTS.length){
 			// held items
 			final int i = index;
-			this.addSlot(new net.minecraft.inventory.container.Slot(targetInventory, i, 8 + 18 * (i - 4), 98 ) {
+			this.addSlot(new net.minecraft.world.inventory.Slot(targetInventory, i, 8 + 18 * (i - 4), 98 ) {
 				@OnlyIn(Dist.CLIENT)
 				public String getSlotTexture()
 				{
@@ -67,7 +67,7 @@ public class CorpseContainer extends net.minecraft.inventory.container.Container
 			index++;
 		}
 
-		while(index < targetInventory.getSizeInventory()){
+		while(index < targetInventory.getContainerSize()){
 			int n = index - EQUIPMENT_SLOTS.length;
 			int x = n % 6;
 			int y = n / 6;
@@ -83,140 +83,140 @@ public class CorpseContainer extends net.minecraft.inventory.container.Container
 
 
 	@Override
-	public boolean canInteractWith(PlayerEntity entityplayer) {
-		return targetInventory.isUsableByPlayer(entityplayer);
+	public boolean stillValid(Player entityplayer) {
+		return targetInventory.stillValid(entityplayer);
 	}
 
 	@Override
-	public ItemStack slotClick(int slotId, int button, ClickType type, PlayerEntity player) {
+	public void clicked(int slotId, int button, ClickType type, Player player) {
 		// A click can arrive before the next player tick closes a stale window.
-		if(!canInteractWith(player)) {
-			resetDrag();
-			return ItemStack.EMPTY;
+		if(!stillValid(player)) {
+			resetQuickCraft();
+			return;
 		}
 		if(type != ClickType.QUICK_CRAFT && dragging) {
-			resetDrag();
-			return ItemStack.EMPTY;
+			resetQuickCraft();
+			return;
 		}
-		if(type == ClickType.QUICK_CRAFT && getDragEvent(button) == 0
-				&& !emptyStack(player.inventory.getItemStack()) && isValidDragMode(extractDragMode(button),player)) dragging = true;
-		if(type == ClickType.THROW && emptyStack(player.inventory.getItemStack())
-				&& slotId >= 0 && slotId < inventorySlots.size()) {
+		if(type == ClickType.QUICK_CRAFT && getQuickcraftHeader(button) == 0
+				&& !emptyStack(getCarried()) && isValidQuickcraftType(getQuickcraftType(button),player)) dragging = true;
+		if(type == ClickType.THROW && emptyStack(getCarried())
+				&& slotId >= 0 && slotId < slots.size()) {
 			Slot slot = getSlot(slotId);
-			if(slot.getHasStack() && slot.canTakeStack(player)) {
-				ItemStack original = slot.getStack().copy();
-				ItemStack removed = slot.decrStackSize(button == 0 ? 1 : original.getCount());
+			if(slot.hasItem() && slot.mayPickup(player)) {
+				ItemStack original = slot.getItem().copy();
+				ItemStack removed = slot.remove(button == 0 ? 1 : original.getCount());
 				slot.onTake(player,removed);
 				if(!tryRelease(player,removed,true)) {
-					slot.putStack(original);
+					slot.set(original);
 					resync(player);
 				}
 			}
-			return ItemStack.EMPTY;
+			return;
 		}
 		if((type == ClickType.PICKUP || type == ClickType.QUICK_MOVE) && slotId == -999 && (button == 0 || button == 1)) {
-			ItemStack cursor = player.inventory.getItemStack();
+			ItemStack cursor = getCarried();
 			if(!emptyStack(cursor)) {
 				ItemStack original = cursor.copy();
 				ItemStack removed = cursor.split(button == 0 ? cursor.getCount() : 1);
-				if(cursor.getCount() == 0) player.inventory.setItemStack(ItemStack.EMPTY);
+				if(cursor.getCount() == 0) setCarried(ItemStack.EMPTY);
 				if(!tryRelease(player,removed,true)) {
-					player.inventory.setItemStack(original);
+					setCarried(original);
 					resync(player);
 				}
 			}
-			return ItemStack.EMPTY;
+			return;
 		}
 		if(type == ClickType.SWAP && button >= 0 && button < 9
-				&& slotId >= 0 && slotId < targetInventory.getSizeInventory()) {
+				&& slotId >= 0 && slotId < targetInventory.getContainerSize()) {
 			Slot slot = getSlot(slotId);
-			ItemStack incoming = player.inventory.getStackInSlot(button);
-			ItemStack displaced = slot.getStack();
-			if(!emptyStack(incoming) && !emptyStack(displaced) && slot.canTakeStack(player) && slot.isItemValid(incoming)) {
-				int limit = Math.min(slot.getItemStackLimit(incoming),incoming.getMaxStackSize());
+			ItemStack incoming = player.getInventory().getItem(button);
+			ItemStack displaced = slot.getItem();
+			if(!emptyStack(incoming) && !emptyStack(displaced) && slot.mayPickup(player) && slot.mayPlace(incoming)) {
+				int limit = Math.min(slot.getMaxStackSize(incoming),incoming.getMaxStackSize());
 				if(limit > 0 && incoming.getCount() > limit) {
-					slot.putStack(incoming.split(limit));
+					slot.set(incoming.split(limit));
 					slot.onTake(player,displaced);
-					storeInPlayerInventory(player.inventory,displaced);
+					storeInPlayerInventory(player.getInventory(),displaced);
 					if(displaced.getCount() > 0) releaseOrRetain(player,displaced);
-					return ItemStack.EMPTY;
+					return;
 				}
 			}
 		}
-		return super.slotClick(slotId,button,type,player);
+		super.clicked(slotId,button,type,player);
 	}
 
 	@Override
-	public void onContainerClosed(PlayerEntity player) {
-		ItemStack cursor = player.inventory.getItemStack();
+	public void removed(Player player) {
+		ItemStack cursor = getCarried();
 		if(!emptyStack(cursor)) {
 			releaseOrRetain(player,cursor);
-			player.inventory.setItemStack(ItemStack.EMPTY);
+			setCarried(ItemStack.EMPTY);
 		}
 	}
 
 	@Override
-	protected void resetDrag() {
+	protected void resetQuickCraft() {
 		dragging = false;
-		super.resetDrag();
+		super.resetQuickCraft();
 	}
 
-	private void resync(PlayerEntity player) {
+	private void resync(Player player) {
 		// Accepted transaction replies assume client prediction succeeded. A
 		// rejected toss needs an explicit source/cursor correction as well.
-		if(player instanceof ServerPlayerEntity) ((ServerPlayerEntity)player).sendContainerToPlayer(this);
+		if(player instanceof ServerPlayer) broadcastFullState();
 	}
 
-	private void releaseOrRetain(PlayerEntity player, ItemStack stack) {
+	private void releaseOrRetain(Player player, ItemStack stack) {
 		if(emptyStack(stack) || stack.getCount() <= 0 || tryRelease(player,stack,false)) return;
 		ItemStack remainder = stack.copy();
 		// PlayerInventory discards overflow in creative mode. Retain real
 		// corpse/cursor items even when every player slot is full.
-		storeInPlayerInventory(player.inventory,remainder);
+		storeInPlayerInventory(player.getInventory(),remainder);
 		if(remainder.getCount() > 0) ((EntityLootableBody)targetInventory).retainItem(remainder);
 	}
 
-    private void storeInPlayerInventory(PlayerInventory inventory, ItemStack remainder) {
+    private void storeInPlayerInventory(Inventory inventory, ItemStack remainder) {
         // Keep vanilla's selected-slot, off-hand, main-slot and first-empty
         // priority, without PlayerInventory's creative overflow discard.
         while(remainder.getCount() > 0) {
             int destination = -1;
             if(!remainder.isDamaged()) {
-                if(canStore(inventory,inventory.currentItem,remainder)) destination = inventory.currentItem;
+                if(canStore(inventory,inventory.selected,remainder)) destination = inventory.selected;
                 else if(canStore(inventory,40,remainder)) destination = 40;
-                else for(int i = 0; i < inventory.mainInventory.size(); i++) {
+                else for(int i = 0; i < inventory.items.size(); i++) {
                     if(canStore(inventory,i,remainder)) { destination = i; break; }
                 }
             }
-            if(destination < 0) destination = inventory.getFirstEmptyStack();
+            if(destination < 0) destination = inventory.getFreeSlot();
             if(destination < 0) return;
-            ItemStack current = inventory.getStackInSlot(destination);
-            int limit = Math.min(remainder.getMaxStackSize(),inventory.getInventoryStackLimit());
+            ItemStack current = inventory.getItem(destination);
+            int limit = Math.min(remainder.getMaxStackSize(),inventory.getMaxStackSize());
             int amount = Math.min(remainder.getCount(),Math.max(0,limit - (emptyStack(current) ? 0 : current.getCount())));
             if(amount == 0) return;
             if(emptyStack(current)) {
-                inventory.setInventorySlotContents(destination,remainder.split(amount));
-                current = inventory.getStackInSlot(destination);
+                inventory.setItem(destination,remainder.split(amount));
+                current = inventory.getItem(destination);
             } else {
                 current.grow(amount);
                 remainder.shrink(amount);
             }
-            current.setAnimationsToGo(5);
-            inventory.markDirty();
+            current.setPopTime(5);
+            inventory.setChanged();
         }
     }
 
-    private boolean canStore(PlayerInventory inventory, int slot, ItemStack incoming) {
-        ItemStack current = inventory.getStackInSlot(slot);
+    private boolean canStore(Inventory inventory, int slot, ItemStack incoming) {
+        ItemStack current = inventory.getItem(slot);
         return !emptyStack(current) && current.isStackable() && current.getItem() == incoming.getItem()
-                && ItemStack.areItemStackTagsEqual(current,incoming)
-                && current.getCount() < Math.min(current.getMaxStackSize(),inventory.getInventoryStackLimit());
+                && ItemStack.tagMatches(current,incoming)
+                && current.getCount() < Math.min(current.getMaxStackSize(),inventory.getMaxStackSize());
     }
 
-	private boolean tryRelease(PlayerEntity player, ItemStack stack, boolean includeName) {
+	private boolean tryRelease(Player player, ItemStack stack, boolean includeName) {
 		if(emptyStack(stack) || stack.getCount() <= 0) return false;
-		if(player.world.isRemote) {
-			player.dropItem(stack.copy(),includeName);
+		if(player.level.isClientSide) {
+			player.drop(stack.copy(),includeName);
 			return true;
 		}
 		// Forge's legacy toss helper clears the caller's captured drops and
@@ -224,7 +224,7 @@ public class CorpseContainer extends net.minecraft.inventory.container.Container
 		java.util.Collection<ItemEntity> capturing = player.captureDrops(new java.util.ArrayList<>());
 		ItemEntity dropped;
 		try {
-			dropped = player.dropItem(stack.copy(),false,includeName);
+			dropped = player.drop(stack.copy(),false,includeName);
 			if(dropped != null) player.captureDrops().remove(dropped);
 		} finally {
 			player.captureDrops(capturing);
@@ -236,30 +236,30 @@ public class CorpseContainer extends net.minecraft.inventory.container.Container
 			capturing.add(event.getEntityItem());
 			return true;
 		}
-		return player.world.addEntity(event.getEntityItem());
+		return player.level.addFreshEntity(event.getEntityItem());
 	}
 
 	@Override
-	protected boolean mergeItemStack(ItemStack stack, int start, int end, boolean reverse) {
+	protected boolean moveItemStackTo(ItemStack stack, int start, int end, boolean reverse) {
 		boolean changed = false;
 		int step = reverse ? -1 : 1;
 		for(int pass = 0; pass < 2 && stack.getCount() > 0; pass++) {
 			for(int i = reverse ? end - 1 : start; i >= start && i < end && stack.getCount() > 0; i += step) {
 				Slot slot = getSlot(i);
-				if(!slot.isItemValid(stack)) continue;
-				ItemStack current = slot.getStack();
-				int limit = Math.min(slot.getItemStackLimit(stack),stack.getMaxStackSize());
+				if(!slot.mayPlace(stack)) continue;
+				ItemStack current = slot.getItem();
+				int limit = Math.min(slot.getMaxStackSize(stack),stack.getMaxStackSize());
 				if(pass == 0 && stack.isStackable() && !emptyStack(current)
-						&& ItemStack.areItemsEqual(stack,current) && ItemStack.areItemStackTagsEqual(stack,current)) {
+						&& ItemStack.isSame(stack,current) && ItemStack.tagMatches(stack,current)) {
 					int amount = Math.min(stack.getCount(),Math.max(0,limit - current.getCount()));
 					if(amount > 0) {
 						current.grow(amount);
 						stack.shrink(amount);
-						slot.onSlotChanged();
+						slot.setChanged();
 						changed = true;
 					}
 				} else if(pass == 1 && emptyStack(current) && limit > 0) {
-					slot.putStack(stack.split(Math.min(stack.getCount(),limit)));
+					slot.set(stack.split(Math.min(stack.getCount(),limit)));
 					changed = true;
 				}
 			}
@@ -269,30 +269,30 @@ public class CorpseContainer extends net.minecraft.inventory.container.Container
 
 
 	@Override
-	public ItemStack transferStackInSlot(PlayerEntity player, int slot) {
-		int hostSize = targetInventory.getSizeInventory();
+	public ItemStack quickMoveStack(Player player, int slot) {
+		int hostSize = targetInventory.getContainerSize();
 		ItemStack stack = ItemStack.EMPTY;
-		Slot slotObject = (Slot) inventorySlots.get(slot);
+		Slot slotObject = (Slot) slots.get(slot);
 		//null checks and checks if the item can be stacked (maxStackSize > 1)
-		if (slotObject != null && slotObject.getHasStack()) {
-			ItemStack stackInSlot = slotObject.getStack();
+		if (slotObject != null && slotObject.hasItem()) {
+			ItemStack stackInSlot = slotObject.getItem();
 			stack = stackInSlot.copy();
 
 			//merges the item into player inventory since its in the tileEntity
 			if (slot < hostSize) {
-				if (!this.mergeItemStack(stackInSlot, hostSize, 36+hostSize, true)) {
+				if (!this.moveItemStackTo(stackInSlot, hostSize, 36+hostSize, true)) {
 					return ItemStack.EMPTY;
 				}
 			}
 			//places it into the tileEntity if possible since it's in the player inventory
-			else if (!this.mergeItemStack(stackInSlot, 0, hostSize, false)) {
+			else if (!this.moveItemStackTo(stackInSlot, 0, hostSize, false)) {
 				return ItemStack.EMPTY;
 			}
 
 			if (stackInSlot.getCount() == 0) {
-				slotObject.putStack(ItemStack.EMPTY);
+				slotObject.set(ItemStack.EMPTY);
 			} else {
-				slotObject.onSlotChanged();
+				slotObject.setChanged();
 			}
 
 			if (stackInSlot.getCount() == stack.getCount()) {
@@ -303,7 +303,7 @@ public class CorpseContainer extends net.minecraft.inventory.container.Container
 		return stack;
 	}
 
-	protected void bindPlayerInventory(PlayerInventory playerInv, int yOffset) {
+	protected void bindPlayerInventory(Inventory playerInv, int yOffset) {
 		for (int row = 0; row < 3; row++) {
 			for (int col = 0; col < 9; col++) {
 				addSlot(new Slot(playerInv, col + row * 9 + 9, 8 + col * 18, yOffset + row * 18));

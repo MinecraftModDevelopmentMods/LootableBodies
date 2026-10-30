@@ -15,3 +15,6 @@ gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
 *.png binary
+
+# Preserve the exact native Forge default configuration fixture, including EOF.
+tools/fixtures/forge37-server-default.toml whitespace=-blank-at-eof

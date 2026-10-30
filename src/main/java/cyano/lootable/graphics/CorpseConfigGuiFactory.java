@@ -1,7 +1,7 @@
 package cyano.lootable.graphics;
 import java.util.function.BiFunction;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraftforge.api.distmarker.*;
 /** The regular Forge Mods-list Config button entry point. */
 @OnlyIn(Dist.CLIENT)

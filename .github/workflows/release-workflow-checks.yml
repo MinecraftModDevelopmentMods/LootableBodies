@@ -1,9 +1,9 @@
 name: Validate release workflow
 on:
   push:
-    branches: ['feature/**', 'master-1.16.5']
+    branches: ['feature/**', 'master-1.17.1']
   pull_request:
-    branches: ['master-1.16.5']
+    branches: ['master-1.17.1']
 permissions:
   contents: read
 jobs:
@@ -24,7 +24,7 @@ jobs:
       - name: Check release workflow syntax
         run: >-
           "$RUNNER_TEMP/actionlint/actionlint" -shellcheck= -pyflakes=
-          .github/workflows/deploy-release.yml .github/workflows/release-workflow-checks.yml .github/workflows/artifact-audit-1.13.yml .github/workflows/artifact-audit-1.14.yml .github/workflows/artifact-audit-1.15.yml .github/workflows/artifact-audit-1.16.yml
+          .github/workflows/deploy-release.yml .github/workflows/release-workflow-checks.yml .github/workflows/artifact-audit-1.13.yml .github/workflows/artifact-audit-1.14.yml .github/workflows/artifact-audit-1.15.yml .github/workflows/artifact-audit-1.16.yml .github/workflows/artifact-audit-1.17.yml
 
       - name: Test version selection and publication checks
         run: python3 .github/scripts/test_release_workflow.py -v

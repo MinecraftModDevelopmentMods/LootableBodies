@@ -2,62 +2,66 @@ package cyano.lootable.graphics;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.minecraft.MinecraftProfileTexture;
-import com.mojang.blaze3d.matrix.MatrixStack;
+import com.mojang.blaze3d.vertex.PoseStack;
 import cyano.lootable.LootableBodies;
 import cyano.lootable.entities.EntityLootableBody;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.IRenderTypeBuffer;
-import net.minecraft.util.math.vector.Vector3f;
-import net.minecraft.client.renderer.entity.EntityRendererManager;
-import net.minecraft.client.renderer.entity.LivingRenderer;
+import net.minecraft.client.renderer.MultiBufferSource;
+import com.mojang.math.Vector3f;
+import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.client.model.geom.ModelLayers;
+import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.layers.ArrowLayer;
-import net.minecraft.client.renderer.entity.layers.BipedArmorLayer;
-import net.minecraft.client.renderer.entity.layers.HeadLayer;
-import net.minecraft.client.renderer.entity.layers.HeldItemLayer;
-import net.minecraft.client.renderer.entity.model.BipedModel;
-import net.minecraft.client.renderer.entity.model.PlayerModel;
+import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
+import net.minecraft.client.renderer.entity.layers.CustomHeadLayer;
+import net.minecraft.client.renderer.entity.layers.ItemInHandLayer;
+import net.minecraft.client.model.HumanoidModel;
+import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.resources.DefaultPlayerSkin;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 
 /** Corpse renderer, originally created by Chris on 4/10/2016. */
 @OnlyIn(Dist.CLIENT)
-public class CorpseRenderer extends LivingRenderer<EntityLootableBody, PlayerModel<EntityLootableBody>> {
+public class CorpseRenderer extends LivingEntityRenderer<EntityLootableBody, PlayerModel<EntityLootableBody>> {
     private static final ResourceLocation localSkin = new ResourceLocation(LootableBodies.MODID,
             "textures/entity/corpse/corpse.png");
     protected final PlayerModel<EntityLootableBody> thickArmsModel;
     protected final PlayerModel<EntityLootableBody> thinArmsModel;
 
-    public CorpseRenderer(EntityRendererManager manager) {
-        super(manager, new FrozenPlayerModel(true), 0.5F);
-        thinArmsModel = entityModel;
-        thickArmsModel = new FrozenPlayerModel(false);
-        addLayer(new BipedArmorLayer<>(this, new FrozenArmorModel(0.5F), new FrozenArmorModel(1F)));
-        addLayer(new HeldItemLayer<>(this));
-        addLayer(new ArrowLayer<>(this));
-        addLayer(new HeadLayer<>(this));
+    public CorpseRenderer(EntityRendererProvider.Context context) {
+        super(context, new FrozenPlayerModel(context.bakeLayer(ModelLayers.PLAYER_SLIM),true), 0.5F);
+        thinArmsModel = model;
+        thickArmsModel = new FrozenPlayerModel(context.bakeLayer(ModelLayers.PLAYER),false);
+        addLayer(new HumanoidArmorLayer<>(this,
+                new FrozenArmorModel(context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
+                new FrozenArmorModel(context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR))));
+        addLayer(new ItemInHandLayer<>(this));
+        addLayer(new ArrowLayer<>(context,this));
+        addLayer(new CustomHeadLayer<>(this,context.getModelSet()));
     }
 
-    public PlayerModel<EntityLootableBody> getMainModel() { return getEntityModel(); }
-    public void setModel(boolean thinArms) { entityModel = thinArms ? thinArmsModel : thickArmsModel; }
+    public PlayerModel<EntityLootableBody> getMainModel() { return getModel(); }
+    public void setModel(boolean thinArms) { model = thinArms ? thinArmsModel : thickArmsModel; }
 
-    @Override public ResourceLocation getEntityTexture(EntityLootableBody entity) {
+    @Override public ResourceLocation getTextureLocation(EntityLootableBody entity) {
         if (LootableBodies.useLocalSkin) return localSkin;
         GameProfile profile = entity.getGameProfile();
-        return profile != null && profile.getId() != null ? getSkin(profile) : DefaultPlayerSkin.getDefaultSkinLegacy();
+        return profile != null && profile.getId() != null ? getSkin(profile) : DefaultPlayerSkin.getDefaultSkin();
     }
 
     public static ResourceLocation getSkin(GameProfile profile) {
         ResourceLocation fallback = profile == null || profile.getId() == null
-                ? DefaultPlayerSkin.getDefaultSkinLegacy() : DefaultPlayerSkin.getDefaultSkin(profile.getId());
+                ? DefaultPlayerSkin.getDefaultSkin() : DefaultPlayerSkin.getDefaultSkin(profile.getId());
         if (profile == null || profile.getId() == null) return fallback;
         try {
             Minecraft minecraft = Minecraft.getInstance();
-            Map<MinecraftProfileTexture.Type, MinecraftProfileTexture> textures = minecraft.getSkinManager().loadSkinFromCache(profile);
+            Map<MinecraftProfileTexture.Type, MinecraftProfileTexture> textures = minecraft.getSkinManager().getInsecureSkinInformation(profile);
             return textures.containsKey(MinecraftProfileTexture.Type.SKIN)
-                    ? minecraft.getSkinManager().loadSkin(textures.get(MinecraftProfileTexture.Type.SKIN), MinecraftProfileTexture.Type.SKIN)
+                    ? minecraft.getSkinManager().registerTexture(textures.get(MinecraftProfileTexture.Type.SKIN), MinecraftProfileTexture.Type.SKIN)
                     : fallback;
         } catch (RuntimeException unavailable) {
             return fallback;
@@ -65,7 +69,7 @@ public class CorpseRenderer extends LivingRenderer<EntityLootableBody, PlayerMod
     }
 
     @Override public void render(EntityLootableBody entity, float yaw, float partialTicks,
-            MatrixStack matrices, IRenderTypeBuffer buffers, int light) {
+            PoseStack matrices, MultiBufferSource buffers, int light) {
         setModel(entity.useThinArms());
         try {
             super.render(entity, 0F, partialTicks, matrices, buffers, light);
@@ -74,42 +78,42 @@ public class CorpseRenderer extends LivingRenderer<EntityLootableBody, PlayerMod
         }
     }
 
-    @Override protected void applyRotations(EntityLootableBody entity, MatrixStack matrices,
+    @Override protected void setupRotations(EntityLootableBody entity, PoseStack matrices,
             float age, float yaw, float partialTicks) {
-        matrices.rotate(Vector3f.XP.rotationDegrees(90F));
-        matrices.rotate(Vector3f.ZP.rotationDegrees(entity.getRotation()));
+        matrices.mulPose(Vector3f.XP.rotationDegrees(90F));
+        matrices.mulPose(Vector3f.ZP.rotationDegrees(entity.getRotation()));
         matrices.translate(0D, -0.85D, -0.125D);
-        super.applyRotations(entity, matrices, 0F, 0F, partialTicks);
+        super.setupRotations(entity, matrices, 0F, 0F, partialTicks);
     }
 
-    @Override protected float getSwingProgress(EntityLootableBody entity, float partialTicks) { return 0F; }
-    @Override protected float handleRotationFloat(EntityLootableBody entity, float partialTicks) { return 0F; }
-    @Override protected boolean canRenderName(EntityLootableBody entity) {
-        return LootableBodies.displayNameTag && super.canRenderName(entity);
+    @Override protected float getAttackAnim(EntityLootableBody entity, float partialTicks) { return 0F; }
+    @Override protected float getBob(EntityLootableBody entity, float partialTicks) { return 0F; }
+    @Override protected boolean shouldShowName(EntityLootableBody entity) {
+        return LootableBodies.displayNameTag && super.shouldShowName(entity);
     }
-    @Override protected void renderName(EntityLootableBody entity, net.minecraft.util.text.ITextComponent name, MatrixStack matrices,
-            IRenderTypeBuffer buffers, int light) {
-        if (LootableBodies.displayNameTag) super.renderName(entity, name, matrices, buffers, light);
+    @Override protected void renderNameTag(EntityLootableBody entity, net.minecraft.network.chat.Component name, PoseStack matrices,
+            MultiBufferSource buffers, int light) {
+        if (LootableBodies.displayNameTag) super.renderNameTag(entity, name, matrices, buffers, light);
     }
 
     private static final class FrozenPlayerModel extends PlayerModel<EntityLootableBody> {
-        FrozenPlayerModel(boolean thin) { super(0F, thin); }
-        @Override public void setLivingAnimations(EntityLootableBody body, float swing, float amount, float partial) {
-            super.setLivingAnimations(body, 0F, 0F, 0F);
+        FrozenPlayerModel(ModelPart root,boolean thin) { super(root, thin); }
+        @Override public void prepareMobModel(EntityLootableBody body, float swing, float amount, float partial) {
+            super.prepareMobModel(body, 0F, 0F, 0F);
         }
-        @Override public void setRotationAngles(EntityLootableBody body, float swing, float amount,
+        @Override public void setupAnim(EntityLootableBody body, float swing, float amount,
                 float age, float yaw, float pitch) {
-            super.setRotationAngles(body, 0F, 0F, 0F, 0F, 0F);
+            super.setupAnim(body, 0F, 0F, 0F, 0F, 0F);
         }
     }
-    private static final class FrozenArmorModel extends BipedModel<EntityLootableBody> {
-        FrozenArmorModel(float scale) { super(scale); }
-        @Override public void setLivingAnimations(EntityLootableBody body, float swing, float amount, float partial) {
-            super.setLivingAnimations(body, 0F, 0F, 0F);
+    private static final class FrozenArmorModel extends HumanoidModel<EntityLootableBody> {
+        FrozenArmorModel(ModelPart root) { super(root); }
+        @Override public void prepareMobModel(EntityLootableBody body, float swing, float amount, float partial) {
+            super.prepareMobModel(body, 0F, 0F, 0F);
         }
-        @Override public void setRotationAngles(EntityLootableBody body, float swing, float amount,
+        @Override public void setupAnim(EntityLootableBody body, float swing, float amount,
                 float age, float yaw, float pitch) {
-            super.setRotationAngles(body, 0F, 0F, 0F, 0F, 0F);
+            super.setupAnim(body, 0F, 0F, 0F, 0F, 0F);
         }
     }
 }

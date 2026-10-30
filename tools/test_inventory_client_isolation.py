@@ -13,19 +13,20 @@ class InventoryClientIsolationTest(unittest.TestCase):
             jar=project/'build/libs'/client.MAIN_JAR
             jar.parent.mkdir(parents=True);jar.write_bytes(b'unchanged production bytes')
             def prepare(root,*args):root.mkdir()
-            def launch(command,**options):
-                self.assertEqual(home,options['cwd'])
+            def launch(command,root,label,timeout):
+                self.assertEqual(home,root)
+                self.assertEqual(('client',180),(label,timeout))
                 config=(home/'config/lootablebodies.cfg').read_text()
                 self.assertIn('B:local_texture='+expected,config)
                 self.assertEqual(b'unchanged production bytes',jar.read_bytes())
                 raise Prepared()
             argv=['verify_packaged_client','--java',str(project/'java'),
-                '--forge-client-home',str(project/'sdk'),'--output',str(home),'--mode',mode]
+                '--forge-client-home',str(project/'sdk'),'--client-inputs',str(project/'prepared'),'--output',str(home),'--mode',mode]
             with patch.object(client,'__file__',str(project/'tools/verify_packaged_client.py')),\
                     patch.object(client,'prepare_client',prepare),\
                     patch.object(client,'project_assets',return_value=project/'assets'),\
                     patch.object(client,'client_command',return_value=['owned-java']),\
-                    patch.object(subprocess,'run',side_effect=launch),patch('sys.argv',argv),\
+                    patch.object(client,'run_client',side_effect=launch),patch('sys.argv',argv),\
                     self.assertRaises(Prepared):
                 client.main()
 
