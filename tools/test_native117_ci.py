@@ -4,6 +4,21 @@ from unittest.mock import patch
 import native117_ci as ci
 
 class Native117CITests(unittest.TestCase):
+    def test_eclipse_gate_receives_the_real_prepared_client_natives_after_sdk_install(self):
+        with tempfile.TemporaryDirectory() as d,patch.object(ci,'PROJECT',Path(d)):
+            events=[];natives=Path(d)/'build/native-client-distribution/prepared-inputs/natives'
+            def installer(name,tool,*args,**kwargs):
+                events.append(name)
+                if '--client' in args:natives.mkdir(parents=True)
+            def eclipse(name,*tasks,**kwargs):
+                self.assertTrue(natives.is_dir(),'IDE verification ran before actual client input preparation')
+                self.assertIn('verifyEclipseProductionClasspath',tasks)
+                self.assertIn('-PminecraftNativesDirectory=build/native-client-distribution/prepared-inputs/natives',tasks)
+                events.append(name)
+            with patch.object(ci,'python',side_effect=installer),patch.object(ci,'gradle',side_effect=eclipse):
+                ci.native_sdk_and_eclipse(Path(d)/'jdk/bin/java')
+            self.assertEqual(['native-server-install.log','native-client-install.log','eclipse-and-assets.log'],events)
+
     def test_only_the_six_accepted_bytes_can_be_promoted(self):
         with tempfile.TemporaryDirectory() as d,patch.object(ci,'PROJECT',Path(d)):
             target=Path(d)/'bundle';target.mkdir();expected={}
