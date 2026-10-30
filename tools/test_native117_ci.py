@@ -4,16 +4,17 @@ from unittest.mock import patch
 import native117_ci as ci
 
 class Native117CITests(unittest.TestCase):
-    def test_optional_diagnostic_prepares_the_exact_assets_directory_used_by_scenarios(self):
+    def test_hosted_workflow_keeps_gameplay_and_sdk_installation_local(self):
         workflow=(Path(ci.__file__).resolve().parents[1]/'.github/workflows/native117.yml').read_text()
-        step=workflow.split('- name: Prepare a labelled Linux visibility investigation\n',1)[1].split('\n      - name:',1)[0]
-        self.assertIn('-PminecraftAssetsDirectory=build/native-assets',step)
-        self.assertIn("'native117-visibility-diagnostic'",step)
+        for token in ['native_runtime.py','scenario --group','migration_ci.py','xvfb-run','pulseaudio','prepareMinecraftAssets']:
+            with self.subTest(token=token):self.assertNotIn(token,workflow)
+        self.assertIn('test assemble javadoc verifyProductionRuntimeClasspath prepareReleaseBundle',workflow)
 
-    def test_optional_diagnostic_builds_the_packaged_probe_before_native_launch(self):
+    def test_hosted_workflow_uploads_the_exact_six_files_for_publication(self):
         workflow=(Path(ci.__file__).resolve().parents[1]/'.github/workflows/native117.yml').read_text()
-        step=workflow.split('- name: Prepare a labelled Linux visibility investigation\n',1)[1].split('\n      - name:',1)[0]
-        self.assertIn('preparePackagedIntegrationProbe',step)
+        self.assertIn('name: LootableBodies-1.17.1-${{ github.sha }}',workflow)
+        self.assertIn('actual != expected',workflow)
+        self.assertIn('if-no-files-found: error',workflow)
 
     def test_eclipse_gate_receives_the_real_prepared_client_natives_after_sdk_install(self):
         with tempfile.TemporaryDirectory() as d,patch.object(ci,'PROJECT',Path(d)):
