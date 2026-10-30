@@ -11,12 +11,47 @@ permissions:
   actions: read
 
 jobs:
-  audit:
-    # Pull-request merge trees are audited inside CI. Push artifacts use the
-    # workflow run's exact head SHA, which is also their declared artifact name.
+  scope:
+    name: Check artifact producer scope
     if: >-
       github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' &&
       (github.event.workflow_run.head_branch == 'master-1.12.2' || github.event.workflow_run.head_branch == 'master-1.12')
+    runs-on: ubuntu-latest
+    outputs:
+      required: ${{ steps.scope.outputs.required }}
+    steps:
+      - id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRODUCER_URL: ${{ github.event.workflow_run.jobs_url }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import json,os,urllib.request
+          def artifact_required(jobs):
+              def exactly(name):
+                  found=[j for j in jobs if j['name']==name]
+                  if len(found)!=1 or found[0]['status']!='completed':raise ValueError('Missing, duplicate or pending producer job: '+name)
+                  return found[0]['conclusion']
+              build=exactly('Build, test, and audit')
+              if build=='success':return True
+              if build=='skipped' and exactly('Check runtime inputs')=='success' and exactly('Cold Forge bootstrap')=='skipped':return False
+              raise ValueError('Artifact producer did not succeed')
+          # Fetch the exact producer jobs; absent artifacts never imply a skip.
+          url=os.environ['PRODUCER_URL']+'?per_page=100'
+          if not url.startswith('https://api.github.com/repos/'+os.environ['REPOSITORY']+'/actions/runs/'):raise ValueError('Unexpected producer API URL')
+          request=urllib.request.Request(url,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+          with urllib.request.urlopen(request,timeout=30) as response:result=json.load(response)
+          if result['total_count']!=len(result['jobs']):raise ValueError('Incomplete producer job list')
+          required=artifact_required(result['jobs'])
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:output.write('required='+str(required).lower()+'\n')
+          print('Artifact audit required:',required)
+          PY
+  audit:
+    # Successful builds always require their exact artifact. A dispatcher-only
+    # change has an explicitly skipped producer and has no release bytes to audit.
+    needs: scope
+    if: needs.scope.outputs.required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

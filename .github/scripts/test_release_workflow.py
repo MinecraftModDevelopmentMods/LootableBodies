@@ -291,6 +291,28 @@ class ReleaseWorkflowTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             self.validate('1.10.2', release_exists=True)
 
+    def test_112_artifact_audit_skips_only_explicitly_scoped_out_builds(self):
+        text=WORKFLOW.with_name('artifact-audit-1.12.yml').read_text()
+        code=text.split('def artifact_required(jobs):',1)[1].split('\n          # Fetch',1)[0]
+        code='def artifact_required(jobs):'+code
+        import textwrap
+        code=code.replace('\n          ','\n')
+        namespace={};exec(compile(code,'artifact-scope','exec'),namespace)
+        check=namespace['artifact_required']
+        def job(name,conclusion,status='completed'):return dict(name=name,conclusion=conclusion,status=status)
+        build=job('Build, test, and audit','success')
+        self.assertTrue(check([build]))
+        skipped=[job('Check runtime inputs','success'),job('Build, test, and audit','skipped'),job('Cold Forge bootstrap','skipped')]
+        self.assertFalse(check(skipped))
+        for invalid in [[],[build,build],skipped[1:],skipped[:2],
+                        [dict(build,status='in_progress')],
+                        [dict(build,conclusion='failure')],
+                        [dict(skipped[0],conclusion='failure'),*skipped[1:]],
+                        [*skipped[:2],dict(skipped[2],conclusion='failure')]]:
+            with self.subTest(invalid=invalid),self.assertRaises(ValueError):check(invalid)
+        self.assertIn("needs: scope",text)
+        self.assertIn("if: needs.scope.outputs.required == 'true'",text)
+
     def test_tag_at_another_commit_is_rejected(self):
         with self.assertRaises(SystemExit):
             self.validate('1.10.2', wrong_tag=True)
