@@ -15,6 +15,22 @@ from verify_multiplayer import client_command
 from verify_packaged import prepare, FORGE, MAIN, digest, run
 
 
+def death_render_proof(home):
+    shared=home/'sync';packets=(home/'clientA/client-packets.txt').read_text();proof=[]
+    for phase,name in [(2,'first'),(14,'second')]:
+        receipt=json.loads((shared/('A.death-render-'+str(phase)+'.json')).read_text())
+        identity=(shared/(name+'.uuid')).read_text().strip()
+        if (receipt!={'phase':phase,'uuid':identity,'death_screen_drawn':True,'live_corpse_rendered':True}
+                or type(receipt.get('death_screen_drawn')) is not bool or type(receipt.get('live_corpse_rendered')) is not bool):
+            raise RuntimeError('Missing actual rendered death-screen corpse proof')
+        if not any(' IN MOD_SPAWN ' in line and 'mod=lootablebodies ' in line and 'uuid='+identity in line for line in packets.splitlines()):
+            raise RuntimeError('Rendered corpse lacks its actual receiving TCP spawn packet')
+        if any('FAULT_DROPPED ' in line and 'uuid='+identity in line for line in packets.splitlines()):
+            raise RuntimeError('Dropped corpse spawn cannot qualify a render receipt')
+        proof.append(receipt)
+    return proof
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--java',type=Path,required=True)
@@ -99,6 +115,9 @@ def main():
         if list((home/name).rglob('crash-reports/*.txt')): raise RuntimeError('Crash report')
     for role in ['A','B']:
         if not (home/('client'+role)/(args.mode+'-client.pass')).is_file(): raise RuntimeError('Client did not finish '+role)
+    death_proof=[]
+    if args.mode=='visibility' and not args.source_server:
+        death_proof=death_render_proof(home)
     if args.mode=='visibility' and not args.source_server:
         (home/'server/server.properties').write_text(props.replace('server-port='+str(port),'server-port=0'))
         archive_live_logs(home)
@@ -111,6 +130,7 @@ def main():
     (home/'result.json').write_text(json.dumps({'candidate_sha256':before,'mode':args.mode,
         'checks':checks,'two_tcp_clients':True,'simultaneous':args.simultaneous,'drop_spawn':args.drop_spawn,
         'counter_collision':args.counter_collision,'connected_restart':bool(args.source_server),
+        'rendered_death_screen_proof':death_proof,
         'computer_control':'none'},indent=2)+'\n')
     print('VISIBILITY_RESPAWN_PASS',args.mode,flush=True)
 

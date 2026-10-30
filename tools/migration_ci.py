@@ -143,7 +143,7 @@ def run_shard(project, java, shard, commit, total=12):
         if digest(project / name) != manifest['files'][name]['sha256']:
             raise ValueError('Prepared candidate/probe changed')
     args = SimpleNamespace(java=java, origins=origins, variants=['normal','stamps'], seeds=[seeds],
-        forge117_home=project/'build/native-server-distribution', prepared_sources=None, output=project/'build/migration-results')
+        forge117_home=project/'build/native-server-distribution', prepared_sources=None, output=project/'build/migration-results', workers=2)
     verify(args, project)
     abort_root = project / 'build/migration-abort';abort_root.mkdir(exist_ok=False)
     aborts = {}

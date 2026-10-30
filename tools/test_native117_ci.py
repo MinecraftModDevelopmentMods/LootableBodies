@@ -4,6 +4,18 @@ from unittest.mock import patch
 import native117_ci as ci
 
 class Native117CITests(unittest.TestCase):
+    def test_hosted_workflow_keeps_gameplay_and_sdk_installation_local(self):
+        workflow=(Path(ci.__file__).resolve().parents[1]/'.github/workflows/native117.yml').read_text()
+        for token in ['native_runtime.py','scenario --group','migration_ci.py','xvfb-run','pulseaudio','prepareMinecraftAssets']:
+            with self.subTest(token=token):self.assertNotIn(token,workflow)
+        self.assertIn('test assemble javadoc verifyProductionRuntimeClasspath prepareReleaseBundle',workflow)
+
+    def test_hosted_workflow_uploads_the_exact_six_files_for_publication(self):
+        workflow=(Path(ci.__file__).resolve().parents[1]/'.github/workflows/native117.yml').read_text()
+        self.assertIn('name: LootableBodies-1.17.1-${{ github.sha }}',workflow)
+        self.assertIn('actual != expected',workflow)
+        self.assertIn('if-no-files-found: error',workflow)
+
     def test_eclipse_gate_receives_the_real_prepared_client_natives_after_sdk_install(self):
         with tempfile.TemporaryDirectory() as d,patch.object(ci,'PROJECT',Path(d)):
             events=[];natives=Path(d)/'build/native-client-distribution/prepared-inputs/natives'

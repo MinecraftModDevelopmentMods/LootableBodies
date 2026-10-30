@@ -6,7 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 from audit_runtime_logs import audit
-from native_runtime import project_assets,prepare_client,client_command
+from native_runtime import project_assets,prepare_client,client_command,fingerprint
 from release_identity import MAIN_JAR
 from runtime_diagnostics import run_monitored
 
@@ -30,6 +30,32 @@ def audit_client(root,console):
     for log in [root/console,root/'logs/latest.log',root/'logs/debug.log']:
         if not log.is_file():raise FileNotFoundError(log)
         audit(log,native=True)
+
+
+def run_default_phases(command,root):
+    """Continue the same saved world at the connected/drop boundary.
+
+    Both processes keep the original 180s bound. The first complete log set
+    and images are retained before the second process can replace live files.
+    """
+    first=[command[0],'-Dlootablebodies.clientStopBeforeDrops=true',*command[1:]]
+    result=run_client(first,root,'client',180)
+    marker=root/'client-connected.pass';console=root/'client.log'
+    if result.returncode or not marker.is_file() or not console.is_file() or 'LOOTABLE_BODIES_CONNECTED_STAGE_PASS' not in console.read_text(errors='replace'):
+        raise RuntimeError('Connected graphical phase incomplete; no continuation')
+    world=root/'saves/build-fixture';sealed=fingerprint(world)
+    if not sealed or not (world/'level.dat').is_file():
+        raise RuntimeError('Missing actual saved world for graphical continuation')
+    images=root/'screenshots'
+    if not images.is_dir() or not list(images.glob('*.png')):
+        raise RuntimeError('Missing first graphical phase images')
+    shutil.copytree(images,root/'connected-screenshots')
+    (root/'client-handoff.json').write_text(json.dumps({'saved_world':sealed,
+        'first_log_sha256':hashlib.sha256(console.read_bytes()).hexdigest().upper(),
+        'process_deadlines':[180,180],'regenerated_world':False},indent=2)+'\n')
+    if fingerprint(world)!=sealed:raise RuntimeError('World changed before continuation')
+    second=[command[0],'-Dlootablebodies.clientResumeDrops=true',*command[1:]]
+    return run_client(second,root,'client-recovery',180)
 
 
 def main():
@@ -61,14 +87,23 @@ def main():
         option={'config':'configUiCheck','skin':'visibilitySkinCheck','issues':'issueClientCheck','names':'namelessClientCheck'}[args.mode]
         extra.append('-Dlootablebodies.'+option+'=true')
     command=client_command(args.java.resolve(),root,args.forge_client_home.resolve(),args.assets.resolve() if args.assets else project_assets(project),extra=extra,prepared=args.client_inputs.resolve())
-    result=run_client(command,root,'client',180)
-    text=(root/'client.log').read_text(errors='replace')
+    if args.mode=='default':
+        result=run_default_phases(command,root)
+        for label in ('client','client-recovery'):
+            for suffix in ('.log','.latest.log','.debug.log'):
+                path=root/(label+suffix)
+                if not path.is_file():raise FileNotFoundError(path)
+                audit(path,native=True)
+        text=(root/'client.log').read_text(errors='replace')+(root/'client-recovery.log').read_text(errors='replace')
+    else:
+        result=run_client(command,root,'client',180)
+        text=(root/'client.log').read_text(errors='replace')
     expected={'default':'LOOTABLE_BODIES_CLIENT_PASS','config':'LOOTABLE_BODIES_CONFIG_CLIENT_PASS',
               'skin':'LOOTABLE_BODIES_VISIBILITY_SKIN_PASS','issues':'LOOTABLE_BODIES_ISSUE5_CLIENT_PASS','names':'LOOTABLE_BODIES_NAME_TRANSLATION_PASS'}[args.mode]
     if result.returncode or not (root/'client.pass').is_file() or expected not in text:
         raise RuntimeError('Packaged client failed: '+str(root/'client.log'))
     if list((root/'crash-reports').glob('*')): raise RuntimeError('Client crash reports')
-    audit_client(root,'client.log')
+    audit_client(root,'client-recovery.log' if args.mode=='default' else 'client.log')
     if args.mode!='default':
         reports={'config':'config-checks.txt','skin':'skin-checks.txt','issues':'issue5-client-checks.txt','names':'name-checks.txt'}
         report=root/reports[args.mode]
