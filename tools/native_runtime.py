@@ -280,6 +280,20 @@ def client_command(java, home, runtime, assets, *, username='LootableTest', extr
     return command(java,home,runtime,assets,prepared,username=username,extra=extra)
 
 
+def prepare_vanilla_server(home):
+    """Stage the official pinned server where the native installer reads it."""
+    from native117_client import BASE_VERSION,BASE_SHA1
+    descriptor=home/'versions'/BASE_VERSION/(BASE_VERSION+'.json')
+    _download({'sha1':BASE_SHA1,'url':'https://piston-meta.mojang.com/v1/packages/'+BASE_SHA1+'/1.17.1.json'},descriptor)
+    metadata=json.loads(descriptor.read_text())
+    if metadata['id']!=BASE_VERSION:raise RuntimeError('Wrong official server descriptor')
+    relative='libraries/net/minecraft/server/'+BASE_VERSION+'/server-'+BASE_VERSION+'.jar'
+    target=home/relative
+    _download(metadata['downloads']['server'],target)
+    if digest(target)!=SERVER_INPUTS[relative]:raise RuntimeError('Official vanilla server checksum mismatch')
+    return target
+
+
 def install(java, home, client=False):
     """Install the pinned native37 distribution into a new owned directory."""
     from prepare_migration_inputs import fetch
@@ -292,6 +306,8 @@ def install(java, home, client=False):
         _download({'sha1':BASE_SHA1,'url':'https://piston-meta.mojang.com/v1/packages/'+BASE_SHA1+'/1.17.1.json'},base)
         metadata=json.loads(base.read_text());_download(metadata['downloads']['client'],base.with_suffix('.jar'))
         (home/'launcher_profiles.json').write_text('{"profiles":{}}\n')
+    else:
+        prepare_vanilla_server(home)
     run_logged([str(java),'-Djava.awt.headless=true','-jar',installer.name,
                 '--installClient' if client else '--installServer',str(home)],
                 cwd=home,path=home/'install.log',timeout=600)
