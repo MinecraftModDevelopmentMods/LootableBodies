@@ -39,6 +39,29 @@ def fingerprint(directory):
             for p in sorted(directory.rglob('*')) if p.is_file()}
 
 
+def verify_server_inputs(distribution):
+    """Pin raw inputs and seal both installer-generated archive contents.
+
+    Only installer directory timestamps and ZIP entry order may vary. The
+    returned hashes bind the actual SDK bytes prepared for every process.
+    """
+    from native_sdk_contents import verify_generated_archive
+    generated=json.loads(Path(__file__).with_name('native117_generated_sdk.json').read_text())
+    actual={}
+    for name,expected in SERVER_INPUTS.items():
+        artifact=Path(distribution)/name
+        if artifact.is_symlink() or not artifact.is_file():raise FileNotFoundError('Missing native37 SDK input: '+name)
+        value=digest(artifact)
+        if value!=expected:
+            seal=generated.get(name)
+            if not seal or seal['canonical_archive_sha256']!=expected:
+                raise RuntimeError('Incorrect official Forge37 server input: '+name)
+            verify_generated_archive(artifact,seal)
+            if digest(artifact)!=value:raise RuntimeError('Native SDK changed during verification: '+name)
+        actual[name]=value
+    return actual
+
+
 def seed_loader_defaults(home, deterministic=False, include_default_path=True):
     """Seed an owned home; disable optional HTTP checks only for probes."""
     config=home/'config/fml.toml'
@@ -57,10 +80,7 @@ def prepare_server(home, distribution, candidate=None, probe=None):
     libraries = distribution / 'libraries'
     if not libraries.is_dir():
         raise FileNotFoundError('Incomplete official Forge 37 server installation')
-    for name, expected in SERVER_INPUTS.items():
-        artifact = distribution / name
-        if not artifact.is_file() or digest(artifact) != expected:
-            raise RuntimeError('Incorrect official Forge 37 server input: ' + name)
+    verify_server_inputs(distribution)
     home.mkdir(parents=True, exist_ok=False)
     (home / 'mods').mkdir()
     seed_loader_defaults(home, deterministic=probe is not None)
@@ -279,8 +299,7 @@ def install(java, home, client=False):
         from native117_client import prepare
         inputs=prepare(home,home/'prepared-inputs')['files']
     else:
-        inputs={name:digest(home/name) for name in SERVER_INPUTS}
-        if inputs!=SERVER_INPUTS:raise RuntimeError('Official Forge37 server installation checksum mismatch')
+        inputs=verify_server_inputs(home)
     (home/'runtime-inputs.json').write_text(json.dumps({'installer_sha256':INSTALLER_SHA256,'client':client,'files':inputs},indent=2)+'\n')
     return home
 
