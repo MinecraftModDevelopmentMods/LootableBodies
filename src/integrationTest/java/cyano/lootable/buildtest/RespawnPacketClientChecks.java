@@ -41,8 +41,8 @@ final class RespawnPacketClientChecks {
     private File observations;
     private Level profileWorld;
     void register(){if(Boolean.getBoolean("lootablebodies.respawn")&&role!=null){net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);MinecraftForge.EVENT_BUS.register(this);}}
-    @SubscribeEvent public void mouse(net.minecraftforge.client.event.GuiScreenEvent.MouseClickedEvent.Pre e){e.setCanceled(true);}
-    @SubscribeEvent public void key(net.minecraftforge.client.event.GuiScreenEvent.KeyboardKeyPressedEvent.Pre e){e.setCanceled(true);}
+    @SubscribeEvent public void mouse(net.minecraftforge.client.event.ScreenEvent.MouseClickedEvent.Pre e){e.setCanceled(true);}
+    @SubscribeEvent public void key(net.minecraftforge.client.event.ScreenEvent.KeyboardKeyPressedEvent.Pre e){e.setCanceled(true);}
     private void respawn(Minecraft mc) {
         if((!role.equals("A")&&!Boolean.getBoolean("lootablebodies.respawn.simultaneous"))||mc.player==null)return;
         if(mc.screen instanceof DeathScreen) {
@@ -82,7 +82,7 @@ final class RespawnPacketClientChecks {
                         p.getProperties().put("textures",new Property("textures",Base64.getEncoder().encodeToString(texture.getBytes(StandardCharsets.UTF_8))));return Optional.of(p);
                     }
                 };
-                fixtureCache.setExecutor(mc::execute);SkullBlockEntity.setProfileCache(fixtureCache);
+                fixtureCache.setExecutor(mc::execute);SkullBlockEntity.profileCache=fixtureCache;
             }
             return;
         }

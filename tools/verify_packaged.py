@@ -1,4 +1,4 @@
-"""Verify the exact production jar in disposable native Forge 37 servers."""
+"""Verify the exact production jar in disposable native Forge 40 servers."""
 import argparse
 import json
 from pathlib import Path

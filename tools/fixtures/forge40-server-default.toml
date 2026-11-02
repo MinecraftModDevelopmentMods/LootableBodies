@@ -1,0 +1,12 @@
+# Native Forge 40.3.12 server spec baseline; packaged output is checked separately.
+[server]
+zombieBaseSummonChance = 0.1
+zombieBabyChance = 0.05
+fullBoundingBoxLadders = false
+fixAdvancementLoading = true
+treatEmptyTagsAsAir = false
+removeErroringBlockEntities = false
+removeErroringEntities = false
+permissionHandler = "forge:default_handler"
+useItemWithDurationZero = false
+skipEmptyShapelessCheck = true

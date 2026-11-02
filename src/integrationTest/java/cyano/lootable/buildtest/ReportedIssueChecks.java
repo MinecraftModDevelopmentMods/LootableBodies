@@ -227,7 +227,7 @@ final class ReportedIssueChecks {
         f.platform=new BlockPos(floorX+(axis==0?direction:0),79,floorZ+(axis==1?direction:0));
         // A body can straddle a chunk boundary while its centre remains in the ticketed chunk.
         // Remove only the two fixture columns' ground, leaving one thin supporting platform.
-        for(int y=0;y<5;y++){world.removeBlock(new BlockPos(floorX,y,floorZ),false);world.removeBlock(new BlockPos(f.platform.getX(),y,f.platform.getZ()),false);}
+        for(int y=world.getMinBuildHeight();y<79;y++){world.removeBlock(new BlockPos(floorX,y,floorZ),false);world.removeBlock(new BlockPos(f.platform.getX(),y,f.platform.getZ()),false);}
         world.setBlockAndUpdate(f.platform,Blocks.STONE.defaultBlockState());
         f.body=fullBody(f.cx,f.cz,8.5,savedId);f.body.setPos(x,80,z);f.expected=inventory(f.body);
         f.forced=world.setChunkForced(f.cx,f.cz,true);
@@ -249,7 +249,7 @@ final class ReportedIssueChecks {
     private static void realVoid() {
         try(Support f=support(0,1)) {
             world.removeBlock(f.platform,false);
-            // 1.11 applies ordinary 4-HP void hits with hurt-resistance intervals.
+            // Use ordinary native void hits with hurt-resistance intervals.
             // Allow that native sequence to finish; retain the same conservation gate.
             for(int i=0;i<250 && f.body.isAlive();i++)world.tickNonPassenger(f.body);
             for(int i=0;i<15;i++)f.body.baseTick();

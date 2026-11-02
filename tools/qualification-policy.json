@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "target": "1.18.2",
+  "status": "Full functional qualification local; hosted compilation, archive/security audits and small workflow contracts only. Unvalidated phase consolidation remains disabled.",
+  "hosted": {
+    "allowed": [
+      "workflow/wrapper contracts",
+      "production compilation",
+      "archive/metadata/byte audits",
+      "CodeQL security analysis"
+    ],
+    "native118_gradle_roots": [
+      "assemble",
+      "verifyProductionRuntimeClasspath",
+      "prepareReleaseBundle"
+    ],
+    "fork_gradle_build": false,
+    "full_java_suite": false,
+    "full_python_suite": false,
+    "gameplay_or_migration": false,
+    "runtime_sdk_or_asset_install": false
+  },
+  "local": {
+    "development": "Focused changed-behaviour regression first; batch cheap Java/Python checks. Full runtime matrix is not an edit/commit hook.",
+    "freeze": "One full Java suite and one full Python suite per exact relevant input closure; all functional gates once on sealed candidate inputs.",
+    "clean_builds": 2,
+    "second_clean_build": "Compile production and assemble/audit all six outputs; compare bytes to first build. Reuse unchanged first-build unit proof honestly, without a second JUnit/game suite.",
+    "seal_before_second_clean": [
+      "main jar",
+      "packaged historical probe",
+      "native-only control",
+      "logging inputs",
+      "tool/SDK/JDK hashes",
+      "original prepared-world manifest"
+    ],
+    "historical_priority": [
+      "recovery-116",
+      "recovery-115",
+      "recovery-117",
+      "original-110",
+      "released-117"
+    ],
+    "historical_origins": 47,
+    "historical_cases": 94,
+    "historical_phases_per_case": 10,
+    "historical_receipts_including_future_refusals": 1130,
+    "max_historical_workers": 2,
+    "shared_cache_gradle_writers": 1,
+    "visibility": "Keep both6200ticks and310seconds and connected restart; no shorter acceptance substitute.",
+    "respawns": "Keep64 at freeze;16 per mode are8 scenarios repeated under accumulated state, not16 distinct branches.",
+    "native_controls": "Reuse only unchanged no-mod control/SDK/JDK/flags/logging scope. Requalify after environment/control changes or diagnosed failure, not every mod edit.",
+    "evidence": "Rehash all receipts, original worlds, inputs and artifacts before expensive reuse/publication. Missing, changed or unreadable bytes block reuse. Never reconstruct a receipt or count reuse as a fresh run."
+  },
+  "phase_consolidation": {
+    "enabled": false,
+    "proposal": [
+      "Recover near inventory after checking the first cold near reload; retain recovered cold reload",
+      "Remove the empty corpse after all-wave return checks; retain final cold reload/no-resurrection"
+    ],
+    "requires": "Native disk-equivalence and deliberate loss/duplication/resurrection/deferred-chunk negative controls on next authorised run, then explicit new coverage/receipt schema",
+    "origins_and_cases_unchanged_if_validated": [
+      47,
+      94
+    ],
+    "positive_jvms_if_validated": 752,
+    "total_receipts_if_validated": 942,
+    "current_10_phase_contract_remains_authoritative": true
+  }
+}

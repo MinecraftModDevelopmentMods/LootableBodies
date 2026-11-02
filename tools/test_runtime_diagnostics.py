@@ -6,6 +6,7 @@ import sys
 import tempfile
 import time
 import unittest
+import os,shutil
 from unittest.mock import patch
 
 from runtime_diagnostics import run_monitored
@@ -44,22 +45,30 @@ class RuntimeDeadlineTests(unittest.TestCase):
                     process.wait()
 
     def run_child(self, home, code, *, timeout=1.2, collector=None, metric=None):
-        return run_monitored(
-            [sys.executable, '-u', '-c', code], cwd=home,
-            log=home/'phase.log', timeout=timeout,
-            diagnostics=home/'phase.diagnostics',
-            diagnostic_command=collector or [sys.executable, '-c',
-                'import sys; print("THREAD_CAPTURE_TARGET="+sys.argv[1], flush=True)'],
-            metric_command=metric)
+        try:
+            return run_monitored(
+                [sys.executable, '-u', '-c', code], cwd=home,
+                log=home/'phase.log', timeout=timeout,
+                diagnostics=home/'phase.diagnostics',
+                diagnostic_command=collector or [sys.executable, '-c',
+                    'import sys; print("THREAD_CAPTURE_TARGET="+sys.argv[1], flush=True)'],
+                metric_command=metric)
+        except BaseException:
+            if os.environ.get('LOOTABLEBODIES_UNIT_EVIDENCE'):
+                shutil.copytree(home,Path(os.environ['LOOTABLEBODIES_UNIT_EVIDENCE'])/self._testMethodName)
+            raise
 
     def test_heap_metrics_are_captured_even_if_a_gc_log_has_no_events(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             with self.assertRaises(subprocess.TimeoutExpired):
                 self.run_child(home, 'import time; time.sleep(30)', metric=[
-                    sys.executable, '-c', 'from pathlib import Path; import sys,time; '
-                    'seen=Path("heap-seen"); time.sleep(30) if seen.exists() else None; '
-                    'seen.touch(); print("HEAP_TARGET="+sys.argv[1],flush=True)'])
+                    sys.executable, '-S', '-c', 'import os,sys,time; '
+                    'time.sleep(30) if os.path.exists("heap-seen") else None; '
+                    'open("heap-seen","w").close(); print("HEAP_TARGET="+sys.argv[1],flush=True); os._exit(0)'])
+            # The first fake collector's only task is its flushed output. Avoid
+            # unrelated interpreter shutdown consuming its original0.24s budget.
+            # Later collectors still really block and must be killed on time.
             report = json.loads((home/'phase.diagnostics/result.json').read_text())
             self.assertTrue(report['metrics'])
             self.assertTrue(any(m['returncode']==0 for m in report['metrics']))
@@ -100,11 +109,23 @@ class RuntimeDeadlineTests(unittest.TestCase):
             self.assertTrue(report['timed_out'])
             self.assertIsNotNone(report['returncode'])
             self.assertTrue(report['captures'])
+            # Keep the complete negative fixture when requested. A collector
+            # launched at93.75% can legitimately be stopped by the SAME fixed
+            # deadline on a busy machine; that must remain a failed attempt.
+            if os.environ.get('LOOTABLEBODIES_UNIT_EVIDENCE'):
+                target=Path(os.environ['LOOTABLEBODIES_UNIT_EVIDENCE'])/'premature-marker-timeout'
+                shutil.copytree(home,target)
+            self.assertTrue(any(c['returncode']==0 for c in report['captures']))
             for capture in report['captures']:
                 self.assertLess(capture['started_seconds'], 1.2)
-                self.assertEqual(0, capture['returncode'])
-                self.assertIn('THREAD_CAPTURE_TARGET='+str(report['pid']),
-                              (home/'phase.diagnostics'/capture['file']).read_text())
+                if capture['returncode']==0:
+                    self.assertIn('THREAD_CAPTURE_TARGET='+str(report['pid']),
+                                  (home/'phase.diagnostics'/capture['file']).read_text())
+                else:
+                    self.assertTrue(capture['timed_out'])
+                    self.assertIn(capture['stopped_reason'],('runtime_deadline','capture_deadline'))
+                    self.assertIsNotNone(capture['returncode'])
+                self.assertIn(capture['file'],report['evidence'])
             self.assertIn('STARTED', (home/'phase.log').read_text())
 
     def test_a_stuck_collector_cannot_extend_the_runtime_or_survive_it(self):
@@ -127,11 +148,10 @@ class RuntimeDeadlineTests(unittest.TestCase):
             home = Path(directory)
             with self.assertRaises(subprocess.TimeoutExpired):
                 self.run_child(home, 'import time; time.sleep(30)',
-                    collector=[sys.executable, '-c',
-                               'from pathlib import Path; import sys,time; '
-                               'seen=Path("attach-seen"); '
-                               'time.sleep(30) if seen.exists() else None; '
-                               'seen.touch(); print("attach refused", flush=True); sys.exit(9)'])
+                    collector=[sys.executable, '-S', '-c',
+                               'import os,sys,time; '
+                               'time.sleep(30) if os.path.exists("attach-seen") else None; '
+                               'open("attach-seen","w").close(); print("attach refused", flush=True); os._exit(9)'])
             report = json.loads((home/'phase.diagnostics/result.json').read_text())
             self.assertTrue(report['timed_out'])
             self.assertTrue(any(c['returncode'] == 9 for c in report['captures']))
@@ -141,8 +161,9 @@ class RuntimeDeadlineTests(unittest.TestCase):
             self.assertTrue(all(c['returncode'] == 9 or
                                 (c['timed_out'] and c['returncode'] is not None)
                                 for c in report['captures']))
-            self.assertIn('attach refused',
-                          (home/'phase.diagnostics'/report['captures'][0]['file']).read_text())
+            for capture in report['captures']:
+                if capture['returncode']==9:
+                    self.assertIn('attach refused',(home/'phase.diagnostics'/capture['file']).read_text())
 
     def test_nonzero_exit_preserves_complete_output_without_a_retry(self):
         with tempfile.TemporaryDirectory() as directory:

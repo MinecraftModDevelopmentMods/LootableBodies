@@ -33,7 +33,7 @@ ext.auditReleaseArchives = { File directory ->
                     if (!path.startsWith('cyano/lootable/')) throw new GradleException("Foreign production class ${path}")
                     byte[] bytes = zip.getInputStream(entry).bytes
                     int major = ((bytes[6] & 255) << 8) | (bytes[7] & 255)
-                    if (major != 60) throw new GradleException("${path} is class major ${major}")
+                    if (major != 61) throw new GradleException("${path} is class major ${major}")
                 }
                 if (path.endsWith('.lang')) {
                     java.nio.charset.StandardCharsets.UTF_8.newDecoder().decode(
@@ -55,16 +55,22 @@ ext.auditReleaseArchives = { File directory ->
                 throw new GradleException("Incorrect release manifest in ${name}")
             if (index == 0) {
                 ['META-INF/mods.toml', 'pack.mcmeta', 'cyano/lootable/LootableBodies.class',
+                 'META-INF/coremods.json', 'coremods/early-world-preservation.js',
+                 'cyano/lootable/upgrade/EarlyWorldPreservation.class',
                  'assets/lootablebodies/textures/gui/corpse.png',
                  'assets/lootablebodies/textures/entity/corpse/corpse.png'].each {
                     if (!names.contains(it)) throw new GradleException("Missing production entry ${it}")
                 }
                 String info=zip.getInputStream(zip.getEntry('META-INF/mods.toml')).getText('UTF-8')
-                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.17.1]"'].each {
+                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.18.2]"'].each {
                     if(!info.contains(it))throw new GradleException("Incorrect production metadata: ${it}")
                 }
-                if(new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack.pack_format!=7)
-                    throw new GradleException('Native resource pack format must be 7')
+                def pack=new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack
+                if(pack.pack_format!=9 || pack['forge:resource_pack_format']!=8 || pack['forge:data_pack_format']!=9)
+                    throw new GradleException('Native pack formats must be pack9/resource8/data9')
+                def coremods=new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('META-INF/coremods.json')).getText('UTF-8'))
+                if(coremods!=[lootablebodies_preservation:'coremods/early-world-preservation.js'])
+                    throw new GradleException('Missing or changed early native save attachment')
                 def atEntry=zip.getEntry('META-INF/accesstransformer.cfg')
                 def atRules=atEntry?zip.getInputStream(atEntry).getText('UTF-8').readLines()
                         .collect {it.split('#',2)[0].trim()}.findAll {!it.isEmpty()}:[]

@@ -70,6 +70,7 @@ final class PositionMotionChecks {
         check("position_repair_does_not_heal_saved_zero_health",PositionMotionChecks::deadHealth);
         check("geometry_metadata_alone_is_not_inventory",PositionMotionChecks::empty);
         check("unknown_items_and_complete_inventory_survive_geometry_repair",PositionMotionChecks::inventory);
+        check("sanitized_motion_can_change_under_native_entity_collision",PositionMotionChecks::nativeCollision);
         try(PrintWriter out=new PrintWriter(new File(folder,"position-motion-checks.txt"),"UTF-8")){for(String s:results)out.println(s);out.println("checks="+results.size()+" failures="+failures);}
         require(failures==0,"Position/motion regressions: "+failures+" / "+results.size());System.out.println("LOOTABLE_BODIES_POSITION_MOTION_PASS checks="+results.size());
     }
@@ -104,4 +105,18 @@ final class PositionMotionChecks {
     private static void empty(){CompoundTag n=base();n.put("Equipment",new ListTag());n.remove("Aux");n.putString("Motion","opaque");EntityLootableBody b=read(n);require(b.isEmpty(),"Geometry evidence counts as items");NameLifetimeChecks.retained(b,"Motion",n.get("Motion"));}
     private static void inventory(){CompoundTag n=base(),raw=NbtRecoveryChecks.entry(121,11,7);raw.putString("id","absentfixture:missing");n.getList("Equipment",10).add(raw);n.put("Pos",vector(Double.NaN,80,160.5));n.put("Motion",vector(Double.NaN,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY));EntityLootableBody b=chunk(n,10,10);require(b.isAlive(),"Corrupt geometry made inventory inaccessible");NbtRecoveryChecks.retained(b,raw);verifyWorldFields(b);stable(b);NbtRecoveryChecks.retained(read(saved(b)),raw);}
     static void verifyWorldFields(EntityLootableBody b){finite(b);sameValue(b.getDeltaMovement().x,0,"Disk motion X");sameValue(b.getDeltaMovement().y,0,"Disk motion Y");sameValue(b.getDeltaMovement().z,0,"Disk motion Z");NameLifetimeChecks.retained(b,"Pos",vector(Double.NaN,80,b.getZ()));NameLifetimeChecks.retained(b,"Motion",vector(Double.NaN,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY));}
+    private static void nativeCollision(){
+        CompoundTag raw=base();raw.put("Pos",vector(Double.NaN,80,160.5));raw.put("Motion",vector(Double.NaN,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY));
+        EntityLootableBody body=chunk(raw,10,10);
+        try {
+            verifyWorldFields(body);CompoundTag before=saved(body);
+            EntityLootableBody neighbour=new EntityLootableBody(world);neighbour.setPos(body.getX()-.25,body.getY(),body.getZ());
+            require(body.getBoundingBox().intersects(neighbour.getBoundingBox()),"Native collision control did not overlap");
+            neighbour.push(body);
+            finite(body);require(body.getDeltaMovement().x>0 && body.getDeltaMovement().y==0 && body.getDeltaMovement().z==0,"Native push did not change sanitized motion");
+            CompoundTag after=saved(body);
+            for(String key:new String[]{"Equipment","Aux","LootableBodiesInvalidFields"})require(NameLifetimeChecks.same(before.get(key),after.get(key)),"Native collision changed preserved "+key);
+            System.out.println("POSITION_NATIVE_COLLISION_MOTION "+body.getDeltaMovement());
+        } finally {body.discard();}
+    }
 }

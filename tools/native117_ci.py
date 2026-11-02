@@ -123,6 +123,8 @@ def scenario(group):
     (root/'complete.json').write_text(json.dumps({'group':group,'candidate':digest(PROJECT/'build/libs'/MAIN_JAR),'complete':True})+'\n')
 
 def main():
+    if MOD_VERSION!='2.4.8.117011':
+        raise ValueError('Historical 1.17 CI controller is disabled for this target; use local qualification and the native118 build-only contract')
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('mode',choices=['build','prepare','scenario']);p.add_argument('--group');a=p.parse_args()
     if a.mode=='build':build()
     elif a.mode=='prepare':prepare()

@@ -17,8 +17,8 @@ import net.minecraftforge.event.RegistryEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fmlserverevents.FMLServerAboutToStartEvent;
-import net.minecraftforge.fmlserverevents.FMLServerStoppedEvent;
+import net.minecraftforge.event.server.ServerAboutToStartEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.loading.FMLPaths;
 
@@ -26,7 +26,7 @@ import net.minecraftforge.fml.loading.FMLPaths;
 public final class LootableBodies {
     public static final String MODID = "lootablebodies";
     public static final String NAME = "DrCyano's Lootable Bodies";
-    public static final String VERSION = "2.4.8.117011";
+    public static final String VERSION = "2.4.9.118021";
     public static final ResourceLocation CORPSE_ID = new ResourceLocation("lootablebodies:corpse");
     public static EntityType<EntityLootableBody> CORPSE;
     public static Item CORPSE_EGG;
@@ -86,7 +86,7 @@ public final class LootableBodies {
         event.getRegistry().register(CORPSE_EGG);
     }
     private void registerContainers(RegistryEvent.Register<net.minecraft.world.inventory.MenuType<?>> event) {
-        CORPSE_CONTAINER=net.minecraftforge.common.extensions.IForgeContainerType.create((window,inventory,buffer)-> {
+        CORPSE_CONTAINER=net.minecraftforge.common.extensions.IForgeMenuType.create((window,inventory,buffer)-> {
             net.minecraft.world.entity.Entity body=inventory.player.level.getEntity(buffer.readVarInt());
             if(!(body instanceof EntityLootableBody))throw new IllegalStateException("Corpse container has no matching entity");
             return new cyano.lootable.graphics.CorpseContainer(window,inventory,(EntityLootableBody)body);
@@ -94,7 +94,7 @@ public final class LootableBodies {
         event.getRegistry().register(CORPSE_CONTAINER.setRegistryName(CORPSE_ID));
     }
     public static LootableBodies getInstance(){return INSTANCE;}
-    @SubscribeEvent public void beforeWorldLoading(FMLServerAboutToStartEvent event) {
+    @SubscribeEvent public void beforeWorldLoading(ServerAboutToStartEvent event) {
         File level=event.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();
         try {
             UpgradePreservation.register(event.getServer().getFixerUpper());
@@ -113,7 +113,7 @@ public final class LootableBodies {
     public void beforeSpawn(net.minecraftforge.event.world.WorldEvent.CreateSpawnPosition event) {
         if(event.getWorld() instanceof net.minecraft.server.level.ServerLevel)ChunkVersionContext.installWorld((net.minecraft.server.level.ServerLevel)event.getWorld());
     }
-    @SubscribeEvent public void worldStopped(FMLServerStoppedEvent event){UpgradePreservation.close();}
+    @SubscribeEvent public void worldStopped(ServerStoppedEvent event){UpgradePreservation.close();}
     private static boolean or(boolean... values){for(boolean value:values)if(value)return true;return false;}
     /** Reads startup rules. GUI saves deliberately do not call this method. */
     public static void loadConfiguration(File file) {

@@ -70,7 +70,7 @@ def main():
     commands={'server':[str(java),'-Xmx1G','-Dlootablebodies.'+args.mode+'=true',
         '-Dlog4j.configurationFile='+(project/'src/integrationTest/resources/log4j2.xml').as_uri(),
         '-Dlootablebodies.multiplayer.sync='+str(shared),'-Dlootablebodies.respawn.cases='+str(args.cases),
-        '@libraries/net/minecraftforge/forge/1.17.1-37.1.1/'+('win_args.txt' if os.name=='nt' else 'unix_args.txt'),'--nogui']}
+        '@libraries/net/minecraftforge/forge/'+FORGE.removeprefix('forge-')+'/'+('win_args.txt' if os.name=='nt' else 'unix_args.txt'),'--nogui']}
     if args.source_server: commands['server'].insert(2,'-Dlootablebodies.visibility.reload=true')
     if args.simultaneous: commands['server'].insert(2,'-Dlootablebodies.respawn.simultaneous=true')
     for role in ['A','B']:
@@ -104,8 +104,8 @@ def main():
         for process in processes.values():
             if process.poll() is None: process.terminate()
         for process in processes.values():
-            try: process.wait(timeout=10)
-            except subprocess.TimeoutExpired: process.kill();process.wait()
+            try: process.reap(timeout=10)
+            except subprocess.TimeoutExpired: process.kill();process.reap(timeout=10)
         for log in logs: log.close()
     if not (shared/(args.mode+'.pass')).is_file(): raise RuntimeError('Missing server result')
     write_receipts(home)

@@ -1,0 +1,14 @@
+{
+  "libraries/net/minecraft/server/1.18.2-20220404.173914/server-1.18.2-20220404.173914-srg.jar": {
+    "canonical_archive_sha256": "483126784D3736FC9863135F9409B5497B3A5C89F73F590A82875202BC148D29",
+    "timestamp_policy": "exact",
+    "entries": 4954,
+    "content_and_metadata_sha256": "12CDF8B4E0B7DCAE666D68E5FFD936EEF0EBE09EC9E3FAFE491FA1F8959A3A99"
+  },
+  "libraries/net/minecraftforge/forge/1.18.2-40.3.12/forge-1.18.2-40.3.12-server.jar": {
+    "canonical_archive_sha256": "92DE04B82205209189D6E501516D0CB1EC72A97E9779A4F11D058940DE04C3C1",
+    "timestamp_policy": "exact",
+    "entries": 1289,
+    "content_and_metadata_sha256": "3AF4C998CB82E259F8E1371DD654874E0050AFE394DFBBB87C80A91A822D9374"
+  }
+}

@@ -1,36 +1,38 @@
-"""The installer must see exact prepared vanilla bytes before it starts."""
-import hashlib,json,tempfile,unittest
+"""Forge owns server downloads; installed bytes are checked before gameplay."""
+import hashlib,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
 import native_runtime as runtime
-from native117_client import BASE_VERSION,BASE_SHA1
 
 class VanillaServerPreparationTests(unittest.TestCase):
-    def fixture(self,home,*,changed=False):
-        payload=b'synthetic official server fixture'
-        relative='libraries/net/minecraft/server/1.17.1/server-1.17.1.jar'
-        server={'url':'https://fixture.invalid/server.jar','sha1':hashlib.sha1(payload).hexdigest()}
-        calls=[]
-        def download(record,path):
-            calls.append((record,path));path.parent.mkdir(parents=True,exist_ok=True)
-            if path.suffix=='.json':
-                self.assertEqual(BASE_SHA1,record['sha1'])
-                path.write_text(json.dumps({'id':BASE_VERSION,'downloads':{'server':server}}))
-            else:
-                self.assertEqual(home/relative,path);self.assertEqual(server,record)
-                path.write_bytes(b'changed fixture' if changed else payload)
-        return relative,payload,calls,download
-    def test_prepared_server_uses_the_exact_installer_path_and_both_pins(self):
+    def fixture(self,home,payload=b'exact installed native input'):
+        relative='libraries/net/minecraft/server/1.18.2/server-1.18.2.jar'
+        expected=hashlib.sha256(b'exact installed native input').hexdigest().upper()
+        def installed(command,**options):
+            self.assertIn('--installServer',command)
+            self.assertEqual(home,options['cwd'])
+            self.assertFalse((home/'versions').exists(),'Server path prefetched a separate vanilla descriptor')
+            target=home/relative;target.parent.mkdir(parents=True);target.write_bytes(payload)
+        return {relative:expected},installed
+    def test_installer_owns_server_download_without_separate_vanilla_prefetch(self):
         with tempfile.TemporaryDirectory() as directory:
-            home=Path(directory);relative,payload,calls,download=self.fixture(home)
-            with patch.object(runtime,'_download',side_effect=download),patch.object(runtime,'SERVER_INPUTS',{relative:hashlib.sha256(payload).hexdigest().upper()}):
-                self.assertEqual(home/relative,runtime.prepare_vanilla_server(home))
-            self.assertEqual(2,len(calls));self.assertEqual(payload,(home/relative).read_bytes())
-    def test_wrong_vanilla_bytes_refuse_before_the_installer_can_run(self):
+            home=Path(directory)/'new-sdk';pins,installed=self.fixture(home)
+            with patch('prepare_migration_inputs.fetch'),patch.object(runtime,'_download') as prefetch,patch.object(runtime,'run_logged',side_effect=installed) as installer,patch.object(runtime,'SERVER_INPUTS',pins):
+                self.assertEqual(home.resolve(),runtime.install(Path('fixture-java'),home))
+                prefetch.assert_not_called();self.assertEqual(1,installer.call_count)
+                self.assertTrue((home/'runtime-inputs.json').is_file())
+    def test_wrong_installed_vanilla_bytes_refuse_before_gameplay_without_installer_retry(self):
         with tempfile.TemporaryDirectory() as directory:
-            home=Path(directory)/'new-sdk';relative,payload,calls,download=self.fixture(home,changed=True)
-            with patch.object(runtime,'_download',side_effect=download),patch.object(runtime,'SERVER_INPUTS',{relative:hashlib.sha256(payload).hexdigest().upper()}),patch('prepare_migration_inputs.fetch'),patch.object(runtime,'run_logged') as installer:
-                with self.assertRaisesRegex(RuntimeError,'vanilla server checksum mismatch'):runtime.install(Path('fixture-java'),home)
-                installer.assert_not_called()
+            home=Path(directory)/'new-sdk';pins,installed=self.fixture(home,b'changed bytes')
+            with patch('prepare_migration_inputs.fetch'),patch.object(runtime,'_download') as prefetch,patch.object(runtime,'run_logged',side_effect=installed) as installer,patch.object(runtime,'SERVER_INPUTS',pins):
+                with self.assertRaisesRegex(RuntimeError,'Incorrect official Forge40 server input'):runtime.install(Path('fixture-java'),home)
+                prefetch.assert_not_called();self.assertEqual(1,installer.call_count)
+                self.assertFalse((home/'runtime-inputs.json').exists())
+    def test_missing_installed_input_is_fatal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home=Path(directory)/'new-sdk';pins,_=self.fixture(home)
+            with patch('prepare_migration_inputs.fetch'),patch.object(runtime,'_download') as prefetch,patch.object(runtime,'run_logged') as installer,patch.object(runtime,'SERVER_INPUTS',pins):
+                with self.assertRaises(FileNotFoundError):runtime.install(Path('fixture-java'),home)
+                prefetch.assert_not_called();self.assertEqual(1,installer.call_count)
 
 if __name__=='__main__':unittest.main()

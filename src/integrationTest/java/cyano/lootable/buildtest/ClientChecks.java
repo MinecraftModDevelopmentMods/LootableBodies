@@ -31,10 +31,10 @@ public final class ClientChecks {
     private final VisibilitySkinClientChecks visibilitySkins = new VisibilitySkinClientChecks();
     private final ConfigClientChecks configScreen = new ConfigClientChecks();
     private final NamelessCorpseClientChecks namelessNames = new NamelessCorpseClientChecks();
-    @SubscribeEvent public void mouse(net.minecraftforge.client.event.GuiScreenEvent.MouseClickedEvent.Pre event) {
+    @SubscribeEvent public void mouse(net.minecraftforge.client.event.ScreenEvent.MouseClickedEvent.Pre event) {
         event.setCanceled(true);
     }
-    @SubscribeEvent public void keyboard(net.minecraftforge.client.event.GuiScreenEvent.KeyboardKeyPressedEvent.Pre event) {
+    @SubscribeEvent public void keyboard(net.minecraftforge.client.event.ScreenEvent.KeyboardKeyPressedEvent.Pre event) {
         event.setCanceled(true);
     }
     @SubscribeEvent public void tooltip(net.minecraftforge.client.event.RenderTooltipEvent.Color event) {

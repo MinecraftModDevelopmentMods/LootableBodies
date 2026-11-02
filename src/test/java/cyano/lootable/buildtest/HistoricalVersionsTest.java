@@ -21,4 +21,7 @@ class HistoricalVersionsTest {
         assertThrows(IllegalArgumentException.class, () -> HistoricalVersions.dataVersion(""));
         assertThrows(IllegalArgumentException.class, () -> HistoricalVersions.dataVersion("1.99.2"));
     }
+    @Test void released117InventoryKeepsItsActual2730SourceContext() {
+        assertEquals(2730,HistoricalVersions.dataVersion("1.17.1"));
+    }
 }

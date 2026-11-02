@@ -30,7 +30,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.common.util.FakePlayerFactory;
 import net.minecraftforge.fml.common.*;
-import net.minecraftforge.fmlserverevents.FMLServerStartedEvent;
+import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /** Build-only verifier. Never included in the production source set or jars. */
@@ -62,6 +62,7 @@ public final class RuntimeChecks {
         }
     }
     @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.LOWEST) public void fixtureAdmission(net.minecraftforge.event.entity.EntityJoinWorldEvent event) {
+        NbtWorldChecks.verifyGraphicalAdmission(event.getEntity());
         if(pendingDeathId!=null && event.getEntity() instanceof EntityLootableBody && !event.getWorld().isClientSide
                 && "BuildDeath".equals(((EntityLootableBody)event.getEntity()).getCustomNameTag()))event.getEntity().setUUID(pendingDeathId);
         if(Boolean.getBoolean("lootablebodies.assertFixtureAdmission") && event.getEntity() instanceof EntityLootableBody && !event.getWorld().isClientSide && !event.getEntity().isAddedToWorld()) {
@@ -69,9 +70,9 @@ public final class RuntimeChecks {
             require(event.getWorld().getChunkSource().hasChunk(net.minecraft.util.Mth.floor(body.getX())>>4,net.minecraft.util.Mth.floor(body.getZ())>>4),"Manual corpse fixture spawned before chunk admission: "+body.blockPosition()+" name="+body.getCustomNameTag());
         }
     }
-    @SubscribeEvent public void started(FMLServerStartedEvent event) {
+    @SubscribeEvent public void started(ServerStartedEvent event) {
         if ((net.minecraftforge.fml.loading.FMLEnvironment.dist==net.minecraftforge.api.distmarker.Dist.CLIENT)) return;
-        MinecraftServer server = net.minecraftforge.fmllegacy.server.ServerLifecycleHooks.getCurrentServer();
+        MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
         if(Boolean.getBoolean("lootablebodies.respawn")) {
             try{new RespawnPacketChecks(server);}catch(Exception error){throw new RuntimeException(error);}return;
         }
@@ -97,9 +98,9 @@ public final class RuntimeChecks {
     public static void run(MinecraftServer server, String phase) throws Exception {
         ServerLevel world = server.getLevel(FixtureApi.dimensionKey(0));
         File folder = world.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();
-        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.8.117011"), "identity/version");
+        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.9.118021"), "identity/version");
         require(net.minecraftforge.fml.ModList.get().getModContainerById("lootablebodies").get().getModInfo().getVersion().toString().equals(phase.equals("seed") ? "2.4.0" : phase.equals("issues") ?
-                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.8.117011") : "2.4.8.117011"), "loaded release version");
+                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.9.118021") : "2.4.9.118021"), "loaded release version");
         if (!defaultsChecked) require(LootableBodies.addBonesToCorpse && LootableBodies.displayNameTag && !LootableBodies.hurtByEnvironment &&
                 !LootableBodies.hurtByAttacks && !LootableBodies.hurtByMisc && LootableBodies.corpseHP == 20 &&
                 LootableBodies.ticksPerItemDecay == 6000 && LootableBodies.corpseDecayTime == 72000 &&
@@ -205,9 +206,7 @@ public final class RuntimeChecks {
         System.out.println("LOOTABLE_BODIES_RUNTIME_PASS phase=" + phase);
     }
     static net.minecraft.world.level.chunk.LevelChunk emptyChunk(ServerLevel world,int x,int z) {
-        net.minecraft.core.Registry<net.minecraft.world.level.biome.Biome> registry=world.registryAccess().registryOrThrow(net.minecraft.core.Registry.BIOME_REGISTRY);
-        int[] biomes=new int[16*((world.getHeight()+3)/4)];java.util.Arrays.fill(biomes,registry.getId(registry.getOrThrow(net.minecraft.world.level.biome.Biomes.PLAINS)));
-        return new net.minecraft.world.level.chunk.LevelChunk(world,new net.minecraft.world.level.ChunkPos(x,z),new net.minecraft.world.level.chunk.ChunkBiomeContainer(registry,world,biomes));
+        return new net.minecraft.world.level.chunk.LevelChunk(world,new net.minecraft.world.level.ChunkPos(x,z));
     }
     static ItemStack stack(int index) {
         ItemStack stack=index<4?new ItemStack(new net.minecraft.world.item.Item[]{Items.DIAMOND_HELMET,Items.DIAMOND_CHESTPLATE,Items.DIAMOND_LEGGINGS,Items.DIAMOND_BOOTS}[index]):index==4?new ItemStack(Items.DIAMOND_SWORD):index==5?new ItemStack(Items.SHIELD):new ItemStack(Items.LAPIS_LAZULI,1+index%32);

@@ -55,7 +55,7 @@ final class NativeSafeFixer implements DataFixer {
         if(currentSettings!=null)copy.remove("WorldGenSettings");
         Tag currentBiomes=null;
         if(kind.equals("chunk")) {
-            CompoundTag level=copy.getCompound("Level");
+            CompoundTag level=TerrainChunkData.payload(copy);
             // A damaged stamp can replay the old 2D biome expansion on an
             // already-current 3D array. Protect that field alone so older
             // vanilla entities and containers still receive their own fixes.
@@ -68,7 +68,7 @@ final class NativeSafeFixer implements DataFixer {
             if(source<1493 && (nonempty(level,"Sections") || nonempty(level,"Entities") || nonempty(level,"TileEntities"))) {
                 level.putBoolean("TerrainPopulated",true);level.putBoolean("LightPopulated",true);
             }
-            shieldList(level.getList("Entities",10),source,tokens,level.getInt("xPos"),level.getInt("zPos"),true);
+            shieldList(level.getList(TerrainChunkData.entityKey(copy),10),source,tokens,level.getInt("xPos"),level.getInt("zPos"),true);
         } else if(kind.equals("entity_chunk")) {
             int[] position=copy.getIntArray("Position");
             shieldList(copy.getList("Entities",10),source,tokens,position[0],position[1],true);
@@ -80,20 +80,29 @@ final class NativeSafeFixer implements DataFixer {
         }
         protectEggs(copy,source,tokens);
         CompoundTag result;
-        if(source<704 && target>=705) {
-            // The old item hook writes Chest/Banner/Pig names back while the
-            // 704/705 schemas expect namespaced IDs. Cross that boundary on
-            // copies before the later item and flattening fixes run.
-            result=cyano.lootable.upgrade.NativeNbt.update(delegate,type,copy,source,703);
-            bridgeIdentifiers(result,kind);
-            result=cyano.lootable.upgrade.NativeNbt.update(delegate,type,result,705,target);
-        } else result=source<target?cyano.lootable.upgrade.NativeNbt.update(delegate,type,copy,source,target):copy;
+        if(currentBiomes!=null && target>=2832) {
+            // Cross the old 2D expansion on a copy without the already-3D
+            // array, then restore it before native18 consumes it into section
+            // biome palettes. A detached post-Level tag would lose this data.
+            result=nativeConvert(type,copy,source,2202);
+            if(!result.contains("Level",10))throw new IllegalStateException("Native biome prefix lost the legacy Level payload");
+            result.getCompound("Level").put("Biomes",currentBiomes);currentBiomes=null;
+            result=nativeConvert(type,result,2202,target);
+        } else result=nativeConvert(type,copy,source,target);
         result=(CompoundTag)restore(result,tokens);
-        if(currentBiomes!=null)result.getCompound("Level").put("Biomes",currentBiomes);
+        if(currentBiomes!=null) {
+            if(!result.contains("Level",10))throw new IllegalStateException("Protected legacy biomes require staged native height conversion");
+            result.getCompound("Level").put("Biomes",currentBiomes);
+        }
         if(currentSettings!=null)result.put("WorldGenSettings",updateCurrentWorldSettings((CompoundTag)currentSettings,source,target));
         for(String token:tokens.values.keySet())if(!Integer.valueOf(1).equals(tokens.restored.get(token)))throw new IllegalStateException("Native conversion lost or duplicated protected Lootable Bodies data");
         if(kind.equals("chunk")) {
-            CompoundTag level=result.getCompound("Level");ListTag entities=level.getList("Entities",10);
+            // Native height conversion flattens Level but leaves DataVersion
+            // for its ChunkStorage caller. Validate the converted payload with
+            // the proven conversion version, not a recovered stale input stamp.
+            // chunkVersion has already rejected genuinely future flat inputs.
+            result.putInt("DataVersion",Math.max(source,target));
+            CompoundTag level=TerrainChunkData.payload(result);ListTag entities=level.getList(TerrainChunkData.entityKey(result),10);
             if(!UpgradeJournal.corpses(entities).isEmpty()) {
                 if(!level.contains("xPos",3) || !level.contains("zPos",3))throw new IllegalStateException("Saved terrain has no containing coordinates for corpse recovery");
                 SavedCorpsePosition.prepare(entities,level.getInt("xPos"),level.getInt("zPos"));
@@ -103,6 +112,17 @@ final class NativeSafeFixer implements DataFixer {
         }
         if(kind.equals("chunk") || kind.equals("entity_chunk"))result.putInt("DataVersion",Math.max(source,target));
         return result;
+    }
+    private CompoundTag nativeConvert(DSL.TypeReference type,CompoundTag input,int source,int target) {
+        if(source<704 && target>=705) {
+            // The old item hook writes Chest/Banner/Pig names back while the
+            // 704/705 schemas expect namespaced IDs. Cross that boundary on
+            // copies before later item and flattening fixes run.
+            CompoundTag result=NativeNbt.update(delegate,type,input,source,703);
+            bridgeIdentifiers(result,type.typeName());
+            return NativeNbt.update(delegate,type,result,705,target);
+        }
+        return source<target?NativeNbt.update(delegate,type,input,source,target):input;
     }
     private static boolean currentWorldSettings(CompoundTag nbt) {
         if(!nbt.contains("seed",4) || !nbt.contains("dimensions",10))return false;
@@ -124,7 +144,7 @@ final class NativeSafeFixer implements DataFixer {
         return provenSource<target?NativeNbt.update(delegate,References.WORLD_GEN_SETTINGS,
                 settings.copy(),provenSource,target):settings;
     }
-    private static int entityChunkVersion(CompoundTag root) {
+    private int entityChunkVersion(CompoundTag root) {
         int[] position=root.getIntArray("Position");
         Tag entities=root.get("Entities");
         if(!root.contains("Position",11) || position.length!=2 || !(entities instanceof ListTag)
@@ -134,13 +154,22 @@ final class NativeSafeFixer implements DataFixer {
         if(version>UpgradePreservation.MINECRAFT_VERSION)
             throw new IllegalStateException("Saved entity chunk comes from a newer Minecraft version");
         // Terrain Sections/Biomes cannot identify the separate entity format.
-        // The owned current writer marker proves the native version even when
-        // an outer stamp was removed or downgraded.
-        for(UpgradeJournal.LocatedCorpse body:UpgradeJournal.corpses((ListTag)entities))
+        // Current owned markers and the matching immutable journal can prove
+        // the minimum native source even when an outer stamp was damaged.
+        UpgradeJournal journal=preserved!=null?preserved:UpgradePreservation.journal();
+        for(UpgradeJournal.LocatedCorpse body:UpgradeJournal.corpses((ListTag)entities)) {
             if(body.entity.getString("id").equals("lootablebodies:corpse")
                     && body.entity.contains(UpgradePreservation.VERSION,3)
                     && body.entity.getInt(UpgradePreservation.VERSION)==UpgradePreservation.DATA_VERSION)
-                return UpgradePreservation.MINECRAFT_VERSION;
+                version=Math.max(version,UpgradePreservation.MINECRAFT_VERSION);
+            else if(journal!=null && CorpseIdentity.present(body.entity))try {
+                CompoundTag original=journal.originalFor(CorpseIdentity.read(body.entity),position[0],position[1]);
+                if(original!=null) {
+                    int proven=UpgradePreservation.chunkSourceVersion(original.getCompound("SourceVersions"));
+                    if(proven>=512 && proven<=UpgradePreservation.MINECRAFT_VERSION)version=Math.max(version,proven);
+                }
+            }catch(IOException failure){throw new IllegalStateException("Entity chunk source context could not be verified",failure);}
+        }
         if(version<512)throw new IllegalStateException("Cannot prove saved entity chunk source version");
         return version;
     }
@@ -224,7 +253,7 @@ final class NativeSafeFixer implements DataFixer {
             }catch(IOException damaged){throw new IllegalStateException("Corpse preservation could not be verified",damaged);}
         }
         CompoundTag context=new CompoundTag();int marker=entity.getInt(UpgradePreservation.VERSION);
-        context.putInt("DataVersion",entity.getString("id").equals("lootablebodies.Corpse")?512:marker==1?922:marker==2?1343:marker==3?1631:marker==4?1976:marker==5?2230:marker==6?2586:version);return context;
+        context.putInt("DataVersion",entity.getString("id").equals("lootablebodies.Corpse")?512:marker==1?922:marker==2?1343:marker==3?1631:marker==4?1976:marker==5?2230:marker==6?2586:marker==7?2730:version);return context;
     }
     static CompoundTag stageCorpse(CompoundTag raw,CompoundTag context) {
         if(raw.contains(UpgradePreservation.VERSION,3) && raw.getInt(UpgradePreservation.VERSION)>UpgradePreservation.DATA_VERSION)throw new IllegalStateException("This corpse was saved by a newer Lootable Bodies format");
@@ -307,6 +336,7 @@ final class NativeSafeFixer implements DataFixer {
         return version>=512 && version<=UpgradePreservation.MINECRAFT_VERSION && (!legacy || version<1451) && (!palette || version>=1451);
     }
     private static int chunkVersion(CompoundTag chunk,int requested) {
+        if(TerrainChunkData.payload(chunk)==chunk)return TerrainChunkData.flattenedVersion(chunk);
         boolean legacy=sections(chunk,"Blocks",7),palette=sections(chunk,"Palette",9);
         if(legacy && palette)throw new IllegalStateException("Mixed old and flattened sections cannot be converted safely");
         int source=chunk.contains("DataVersion",3)?chunk.getInt("DataVersion"):requested;

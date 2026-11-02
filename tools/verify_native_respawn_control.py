@@ -1,4 +1,4 @@
-"""Exercise native37 delayed respawns/FIFO packets without Lootable Bodies."""
+"""Exercise native40 delayed respawns/FIFO packets without Lootable Bodies."""
 import argparse,json,socket,subprocess,time,os,re
 from pathlib import Path
 from audit_runtime_logs import audit, forge36_dead_player_movement_blocks
@@ -43,7 +43,7 @@ def main():
     commands={'server':[str(args.java.resolve()),'-Xmx1G','-Dlootablebodies.control.tcpServer=true',
         '-Dlootablebodies.control.deaths=true',
         '-Dlog4j.configurationFile='+(project/'src/integrationTest/resources/log4j2.xml').as_uri(),
-        '@libraries/net/minecraftforge/forge/1.17.1-37.1.1/'+('win_args.txt' if os.name=='nt' else 'unix_args.txt'),'--nogui'],
+        '@libraries/net/minecraftforge/forge/'+FORGE.removeprefix('forge-')+'/'+('win_args.txt' if os.name=='nt' else 'unix_args.txt'),'--nogui'],
         'client':client_command(args.java.resolve(),root/'client',args.forge_client_home.resolve(),
                                 args.assets.resolve() if args.assets else project_assets(project),username='ControlOnly',extra=extra,prepared=args.client_inputs.resolve())}
     processes={};logs=[]
@@ -77,9 +77,9 @@ def main():
     server=(root/'server.log').read_text(errors='replace')
     batches=[int(value) for value in re.findall(r'NATIVE_FIFO_DELAY_RELEASE packets=([0-9]+)',client)]
     if server.count('NATIVE_DEATH ')!=8 or len(batches)!=8 or sum(batches)<=0:
-        raise RuntimeError('Native37 control did not exercise all eight real delayed respawn/FIFO actions')
-    result={'lootable_bodies_installed':False,'respawns':8,'native37_delayed_fifo_batches':batches,
-        'legacy36_error_matcher_used':False,'native37_complete_logs_clean':True,
+        raise RuntimeError('Native40 control did not exercise all eight real delayed respawn/FIFO actions')
+    result={'lootable_bodies_installed':False,'respawns':8,'native40_delayed_fifo_batches':batches,
+        'legacy36_error_matcher_used':False,'native40_complete_logs_clean':True,
         'control_jar_sha256':digest(probe),'native_outbound_packets_delayed_fifo':True,'log_audits':reports}
     (root/'result.json').write_text(json.dumps(result,indent=2)+'\n')
     print('NATIVE_RESPAWN_CONTROL_PASS',json.dumps(result),flush=True)

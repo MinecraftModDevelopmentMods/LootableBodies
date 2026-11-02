@@ -4,6 +4,8 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import shlex
+import sys
 import subprocess
 import tempfile
 import textwrap
@@ -26,6 +28,7 @@ MATRIX114 = MATRIX113 + [origin + ' / ' + stamps for origin in
              for stamps in ['normal', 'stamps']]
 MATRIX115 = ['World upgrade matrix', 'Prepare verified migration inputs', 'Validate release workflow'] + ['Historical world shard ' + str(i) for i in range(6)]
 CORE117 = ['Build, test, and audit', 'Analyze Java', 'Validation', 'Validate release workflow']
+CORE118 = ['Check hosted work policy', 'Build and audit locally qualified archives', 'Analyze Java', 'Validation', 'Validate release workflow']
 MATRIX117 = []
 MATRIX116 = ['World upgrade matrix', 'Prepare verified migration inputs', 'Validate release workflow'] + ['Historical world shard ' + str(i) for i in range(12)]
 MATRIX = [origin + ' / ' + stamps for origin in
@@ -65,13 +68,14 @@ class ReleaseWorkflowTests(unittest.TestCase):
             '1.14.4': ('114041', 'master-1.14.4', '28.2.26'),
             '1.15.2': ('115021', 'master-1.15.2', '31.2.57'),
             '1.16.5': ('116051', 'master-1.16.5', '36.2.42'),
-            '1.17.1': ('117011', 'master-1.17.1', '37.1.1')}[minecraft]
+            '1.17.1': ('117011', 'master-1.17.1', '37.1.1'),
+            '1.18.2': ('118021', 'master-1.18.2', '40.3.12')}[minecraft]
         version = '2.4.2.' + suffix
         files={name:'C'*64 for name in ['main.jar','sources.jar','javadoc.jar','release.pom','CHANGELOG.txt','SHA256SUMS']}
         receipt={'schema':1,'source':SHA,'version':version,'files':files,'evidence_sha256':'F'*64,'qualified_locally':True,'manual_accepted':True}
         if local_receipt is not None:receipt=local_receipt
         values = dict(minecraft_version=minecraft, forge_version=forge, loader_name='forge', loader_code='1',
-            java_version='16' if minecraft=='1.17.1' else '8', java_toolchain_version='16.0.2+7' if minecraft=='1.17.1' else '8.0.502+7', gradle_java_version='17', mod_id='lootablebodies',
+            java_version='17' if minecraft=='1.18.2' else '16' if minecraft=='1.17.1' else '8', java_toolchain_version='17.0.20.1+1' if minecraft=='1.18.2' else '16.0.2+7' if minecraft=='1.17.1' else '8.0.502+7', gradle_java_version='17', mod_id='lootablebodies',
             mod_artifact='LootableBodies', mod_group='zone.moddev.mc.lootablebodies', mod_license='LGPL-2.1-only',
             curseforge_project_id='240968', mod_version=version)
         if mutation:
@@ -81,12 +85,14 @@ class ReleaseWorkflowTests(unittest.TestCase):
                          '1.14.4': MATRIX114 + ['Validate release workflow'],
                          '1.15.2': MATRIX115, '1.16.5': MATRIX116}.get(minecraft, []) if names is None else names
         if minecraft=='1.17.1' and names is None:checks=CORE117+MATRIX117
+        if minecraft=='1.18.2' and names is None:checks=CORE118
 
         def command(args, **options):
             if args[0] == 'git':
                 return SHA + '\n'
-            if '/actions/workflows/native117.yml/' in args[-1]:
-                row=dict(id=117,head_sha=SHA,head_branch='master-1.17.1',event='push',path='.github/workflows/native117.yml',conclusion='success')
+            if any('/actions/workflows/native'+code+'.yml/' in args[-1] for code in ['117','118']):
+                code='118' if minecraft=='1.18.2' else '117'
+                row=dict(id=int(code),head_sha=SHA,head_branch=branch,event='push',path='.github/workflows/native'+code+'.yml',conclusion='success')
                 if qualification:row.update(qualification)
                 return json.dumps({'workflow_runs':[row]})
             if '/actions/workflows/' in args[-1]:
@@ -105,12 +111,12 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 'MINECRAFT_VERSION': minecraft, 'SOURCE_BRANCH': branch,
                 'GITHUB_OUTPUT': str(Path(directory) / 'output'),
                 'LOCAL_QUALIFICATION':json.dumps(receipt) if receipt else ''}), \
-                patch('pathlib.Path.read_text', side_effect=['\n'.join(k+'='+v for k,v in values.items()),json.dumps({'files':files})]), \
+                patch('pathlib.Path.read_text', side_effect=['\n'.join(k+'='+v for k,v in values.items()),json.dumps({'files':files,'local_qualification_complete':True,'qualification_integrity_status':'verified'})]), \
                 patch('subprocess.check_output', side_effect=command), patch('subprocess.run', side_effect=existing):
             exec(compile(code, 'release-preflight', 'exec'), {})
 
-    def test_future_118_candidate_cannot_dispatch_publication(self):
-        code, values = self.select('2.4.9.118021')
+    def test_future_119_candidate_cannot_dispatch_publication(self):
+        code, values = self.select('2.4.10.119041')
         self.assertNotEqual(0, code)
         self.assertEqual({}, values)
 
@@ -282,6 +288,28 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 with self.assertRaises(SystemExit):exec(compile(code,'extra-native117-promotion','exec'),{})
             finally:os.chdir(previous)
 
+    def test_118_routes_to_the_accepted_target_and_requires_only_artifact_checks(self):
+        code,values=self.select('2.4.9.118021')
+        self.assertEqual(0,code);self.assertEqual('master-1.18.2',values['source_branch'])
+        self.validate('1.18.2')
+        for missing in CORE118:
+            with self.subTest(missing=missing),self.assertRaises(SystemExit):
+                self.validate('1.18.2',names=[x for x in CORE118 if x!=missing])
+
+    def test_118_rejects_other_run_inputs_missing_receipt_audit_or_java(self):
+        for mutation in [{'head_sha':'b'*40},{'head_branch':'master-1.17.1'},{'event':'pull_request'},{'path':'.github/workflows/native117.yml'},{'conclusion':'failure'}]:
+            with self.subTest(mutation=mutation),self.assertRaises(SystemExit):self.validate('1.18.2',qualification=mutation)
+        for kwargs in [{'audit_success':False},{'local_receipt':{}},{'mutation':{'java_version':'8'}},{'mutation':{'java_toolchain_version':'17.0.1+12'}}]:
+            with self.subTest(kwargs=kwargs),self.assertRaises(SystemExit):self.validate('1.18.2',**kwargs)
+
+    def test_118_staging_downloads_exact_inputs_without_build_tests_or_sdk(self):
+        workflow=WORKFLOW.read_text()
+        step=workflow.split('- name: Verify all six native118 bytes before publication',1)[1].split('      - name:',1)[0]
+        self.assertIn('python3 -B tools/native118_build.py --bundle build/release/bundle',step)
+        for forbidden in ['gradlew','native_runtime','unittest','prepare_native','xvfb']:self.assertNotIn(forbidden,step)
+        legacy=workflow.split('- name: Build, test and audit the release',1)[1].split('      - name:',1)[0]
+        self.assertIn("minecraft_version != '1.18.2'",legacy)
+
     def test_identity_changes_are_rejected(self):
         for mutation in [{'mod_id': 'other'}, {'minecraft_version': '1.10.2'}, {'mod_license': 'CC0-1.0'}]:
             with self.subTest(mutation=mutation), self.assertRaises(SystemExit):
@@ -290,6 +318,73 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_existing_release_is_not_uploaded_again(self):
         with self.assertRaises(SystemExit):
             self.validate('1.10.2', release_exists=True)
+
+
+
+    def run_staging_fixture(self,root,version,mutation=None):
+        bundle=root/'build/release/bundle';bundle.mkdir(parents=True)
+        prefix='LootableBodies-'+version
+        names=[prefix+s for s in ['.jar','-sources.jar','-javadoc.jar','.pom']]+['CHANGELOG.txt']
+        for name in names:(bundle/name).write_text('qualified '+name)
+        (bundle/'SHA256SUMS').write_bytes(''.join(hashlib.sha256((bundle/name).read_bytes()).hexdigest()+'  '+name+'\n' for name in names if name.endswith('.jar')).encode())
+        if mutation=='missing':(bundle/(prefix+'.pom')).unlink()
+        if mutation=='extra':(bundle/'unapproved.txt').write_text('extra')
+        runner=root/'runner';runner.mkdir()
+        env=dict(os.environ,RUNNER_TEMP=runner.as_posix(),RELEASE_VERSION=version,RELEASE_SHA=SHA,
+                 GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT='1',GITHUB_OUTPUT=(root/'output.txt').as_posix(),
+                 GITHUB_STEP_SUMMARY=(root/'summary.txt').as_posix(),CHERE_INVOKING='1')
+        shell=shutil.which('bash')
+        if os.name=='nt':
+            # Use the installed Git Bash, not the Windows WSL launcher.
+            shell=next((str(parent/'bin/bash.exe') for parent in Path(shutil.which('git')).parents
+                        if (parent/'bin/bash.exe').is_file()),None)
+        if not shell:raise RuntimeError('Bash is required to test actual release staging')
+        code=script('Stage the exact audited bundle')
+        # Only select this test interpreter; execute the actual shell staging,
+        # checksum checks and summary without a legacy parent checksum file.
+        code=code.replace("python3 - <<'PY'",shlex.quote(Path(sys.executable).as_posix())+" - <<'PY'")
+        return subprocess.run([shell,'-lc',code],cwd=root,env=env,capture_output=True,text=True)
+
+
+    def test_staging_uses_only_the_promoted_six_file_bundle(self):
+        for version in ['2.4.7.116051','2.4.8.117011','2.4.9.118021']:
+            with self.subTest(version=version),tempfile.TemporaryDirectory() as d:
+                root=Path(d);result=self.run_staging_fixture(root,version)
+                self.assertEqual(0,result.returncode,result.stdout+'\n'+result.stderr)
+                self.assertFalse((root/'build/release/SHA256SUMS').exists())
+                self.assertIn('LootableBodies-'+version+'.jar',(root/'summary.txt').read_text())
+
+
+    def test_staging_missing_or_extra_file_fails_before_upload(self):
+        for mutation in ['missing','extra']:
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as d:
+                root=Path(d);result=self.run_staging_fixture(root,'2.4.8.117011',mutation)
+                self.assertNotEqual(0,result.returncode)
+                self.assertIn('missing or unexpected files',result.stdout+result.stderr)
+
+
+    def test_112_artifact_audit_skips_only_explicitly_scoped_out_builds(self):
+        text=WORKFLOW.with_name('artifact-audit-1.12.yml').read_text()
+        code=text.split('def artifact_required(jobs):',1)[1].split('\n          # Fetch',1)[0]
+        code='def artifact_required(jobs):'+code
+        import textwrap
+        code=code.replace('\n          ','\n')
+        namespace={};exec(compile(code,'artifact-scope','exec'),namespace)
+        check=namespace['artifact_required']
+        def job(name,conclusion,status='completed'):return dict(name=name,conclusion=conclusion,status=status)
+        build=job('Build, test, and audit','success')
+        self.assertTrue(check([build]))
+        skipped=[job('Check runtime inputs','success'),job('Build, test, and audit','skipped'),job('Cold Forge bootstrap','skipped')]
+        self.assertFalse(check(skipped))
+        for invalid in [[],[build,build],skipped[1:],skipped[:2],
+                        [dict(build,status='in_progress')],
+                        [dict(build,conclusion='failure')],
+                        [dict(skipped[0],conclusion='failure'),*skipped[1:]],
+                        [*skipped[:2],dict(skipped[2],conclusion='failure')]]:
+            with self.subTest(invalid=invalid),self.assertRaises(ValueError):check(invalid)
+        self.assertIn("needs: scope",text)
+        self.assertIn("if: needs.scope.outputs.required == 'true'",text)
+
 
     def test_tag_at_another_commit_is_rejected(self):
         with self.assertRaises(SystemExit):

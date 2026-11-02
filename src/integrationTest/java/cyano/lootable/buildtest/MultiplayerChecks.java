@@ -26,8 +26,8 @@ import net.minecraft.world.level.GameType;
 
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.fmllegacy.network.NetworkRegistry;
-import net.minecraftforge.fmllegacy.network.simple.*;
+import net.minecraftforge.network.NetworkRegistry;
+import net.minecraftforge.network.simple.*;
 import net.minecraftforge.api.distmarker.Dist;
 
 /** Disposable two-client coordinator. Step messages acknowledge prior TCP clicks on the server thread. */
@@ -39,7 +39,7 @@ public final class MultiplayerChecks {
     private EntityLootableBody body;
     private int phase,ticks;
     private boolean finishing;
-    public static void registerChannel(){CHANNEL.registerMessage(0,Step.class,(message,buffer)->buffer.writeInt(message.number),buffer->new Step(buffer.readInt()),(message,supplier)->{net.minecraftforge.fmllegacy.network.NetworkEvent.Context context=supplier.get();context.enqueueWork(()->acknowledge(message,context.getSender()));context.setPacketHandled(true);});CHANNEL.registerMessage(1,FixtureDeath.class,(message,buffer)->{},buffer->new FixtureDeath(),(message,supplier)->{net.minecraftforge.fmllegacy.network.NetworkEvent.Context context=supplier.get();context.enqueueWork(()->{RuntimeChecks.require(Boolean.getBoolean("lootablebodies.issueClientCheck") && context.getSender()!=null,"Unexpected fixture death signal");context.getSender().kill();});context.setPacketHandled(true);});}
+    public static void registerChannel(){CHANNEL.registerMessage(0,Step.class,(message,buffer)->buffer.writeInt(message.number),buffer->new Step(buffer.readInt()),(message,supplier)->{net.minecraftforge.network.NetworkEvent.Context context=supplier.get();context.enqueueWork(()->acknowledge(message,context.getSender()));context.setPacketHandled(true);});CHANNEL.registerMessage(1,FixtureDeath.class,(message,buffer)->{},buffer->new FixtureDeath(),(message,supplier)->{net.minecraftforge.network.NetworkEvent.Context context=supplier.get();context.enqueueWork(()->{RuntimeChecks.require(Boolean.getBoolean("lootablebodies.issueClientCheck") && context.getSender()!=null,"Unexpected fixture death signal");context.getSender().kill();});context.setPacketHandled(true);});}
     public static final class FixtureDeath { }
     public MultiplayerChecks(MinecraftServer server) throws Exception {
         this.server=server;sync=sync();

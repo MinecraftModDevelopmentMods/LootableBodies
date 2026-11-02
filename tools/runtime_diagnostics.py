@@ -9,6 +9,32 @@ import json
 from pathlib import Path
 import subprocess
 import time
+import xml.etree.ElementTree as ET
+from urllib.parse import urlparse
+from urllib.request import url2pathname
+
+
+def validate_logging_inputs(command):
+    """Reject missing declared logging files before starting an owned JVM."""
+    values=[str(value).split('=',1)[1] for value in command if str(value).startswith('-Dlog4j.configurationFile=')]
+    if len(values)>1:raise ValueError('Multiple explicit runtime logging configurations')
+    inputs={}
+    for value in values:
+        parsed=urlparse(value)
+        if parsed.scheme=='file':
+            if parsed.netloc not in ('','localhost'):raise ValueError('Logging configuration must be a local input')
+            path=Path(url2pathname(parsed.path))
+        elif parsed.scheme and not (len(parsed.scheme)==1 and value[1:3] in (':\\',':/')):
+            raise ValueError('Logging configuration must be a local input')
+        else:path=Path(value)
+        if not path.is_file() or not path.stat().st_size:raise FileNotFoundError('Missing runtime logging input: '+str(path))
+        data=path.read_bytes()
+        if path.suffix.lower()=='.xml':
+            try:
+                if ET.fromstring(data).tag!='Configuration':raise ValueError('Wrong logging configuration root')
+            except ET.ParseError as error:raise ValueError('Malformed runtime logging input: '+str(path)) from error
+        inputs[str(path.resolve())]=hashlib.sha256(data).hexdigest().upper()
+    return inputs
 
 
 def run_monitored(command, *, cwd, log, timeout, diagnostics,

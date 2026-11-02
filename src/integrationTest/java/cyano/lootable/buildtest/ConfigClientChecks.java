@@ -15,7 +15,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.Screenshot;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.fmlclient.gui.screen.ModListScreen;
+import net.minecraftforge.client.gui.ModListScreen;
 /** Real native Mods button and widgets, without operating the user's desktop. */
 final class ConfigClientChecks {
     private int stage,frames,step,tooltipsChecked;private File report;private ModListScreen mods;private CorpseConfigGui root;private Future<?> pending;
@@ -24,7 +24,7 @@ final class ConfigClientChecks {
         if(!(screen instanceof CorpseConfigGui))return;
         int width=0,height=event.getComponents().size()==1?-2:0;
         for(net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent line:event.getComponents()) {
-            width=Math.max(width,line.getWidth(event.getFontRenderer()));height+=line.getHeight();
+            width=Math.max(width,line.getWidth(event.getFont()));height+=line.getHeight();
         }
         RuntimeChecks.require(event.getX()>=3 && event.getX()+width+3<=screen.width && event.getY()>=4 && event.getY()+height+4<=screen.height,
                 "Native configuration tooltip clipped: "+event.getX()+","+event.getY()+" "+width+"x"+height+" screen="+screen.width+"x"+screen.height);
@@ -80,7 +80,7 @@ final class ConfigClientChecks {
     private void openMods(Minecraft mc)throws Exception {
         mods=new ModListScreen(new TitleScreen());mc.setScreen(mods);List<?> list=(List<?>)get(mods,"mods");
         for(int i=0;i<list.size();i++)if(((net.minecraftforge.forgespi.language.IModInfo)list.get(i)).getModId().equals("lootablebodies")){
-            net.minecraftforge.fmlclient.gui.widget.ModListWidget entries=(net.minecraftforge.fmlclient.gui.widget.ModListWidget)get(mods,"modList");
+            net.minecraftforge.client.gui.widget.ModListWidget entries=(net.minecraftforge.client.gui.widget.ModListWidget)get(mods,"modList");
             mods.setSelected(entries.children().get(i));check(button(mods,20).active,"mods_config_button_enabled");return;
         }
         throw new AssertionError("Lootable Bodies missing from Mods list");

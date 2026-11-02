@@ -36,10 +36,13 @@ class MigrationCiTests(unittest.TestCase):
         for value in [-1,6]:
             with self.assertRaises(ValueError):ci.partition(list(ORIGINS),value)
 
-    def test_all_760_phases_and_152_refusals_are_required(self):
+    def test_all_940_phases_and_188_refusals_retain_every_earlier_case(self):
         result = ci.aggregate(self.reports(), list(ORIGINS), 'a'*40)
-        self.assertEqual((76,760,152),(len(result['cases']),result['jvm_phases'],result['abort_cases']))
-        native16=[name for name in result['cases'] if not name.startswith(('released-116-','recovery-116-','via116-'))]
+        self.assertEqual((94,940,188),(len(result['cases']),result['jvm_phases'],result['abort_cases']))
+        native17=[name for name in result['cases'] if not name.startswith(('released-117-','recovery-117-','via117-'))]
+        self.assertEqual(76,len(native17));self.assertEqual(760,sum(len(result['cases'][name]['phases']) for name in native17))
+        self.assertEqual(152,sum(len(result['aborts'][name]['conditions']) for name in native17))
+        native16=[name for name in native17 if not name.startswith(('released-116-','recovery-116-','via116-'))]
         self.assertEqual(60,len(native16));self.assertEqual(600,sum(len(result['cases'][name]['phases']) for name in native16))
         self.assertEqual(120,sum(len(result['aborts'][name]['conditions']) for name in native16))
         earlier=[name for name in native16 if not name.startswith(('released-115-','recovery-115-','via115-'))]

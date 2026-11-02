@@ -1,0 +1,12 @@
+{
+  "kind": "Synthetic flat fixture header produced by actual native18 PrimaryLevelData + WorldGenSettings registry codec; not a historical source world",
+  "minecraft": "1.18.2",
+  "forge": "40.3.12",
+  "native_data_version": 2975,
+  "java": "Temurin17.0.20.1+1",
+  "sha256": "A806A2751860CDB3D8566510D6A714435F36A6182C026825943BCC24838AC031",
+  "generator_source": "src/test/java/cyano/lootable/buildtest/Native118FixtureGenerator.java",
+  "generator_source_sha256": "22670F72942C7F4B481AB702CAC13D64E1DE9112D016286755D25E0585E65730",
+  "last_played_normalized": 0,
+  "world_seed": 4267321
+}

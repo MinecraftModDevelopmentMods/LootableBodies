@@ -29,7 +29,6 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.TickList;
 import net.minecraft.world.level.chunk.ChunkSource;
 
 import net.minecraftforge.common.MinecraftForge;
@@ -366,19 +365,18 @@ public final class InventorySafetyChecks {
     private static final class RejectingWorld extends Level {
         private final ServerLevel delegate; int attempts;
         RejectingWorld(ServerLevel target) {
-            super((net.minecraft.world.level.storage.WritableLevelData)target.getLevelData(),target.dimension(),target.dimensionType(),()->net.minecraft.util.profiling.InactiveProfiler.INSTANCE,false,false,target.getSeed());
+            super((net.minecraft.world.level.storage.WritableLevelData)target.getLevelData(),target.dimension(),target.dimensionTypeRegistration(),()->net.minecraft.util.profiling.InactiveProfiler.INSTANCE,false,false,target.getSeed());
             delegate=target;
         }
         @Override public net.minecraft.core.RegistryAccess registryAccess(){return delegate.registryAccess();}
         @Override public float getShade(net.minecraft.core.Direction direction,boolean shade){return delegate.getShade(direction,shade);}
         @Override public ChunkSource getChunkSource(){return delegate.getChunkSource();}
-        @Override public net.minecraft.world.level.biome.Biome getUncachedNoiseBiome(int x,int y,int z){return delegate.getUncachedNoiseBiome(x,y,z);}
+        @Override public net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> getUncachedNoiseBiome(int x,int y,int z){return delegate.getUncachedNoiseBiome(x,y,z);}
 
-        @Override public net.minecraft.world.level.TickList<net.minecraft.world.level.block.Block> getBlockTicks(){return delegate.getBlockTicks();}
-        @Override public net.minecraft.world.level.TickList<net.minecraft.world.level.material.Fluid> getLiquidTicks(){return delegate.getLiquidTicks();}
+        @Override public net.minecraft.world.ticks.LevelTickAccess<net.minecraft.world.level.block.Block> getBlockTicks(){return delegate.getBlockTicks();}
+        @Override public net.minecraft.world.ticks.LevelTickAccess<net.minecraft.world.level.material.Fluid> getFluidTicks(){return delegate.getFluidTicks();}
         @Override public net.minecraft.world.item.crafting.RecipeManager getRecipeManager(){return delegate.getRecipeManager();}
         @Override public net.minecraft.world.scores.Scoreboard getScoreboard(){return delegate.getScoreboard();}
-        @Override public net.minecraft.tags.TagContainer getTagManager(){return delegate.getTagManager();}
         @Override public net.minecraft.server.MinecraftServer getServer(){return delegate.getServer();}
         @Override public long getGameTime(){return delegate==null?0:delegate.getGameTime();}
 

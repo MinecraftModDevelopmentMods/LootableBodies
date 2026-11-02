@@ -8,7 +8,7 @@ from nbt_regions import Tag,encode
 
 
 class Native117FlatHeaderTests(unittest.TestCase):
-    def header(self,root,version=2730,generator='minecraft:flat'):
+    def header(self,root,version=2975,generator='minecraft:flat'):
         settings=Tag(10,{'dimensions':Tag(10,{'minecraft:overworld':Tag(10,{
             'generator':Tag(10,{'type':Tag(8,generator)})})})})
         data=encode('',Tag(10,{'Data':Tag(10,{'DataVersion':Tag(3,version),'WorldGenSettings':settings})}))
@@ -22,7 +22,7 @@ class Native117FlatHeaderTests(unittest.TestCase):
             self.assertEqual(before,(home/'world/level.dat').read_bytes());self.assertEqual(before,header.read_bytes())
             self.assertEqual(['level.dat'],[p.name for p in (home/'world').iterdir()])
     def test_wrong_hash_target_or_generator_refuses_before_creating_world(self):
-        for version,generator,bad_hash in [(2730,'minecraft:flat',True),(2586,'minecraft:flat',False),(2730,'minecraft:noise',False)]:
+        for version,generator,bad_hash in [(2975,'minecraft:flat',True),(2586,'minecraft:flat',False),(2730,'minecraft:flat',False),(2975,'minecraft:noise',False)]:
             with self.subTest(version=version,generator=generator,bad_hash=bad_hash),tempfile.TemporaryDirectory() as directory:
                 root=Path(directory);header,digest=self.header(root,version,generator);home=self.home(root)
                 with self.assertRaises(RuntimeError):seed_flat_fixture(home,header,'0'*64 if bad_hash else digest)
@@ -33,6 +33,14 @@ class Native117FlatHeaderTests(unittest.TestCase):
             protected=home/'world/level.dat';protected.write_bytes(b'existing world bytes')
             with self.assertRaises(FileExistsError):seed_flat_fixture(home,header,digest)
             self.assertEqual(b'existing world bytes',protected.read_bytes())
+
+    def test_actual_native18_codec_header_is_a_sealed_current_target_input(self):
+        header=Path(__file__).parent/'fixtures/native118-flat-level.dat'
+        expected='A806A2751860CDB3D8566510D6A714435F36A6182C026825943BCC24838AC031'
+        self.assertEqual(expected,hashlib.sha256(header.read_bytes()).hexdigest().upper())
+        with tempfile.TemporaryDirectory() as directory:
+            home=self.home(Path(directory));seed_flat_fixture(home,header,expected)
+            self.assertEqual(header.read_bytes(),(home/'world/level.dat').read_bytes())
 
 
 if __name__=='__main__':unittest.main()

@@ -37,16 +37,37 @@ final class VisibilityClientChecks {
     private net.minecraft.network.Connection traced;
     private net.minecraft.client.multiplayer.ClientLevel profileWorld;
     void register(){if(Boolean.getBoolean("lootablebodies.visibility")&&role!=null){net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);MinecraftForge.EVENT_BUS.register(this);}}
-    @SubscribeEvent public void mouse(net.minecraftforge.client.event.GuiScreenEvent.MouseClickedEvent.Pre e){e.setCanceled(true);}
-    @SubscribeEvent public void key(net.minecraftforge.client.event.GuiScreenEvent.KeyboardKeyPressedEvent.Pre e){e.setCanceled(true);}
+    @SubscribeEvent public void mouse(net.minecraftforge.client.event.ScreenEvent.MouseClickedEvent.Pre e){e.setCanceled(true);}
+    @SubscribeEvent public void key(net.minecraftforge.client.event.ScreenEvent.KeyboardKeyPressedEvent.Pre e){e.setCanceled(true);}
     @SubscribeEvent public void rendered(RenderLivingEvent.Post<?,?> e){
         if(e.getEntity() instanceof EntityLootableBody) {
             rendered.add(e.getEntity().getUUID());
             if(Minecraft.getInstance().screen instanceof DeathScreen && !e.getEntity().isRemoved() && !e.getEntity().isInvisible())deathRendered.add(e.getEntity().getUUID());
         }
     }
-    @SubscribeEvent public void deathScreenDrawn(net.minecraftforge.client.event.GuiScreenEvent.DrawScreenEvent.Post e) {
-        if(!role.equals("A") || !(e.getGui() instanceof DeathScreen) || (phase!=2&&phase!=14) || done.contains(phase))return;
+    @SubscribeEvent public void readyForRealDeath(net.minecraftforge.client.event.RenderLevelStageEvent e) {
+        if(!role.equals("A") || (phase!=1&&phase!=13) || done.contains(phase) || frames<20 ||
+                e.getStage()!=net.minecraftforge.client.event.RenderLevelStageEvent.Stage.AFTER_PARTICLES)return;
+        Minecraft mc=Minecraft.getInstance();
+        if(mc.level==null || mc.player==null || !mc.player.isAlive() || mc.screen!=null ||
+                !mc.level.hasChunkAt(mc.player.blockPosition()) || e.getCamera().getEntity()!=mc.player ||
+                e.getCamera().getLookVector().y()>-0.75F)return;
+        // Client ticks can catch up before a world frame has actually drawn.
+        // Native death removes the owner's tracking connection after20ticks;
+        // begin that finite window only with a real, loaded, downward view.
+        net.minecraft.world.phys.Vec3 p=mc.player.position();
+        net.minecraft.world.phys.AABB futureBody=new net.minecraft.world.phys.AABB(
+                p.x-0.425D,p.y,p.z-0.425D,p.x+0.425D,p.y+1.25D,p.z+0.425D).inflate(0.5D);
+        if(!e.getFrustum().isVisible(futureBody))return;
+        try {
+            String receipt="{\"phase\":"+phase+",\"native_world_frame\":true,\"render_tick\":"+e.getRenderTick()+
+                ",\"pitch\":"+mc.player.getXRot()+",\"corpse_box_in_native_frustum\":true,\"at_nanos\":"+System.nanoTime()+"}";
+            Files.write(VisibilityChecks.file("A.predeath-render-"+phase+".json").toPath(),receipt.getBytes(StandardCharsets.UTF_8));
+            System.out.println("VISIBILITY_PREDEATH_RENDER_READY "+receipt);ack();
+        }catch(Throwable failure){failure.printStackTrace();finished=true;mc.stop();}
+    }
+    @SubscribeEvent public void deathScreenDrawn(net.minecraftforge.client.event.ScreenEvent.DrawScreenEvent.Post e) {
+        if(!role.equals("A") || !(e.getScreen() instanceof DeathScreen) || (phase!=2&&phase!=14) || done.contains(phase))return;
         Minecraft mc=Minecraft.getInstance();
         try {
             EntityLootableBody b=body(mc,phase==2?"first":"second");
@@ -81,7 +102,7 @@ final class VisibilityClientChecks {
                     profile.getProperties().put("textures",new com.mojang.authlib.properties.Property("textures",Base64.getEncoder().encodeToString(texture.getBytes(StandardCharsets.UTF_8))));
                     cache.add(profile);
                 }
-                net.minecraft.world.level.block.entity.SkullBlockEntity.setProfileCache(cache);
+                net.minecraft.world.level.block.entity.SkullBlockEntity.profileCache=cache;
             }
             return;
         }
@@ -105,7 +126,7 @@ final class VisibilityClientChecks {
                 EntityLootableBody b=body(mc,"first");RuntimeChecks.require(b!=null&&!b.isRemoved()&&!b.isInvisible(),"Corpse disappeared during five-minute wait");
             }
             if(done.contains(phase) || frames<20)return;
-            if(phase==0 || phase==1 || phase==13){ack();return;}
+            if(phase==0 || phase==1 || phase==13){if(!role.equals("A") || phase==0)ack();return;}
             if(phase==2 || phase==14) {
                 // The owner proves the live corpse at the actual rendered death
                 // screen. Native tracking may remove it before a later tick.

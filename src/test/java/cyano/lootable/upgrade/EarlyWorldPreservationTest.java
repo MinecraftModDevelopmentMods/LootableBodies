@@ -6,13 +6,12 @@ import java.nio.file.*;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.world.level.storage.LevelStorageSource;
-import net.minecraftforge.fmllegacy.WorldPersistenceHooks;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 class EarlyWorldPreservationTest {
-    @TempDir Path directory;
+    @TempDir(cleanup=org.junit.jupiter.api.io.CleanupMode.ON_SUCCESS) Path directory;
     @AfterEach void close(){UpgradePreservation.close();}
     private CompoundTag level(int version) {
         CompoundTag root=new CompoundTag(),data=new CompoundTag();data.putInt("DataVersion",version);root.put("Data",data);
@@ -24,27 +23,27 @@ class EarlyWorldPreservationTest {
     @Test void nativeReadHookAbortsBeforeFallbackOrLevelWrites()throws Exception {
         Path world=directory.resolve("fixture");CompoundTag root=level(2230);write(world,root);
         Path journal=world.resolve("data/lootablebodies-upgrade");Files.createDirectories(journal);Files.write(journal.resolve("index.nbt"),new byte[]{1,2,3});
-        byte[] before=Files.readAllBytes(world.resolve("level.dat"));EarlyWorldPreservation.install();
+        byte[] before=Files.readAllBytes(world.resolve("level.dat"));Native118UnitLifecycle.activate();
         LevelStorageSource format=new LevelStorageSource(directory,directory.resolve("backups"),NativeVanillaDataFixer.get());
         try(LevelStorageSource.LevelStorageAccess save=format.createAccess("fixture")) {
-            Error failure=assertThrows(Error.class,()->WorldPersistenceHooks.handleWorldDataLoad(save,null,root));
+            Error failure=assertThrows(Error.class,()->EarlyWorldPreservation.beforeRead(save));
             assertTrue(failure.getMessage().contains("Lootable Bodies could not preserve this world's corpses"));
         }
         assertArrayEquals(before,Files.readAllBytes(world.resolve("level.dat")));
         assertArrayEquals(new byte[]{1,2,3},Files.readAllBytes(journal.resolve("index.nbt")));
     }
     @Test void startupKeepsItsEarlySourceContextAndUnknownOwnedMetadata()throws Exception {
-        Path world=directory.resolve("fixture");CompoundTag root=level(2230);write(world,root);EarlyWorldPreservation.install();
+        Path world=directory.resolve("fixture");CompoundTag root=level(2230);write(world,root);Native118UnitLifecycle.activate();
         LevelStorageSource format=new LevelStorageSource(directory,directory.resolve("backups"),NativeVanillaDataFixer.get());
         try(LevelStorageSource.LevelStorageAccess save=format.createAccess("fixture")) {
-            WorldPersistenceHooks.handleWorldDataLoad(save,null,root);
+            EarlyWorldPreservation.beforeRead(save);
             UpgradeJournal early=UpgradePreservation.journal();assertEquals(2230,early.worldVersions().getInt("WorldDataVersion"));
             write(world,level(2586));assertSame(early,UpgradePreservation.prepareForStart(world));
             assertEquals(2230,early.worldVersions().getInt("WorldDataVersion"));
-            CompoundTag output=new CompoundTag();WorldPersistenceHooks.handleWorldDataSave(save,null,output);
+            CompoundTag output=new CompoundTag();EarlyWorldPreservation.beforeWrite(save,output);
             assertEquals(root.get("lootablebodies"),output.get("lootablebodies"));
             output.getCompound("lootablebodies").putString("unknown","changed copy");
-            CompoundTag again=new CompoundTag();WorldPersistenceHooks.handleWorldDataSave(save,null,again);
+            CompoundTag again=new CompoundTag();EarlyWorldPreservation.beforeWrite(save,again);
             assertEquals(root.get("lootablebodies"),again.get("lootablebodies"));
         }
     }

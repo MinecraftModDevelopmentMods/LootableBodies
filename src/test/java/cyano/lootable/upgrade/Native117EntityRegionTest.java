@@ -33,7 +33,7 @@ class Native117EntityRegionTest {
     private Path write(String dimension,String storage,int x,int z,CompoundTag root) throws Exception {
         Path directory=world.resolve(dimension).resolve(storage);Files.createDirectories(directory);
         Path path=directory.resolve("r."+(x>>5)+"."+(z>>5)+".mca");
-        try(RegionFile region=new RegionFile(path.toFile(),directory.toFile(),false)) {
+        try(RegionFile region=new RegionFile(path,directory,false)) {
             try(DataOutputStream out=region.getChunkDataOutputStream(new ChunkPos(x,z))) {NbtIo.write(root,out);}
         }
         return path;
@@ -109,7 +109,7 @@ class Native117EntityRegionTest {
     }
     @Test void nativeEmptyEntityRegionPlaceholderStaysEmpty() throws Exception {
         Path directory=world.resolve("entities");Files.createDirectories(directory);Path file=directory.resolve("r.0.0.mca");
-        try(RegionFile region=new RegionFile(file.toFile(),directory.toFile(),false)) {assertNull(region.getChunkDataInputStream(new ChunkPos(0,0)));}
+        try(RegionFile region=new RegionFile(file,directory,false)) {assertNull(region.getChunkDataInputStream(new ChunkPos(0,0)));}
         byte[] before=Files.readAllBytes(file);assertEquals(0,UpgradeJournal.scan(world).size());assertArrayEquals(before,Files.readAllBytes(file));
     }
 }

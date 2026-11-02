@@ -28,7 +28,7 @@ public final class NativePreflightChecks {
             DataFixer observer=new DataFixer() {
                 public Schema getSchema(int version){return nativeFixer.getSchema(version);}
                 public <T> Dynamic<T> update(DSL.TypeReference type,Dynamic<T> input,int from,int to) {
-                    if(type.typeName().equals("entity_chunk") && net.minecraftforge.fmllegacy.server.ServerLifecycleHooks.getCurrentServer()==null) {
+                    if(type.typeName().equals("entity_chunk") && net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer()==null) {
                         boolean preflight=java.util.Arrays.stream(Thread.currentThread().getStackTrace()).anyMatch(
                                 frame->frame.getClassName().equals("cyano.lootable.upgrade.UpgradeJournal") && frame.getMethodName().equals("validateEntityChunks"));
                         if(!preflight || worlds.get()!=0 || starts.get()!=0)throw new AssertionError("Entity conversion missed the pre-world boundary");
@@ -43,7 +43,7 @@ public final class NativePreflightChecks {
         }));
     }
     @SubscribeEvent public void loaded(net.minecraftforge.event.world.WorldEvent.Load event){worlds.incrementAndGet();}
-    @SubscribeEvent public void starting(net.minecraftforge.fmlserverevents.FMLServerAboutToStartEvent event){starts.incrementAndGet();}
+    @SubscribeEvent public void starting(net.minecraftforge.event.server.ServerAboutToStartEvent event){starts.incrementAndGet();}
     static void verify(MinecraftServer server) throws Exception {
         RuntimeChecks.require(mode.equals("convert") && early.get()>0,"No actual pre-world entity conversion observed");
         net.minecraft.server.level.ServerLevel world=server.overworld();RuntimeChecks.awaitChunk(world,0,0);
@@ -59,7 +59,7 @@ public final class NativePreflightChecks {
                     && item.hasTag() && item.getTag().getString("keep").equals("slot-"+slot),"Preflight inventory changed at slot"+slot);
         }
         CompoundTag saved=new CompoundTag();body.saveAsPassenger(saved);
-        RuntimeChecks.require(saved.getInt("LootableBodiesDataVersion")==7,"Preflight corpse marker was not advanced");
+        RuntimeChecks.require(saved.getInt("LootableBodiesDataVersion")==8,"Preflight corpse marker was not advanced");
         ListTag aux=saved.getList("Aux",10);RuntimeChecks.require(aux.size()==5,"Preflight Aux record count changed");
         for(int index=0;index<5;index++) {
             int sourceSlot=index<4?index:47;CompoundTag item=aux.getCompound(index);

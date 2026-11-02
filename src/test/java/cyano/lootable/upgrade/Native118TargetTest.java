@@ -6,12 +6,12 @@ import net.minecraft.nbt.ListTag;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
-class Native117TargetTest {
+class Native118TargetTest {
     @Test void targetMatchesTheActualNativeWorldVersion() {
         net.minecraft.SharedConstants.tryDetectVersion();
-        assertEquals(2730,net.minecraft.SharedConstants.getCurrentVersion().getWorldVersion());
-        assertEquals(2730,UpgradePreservation.MINECRAFT_VERSION);
-        assertEquals(7,UpgradePreservation.DATA_VERSION);
+        assertEquals(2975,net.minecraft.SharedConstants.getCurrentVersion().getWorldVersion());
+        assertEquals(2975,UpgradePreservation.MINECRAFT_VERSION);
+        assertEquals(8,UpgradePreservation.DATA_VERSION);
     }
     @Test void released16MarkerIsMigratedWithAllSlotsAndOriginalsRetained() {
         assertEquals(2586,cyano.lootable.buildtest.HistoricalVersions.dataVersion("1.16.5"));
@@ -25,7 +25,7 @@ class Native117TargetTest {
         body.put("Equipment",items);CompoundTag before=body.copy();
         CompoundTag source=new CompoundTag();source.putInt("DataVersion",2586);
         CompoundTag staged=NativeSafeFixer.stageCorpse(body,source);
-        assertEquals(7,staged.getInt(UpgradePreservation.VERSION));
+        assertEquals(8,staged.getInt(UpgradePreservation.VERSION));
         assertEquals(48,staged.getList("LootableBodiesUnresolved",10).size());
         for(int slot=0;slot<48;slot++) {
             CompoundTag record=staged.getList("LootableBodiesUnresolved",10).getCompound(slot);
@@ -35,9 +35,9 @@ class Native117TargetTest {
         }
         assertEquals(before,body);
     }
-    @Test void productionClassesUseJava16() throws Exception {
+    @Test void productionClassesUseJava17() throws Exception {
         try(DataInputStream bytes=new DataInputStream(getClass().getResourceAsStream("/cyano/lootable/entities/EntityLootableBody.class"))) {
-            assertEquals(0xCAFEBABE,bytes.readInt());bytes.readUnsignedShort();assertEquals(60,bytes.readUnsignedShort());
+            assertEquals(0xCAFEBABE,bytes.readInt());bytes.readUnsignedShort();assertEquals(61,bytes.readUnsignedShort());
         }
     }
     @Test void marker6OverridesADamagedOuterEntityStamp() {
@@ -48,8 +48,31 @@ class Native117TargetTest {
             public <T> com.mojang.serialization.Dynamic<T> update(com.mojang.datafixers.DSL.TypeReference type,com.mojang.serialization.Dynamic<T> value,int from,int to){return value;}
         };
         CompoundTag staged=NativeNbt.update(UpgradePreservation.wrapper(identity),
-                net.minecraft.util.datafix.fixes.References.ENTITY_TREE,body,512,2730);
+                net.minecraft.util.datafix.fixes.References.ENTITY_TREE,body,512,2975);
         assertEquals(2586,staged.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
         assertEquals(6,body.getInt(UpgradePreservation.VERSION));
+    }
+    @Test void released17MarkerRetainsItsSourceAndEveryIndexedOriginal() {
+        CompoundTag body=Native117RegionFixtures.body(java.util.UUID.randomUUID(),7),before=body.copy();
+        CompoundTag source=new CompoundTag();source.putInt("DataVersion",2730);
+        CompoundTag staged=NativeSafeFixer.stageCorpse(body,source);
+        assertEquals(8,staged.getInt(UpgradePreservation.VERSION));
+        assertEquals(2730,staged.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
+        ListTag records=staged.getList("LootableBodiesUnresolved",10);assertEquals(50,records.size());
+        for(int slot=0;slot<48;slot++) {
+            assertEquals("Equipment",records.getCompound(slot).getString("Source"));
+            assertEquals(before.getList("Equipment",10).getCompound(slot),records.getCompound(slot).getCompound("Data"));
+        }
+        assertEquals(before,body);
+    }
+    @Test void marker7OverridesDamagedOuterStampWhenTheNative18TargetRuns() {
+        CompoundTag body=Native117RegionFixtures.body(java.util.UUID.randomUUID(),7),before=body.copy();
+        com.mojang.datafixers.DataFixer identity=new com.mojang.datafixers.DataFixer() {
+            public com.mojang.datafixers.schemas.Schema getSchema(int version){throw new AssertionError("No schema needed");}
+            public <T> com.mojang.serialization.Dynamic<T> update(com.mojang.datafixers.DSL.TypeReference type,com.mojang.serialization.Dynamic<T> value,int from,int to){return value;}
+        };
+        CompoundTag staged=NativeNbt.update(UpgradePreservation.wrapper(identity),net.minecraft.util.datafix.fixes.References.ENTITY_TREE,body,512,2975);
+        assertEquals(2730,staged.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
+        assertEquals(before,body);
     }
 }

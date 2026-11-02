@@ -1,0 +1,78 @@
+name: LootableBodies 1.18 CI
+
+on:
+  push:
+    branches: [master-1.18.2]
+  pull_request:
+    branches: [master-1.18.2]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native118-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  policy:
+    name: Check hosted work policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Reject hosted test and runtime commands
+        run: python3 -B tools/hosted_policy.py
+  build:
+    name: Build and audit locally qualified archives
+    needs: policy
+    if: github.repository == 'MinecraftModDevelopmentMods/LootableBodies'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Require local qualification before build preparation
+        run: |
+          set -euo pipefail
+          python3 -B tools/hosted_policy.py --require-qualified-manifest 2>&1 | tee "$RUNNER_TEMP/native118-build.log"
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '25.0.3+9.0.LTS'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17.0.20.1+1'
+      # Full Java/Python suites, games, IDE consumers and SDK installs stay local.
+      # Fork pushes run policy checks only. MMD builds independently check bytes.
+      - name: Compile and audit release archives
+        env:
+          LOOTABLEBODIES_JAVA17_HOME: ${{ env.JAVA_HOME_17_X64 }}
+          LOOTABLEBODIES_MAVENIZER_JAVA_HOME: ${{ env.JAVA_HOME_25_X64 }}
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew assemble verifyProductionRuntimeClasspath prepareReleaseBundle --no-daemon --no-build-cache --stacktrace 2>&1 | tee -a "$RUNNER_TEMP/native118-build.log"
+          python3 -B tools/native118_build.py 2>&1 | tee -a "$RUNNER_TEMP/native118-build.log"
+      - name: Retain the exact six release files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: LootableBodies-1.18.2-${{ github.sha }}
+          if-no-files-found: error
+          path: build/release/bundle/*
+      - name: Retain build evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: native118-fast-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            build/reports/**
+            build/release/bundle/*
+            ${{ runner.temp }}/native118-build.log

@@ -6,7 +6,7 @@ import java.util.zip.ZipFile;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Native37 loads mods as distinct Java modules: split packages are fatal. */
+/** Native40 loads mods as distinct Java modules: split packages are fatal. */
 class Native117ProbeIsolationTest {
     private Set<String> packages(String archive) throws Exception {
         Set<String> result=new TreeSet<>();
@@ -15,16 +15,16 @@ class Native117ProbeIsolationTest {
                 java.util.zip.ZipEntry entry=entries.nextElement();String path=entry.getName();
                 if(!path.endsWith(".class"))continue;
                 byte[] code=zip.getInputStream(entry).readAllBytes();
-                assertEquals(60,((code[6]&255)<<8)|(code[7]&255),path);
+                assertEquals(61,((code[6]&255)<<8)|(code[7]&255),path);
                 result.add(path.substring(0,path.lastIndexOf('/')));
             }
         }
         assertFalse(result.isEmpty(),archive);return result;
     }
     @Test void integrationModuleHasNoProductionPackageDefinitions() throws Exception {
-        Set<String> main=packages("build/libs-dev/LootableBodies-2.4.8.117011-deobf.jar");
+        Set<String> main=packages("build/libs-dev/LootableBodies-2.4.9.118021-deobf.jar");
         Set<String> probe=packages("build/integration-test-mod/lootablebodies-build-tests.jar");
-        probe.retainAll(main);assertTrue(probe.isEmpty(),"Native37 module split packages: "+probe);
+        probe.retainAll(main);assertTrue(probe.isEmpty(),"Native40 module split packages: "+probe);
     }
     @Test void independentControlHasNoModOrIntegrationPackages() throws Exception {
         Set<String> control=packages("build/control-test-mod/forge-platform-control.jar");

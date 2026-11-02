@@ -1,8 +1,15 @@
 // Keep development launches independent of any installed Minecraft instance.
 ext.minecraftGameHome = layout.projectDirectory.dir('.gradle/minecraft-home')
+// Buildship refresh has no command-line -P arguments. Retain a prepared local
+// client location rather than requiring its assets/natives to be copied.
+Properties localMinecraftSetup = new Properties()
+File localMinecraftSetupFile = file('gradle-local.properties')
+if (localMinecraftSetupFile.isFile()) localMinecraftSetupFile.withInputStream { localMinecraftSetup.load(it) }
 String assetFolder=org.gradle.internal.os.OperatingSystem.current().isMacOsX()?'Library/Application Support/minecraft/assets':'.minecraft/assets'
-ext.minecraftAssets = providers.gradleProperty('minecraftAssetsDirectory').isPresent() ?
-        layout.projectDirectory.dir(providers.gradleProperty('minecraftAssetsDirectory').get()) : minecraftGameHome.dir(assetFolder)
+ext.minecraftAssets = layout.projectDirectory.dir(providers.gradleProperty('minecraftAssetsDirectory')
+        .getOrElse(localMinecraftSetup.getProperty('minecraftAssetsDirectory',minecraftGameHome.dir(assetFolder).asFile.absolutePath)))
+ext.minecraftNatives = layout.projectDirectory.dir(providers.gradleProperty('minecraftNativesDirectory')
+        .getOrElse(localMinecraftSetup.getProperty('minecraftNativesDirectory','.gradle/native118-client-inputs/natives')))
 tasks.register('prepareMinecraftAssets') {
     group = 'ide'
     doLast {
@@ -17,10 +24,10 @@ tasks.register('prepareMinecraftAssets') {
                 java.nio.file.Files.move(pending.toPath(),output.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING)
             }
         }
-        File descriptor=new File(root,'1.17.1.json')
-        download('https://piston-meta.mojang.com/v1/packages/e0e7ab5ed6f55bbd874ef95be3c9356d67e64b57/1.17.1.json','e0e7ab5ed6f55bbd874ef95be3c9356d67e64b57',descriptor)
+        File descriptor=new File(root,'1.18.2.json')
+        download('https://piston-meta.mojang.com/v1/packages/334b33fcba3c9be4b7514624c965256535bd7eba/1.18.2.json','334b33fcba3c9be4b7514624c965256535bd7eba',descriptor)
         def version=new groovy.json.JsonSlurper().parse(descriptor)
-        File index=new File(root,'indexes/1.17.json')
+        File index=new File(root,'indexes/1.18.json')
         download(version.assetIndex.url,version.assetIndex.sha1,index)
         Set<String> hashes=new groovy.json.JsonSlurper().parse(index).objects.values().collect {it.hash} as Set
         hashes.each {hash ->

@@ -17,12 +17,16 @@ def main():
     run(java,seed,'nbt-seed');sealed=fingerprint(seed/'world')
     home=root/'candidate';prepare(home,distribution,main,probe);shutil.copytree(seed/'world',home/'world')
     far=home/'world/region/r.8.8.mca';deferred=digest(far)
-    run(java,home,'nbt-reload');assert digest(far)==deferred,'Unopened malformed region changed'
+    entity_far=home/'world/entities/r.8.8.mca'
+    if not entity_far.is_file():raise FileNotFoundError('Missing native18 deferred malformed entity region')
+    deferred_entities=digest(entity_far)
+    run(java,home,'nbt-reload');assert digest(far)==deferred and digest(entity_far)==deferred_entities,'Unopened malformed terrain/entity region changed'
     for phase in ('nbt-deferred','nbt-deferred-repeat','nbt-return','nbt-return-reload'):run(java,home,phase)
     expected=['nbt-reload','nbt-deferred','nbt-deferred-repeat','nbt-return','nbt-return-reload']
     assert (home/'world/nbt-world-checks.txt').read_text().splitlines()==['PASS '+s+' exact_items_raw_records_identity' for s in expected]
     assert fingerprint(seed/'world')==sealed and digest(baseline)==original and digest(main)==candidate,'A sealed source/candidate changed'
     report={'candidate_sha256':candidate,'baseline_sha256':original,'sealed_world_unchanged':True,'unopened_malformed_region_unchanged':deferred,'checks':expected,'raw_records_per_corpse_before_return':5,'raw_records_per_corpse_after_return':4,'raw_scalar_records_per_corpse':4,'raw_health_attribute_records_per_corpse':5,'raw_effect_hurt_records_per_corpse':3,'raw_geometry_records_per_corpse':2,'raw_rotation_fall_records_per_corpse':2,'raw_metadata_records_per_corpse':16,'source_world':sealed}
+    report['unopened_malformed_entity_region_unchanged']=deferred_entities
     (root/'result.json').write_text(json.dumps(report,indent=2)+'\n');print('PACKAGED_NBT_RECOVERY_PASS',flush=True)
 
 if __name__=='__main__':main()

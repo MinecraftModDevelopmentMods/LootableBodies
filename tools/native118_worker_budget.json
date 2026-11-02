@@ -1,0 +1,29 @@
+{
+  "minecraft": "1.18.2",
+  "forge": "40.3.12",
+  "java": "Temurin17.0.20.1+1",
+  "platform": "Windows amd64",
+  "qualified": true,
+  "reloads": 200,
+  "jvms": 4,
+  "per_process_deadline": 240,
+  "max_concurrent_workers": 2,
+  "visible_cpus": 24,
+  "native_preparation_workers": 1,
+  "jvm_args": [
+    "-Dmax.bg.threads=1"
+  ],
+  "heap_test_args": [
+    "-Xms256m",
+    "-Xmx1G"
+  ],
+  "gc": "G1 actual target default, 18 parallelGCThreads/5concurrentGCThreads observed",
+  "no_candidate": true,
+  "no_worlds": true,
+  "source_and_sdk_seals_unchanged": true,
+  "scope": "Historical copied-world harness only: native40-specific single preparation worker qualified by4fresh native-only JVMs/200real resource reloads. Ordinary/client launches retain native CPU/worker/G1 defaults. Original startup-timeout cause remains UNKNOWN; scheduling diagnostic reproduced native HashSet counter corruption and pending native reload.",
+  "qualification_evidence_sha256": "B024B7810EA541D3E6D1DDA4B9A2AC13971044A82A8EB1705D84FF01E87AEDD5",
+  "controller_sha256": "33D49827D74E1CF2B23F112D2EC56670238E8457596E8F65869BAF3DB4DAB001",
+  "native_race_diagnostic_sha256": "D78547A28C823B9D237A32EB5899140112F20E23BE7173B9A74FBDFE307496E2",
+  "original_timeout_cause_confirmed": false
+}

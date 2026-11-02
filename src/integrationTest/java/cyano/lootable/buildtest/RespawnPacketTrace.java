@@ -5,7 +5,7 @@ import net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerCombatEnterPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerCombatEndPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerCombatKillPacket;
-import net.minecraft.network.protocol.game.ClientboundLevelChunkPacket;
+import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
 import net.minecraft.core.Registry;
 
@@ -20,12 +20,11 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.game.ClientboundAddMobPacket;
 import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
-import net.minecraft.network.protocol.game.ClientboundLevelChunkPacket;
 import net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket;
 import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
 import net.minecraft.network.protocol.game.ServerboundClientCommandPacket;
-import net.minecraftforge.fmllegacy.network.ICustomPacket;
+import net.minecraftforge.network.ICustomPacket;
 
 /** Observes decoded packets without dropping, delaying, mutating or reordering them. */
 final class RespawnPacketTrace extends ChannelDuplexHandler {
@@ -61,7 +60,7 @@ final class RespawnPacketTrace extends ChannelDuplexHandler {
             return "MOD_SPAWN id="+id+" mod="+name+" type="+type+" uuid="+new UUID(b.readLong(),b.readLong());
         }
         if(!(packet instanceof ClientboundAddMobPacket||packet instanceof ClientboundRespawnPacket||packet instanceof ClientboundRemoveEntitiesPacket||packet instanceof ClientboundForgetLevelChunkPacket
-            ||packet instanceof ClientboundLevelChunkPacket||packet instanceof ClientboundPlayerCombatEnterPacket||packet instanceof ClientboundPlayerCombatEndPacket
+            ||packet instanceof ClientboundLevelChunkWithLightPacket||packet instanceof ClientboundPlayerCombatEnterPacket||packet instanceof ClientboundPlayerCombatEndPacket
             ||packet instanceof ClientboundPlayerCombatKillPacket||packet instanceof ClientboundSetEntityDataPacket||packet instanceof ServerboundClientCommandPacket))return null;
         if(packet instanceof ClientboundRespawnPacket) {
             return NativeRespawnDescription.describe((ClientboundRespawnPacket)packet);
@@ -79,9 +78,9 @@ final class RespawnPacketTrace extends ChannelDuplexHandler {
             }
             if(packet instanceof ClientboundRemoveEntitiesPacket){int[] ids=new int[b.readVarInt()];for(int i=0;i<ids.length;i++)ids[i]=b.readVarInt();return "DESTROY ids="+Arrays.toString(ids);}
             if(packet instanceof ClientboundForgetLevelChunkPacket)return "UNLOAD chunk="+b.readInt()+","+b.readInt();
-            // Native 1.17 always carries the biome array with this chunk packet;
-            // the old partial/full flag no longer exists on the wire.
-            if(packet instanceof ClientboundLevelChunkPacket)return "CHUNK chunk="+b.readInt()+","+b.readInt()+" full=true";
+            // Native 1.18 combines the complete chunk and light payload. Its
+            // first two serialized ints are still the containing coordinates.
+            if(packet instanceof ClientboundLevelChunkWithLightPacket)return "CHUNK chunk="+b.readInt()+","+b.readInt()+" full=true";
             if(packet instanceof ClientboundPlayerCombatEnterPacket)return "COMBAT event=ENTER_COMBAT";
             if(packet instanceof ClientboundPlayerCombatEndPacket)return "COMBAT event=END_COMBAT";
             if(packet instanceof ClientboundPlayerCombatKillPacket)return "COMBAT event=ENTITY_DIED player="+b.readVarInt();

@@ -82,16 +82,13 @@ public final class RespawnPacketChecks {
                 if(a.level.dimension()!=dim)transfer(a,dim);
                 if(b.level.dimension()!=dim)transfer(b,dim);
                 double x=kind==6?-.4:96.5,z=kind==6?-.4:96.5;
-                for(int dx=-6;dx<=6;dx++)for(int dz=-6;dz<=6;dz++) {
-                    BlockPos floor=new BlockPos(x+dx,79,z+dz);w.setBlockAndUpdate(floor,Blocks.OBSIDIAN.defaultBlockState());
-                    for(int y=80;y<=84;y++)w.removeBlock(new BlockPos(x+dx,y,z+dz),false);
-                }
+                FixtureArena.prepare(new BlockPos(x,79,z),w::setBlockAndUpdate);
+                FixtureArena.prepare(new BlockPos(160,79,96),w::setBlockAndUpdate);
                 w.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBSPAWNING).set(false,null);w.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);
                 a.setGameMode(GameType.SURVIVAL);b.setGameMode(GameType.SURVIVAL);a.getInventory().clearContent();b.getInventory().clearContent();
                 FixtureApi.spawn(a,new BlockPos(kind==5?160:(int)Math.floor(x),80,(int)Math.floor(z)-3),true,false,a.level.dimension());
                 FixtureApi.spawn(b,new BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),true,false,b.level.dimension());
                 if(kind==7)FixtureApi.spawn(a,new BlockPos(96,80,93),true,false,a.level.dimension());
-                for(int dx=157;dx<=164;dx++)for(int dz=90;dz<=98;dz++)w.setBlockAndUpdate(new BlockPos(dx,79,dz),Blocks.OBSIDIAN.defaultBlockState());
                 a.getInventory().items.set(9,RuntimeChecks.stack(520+index));a.containerMenu.broadcastChanges();
                 if(simultaneous){b.getInventory().items.set(9,RuntimeChecks.stack(620+index));b.containerMenu.broadcastChanges();}
                 a.connection.teleport(x,80,z,0,0);b.connection.teleport(kind==4?160.5:x+2,80,z-2.5,0,25);
@@ -115,6 +112,7 @@ public final class RespawnPacketChecks {
                 // death and return. Saved UUIDs survive; runtime entity IDs do not.
                 body=live(body);if(simultaneous)observerBody=live(observerBody);state(3);
             } else if(phase==3) {
+                RuntimeChecks.require(a!=null&&b!=null&&a.isAlive()&&b.isAlive(),"Unexpected extra player death during the accepted respawn observation");
                 // In a cold restart, many ordinary saved bodies can collide and
                 // move the new corpse beyond the player's interaction reach.
                 // Follow it with the viewer; never freeze production physics.

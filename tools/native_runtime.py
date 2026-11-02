@@ -1,4 +1,4 @@
-"""Disposable official Forge 37 launches, separate from the development bootstrap."""
+"""Disposable official Forge 40 launches, separate from the development bootstrap."""
 import hashlib
 import json
 import os
@@ -10,19 +10,22 @@ import urllib.error
 import urllib.request
 import zipfile
 from command_logs import run_logged
-from runtime_diagnostics import run_monitored
+from runtime_diagnostics import run_monitored,validate_logging_inputs
 
-FORGE = 'forge-1.17.1-37.1.1'
-INSTALLER_SHA256 = '31F2319B1B9CA491AACCC020887240F8524A4FF2A8E0F8B795E17E889CBC043B'
-SERVER_INPUTS = json.loads(Path(__file__).with_name('native117_server_inputs.json').read_text(encoding='utf-8'))
-# Qualified by 200 actual packaged native37 resource reloads in four bounded
-# JVMs, without this mod or a world. Ordinary gameplay retains native defaults.
-WORKER_BUDGET_PROOF = json.loads(Path(__file__).with_name('native117_worker_budget.json').read_text(encoding='utf-8'))
+FORGE = 'forge-1.18.2-40.3.12'
+INSTALLER_SHA256 = 'DCFF493F6C2212BDF6AE087F98029CD317A79759AB1009DCE23E63E7DBA0E216'
+SERVER_INPUTS = json.loads(Path(__file__).with_name('native118_server_inputs.json').read_text(encoding='utf-8'))
+# Native40's copied-world history harness uses its separately qualified single
+# preparation worker. Ordinary/client games retain native CPU/worker/GC defaults.
+WORKER_BUDGET_PROOF = json.loads(Path(__file__).with_name('native118_worker_budget.json').read_text(encoding='utf-8'))
 if (WORKER_BUDGET_PROOF['minecraft'], WORKER_BUDGET_PROOF['forge'],
         WORKER_BUDGET_PROOF['reloads'], WORKER_BUDGET_PROOF['jvms'],
-        WORKER_BUDGET_PROOF['native_preparation_workers']) != ('1.17.1', '37.1.1', 200, 4, 1):
-    raise RuntimeError('Missing native37 worker-budget qualification')
-HISTORICAL_JVM_ARGS = ('-XX:ActiveProcessorCount=2',)
+        WORKER_BUDGET_PROOF['qualified']) != ('1.18.2', '40.3.12', 200, 4, True):
+    raise RuntimeError('Missing native40 resource-policy qualification')
+HISTORICAL_JVM_ARGS = tuple(WORKER_BUDGET_PROOF['jvm_args'])
+if (HISTORICAL_JVM_ARGS != ('-Dmax.bg.threads=1',) or
+        WORKER_BUDGET_PROOF['native_preparation_workers'] != 1):
+    raise RuntimeError('Missing exact native40 historical preparation-worker qualification')
 
 
 def project_assets(project):
@@ -46,16 +49,16 @@ def verify_server_inputs(distribution):
     returned hashes bind the actual SDK bytes prepared for every process.
     """
     from native_sdk_contents import verify_generated_archive
-    generated=json.loads(Path(__file__).with_name('native117_generated_sdk.json').read_text())
+    generated=json.loads(Path(__file__).with_name('native118_generated_sdk.json').read_text())
     actual={}
     for name,expected in SERVER_INPUTS.items():
         artifact=Path(distribution)/name
-        if artifact.is_symlink() or not artifact.is_file():raise FileNotFoundError('Missing native37 SDK input: '+name)
+        if artifact.is_symlink() or not artifact.is_file():raise FileNotFoundError('Missing native40 SDK input: '+name)
         value=digest(artifact)
         if value!=expected:
             seal=generated.get(name)
             if not seal or seal['canonical_archive_sha256']!=expected:
-                raise RuntimeError('Incorrect official Forge37 server input: '+name)
+                raise RuntimeError('Incorrect official Forge40 server input: '+name)
             verify_generated_archive(artifact,seal)
             if digest(artifact)!=value:raise RuntimeError('Native SDK changed during verification: '+name)
         actual[name]=value
@@ -79,7 +82,7 @@ def prepare_server(home, distribution, candidate=None, probe=None):
     distribution = distribution.resolve()
     libraries = distribution / 'libraries'
     if not libraries.is_dir():
-        raise FileNotFoundError('Incomplete official Forge 37 server installation')
+        raise FileNotFoundError('Incomplete official Forge 40 server installation')
     verify_server_inputs(distribution)
     home.mkdir(parents=True, exist_ok=False)
     (home / 'mods').mkdir()
@@ -120,11 +123,11 @@ def run_java(java, home, phase, *, timeout=240, jvm_args=()):
     home = home.resolve()
     release = java.parent.parent / 'release'
     if not release.is_file():
-        raise RuntimeError('Native runtime requires exact Temurin 16.0.2+7 JDK metadata')
+        raise RuntimeError('Native runtime requires exact Temurin 17.0.20.1+1 JDK metadata')
     version = dict(line.split('=', 1) for line in release.read_text(encoding='utf-8').splitlines() if '=' in line)
-    if (version.get('SEMANTIC_VERSION') != '"16.0.2+7"' or
-            version.get('IMPLEMENTOR') != '"Eclipse Foundation"'):
-        raise RuntimeError('Native runtime requires exact Temurin 16.0.2+7')
+    if (version.get('SEMANTIC_VERSION') != '"17.0.20.1+1"' or
+            version.get('IMPLEMENTOR') != '"Eclipse Adoptium"'):
+        raise RuntimeError('Native runtime requires exact Temurin 17.0.20.1+1')
     log = home / (phase + '.log')
     diagnostics = home / (phase + '.diagnostics')
     copies = [home / (phase + '.' + name) for name in ('latest.log', 'debug.log')]
@@ -138,13 +141,22 @@ def run_java(java, home, phase, *, timeout=240, jvm_args=()):
     # Relative output avoids the drive-letter delimiter in unified logging.
     gc = diagnostics.relative_to(home) / 'gc.txt'
     arguments = 'win_args.txt' if os.name == 'nt' else 'unix_args.txt'
-    command = [str(java), '-Xlog:gc*,safepoint:file=' + gc.as_posix() + ':time,uptime,level,tags',
-               *jvm_args, '@libraries/net/minecraftforge/forge/1.17.1-37.1.1/' + arguments, '--nogui']
+    command = [str(java), '-Xms256m', '-Xmx2G', '-Xlog:gc*,safepoint:file=' + gc.as_posix() + ':time,uptime,level,tags',
+               *jvm_args, '@libraries/net/minecraftforge/forge/1.18.2-40.3.12/' + arguments, '--nogui']
+    validate_logging_inputs(command)
+    def initial_diagnostics(process):
+        # Short refusals and successful phases must retain real thread/heap
+        # evidence too. This callback remains inside the unchanged deadline.
+        for name, tool, option in [('initial-threads.txt',jstack,'-l'),('initial-heap-gc.txt',jstat,'-gc')]:
+            with (diagnostics/name).open('x',encoding='utf-8') as output:
+                subprocess.run([str(tool),option,str(process.pid)],stdout=output,
+                               stderr=subprocess.STDOUT,timeout=8,check=True)
     try:
         completed = run_monitored(command, cwd=home, log=log, timeout=timeout,
                                   diagnostics=diagnostics,
                                   diagnostic_command=[str(jstack), '-l'],
-                                  metric_command=[str(jstat), '-gc'])
+                                  metric_command=[str(jstat), '-gc'],
+                                  process_started=initial_diagnostics)
     finally:
         # Failed and timed-out phases need their complete native logs too.
         for name, destination in zip(('latest.log', 'debug.log'), copies):
@@ -172,14 +184,14 @@ def seed_flat_fixture(home, header, expected_sha256):
         version = data.value['DataVersion']
         generator = data.value['WorldGenSettings'].value['dimensions'].value[
             'minecraft:overworld'].value['generator'].value['type']
-        if version.kind != 3 or version.value != 2730 or generator.kind != 8 or generator.value != 'minecraft:flat':
+        if version.kind != 3 or version.value != 2975 or generator.kind != 8 or generator.value != 'minecraft:flat':
             raise ValueError('Wrong native version or generator')
     except (AttributeError, KeyError, ValueError) as error:
-        raise RuntimeError('Expected an explicit native2730 flat codec header') from error
+        raise RuntimeError('Expected an explicit native2975 flat codec header') from error
     world.mkdir()
     shutil.copy2(header, world/'level.dat')
     (home/'native-flat-header-input.json').write_text(json.dumps({
-        'sha256':expected_sha256, 'native_data_version':2730, 'generator':'minecraft:flat',
+        'sha256':expected_sha256, 'native_data_version':2975, 'generator':'minecraft:flat',
         'only_header_copied':True}, indent=2)+'\n', encoding='utf-8')
 
 
@@ -199,9 +211,10 @@ def run_server(java, home, phase, *, timeout=240, extra=(), marker=None, message
     from audit_runtime_logs import audit
     audit(log,native=True)
     for name in ('latest.log', 'debug.log'):
-        runtime_log = home / 'logs' / name
-        if runtime_log.is_file():
-            audit(runtime_log,native=True)
+        runtime_log = home / (phase+'.'+name)
+        if not runtime_log.is_file() or not runtime_log.stat().st_size:
+            raise FileNotFoundError('Missing complete native log: '+str(runtime_log))
+        audit(runtime_log,native=True)
     return log
 
 
@@ -214,7 +227,7 @@ def _download(artifact, destination):
     destination.parent.mkdir(parents=True, exist_ok=True)
     for address in (artifact['url'], artifact['url'] + '?source=lootablebodies-runtime'):
         try:
-            request = urllib.request.Request(address, headers={'User-Agent': 'LootableBodiesRuntimeTests/2.4.7.116051'})
+            request = urllib.request.Request(address, headers={'User-Agent': 'LootableBodiesRuntimeTests/2.4.9.118021'})
             with urllib.request.urlopen(request, timeout=60) as response:
                 content = response.read()
             if hashlib.sha1(content).hexdigest() != expected:
@@ -251,13 +264,13 @@ def validate_client_paths(paths):
 
 
 def client_inputs(runtime, prepared):
-    from native117_client import load
+    from native118_client import load
     base, forge, record = load(runtime, prepared)
     return base, forge, [Path(p) for p in record['classpath']], Path(record['natives'])
 
 
 def prepare_assets(runtime, cache=None):
-    raise RuntimeError('Use the pinned native1.17 prepareMinecraftAssets task; inherited cache-copy hydration is disabled')
+    raise RuntimeError('Use pinned native1.18 assets; inherited cache-copy hydration is disabled')
 
 
 def prepare_client(home, candidate=None, probe=None):
@@ -274,45 +287,29 @@ def prepare_client(home, candidate=None, probe=None):
 
 
 def client_command(java, home, runtime, assets, *, username='LootableTest', extra=(), prepared=None):
-    from native117_client import command
+    from native118_client import command
     if prepared is None:
-        prepared=Path(__file__).resolve().parents[1]/'.gradle/native117-client-inputs'
+        prepared=Path(__file__).resolve().parents[1]/'.gradle/native118-client-inputs'
     return command(java,home,runtime,assets,prepared,username=username,extra=extra)
 
 
-def prepare_vanilla_server(home):
-    """Stage the official pinned server where the native installer reads it."""
-    from native117_client import BASE_VERSION,BASE_SHA1
-    descriptor=home/'versions'/BASE_VERSION/(BASE_VERSION+'.json')
-    _download({'sha1':BASE_SHA1,'url':'https://piston-meta.mojang.com/v1/packages/'+BASE_SHA1+'/1.17.1.json'},descriptor)
-    metadata=json.loads(descriptor.read_text())
-    if metadata['id']!=BASE_VERSION:raise RuntimeError('Wrong official server descriptor')
-    relative='libraries/net/minecraft/server/'+BASE_VERSION+'/server-'+BASE_VERSION+'.jar'
-    target=home/relative
-    _download(metadata['downloads']['server'],target)
-    if digest(target)!=SERVER_INPUTS[relative]:raise RuntimeError('Official vanilla server checksum mismatch')
-    return target
-
-
 def install(java, home, client=False):
-    """Install the pinned native37 distribution into a new owned directory."""
+    """Install native40 locally; its installer owns the server downloads."""
     from prepare_migration_inputs import fetch
     home=home.resolve();home.mkdir(parents=True,exist_ok=False)
     installer=home/(FORGE+'-installer.jar')
-    fetch('https://maven.minecraftforge.net/net/minecraftforge/forge/1.17.1-37.1.1/'+installer.name,installer,INSTALLER_SHA256)
+    fetch('https://maven.minecraftforge.net/net/minecraftforge/forge/1.18.2-40.3.12/'+installer.name,installer,INSTALLER_SHA256)
     if client:
-        from native117_client import BASE_VERSION,BASE_SHA1
+        from native118_client import BASE_VERSION,BASE_SHA1
         base=home/'versions'/BASE_VERSION/(BASE_VERSION+'.json')
-        _download({'sha1':BASE_SHA1,'url':'https://piston-meta.mojang.com/v1/packages/'+BASE_SHA1+'/1.17.1.json'},base)
+        _download({'sha1':BASE_SHA1,'url':'https://piston-meta.mojang.com/v1/packages/'+BASE_SHA1+'/1.18.2.json'},base)
         metadata=json.loads(base.read_text());_download(metadata['downloads']['client'],base.with_suffix('.jar'))
         (home/'launcher_profiles.json').write_text('{"profiles":{}}\n')
-    else:
-        prepare_vanilla_server(home)
     run_logged([str(java),'-Djava.awt.headless=true','-jar',installer.name,
                 '--installClient' if client else '--installServer',str(home)],
                 cwd=home,path=home/'install.log',timeout=600)
     if client:
-        from native117_client import prepare
+        from native118_client import prepare
         inputs=prepare(home,home/'prepared-inputs')['files']
     else:
         inputs=verify_server_inputs(home)

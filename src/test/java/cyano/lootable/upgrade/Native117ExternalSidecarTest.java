@@ -36,14 +36,14 @@ class Native117ExternalSidecarTest {
         CompoundTag chunk=new CompoundTag();chunk.putInt("DataVersion",2730);chunk.putIntArray("Position",new int[]{0,0});
         ListTag entities=new ListTag();entities.add(body);chunk.put("Entities",entities);
         Path file=directory.resolve("r.0.0.mca");
-        try(RegionFile region=new RegionFile(file.toFile(),directory.toFile(),false)) {
+        try(RegionFile region=new RegionFile(file,directory,false)) {
             try(DataOutputStream out=region.getChunkDataOutputStream(new ChunkPos(0,0))){NbtIo.write(chunk,out);}
         }
         Path sidecar=directory.resolve("c.0.0.mcc");assertTrue(Files.isRegularFile(sidecar));assertTrue(Files.size(sidecar)>1024*1024);
         byte[] raw=Files.readAllBytes(file),payload=Files.readAllBytes(sidecar);
         int location=ByteBuffer.wrap(raw).getInt(),offset=(location>>>8)*4096;
         assertEquals(0x82,raw[offset+4]&255,"Native writer must actually select external zlib storage");
-        try(RegionFile region=new RegionFile(file.toFile(),directory.toFile(),false);
+        try(RegionFile region=new RegionFile(file,directory,false);
                 DataInputStream in=region.getChunkDataInputStream(new ChunkPos(0,0))) {
             assertEquals(chunk,NbtIo.read(in),"Native reader must decode the original external entity chunk");
         }
