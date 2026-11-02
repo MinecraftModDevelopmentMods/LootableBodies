@@ -1,4 +1,4 @@
-"""Run the exact production jar and isolated verifier in official Forge 37."""
+"""Run the exact production jar and isolated verifier in official Forge 40."""
 import argparse
 import hashlib
 import json
@@ -8,18 +8,24 @@ import subprocess
 from audit_runtime_logs import audit
 from native_runtime import project_assets,prepare_client,client_command,fingerprint
 from release_identity import MAIN_JAR
-from runtime_diagnostics import run_monitored
+from runtime_diagnostics import run_monitored,validate_logging_inputs
 
 
 def run_client(command,root,label,timeout):
+    validate_logging_inputs(command)
     diagnostics=root/(label+'.diagnostics')
     gc='-Xlog:gc*,safepoint:file='+label+'.diagnostics/gc.txt:time,uptime,level,tags'
     launch=[command[0],gc,*command[1:]]
     java=Path(command[0]);suffix='.exe' if java.suffix=='.exe' else ''
+    def initial_diagnostics(process):
+        for name,tool,option in [('initial-threads.txt','jstack','-l'),('initial-heap-gc.txt','jstat','-gc')]:
+            with (diagnostics/name).open('x',encoding='utf-8') as output:
+                subprocess.run([str(java.with_name(tool+suffix)),option,str(process.pid)],stdout=output,
+                    stderr=subprocess.STDOUT,timeout=8,check=True)
     try:
         return run_monitored(launch,cwd=root,log=root/(label+'.log'),timeout=timeout,
             diagnostics=diagnostics,diagnostic_command=[str(java.with_name('jstack'+suffix)),'-l'],
-            metric_command=[str(java.with_name('jstat'+suffix)),'-gc'])
+            metric_command=[str(java.with_name('jstat'+suffix)),'-gc'],process_started=initial_diagnostics)
     finally:
         for name in ('latest.log','debug.log'):
             log=root/'logs'/name
@@ -36,7 +42,8 @@ def run_default_phases(command,root):
     """Continue the same saved world at the connected/drop boundary.
 
     Both processes keep the original 180s bound. The first complete log set
-    and images are retained before the second process can replace live files.
+    and images, plus the actual saved world bytes, are retained before the
+    second process can replace live files. A hash list cannot recover bytes.
     """
     first=[command[0],'-Dlootablebodies.clientStopBeforeDrops=true',*command[1:]]
     result=run_client(first,root,'client',180)
@@ -50,7 +57,11 @@ def run_default_phases(command,root):
     if not images.is_dir() or not list(images.glob('*.png')):
         raise RuntimeError('Missing first graphical phase images')
     shutil.copytree(images,root/'connected-screenshots')
+    frozen=root/'connected-world'
+    shutil.copytree(world,frozen)
+    if fingerprint(frozen)!=sealed:raise RuntimeError('Incomplete or damaged frozen graphical world')
     (root/'client-handoff.json').write_text(json.dumps({'saved_world':sealed,
+        'frozen_world':frozen.name,
         'first_log_sha256':hashlib.sha256(console.read_bytes()).hexdigest().upper(),
         'process_deadlines':[180,180],'regenerated_world':False},indent=2)+'\n')
     if fingerprint(world)!=sealed:raise RuntimeError('World changed before continuation')

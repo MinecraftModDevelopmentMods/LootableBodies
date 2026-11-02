@@ -5,7 +5,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.api.distmarker.*;
-import net.minecraftforge.fmllegacy.network.NetworkHooks;
+import net.minecraftforge.network.NetworkHooks;
 /** Native Forge container opening, with the historical local helper kept internal. */
 public final class GUIHandler {
     private static final GUIHandler INSTANCE=new GUIHandler();

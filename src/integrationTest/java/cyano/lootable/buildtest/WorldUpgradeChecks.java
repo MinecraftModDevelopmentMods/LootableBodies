@@ -226,9 +226,7 @@ final class WorldUpgradeChecks {
         for(int i=0;i<samples.size();i++) {
             CompoundTag record=samples.getCompound(i);
             if(record.getInt("Dimension")!=FixtureApi.dimensionId(world) || record.getInt("Wave")!=wave)continue;
-            int[] source=record.getIntArray("Data"),expected=HistoricalBiomes.nativeValues(source);
-            int[] actual=world.getChunk(record.getInt("ChunkX"),record.getInt("ChunkZ")).getBiomes().writeBiomes();
-            require(Arrays.equals(expected,actual),"Historical biome sampling changed in dimension "+record.getInt("Dimension")+" wave "+wave);
+            Native118BiomeChecks.verify(world,record,wave);
         }
     }
     private static Map<String,Integer> indexedPlayer(CompoundTag player,String key) {

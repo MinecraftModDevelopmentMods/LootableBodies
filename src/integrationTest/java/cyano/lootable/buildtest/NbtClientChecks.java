@@ -27,6 +27,10 @@ import net.minecraft.world.level.GameType;
 
 /** Real GUI recovery after loading malformed NBT, including unresolved data across another save. */
 final class NbtClientChecks {
+    // Earlier native admission regressions intentionally leave live fixtures in
+    // chunk10,10. Keep the graphical disk fixture in a separate, empty chunk so
+    // native entity collisions cannot change its zero-motion load assertion.
+    private static final int COORDINATE=NbtWorldChecks.GRAPHICAL_COORDINATE;
     private interface Action {void run() throws Exception;}
     private final UUID bodyId=UUID.fromString("00000000-0000-4000-8000-000000000121");
     private UUID playerId;
@@ -35,18 +39,21 @@ final class NbtClientChecks {
     private CompoundTag visible;
     private Map<String,Integer> before;
     private ListTag expectedPlayer;
-    void start(Minecraft mc){playerId=mc.player.getUUID();}
+    void start(Minecraft mc){playerId=mc.player.getUUID();NbtWorldChecks.graphicalAdmissions=0;}
     boolean tick(Minecraft mc) throws Exception {
         frames++;RuntimeChecks.require(frames<300,"NBT graphical stage timeout "+stage);
         if(stage==0){schedule(mc,()->{
             ServerPlayer p=player(mc);p.getInventory().clearContent();p.containerMenu.setCarried(ItemStack.EMPTY);p.setGameMode(GameType.SURVIVAL);
-            for(int x=157;x<=171;x++)for(int z=157;z<=163;z++)p.level.setBlockAndUpdate(new BlockPos(x,79,z),Blocks.STONE.defaultBlockState());
-            NbtWorldChecks.seed(p.getLevel(),bodyId,160,folder(mc),"graphical");
+            RuntimeChecks.awaitChunk(p.getLevel(),COORDINATE>>4,COORDINATE>>4);
+            for(int x=COORDINATE-3;x<=COORDINATE+11;x++)for(int z=COORDINATE-3;z<=COORDINATE+3;z++)p.level.setBlockAndUpdate(new BlockPos(x,79,z),Blocks.STONE.defaultBlockState());
+            RuntimeChecks.require(p.getLevel().getEntities(null,new net.minecraft.world.phys.AABB(COORDINATE,79,COORDINATE-2,COORDINATE+16,83,COORDINATE+4)).isEmpty(),"Graphical malformed fixture chunk is not isolated");
+            NbtWorldChecks.seed(p.getLevel(),bodyId,COORDINATE,folder(mc),"graphical");
         });next(1);}
         else if(stage==1 && done() && frames>20){quit(mc);next(2);}
         else if(stage==2 && FixtureConnections.stopped(mc)){mc.loadLevel("build-fixture");next(3);}
-        else if(stage==3 && ready(mc) && frames>20){schedule(mc,()->player(mc).connection.teleport(168.5,80,159.5,0,0));next(30);}
+        else if(stage==3 && ready(mc) && frames>20){schedule(mc,()->player(mc).connection.teleport(COORDINATE+8.5,80,COORDINATE-.5,0,0));next(30);}
         else if(stage==30 && done() && frames>20){schedule(mc,()->{
+            RuntimeChecks.require(NbtWorldChecks.graphicalAdmissions==1,"Missing exact first native graphical disk admission");
             EntityLootableBody b=body(mc);for(int i=0;i<8;i++)b.baseTick();NbtWorldChecks.verify(b,false);
             before=NbtRecoveryChecks.items(b);visible=full(b);RuntimeChecks.saveExpected(folder(mc),"nbt-client-before",b);
         });next(4);}
@@ -62,8 +69,9 @@ final class NbtClientChecks {
         });next(7);}
         else if(stage==7 && done()){checkPlayer(mc.player.getInventory());quit(mc);next(8);}
         else if(stage==8 && FixtureConnections.stopped(mc)){mc.loadLevel("build-fixture");next(9);}
-        else if(stage==9 && ready(mc) && frames>20){schedule(mc,()->player(mc).connection.teleport(168.5,80,159.5,0,0));next(90);}
+        else if(stage==9 && ready(mc) && frames>20){schedule(mc,()->player(mc).connection.teleport(COORDINATE+8.5,80,COORDINATE-.5,0,0));next(90);}
         else if(stage==90 && done() && frames>20){schedule(mc,()->{
+            RuntimeChecks.require(NbtWorldChecks.graphicalAdmissions==2,"Missing exact second native graphical disk admission");
             body(mc).baseTick();RuntimeChecks.verifyExpected(folder(mc),"nbt-client-after",body(mc));
             RuntimeChecks.require(Objects.equals(visible.get(NbtRecoveryChecks.RECOVERY),NbtRecoveryChecks.saved(body(mc)).get(NbtRecoveryChecks.RECOVERY)),"Unresolved raw data changed on graphical disk reload");
             NbtWorldChecks.verifyMetadata(body(mc));RuntimeChecks.require(NameLifetimeChecks.same(visible.get(NameLifetimeChecks.RECOVERY),full(body(mc)).get(NameLifetimeChecks.RECOVERY)),"Raw scalar evidence changed on graphical reload");

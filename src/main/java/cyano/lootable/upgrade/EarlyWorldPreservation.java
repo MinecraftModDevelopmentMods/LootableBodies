@@ -1,31 +1,63 @@
 package cyano.lootable.upgrade;
 
+import java.io.DataInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.zip.GZIPInputStream;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtAccounter;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.storage.LevelResource;
-import net.minecraft.world.level.storage.WorldData;
 import net.minecraft.world.level.storage.LevelStorageSource;
-import net.minecraftforge.fmllegacy.WorldPersistenceHooks;
 
 /** Preserve old chunks before Forge rewrites the level header on startup. */
-public final class EarlyWorldPreservation implements WorldPersistenceHooks.WorldPersistenceHook {
-    private static boolean installed;
-    private final Map<LevelStorageSource.LevelStorageAccess,CompoundTag> metadata=Collections.synchronizedMap(new WeakHashMap<>());
+public final class EarlyWorldPreservation {
+    private static volatile boolean installed;
+    private static final Map<LevelStorageSource.LevelStorageAccess,Tag> metadata=Collections.synchronizedMap(new WeakHashMap<>());
     private EarlyWorldPreservation(){ }
     public static synchronized void install() {
-        if(!installed){WorldPersistenceHooks.addHook(new EarlyWorldPreservation());installed=true;}
+        if(installed)return;
+        verifyAttachment(LevelStorageSource.LevelStorageAccess.class);
+        installed=true;
     }
-    @Override public String getModId(){return "lootablebodies";}
-    @Override public void readData(LevelStorageSource.LevelStorageAccess save,WorldData info,CompoundTag tag) {
-        metadata.put(save,tag.copy());
-        try {UpgradePreservation.prepareEarly(save.getLevelPath(LevelResource.ROOT));}
-        catch(IOException unsafe){throw new UnsafeWorldUpgrade(unsafe);}
+    private static void verifyAttachment(Class<?> reader) {
+        try {
+            if(!reader.getName().equals(LevelStorageSource.LevelStorageAccess.class.getName()))
+                throw new IllegalStateException("Unexpected native save reader");
+            java.lang.reflect.Method marker=reader.getDeclaredMethod("lootablebodies$preservationAttached");
+            if(marker.getReturnType()!=boolean.class || !marker.isSynthetic() ||
+                    !java.lang.reflect.Modifier.isStatic(marker.getModifiers()) ||
+                    !java.lang.reflect.Modifier.isPublic(marker.getModifiers()) || !Boolean.TRUE.equals(marker.invoke(null)))
+                throw new IllegalStateException("Native save preservation attachment is invalid");
+        } catch(ReflectiveOperationException missing) {
+            throw new IllegalStateException("Native save preservation could not be attached. World loading has been stopped before reading or rewriting a world.",missing);
+        }
     }
-    @Override public CompoundTag getDataForWriting(LevelStorageSource.LevelStorageAccess save,WorldData info) {
-        CompoundTag original=metadata.get(save);return original==null?new CompoundTag():original.copy();
+    /** Called before Forge reads extra data or native level conversion. */
+    public static void beforeRead(LevelStorageSource.LevelStorageAccess save) {
+        try {
+            if(!installed)throw new IllegalStateException("Early preservation was not installed before world loading");
+            Path world=save.getLevelPath(LevelResource.ROOT),header=world.resolve("level.dat");
+            if(!Files.isRegularFile(header) && Files.isRegularFile(world.resolve("level.dat_old")))header=world.resolve("level.dat_old");
+            if(Files.isRegularFile(header)) {
+                CompoundTag root;
+                try(DataInputStream input=new DataInputStream(new GZIPInputStream(Files.newInputStream(header)))) {
+                    root=NbtIo.read(input,new NbtAccounter(64L*1024*1024));
+                }
+                Tag original=root.get("lootablebodies");
+                if(original!=null)metadata.put(save,original.copy());else metadata.remove(save);
+            } else metadata.remove(save);
+            UpgradePreservation.prepareEarly(world);
+        } catch(IOException | RuntimeException unsafe){throw new UnsafeWorldUpgrade(unsafe);}
+    }
+    /** Restore only this mod's original field on the same native save access. */
+    public static void beforeWrite(LevelStorageSource.LevelStorageAccess save,CompoundTag root) {
+        Tag original=metadata.get(save);if(original!=null)root.put("lootablebodies",original.copy());
     }
     private static final class UnsafeWorldUpgrade extends Error {
         private static final long serialVersionUID=1L;

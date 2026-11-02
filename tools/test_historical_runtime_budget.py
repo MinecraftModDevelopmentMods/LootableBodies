@@ -18,6 +18,7 @@ class HistoricalRuntimeBudgetTests(unittest.TestCase):
             (home/'world').mkdir(exist_ok=True)
             (home/'world'/(phase+'.pass')).touch()
             (home/(phase+'.log')).write_text('LOOTABLE_BODIES_WORLD_UPGRADE_PASS phase='+phase+'\n')
+            for name in ['latest.log','debug.log']:(home/(phase+'.'+name)).write_text('Synthetic complete native log fixture\n')
             return subprocess.CompletedProcess([], 0)
 
         with tempfile.TemporaryDirectory() as directory, patch.object(native_runtime, 'run_java', launch):
@@ -27,7 +28,8 @@ class HistoricalRuntimeBudgetTests(unittest.TestCase):
         self.assertEqual(PHASES, [p for p, options in launches])
         for phase, options in launches:
             self.assertEqual(240, options['timeout'])
-            self.assertIn('-XX:ActiveProcessorCount=2', options['jvm_args'])
+            self.assertEqual(['-Dmax.bg.threads=1'],[p for p in options['jvm_args'] if p.startswith('-Dmax.bg.threads=')])
+            self.assertFalse(any(p.startswith(('-XX:ActiveProcessorCount','-XX:+Use')) for p in options['jvm_args']))
             self.assertIn('-Dlootablebodies.phase='+phase, options['jvm_args'])
 
     def test_unsafe_refusals_use_the_same_budget_and_keep_their_shorter_deadline(self):
@@ -35,7 +37,8 @@ class HistoricalRuntimeBudgetTests(unittest.TestCase):
             run_abort(Path('java'), Path('owned'))
         options=launch.call_args.kwargs
         self.assertEqual(180, options['timeout'])
-        self.assertIn('-XX:ActiveProcessorCount=2', options['jvm_args'])
+        self.assertEqual(['-Dmax.bg.threads=1'],[p for p in options['jvm_args'] if p.startswith('-Dmax.bg.threads=')])
+        self.assertFalse(any(p.startswith(('-XX:ActiveProcessorCount','-XX:+Use')) for p in options['jvm_args']))
         self.assertNotIn('-Dlootablebodies.phase=abort', options['jvm_args'])
 
     def test_ordinary_packaged_game_keeps_the_default_native_processor_count(self):
@@ -46,11 +49,12 @@ class HistoricalRuntimeBudgetTests(unittest.TestCase):
             (home/'world').mkdir()
             (home/'world'/(phase+'.pass')).touch()
             (home/(phase+'.log')).write_text('ORDINARY_RUNTIME_COMPLETE\n')
+            for name in ['latest.log','debug.log']:(home/(phase+'.'+name)).write_text('Synthetic complete native log fixture\n')
             return subprocess.CompletedProcess([], 0)
 
         with tempfile.TemporaryDirectory() as directory, patch.object(native_runtime, 'run_java', launch):
             native_runtime.run_server(Path('java'), Path(directory), 'ordinary')
-        self.assertFalse(any(p.startswith('-XX:ActiveProcessorCount') for p in arguments))
+        self.assertFalse(any(p.startswith(('-XX:ActiveProcessorCount','-Dmax.bg.threads','-XX:+Use')) for p in arguments))
 
 
 if __name__ == '__main__':

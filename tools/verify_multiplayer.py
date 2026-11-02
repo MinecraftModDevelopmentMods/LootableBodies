@@ -58,7 +58,7 @@ def main():
     (server/'server.properties').write_text(properties+'view-distance=4\n')
     commands={'server':[str(java),'-Xmx1G','-Dlootablebodies.multiplayer.server=true',
         '-Dlog4j.configurationFile='+(project/'src/integrationTest/resources/log4j2.xml').as_uri(),
-        '-Dlootablebodies.multiplayer.sync='+str(shared),'@libraries/net/minecraftforge/forge/1.17.1-37.1.1/'+('win_args.txt' if os.name=='nt' else 'unix_args.txt'),'--nogui']}
+        '-Dlootablebodies.multiplayer.sync='+str(shared),'@libraries/net/minecraftforge/forge/'+FORGE.removeprefix('forge-')+'/'+('win_args.txt' if os.name=='nt' else 'unix_args.txt'),'--nogui']}
     for role in ('A','B'):
         commands['client'+role]=client_command(project,java,args.forge_client_home.resolve(),root/('client'+role),None,shared,port,role,args.hidden_agent,prepared=args.client_inputs.resolve(),assets=args.assets.resolve() if args.assets else None)
     processes={};logs=[]

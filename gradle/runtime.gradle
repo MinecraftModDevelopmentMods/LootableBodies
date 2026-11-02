@@ -75,11 +75,10 @@ def prepareOwnedLoaderConfig = { File root ->
     }
 }
 
-// Native37 cannot decode a bare FLAT generator through the ordinary properties
-// path. Seed the exact native codec header in a newly owned fixture world.
+// Use an actual native40 codec header in each newly owned flat fixture world.
 def prepareOwnedFlatWorld = { File root ->
-    File header = file('tools/fixtures/native117-flat-level.dat')
-    if (!header.isFile() || releaseDigest(header) != '358E4B91F290AFB219D85B09435B4A641035412686E31A09CF5C69F5A28515CB')
+    File header = file('tools/fixtures/native118-flat-level.dat')
+    if (!header.isFile() || releaseDigest(header) != 'A806A2751860CDB3D8566510D6A714435F36A6182C026825943BCC24838AC031')
         throw new GradleException('Missing or changed native flat fixture header')
     File world = new File(root,'world')
     if (world.exists()) throw new GradleException('Refusing to replace an existing fixture world')
@@ -206,7 +205,13 @@ tasks.register('containerInteractionTest') { group='verification'; dependsOn int
 def reload = phaseTask('reload',fresh)
 def deferred = phaseTask('deferred',reload)
 tasks.register('integrationTest') { group = 'verification'; dependsOn deferred }
-tasks.named('check') { dependsOn 'integrationTest' }
+// Starting Minecraft is explicit. A routine build/check must not repeat it.
+// Complete local qualification still requires these fresh/reload/deferred gates.
+tasks.register('localRuntimeVerification') {
+    group = 'verification'
+    description = 'Runs the local mapped fresh/reload/deferred verification once for a frozen candidate.'
+    dependsOn 'integrationTest'
+}
 
 tasks.register('clientIntegrationTest') {
     group = 'verification'

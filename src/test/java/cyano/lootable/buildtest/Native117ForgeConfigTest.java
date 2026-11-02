@@ -9,7 +9,7 @@ import net.minecraftforge.common.ForgeConfigSpec;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Execute the pinned native37 spec; config corrections precede mod world hooks. */
+/** Execute the pinned native40 spec; config corrections precede mod world hooks. */
 class Native117ForgeConfigTest {
     private ForgeConfigSpec spec() throws Exception {
         java.lang.reflect.Field field=ForgeConfig.class.getDeclaredField("serverSpec");
@@ -25,10 +25,11 @@ class Native117ForgeConfigTest {
         CommentedConfig config=old();Set<String> previous=new HashSet<>(keys(config));
         spec().correct(config);
         Set<String> removed=new HashSet<>(previous);removed.removeAll(keys(config));
-        assertEquals(new HashSet<>(Arrays.asList("removeErroringEntities","removeErroringTileEntities",
+        assertEquals(new HashSet<>(Arrays.asList("removeErroringTileEntities",
             "logCascadingWorldGeneration","fixVanillaCascading","dimensionUnloadQueueDelay")),removed);
         assertEquals(new HashSet<>(Arrays.asList("removeErroringBlockEntities","fullBoundingBoxLadders",
-            "zombieBaseSummonChance","zombieBabyChance","treatEmptyTagsAsAir","fixAdvancementLoading")),keys(config));
+            "zombieBaseSummonChance","zombieBabyChance","treatEmptyTagsAsAir","fixAdvancementLoading",
+            "removeErroringEntities","permissionHandler","useItemWithDurationZero","skipEmptyShapelessCheck")),keys(config));
         assertEquals(false,config.get("server.removeErroringBlockEntities"));
         assertEquals(0,spec().correct(config),"Native correction must be stable");
     }
@@ -37,14 +38,16 @@ class Native117ForgeConfigTest {
         config.set("server.zombieBaseSummonChance",0.37D);config.set("server.zombieBabyChance",0.29D);
         config.set("server.treatEmptyTagsAsAir",true);config.set("server.fixAdvancementLoading",false);
         config.set("server.removeErroringBlockEntities",true);
+        config.set("server.removeErroringEntities",true);config.set("server.useItemWithDurationZero",true);config.set("server.skipEmptyShapelessCheck",false);
         spec().correct(config);
         assertEquals(true,config.get("server.fullBoundingBoxLadders"));assertEquals(0.37D,(Double)config.get("server.zombieBaseSummonChance"));
         assertEquals(0.29D,(Double)config.get("server.zombieBabyChance"));assertEquals(true,config.get("server.treatEmptyTagsAsAir"));
         assertEquals(false,config.get("server.fixAdvancementLoading"));assertEquals(true,config.get("server.removeErroringBlockEntities"));
+        assertEquals(true,config.get("server.removeErroringEntities"));assertEquals(true,config.get("server.useItemWithDurationZero"));assertEquals(false,config.get("server.skipEmptyShapelessCheck"));
     }
-    @Test void actualNativeDefaultMatchesRetainedPackagedOutput() throws Exception {
+    @Test void actualNativeDefaultMatchesTheTargetSpecBaseline() throws Exception {
         CommentedConfig config=CommentedConfig.inMemory();spec().correct(config);
-        CommentedConfig expected=new TomlParser().parse(Files.readString(Paths.get("tools/fixtures/forge37-server-default.toml")));
+        CommentedConfig expected=new TomlParser().parse(Files.readString(Paths.get("tools/fixtures/forge40-server-default.toml")));
         assertEquals(expected,config);
     }
 }

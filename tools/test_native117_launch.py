@@ -11,26 +11,27 @@ import native_runtime
 class Native117LaunchTests(unittest.TestCase):
     def test_posix_native_diagnostics_fixture_uses_the_posix_tools(self):
         with patch.object(native_runtime,'os',SimpleNamespace(name='posix')):
-            self.test_packaged_server_uses_installer_module_arguments_and_java16_gc()
+            self.test_packaged_server_uses_installer_module_arguments_and_java17_gc()
 
-    def jdk(self, root, version='16.0.2+7'):
+    def jdk(self, root, version='17.0.20.1+1'):
         suffix='.exe' if native_runtime.os.name=='nt' else ''
         java = root/('jdk/bin/java'+suffix)
         java.parent.mkdir(parents=True)
         for name in ('java', 'jstack', 'jstat'):
             (java.parent/(name+suffix)).touch()
         (java.parent.parent/'release').write_text(
-            'SEMANTIC_VERSION="'+version+'"\nIMPLEMENTOR="Eclipse Foundation"\n')
+            'SEMANTIC_VERSION="'+version+'"\nIMPLEMENTOR="Eclipse Adoptium"\n')
         return java
 
-    def test_packaged_server_uses_installer_module_arguments_and_java16_gc(self):
+    def test_packaged_server_uses_installer_module_arguments_and_java17_gc(self):
         with tempfile.TemporaryDirectory() as directory:
             home=Path(directory); java=self.jdk(home)
             with patch('native_runtime.run_monitored', return_value=subprocess.CompletedProcess([],0)) as run:
                 native_runtime.run_java(java,home,'fixture',timeout=240)
             command=run.call_args.args[0]
             self.assertNotIn('-jar',command)
-            self.assertTrue(any(arg.startswith('@libraries/net/minecraftforge/forge/1.17.1-37.1.1/') for arg in command))
+            self.assertIn('-Xmx2G',command)
+            self.assertTrue(any(arg.startswith('@libraries/net/minecraftforge/forge/1.18.2-40.3.12/') for arg in command))
             gc=next((arg for arg in command if arg.startswith('-Xlog:')),None)
             self.assertIsNotNone(gc)
             self.assertIn('gc*,safepoint',gc)
@@ -44,25 +45,28 @@ class Native117LaunchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             home=Path(directory); java=self.jdk(home,'17.0.1+12')
             with patch('native_runtime.run_monitored') as run:
-                with self.assertRaisesRegex(RuntimeError,'16.0.2'):
+                with self.assertRaisesRegex(RuntimeError,'17.0.20.1'):
                     native_runtime.run_java(java,home,'fixture')
                 run.assert_not_called()
 
-    def test_server_inputs_pin_native37_instead_of_the_old_launcher(self):
-        self.assertEqual('forge-1.17.1-37.1.1',native_runtime.FORGE)
-        for path in ('libraries/net/minecraftforge/forge/1.17.1-37.1.1/win_args.txt',
-                     'libraries/net/minecraftforge/forge/1.17.1-37.1.1/unix_args.txt',
-                     'libraries/net/minecraftforge/forge/1.17.1-37.1.1/forge-1.17.1-37.1.1-server.jar'):
+    def test_server_inputs_pin_native40_instead_of_the_old_launcher(self):
+        self.assertEqual('forge-1.18.2-40.3.12',native_runtime.FORGE)
+        for path in ('libraries/net/minecraftforge/forge/1.18.2-40.3.12/win_args.txt',
+                     'libraries/net/minecraftforge/forge/1.18.2-40.3.12/unix_args.txt',
+                     'libraries/net/minecraftforge/forge/1.18.2-40.3.12/forge-1.18.2-40.3.12-server.jar'):
             self.assertIn(path,native_runtime.SERVER_INPUTS)
         self.assertFalse(any('1.16.5' in path for path in native_runtime.SERVER_INPUTS))
 
-    def test_historical_cpu_budget_requires_its_own_native37_validation(self):
+    def test_native40_historical_workers_have_their_own_fresh_qualification_binding(self):
         proof=native_runtime.WORKER_BUDGET_PROOF
-        self.assertEqual(('1.17.1','37.1.1',200,4,1),tuple(proof[key] for key in
-            ('minecraft','forge','reloads','jvms','native_preparation_workers')))
+        self.assertEqual(('1.18.2','40.3.12',200,4,True),tuple(proof[key] for key in
+            ('minecraft','forge','reloads','jvms','qualified')))
         self.assertTrue(proof['no_candidate'] and proof['no_worlds'] and proof['source_and_sdk_seals_unchanged'])
-        self.assertEqual(4,len(proof['receipts']))
-        self.assertEqual(('-XX:ActiveProcessorCount=2',),native_runtime.HISTORICAL_JVM_ARGS)
+        self.assertRegex(proof['qualification_evidence_sha256'],r'^[A-F0-9]{64}$')
+        source=Path(__file__).resolve().parents[1]/'src/controlTest/java/buildcontrol/ResourceControl.java'
+        self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest().upper(),proof['controller_sha256'])
+        self.assertEqual(('-Dmax.bg.threads=1',),native_runtime.HISTORICAL_JVM_ARGS)
+        self.assertEqual(1,proof['native_preparation_workers'])
 
     def test_owned_server_does_not_trigger_native_bare_json_flat_settings_fallback(self):
         with tempfile.TemporaryDirectory() as directory:

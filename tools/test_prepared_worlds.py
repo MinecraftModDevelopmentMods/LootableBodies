@@ -11,7 +11,7 @@ class PreparedWorldTest(unittest.TestCase):
         records={name:{'world':str(world.resolve()),'files':fingerprint(world),'minecraft':mc,'mod_version':version,'jar_sha256':sha} for name,(mc,version,sha) in expected.items()}
         second=root/'second';second.mkdir();(second/'level.dat').write_bytes(b'separate synthetic source')
         records['two'].update(world=str(second.resolve()),files=fingerprint(second))
-        path=root/'inputs.json';record={'schema':1,'target_data_version':2730,'origins':records};path.write_text(json.dumps(record))
+        path=root/'inputs.json';record={'schema':1,'target_data_version':2975,'origins':records};path.write_text(json.dumps(record))
         return path,record,expected,world
     def test_exact_subset_reuses_original_paths_and_seals(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -23,7 +23,7 @@ class PreparedWorldTest(unittest.TestCase):
                 path,record,expected,world=self.fixture(Path(directory))
                 if change=='missing':record['origins'].pop('two')
                 elif change=='extra':record['origins']['extra']=record['origins']['one']
-                else:record['target_data_version']=2586
+                else:record['target_data_version']=2730
                 path.write_text(json.dumps(record))
                 with self.assertRaises(ValueError):load(path,expected,['one'])
     def test_missing_added_or_changed_source_bytes_are_fatal(self):

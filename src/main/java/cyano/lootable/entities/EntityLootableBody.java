@@ -1057,16 +1057,16 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 			if(rawId != null && rawId.getId() == 1) id = id & 255L;
 			Long amplifier = rawAmplifier == null ? Long.valueOf(0) : integral(rawAmplifier);
 			Long duration = record.contains("Duration") ? integral(record.get("Duration")) : Long.valueOf(0);
-			MobEffect potion = id != null && id >= 0 && id <= 255 ? MobEffect.byId(id.intValue()) : null;
+            MobEffect potion = SavedEffectIdentity.resolve(record,id);
 			if(potion == null || duration == null || duration < 0 || duration > Integer.MAX_VALUE
 					|| amplifier == null || amplifier > 127 || (amplifier < 0 && rawAmplifier.getId() != 1)
 					|| !seen.add(potion)) {
 				retainInvalid("ActiveEffect",record); continue;
 			}
 			CompoundTag accepted = new CompoundTag();
-			accepted.putByte("Id",id.byteValue()); accepted.putInt("Duration",duration.intValue());
+            SavedEffectIdentity.write(accepted,record,potion); accepted.putInt("Duration",duration.intValue());
 			accepted.putByte("Amplifier",amplifier.byteValue());
-			boolean changed = !Arrays.asList("Id","Duration","Amplifier","Ambient","ShowParticles","ShowIcon","CurativeItems").containsAll(record.getAllKeys());
+            boolean changed = SavedEffectIdentity.needsLegacyRecovery(record,id) || !Arrays.asList("Id","forge:id","Duration","Amplifier","Ambient","ShowParticles","ShowIcon","CurativeItems").containsAll(record.getAllKeys());
 			// Forge 1.11 persists curative stacks. Preserve their complete custom
 			// data; an unreadable list uses Forge's defaults and stays recoverable.
 			if(record.contains("CurativeItems")) {

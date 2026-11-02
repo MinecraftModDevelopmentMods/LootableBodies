@@ -182,7 +182,7 @@ class UpgradeJournalTest {
     @Test void truncatedRegionAbortsBeforeLoading() throws Exception {Path region=region("",body(ID));Files.write(region,new byte[8193]);assertThrows(IOException.class,()->scan());}
     @Test void nativeEmptyRegionPlaceholdersRemainReadOnlyAndAreScannedWhenPopulated()throws Exception {
         Path folder=world.resolve("region");Files.createDirectories(folder);Path file=folder.resolve("r.0.0.mca");
-        try(net.minecraft.world.level.chunk.storage.RegionFile nativeRegion=new net.minecraft.world.level.chunk.storage.RegionFile(file.toFile(),folder.toFile(),false)) {
+        try(net.minecraft.world.level.chunk.storage.RegionFile nativeRegion=new net.minecraft.world.level.chunk.storage.RegionFile(file,folder,false)) {
             assertNull(nativeRegion.getChunkDataInputStream(new net.minecraft.world.level.ChunkPos(0,0)));
         }
         assertEquals(0,Files.size(file));assertNull(original(scan(),ID,0,0));assertEquals(0,Files.size(file));

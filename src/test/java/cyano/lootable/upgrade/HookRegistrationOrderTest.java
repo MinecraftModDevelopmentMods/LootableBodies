@@ -7,38 +7,36 @@ import java.util.concurrent.*;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.storage.WorldData;
 import net.minecraft.world.level.storage.LevelStorageSource;
-import net.minecraftforge.fmllegacy.WorldPersistenceHooks;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Checks native registration after parallel construction has completed. */
 class HookRegistrationOrderTest {
-    private static final class Hook implements WorldPersistenceHooks.WorldPersistenceHook {
-        private final String id;
-        Hook(String id){this.id=id;}
-        public String getModId(){return id;}
-        public void readData(LevelStorageSource.LevelStorageAccess save,WorldData info,CompoundTag tag){}
-        public CompoundTag getDataForWriting(LevelStorageSource.LevelStorageAccess save,WorldData info){return new CompoundTag();}
-    }
-    @Test void serialRegistrationKeepsEveryNativeHookAndRemainsIdempotent() throws Exception {
-        Field registry=WorldPersistenceHooks.class.getDeclaredField("worldPersistenceHooks");registry.setAccessible(true);
+    @TempDir(cleanup=org.junit.jupiter.api.io.CleanupMode.ON_SUCCESS) Path directory;
+    @Test void serialActivationIsRequiredBeforeReadAndRemainsIdempotent() throws Exception {
         Field installed=EarlyWorldPreservation.class.getDeclaredField("installed");installed.setAccessible(true);
-        Object original=registry.get(null);boolean wasInstalled=installed.getBoolean(null);
-        try {
-            for(int round=0;round<1000;round++) {
-                List<WorldPersistenceHooks.WorldPersistenceHook> hooks=new ArrayList<>();registry.set(null,hooks);installed.setBoolean(null,false);
-                // Forge's constructor has finished before deferred lifecycle work.
-                WorldPersistenceHooks.addHook(new Hook("forge"));
-                WorldPersistenceHooks.addHook(new Hook("fml"));
-                EarlyWorldPreservation.install();EarlyWorldPreservation.install();
-                assertEquals(3,hooks.size());assertFalse(hooks.contains(null));
-                Set<String> ids=new HashSet<>();for(WorldPersistenceHooks.WorldPersistenceHook hook:hooks)ids.add(hook.getModId());
-                assertEquals(new HashSet<>(Arrays.asList("forge","fml","lootablebodies")),ids);
-                CompoundTag saved=new CompoundTag();WorldPersistenceHooks.handleWorldDataSave(null,null,saved);
-                assertEquals(ids,saved.getAllKeys());
-            }
-        } finally {registry.set(null,original);installed.setBoolean(null,wasInstalled);}
+        boolean wasInstalled=installed.getBoolean(null);
+        Path world=directory.resolve("serial");Files.createDirectories(world);
+        CompoundTag root=new CompoundTag(),data=new CompoundTag(),owned=new CompoundTag();
+        data.putInt("DataVersion",2730);root.put("Data",data);owned.putString("unknown","keep");root.put("lootablebodies",owned);
+        net.minecraft.nbt.NbtIo.writeCompressed(root,world.resolve("level.dat").toFile());
+        byte[] original=Files.readAllBytes(world.resolve("level.dat"));
+        try(LevelStorageSource.LevelStorageAccess save=LevelStorageSource.createDefault(directory).createAccess("serial")) {
+            installed.setBoolean(null,false);
+            Error refused=assertThrows(Error.class,()->EarlyWorldPreservation.beforeRead(save));
+            assertTrue(refused.getCause().getMessage().contains("not installed"));
+            assertArrayEquals(original,Files.readAllBytes(world.resolve("level.dat")));
+            assertFalse(Files.exists(world.resolve("data/lootablebodies-upgrade")));
+            Native118UnitLifecycle.activate();
+            for(int round=0;round<1000;round++){EarlyWorldPreservation.install();EarlyWorldPreservation.install();}
+            EarlyWorldPreservation.beforeRead(save);
+            CompoundTag saved=new CompoundTag();EarlyWorldPreservation.beforeWrite(save,saved);
+            assertEquals(owned,saved.getCompound("lootablebodies"));
+        } finally {UpgradePreservation.close();installed.setBoolean(null,wasInstalled);}
     }
     @Test void theProductionConstructorMustDeferHookRegistrationToSerialLifecycleWork() throws Exception {
         final boolean[] eager={false},queued={false};
@@ -63,7 +61,7 @@ class HookRegistrationOrderTest {
                 }
             },ClassReader.SKIP_DEBUG|ClassReader.SKIP_FRAMES);
         }
-        assertFalse(eager[0],"The parallel mod constructor mutates Forge's unsynchronised ArrayList alongside ForgeMod");
+        assertFalse(eager[0],"The early preservation gate must not be activated in parallel mod construction");
         assertTrue(queued[0],"Hook installation must be queued to serial lifecycle work before world loading");
     }
 }

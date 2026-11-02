@@ -81,12 +81,13 @@ public final class VisibilityChecks {
                 w.setDayTime(6000);
                 for(int x=88;x<=170;x++)for(int z=89;z<=103;z++)w.setBlockAndUpdate(new BlockPos(x,GROUND_Y,z),Blocks.OBSIDIAN.defaultBlockState());
                 for(ServerPlayer p:new ServerPlayer[]{a,b}) {p.setGameMode(GameType.SURVIVAL);p.getInventory().clearContent();FixtureApi.spawn(p,new BlockPos(96,PLAYER_Y,93),true,false,p.level.dimension());}
-                a.connection.teleport(96.5,PLAYER_Y,96.5,0,0);b.connection.teleport(98.5,PLAYER_Y,93.5,0,25);
+                a.connection.teleport(96.5,PLAYER_Y,96.5,0,65);b.connection.teleport(98.5,PLAYER_Y,93.5,0,25);
                 a.getInventory().items.set(9,RuntimeChecks.stack(410));a.containerMenu.broadcastChanges();phase(1);
             } else if(phase==1 && both(1)) {
+                RuntimeChecks.require(file("A.predeath-render-1.json").isFile(),"Real death began before the owner rendered its loaded viewing area");
                 // A real death offset exposes assumptions about the corpse's coordinates.
                 if(Boolean.getBoolean("lootablebodies.visibility.offsetFirstDeath"))
-                    a.connection.teleport(96.5,PLAYER_Y,98.5,0,0);
+                    a.connection.teleport(96.5,PLAYER_Y,98.5,0,65);
                 before=new HashSet<>(FixtureApi.entities(world()));a.kill();first=newCorpse();saveId("first",first);phase(2);
             } else if(phase==2 && both(2)) {mark("both_clients_receive_actual_death_before_respawn");phase(3);
             } else if(phase==3 && both(3) && a!=null && a.isAlive()) {
@@ -113,9 +114,10 @@ public final class VisibilityChecks {
                 phase(120);
             } else if(phase==120 && both(120)) {
                 mark(Integer.getInteger("lootablebodies.visibility.waitTicks",6200)==6200?"default_corpse_visible_after_6200_ticks_and_310_seconds":"short_fixture_control_default_corpse_visible");
-                a.connection.teleport(100.5,PLAYER_Y,96.5,0,0);b.connection.teleport(102.5,PLAYER_Y,93.5,0,25);
+                a.connection.teleport(100.5,PLAYER_Y,96.5,0,65);b.connection.teleport(102.5,PLAYER_Y,93.5,0,25);
                 a.getInventory().items.set(9,RuntimeChecks.stack(411));a.containerMenu.broadcastChanges();phase(13);
             } else if(phase==13 && both(13)) {
+                RuntimeChecks.require(file("A.predeath-render-13.json").isFile(),"TNT death began before the owner rendered its loaded viewing area");
                 before=new HashSet<>(FixtureApi.entities(world()));PrimedTnt tnt=new PrimedTnt(world(),a.getX(),a.getY(),a.getZ(),null);tnt.setFuse(0);
                 RuntimeChecks.require(world().addFreshEntity(tnt),"TNT fixture spawn");phase(14);
             } else if(phase==14) {

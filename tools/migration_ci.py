@@ -143,7 +143,7 @@ def run_shard(project, java, shard, commit, total=12):
         if digest(project / name) != manifest['files'][name]['sha256']:
             raise ValueError('Prepared candidate/probe changed')
     args = SimpleNamespace(java=java, origins=origins, variants=['normal','stamps'], seeds=[seeds],
-        forge117_home=project/'build/native-server-distribution', prepared_sources=None, output=project/'build/migration-results', workers=2)
+        forge_home=project/'build/native-server-distribution', prepared_sources=None, output=project/'build/migration-results', workers=2)
     verify(args, project)
     abort_root = project / 'build/migration-abort';abort_root.mkdir(exist_ok=False)
     aborts = {}
@@ -156,7 +156,7 @@ def run_shard(project, java, shard, commit, total=12):
                 shutil.copytree(source, selected);changes = patch_stamps(selected, abort_root)
             with (abort_root / (name + '.log')).open('x') as log:
                 subprocess.run([sys.executable,str(project/'tools/verify_upgrade_abort.py'),'--java',str(java),
-                    '--forge-home',str(args.forge117_home),'--source-world',str(selected),
+                    '--forge-home',str(args.forge_home),'--source-world',str(selected),
                     '--output',str(abort_root/name)],cwd=project,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=600)
             result = json.loads((abort_root/name/'result.json').read_text())
             aborts[name] = {'conditions':result['cases'], 'stamp_mutations':changes}

@@ -1,6 +1,8 @@
 {
   "pack": {
-    "pack_format": 7,
-    "description": "Lootable Bodies resources"
+    "pack_format": 9,
+    "description": "Lootable Bodies resources",
+    "forge:resource_pack_format": 8,
+    "forge:data_pack_format": 9
   }
 }

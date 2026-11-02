@@ -55,6 +55,17 @@ ORIGINS.update({
     'via116-114': ORIGINS['released-114'],
     'via116-115': ORIGINS['released-115'],
 })
+ORIGINS.update({
+    'released-117': ('1.17.1','2.4.8.117011','854A46D80B8599966E43B3EAED407CD1A99FE4FB019AEE9138FE2F98E8DDA9FA'),
+    'recovery-117': ('1.17.1','2.4.8.117011','854A46D80B8599966E43B3EAED407CD1A99FE4FB019AEE9138FE2F98E8DDA9FA'),
+    'via117-110': ORIGINS['original-110'],
+    'via117-111': ORIGINS['released-111'],
+    'via117-112': ORIGINS['released-112'],
+    'via117-113': ORIGINS['released-113'],
+    'via117-114': ORIGINS['released-114'],
+    'via117-115': ORIGINS['released-115'],
+    'via117-116': ORIGINS['released-116'],
+})
 FORGE = {'1.12.2': 'forge-1.12.2-14.23.5.2859','1.10.2': 'forge-1.10.2-12.18.3.2511', '1.11.2': 'forge-1.11.2-13.20.1.2588'}
 FORGE_SHA = {'1.12.2': 'BD8314729D787E35164476D75AFB337AFB9783917E4F6FA1F77F049ADBA22F2D','1.10.2': '809C2EA5B4D4F3E5A294D3A326744F20FEC412A1263E708297D00F512E377542',
              '1.11.2': 'B6DFF35B5CCB0E6353FB89B5330FE930DB8FBE8B63787C9FC2F70196BD108998'}
@@ -176,7 +187,7 @@ def main():
     parser.add_argument('--forge114-home', type=Path)
     parser.add_argument('--forge115-home', type=Path)
     parser.add_argument('--forge116-home', type=Path)
-    parser.add_argument('--forge117-home', type=Path)
+    parser.add_argument('--forge-home','--forge117-home',dest='forge_home',type=Path)
     for origin in ORIGINS:
         if origin.startswith('recovery-') or origin.startswith('via'):
             continue
@@ -185,7 +196,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--seed-only', action='store_true')
     parser.add_argument('--seeds', nargs='+', type=Path)
-    parser.add_argument('--prepared-sources', type=Path, help='Exact sealed38-origin paths; reuse original writer worlds')
+    parser.add_argument('--prepared-sources', type=Path, help='Exact sealed47-origin paths; reuse original writer worlds')
     parser.add_argument('--variants', nargs='+', choices=['normal', 'stamps'], default=['normal', 'stamps'])
     parser.add_argument('--control-report', type=Path)
     args = parser.parse_args()
@@ -473,18 +484,26 @@ def patch_stamps(world, disposable):
     if not world.resolve().is_relative_to(disposable.resolve()):
         raise RuntimeError('Fixture mutation outside disposable output')
     changes = []
-    for path in sorted(world.rglob('region/*.mca')):
+    for path in sorted(p for p in world.rglob('*.mca') if p.parent.name in ('region','entities')):
         chunks = read_region(path)
         changed = False
         for chunk in chunks.values():
             root = chunk['root'].value
-            level = root['Level'].value
-            bodies = [e for e in level.get('Entities', Tag(9, (10, []))).value[1]
+            if path.parent.name=='entities':
+                position=root.get('Position')
+                if position is None or position.kind!=11 or len(position.value)!=8:raise ValueError('Malformed source entity-chunk Position')
+                x,z=struct.unpack('>ii',position.value);entries=root.get('Entities',Tag(9,(10,[])))
+            else:
+                level=root['Level'].value if 'Level' in root else root
+                x,z=level['xPos'].value,level['zPos'].value;entries=level.get('Entities',level.get('entities',Tag(9,(10,[]))))
+            if entries.kind!=9 or entries.value[0] not in (0,10):raise ValueError('Malformed source entities list')
+            bodies = [e for e in entries.value[1]
                       if e.value.get('id', Tag(8, '')).value in ('lootablebodies.Corpse', 'lootablebodies:corpse')]
             if not bodies:
                 continue
             dimension = -1 if 'DIM-1' in path.parts else 1 if 'DIM1' in path.parts else 0
-            wave = 0 if level['xPos'].value == 8 else 1 if level['xPos'].value == 256 else 2
+            if x not in (8,256,512) or z!=x:raise ValueError('Unexpected historical corpse chunk')
+            wave = (8,256,512).index(x)
             kind = wave * 3 + {0: 0, -1: 1, 1: 2}[dimension]
             root.pop('DataVersion', None)
             root.pop('ForgeDataVersion', None)
@@ -500,15 +519,22 @@ def patch_stamps(world, disposable):
                 root['DataVersion'] = Tag(3, 1343)
                 root['ForgeDataVersion'] = Tag(10, {'minecraft': Tag(3, 1343), 'lootablebodies': Tag(3, 2)})
             elif kind == 6:
-                root['DataVersion'] = Tag(3, 2147483647)
+                # Native17 separate entity chunks have an unambiguous typed
+                # version boundary. A valid future Int must refuse before world
+                # construction; that negative is exercised separately. This
+                # positive variant exercises a malformed Long stamp instead.
+                root['DataVersion'] = Tag(4 if path.parent.name=='entities' else 3, 2147483647)
             elif kind == 7:
                 root['DataVersion'] = Tag(3, 0)
             elif kind == 8:
                 root['DataVersion'] = Tag(2, 512)
             changed = True
-            changes.append({'region': path.relative_to(world).as_posix(), 'chunk': [level['xPos'].value, level['zPos'].value], 'stamp_case': kind})
+            changes.append({'region': path.relative_to(world).as_posix(), 'chunk': [x,z], 'stamp_case': kind,
+                            'data_version_type':root['DataVersion'].kind if 'DataVersion' in root else None})
         if changed:
             write_disposable_region(path, chunks)
+    if sorted(change['stamp_case'] for change in changes)!=list(range(9)):
+        raise ValueError('Missing or duplicate historical stamp cases')
     path = world / 'level.dat'
     name, level = decode(gzip.decompress(path.read_bytes()))
     level.value['Data'].value['DataVersion'] = Tag(8, 'damaged world stamp')
@@ -535,8 +561,8 @@ def verify(args, project):
     if not args.seeds and not prepared:
         raise ValueError('--prepared-sources or --seeds is required for the upgrade matrix')
     if prepared and args.seeds:raise ValueError('Choose one unambiguous source route')
-    if not args.forge117_home:
-        raise ValueError('--forge117-home is required for the native17 upgrade matrix')
+    if not args.forge_home:
+        raise ValueError('--forge-home is required for the native18 upgrade matrix')
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     candidate = project / 'build/libs' / MAIN_JAR
@@ -571,7 +597,7 @@ def verify(args, project):
             name = origin + '-' + variant
             home = root / name
             from native_runtime import prepare_server
-            prepare_server(home,args.forge117_home.resolve(),candidate,probe)
+            prepare_server(home,args.forge_home.resolve(),candidate,probe)
             shutil.copytree(source, home / 'world')
             world = home / 'world'
             historical_markers=preserve_historical_markers(home)
@@ -580,15 +606,15 @@ def verify(args, project):
                 raise RuntimeError('Expected exactly one sealed fixture player')
             shutil.copy2(player_files[0], world / 'upgrade-player-source.nbt')
             changes = patch_stamps(world, root) if variant == 'stamps' else []
-            distant = {str(path.relative_to(world)): digest(path) for path in world.rglob('region/r.*.mca')
-                       if path.name in ('r.8.8.mca', 'r.16.16.mca')}
-            if len(distant) != 6:
+            distant = {str(path.relative_to(world)): digest(path) for path in world.rglob('*.mca')
+                       if path.parent.name in ('region','entities') and path.name in ('r.8.8.mca', 'r.16.16.mca')}
+            if sum('region' in Path(name).parts for name in distant)!=6:
                 raise RuntimeError('Missing distant region fixtures')
             phases = []
             for phase in PHASES:
                 run_upgrade(args.java.resolve(), home, phase)
                 wave = 0 if phase.startswith('upgrade-near') else 1 if phase.startswith('upgrade-far') else 2 if phase == 'upgrade-late' else -1
-                from native117_persistence import count_persisted
+                from native118_persistence import count_persisted
                 persisted = count_persisted(world,wave)
                 if persisted < (3 if wave >= 0 else 8):
                     raise RuntimeError('Missing persisted corpses after world save')

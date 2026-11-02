@@ -29,7 +29,7 @@ public final class Native117RegionFixtures {
     }
     public static Path write(Path world,CompoundTag chunk) throws Exception {
         Path folder=world.resolve("entities");Files.createDirectories(folder);Path path=folder.resolve("r.0.0.mca");
-        try(RegionFile region=new RegionFile(path.toFile(),folder.toFile(),false)) {
+        try(RegionFile region=new RegionFile(path,folder,false)) {
             try(DataOutputStream output=region.getChunkDataOutputStream(new ChunkPos(0,0))){NbtIo.write(chunk,output);}
         }
         return path;

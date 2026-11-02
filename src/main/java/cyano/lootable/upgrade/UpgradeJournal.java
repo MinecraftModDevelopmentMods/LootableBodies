@@ -247,15 +247,15 @@ public final class UpgradeJournal {
                         throw new IOException("Entity chunk Position mismatch in "+relative);
                     level=chunk;
                 } else {
-                    if(!chunk.contains("Level",10))throw new IOException("Missing chunk Level: "+relative);
-                    level=chunk.getCompound("Level");
+                    level=TerrainChunkData.payload(chunk);
                     if(!level.contains("xPos",3) || !level.contains("zPos",3) || level.getInt("xPos")!=x || level.getInt("zPos")!=z)
                         throw new IOException("Chunk coordinate mismatch in "+relative);
                 }
-                if(entityRegion && !level.contains("Entities"))throw new IOException("Missing native entity list in "+relative);
-                if(!level.contains("Entities")) continue;
-                if(!compoundList(level.get("Entities"))) throw new IOException("Unreadable entity list in "+relative);
-                ListTag entities=level.getList("Entities",10);
+                String entityKey=entityRegion?"Entities":TerrainChunkData.entityKey(chunk);
+                if(entityRegion && !level.contains(entityKey))throw new IOException("Missing native entity list in "+relative);
+                if(!level.contains(entityKey)) continue;
+                if(!compoundList(level.get(entityKey))) throw new IOException("Unreadable entity list in "+relative);
+                ListTag entities=level.getList(entityKey,10);
                 String originalChunk=digest(payload);
                 for(LocatedCorpse located:corpses(entities)) {
                     CompoundTag entity=located.entity;int e=located.root;
@@ -300,7 +300,10 @@ public final class UpgradeJournal {
         CompoundTag record=new CompoundTag();record.putString("Path",relative);record.putString("Digest",hash);record.put("Snapshots",preserved);return record;
     }
     private static CompoundTag comparisonPayload(CompoundTag chunk,boolean entityRegion) {
-        if(!entityRegion)return chunk.getCompound("Level");
+        if(!entityRegion) {
+            CompoundTag payload=TerrainChunkData.payload(chunk);
+            if(payload!=chunk)return payload;
+        }
         CompoundTag payload=chunk.copy();payload.remove("DataVersion");return payload;
     }
 
@@ -336,6 +339,7 @@ public final class UpgradeJournal {
         else if(marker==5)version=2230;
         else if(marker==6)version=2586;
         else if(marker==7)version=2730;
+        else if(marker==8)version=2975;
         if(legacy) {if(version!=512)context.putBoolean("Inferred",true);version=512;}
         if(legacy || (marker>=1 && marker<=UpgradePreservation.DATA_VERSION))
             context.putInt("CorpseWriterDataVersion",version);
@@ -344,7 +348,8 @@ public final class UpgradeJournal {
         for(int i=0;i<mods.size();i++) {
             CompoundTag mod=mods.getCompound(i);if(!mod.getString("ModId").equals("lootablebodies"))continue;
             String release=mod.getString("ModVersion");
-            if(release.endsWith(".117011"))family=2730;
+            if(release.endsWith(".118021"))family=2975;
+            else if(release.endsWith(".117011"))family=2730;
             else if(release.endsWith(".116051"))family=2586;
             else if(release.endsWith(".115021"))family=2230;
             else if(release.endsWith(".114041"))family=1976;

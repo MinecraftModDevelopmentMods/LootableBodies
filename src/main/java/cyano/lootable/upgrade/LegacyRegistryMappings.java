@@ -7,9 +7,18 @@ import net.minecraftforge.event.RegistryEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
-/** The vanilla XP pickup sound was renamed after Minecraft 1.10. */
+/** Known vanilla registry renames, using the native conversion rules. */
 @Mod.EventBusSubscriber(modid=LootableBodies.MODID,bus=Mod.EventBusSubscriber.Bus.FORGE)
 public final class LegacyRegistryMappings {
+    public static ResourceLocation biomeReplacement(ResourceLocation old) {
+        if(!old.getNamespace().equals("minecraft"))return null;
+        String name=old.toString();
+        name=net.minecraft.util.datafix.fixes.BiomeFix.BIOMES.getOrDefault(name,name);
+        if(name.equals("minecraft:nether"))name="minecraft:nether_wastes";
+        name=net.minecraft.util.datafix.fixes.CavesAndCliffsRenames.RENAMES.getOrDefault(name,name);
+        if(name.equals("minecraft:deep_warm_ocean"))name="minecraft:warm_ocean";
+        return name.equals(old.toString())?null:new ResourceLocation(name);
+    }
     public static ResourceLocation itemReplacement(ResourceLocation old) {
         if (!old.getNamespace().equals("minecraft")) return null;
         switch (old.getPath()) {
@@ -78,6 +87,13 @@ public final class LegacyRegistryMappings {
         for (RegistryEvent.MissingMappings.Mapping<net.minecraft.world.level.block.Block> mapping : event.getAllMappings()) {
             ResourceLocation replacement = blockReplacement(mapping.key);
             if (replacement != null) mapping.remap(requireMappingTarget(net.minecraftforge.registries.ForgeRegistries.BLOCKS.containsKey(replacement),()->net.minecraftforge.registries.ForgeRegistries.BLOCKS.getValue(replacement)));
+        }
+    }
+    @SubscribeEvent public static void biomes(RegistryEvent.MissingMappings<net.minecraft.world.level.biome.Biome> event) {
+        if(!event.getRegistry().getRegistrySuperType().equals(net.minecraft.world.level.biome.Biome.class))return;
+        for(RegistryEvent.MissingMappings.Mapping<net.minecraft.world.level.biome.Biome> mapping:event.getAllMappings()) {
+            ResourceLocation replacement=biomeReplacement(mapping.key);
+            if(replacement!=null)mapping.remap(requireMappingTarget(net.minecraftforge.registries.ForgeRegistries.BIOMES.containsKey(replacement),()->net.minecraftforge.registries.ForgeRegistries.BIOMES.getValue(replacement)));
         }
     }
     @SubscribeEvent public static void entities(RegistryEvent.MissingMappings<net.minecraft.world.entity.EntityType<?>> event) {

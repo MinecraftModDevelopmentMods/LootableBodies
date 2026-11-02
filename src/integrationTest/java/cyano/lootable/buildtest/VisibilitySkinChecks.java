@@ -50,8 +50,8 @@ final class VisibilitySkinChecks {
                 @Override public Optional<GameProfile> get(String name) {return Optional.of(new GameProfile(profile.getId(),name));}
                 @Override public void add(GameProfile value) {super.add(value);if(value.getName().equals("VisibilitySlow"))slowDelivered.countDown();}
             };
-            faultCache.setExecutor(Runnable::run);SkullBlockEntity.setProfileCache(faultCache);
-            SkullBlockEntity.setSessionService((MinecraftSessionService)Proxy.newProxyInstance(MinecraftSessionService.class.getClassLoader(),new Class<?>[]{MinecraftSessionService.class},(proxy,method,args)->{
+            faultCache.setExecutor(Runnable::run);cache.set(null,faultCache);
+            service.set(null,(MinecraftSessionService)Proxy.newProxyInstance(MinecraftSessionService.class.getClassLoader(),new Class<?>[]{MinecraftSessionService.class},(proxy,method,args)->{
                 if(method.getName().equals("fillProfileProperties")) {requests.incrementAndGet();failedRequest.countDown();throw new IllegalStateException("injected profile lookup failure");}
                 throw new UnsupportedOperationException(method.getName());
             }));
@@ -60,7 +60,7 @@ final class VisibilitySkinChecks {
             catch(Throwable failure) {failures.add("profile: "+failure);mark(report,"profile_failure_does_not_abort_client_tick",false);}
             RuntimeChecks.require(failedRequest.await(2,TimeUnit.SECONDS),"Profile failure was never injected");
             // Deliberately slow lookup must leave the render/tick thread responsive.
-            SkullBlockEntity.setSessionService((MinecraftSessionService)Proxy.newProxyInstance(MinecraftSessionService.class.getClassLoader(),new Class<?>[]{MinecraftSessionService.class},(proxy,method,args)->{
+            service.set(null,(MinecraftSessionService)Proxy.newProxyInstance(MinecraftSessionService.class.getClassLoader(),new Class<?>[]{MinecraftSessionService.class},(proxy,method,args)->{
                 if(method.getName().equals("fillProfileProperties")) {requests.incrementAndGet();Thread.sleep(400);return args[0];}
                 throw new UnsupportedOperationException(method.getName());
             }));

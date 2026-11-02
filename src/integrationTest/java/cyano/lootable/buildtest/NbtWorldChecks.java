@@ -16,10 +16,21 @@ import net.minecraft.nbt.NbtIo;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.fmllegacy.common.registry.GameRegistry;
 
 /** Raw malformed data written into real disposable region files, then read in later JVMs. */
 final class NbtWorldChecks {
+    static final int GRAPHICAL_COORDINATE=8192;
+    static int graphicalAdmissions;
+    static void verifyGraphicalAdmission(Entity entity){
+        if(!Boolean.getBoolean("lootablebodies.clientCheck") || entity.level.isClientSide
+                || entity.getClass()!=EntityLootableBody.class || !entity.getUUID().equals(NEAR))return;
+        EntityLootableBody body=(EntityLootableBody)entity;
+        PositionMotionChecks.verifyWorldFields(body);
+        RuntimeChecks.require(body.getX()==GRAPHICAL_COORDINATE+8.5 && body.getY()==80 && body.getZ()==GRAPHICAL_COORDINATE+.5,
+                "Malformed graphical disk geometry differs at native admission");
+        graphicalAdmissions++;
+        System.out.println("NBT_CLIENT_NATIVE_ADMISSION_PASS count="+graphicalAdmissions+" position="+body.position()+" motion="+body.getDeltaMovement());
+    }
     private static final UUID NEAR=UUID.fromString("00000000-0000-4000-8000-000000000121"),FAR=UUID.fromString("00000000-0000-4000-8000-000000000122");
     private static final String RETURNING="lootablebodiesbuildtest:returning_item";
     private static Item returning;

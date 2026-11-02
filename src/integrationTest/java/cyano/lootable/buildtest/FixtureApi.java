@@ -38,13 +38,13 @@ final class FixtureApi {
     @OnlyIn(Dist.CLIENT)
     static final class ClientWorlds {
         static void create(net.minecraft.client.Minecraft client,String folder,String title,net.minecraft.world.level.GameType mode,boolean commands) {
-            net.minecraft.core.RegistryAccess.RegistryHolder registries=net.minecraft.core.RegistryAccess.builtin();
+            net.minecraft.core.RegistryAccess.Frozen registries=net.minecraft.core.RegistryAccess.BUILTIN.get();
             net.minecraft.core.Registry<net.minecraft.world.level.dimension.DimensionType> types=registries.registryOrThrow(net.minecraft.core.Registry.DIMENSION_TYPE_REGISTRY);
             net.minecraft.core.Registry<net.minecraft.world.level.biome.Biome> biomes=registries.registryOrThrow(net.minecraft.core.Registry.BIOME_REGISTRY);
             net.minecraft.world.level.levelgen.WorldGenSettings settings=new net.minecraft.world.level.levelgen.WorldGenSettings(4267321L,false,false,
                 net.minecraft.world.level.levelgen.WorldGenSettings.withOverworld(types,
-                    net.minecraft.world.level.dimension.DimensionType.defaultDimensions(types,biomes,registries.registryOrThrow(net.minecraft.core.Registry.NOISE_GENERATOR_SETTINGS_REGISTRY),4267321L),
-                    new net.minecraft.world.level.levelgen.FlatLevelSource(net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings.getDefault(biomes))));
+                    net.minecraft.world.level.dimension.DimensionType.defaultDimensions(registries,4267321L),
+                    new net.minecraft.world.level.levelgen.FlatLevelSource(registries.registryOrThrow(net.minecraft.core.Registry.STRUCTURE_SET_REGISTRY),net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings.getDefault(biomes,registries.registryOrThrow(net.minecraft.core.Registry.STRUCTURE_SET_REGISTRY)))));
             client.createLevel(folder,new net.minecraft.world.level.LevelSettings(title,mode,false,net.minecraft.world.Difficulty.NORMAL,commands,new net.minecraft.world.level.GameRules(),net.minecraft.world.level.DataPackConfig.DEFAULT),registries,settings);
         }
     }
@@ -59,25 +59,28 @@ final class FixtureApi {
     }
     static Entity readChunkEntity(CompoundTag data, ServerLevel world, net.minecraft.world.level.chunk.LevelChunk chunk) {
         // Invoke the actual native chunk serializer; do not replace its admission callback.
-        CompoundTag root=new CompoundTag(),level=new CompoundTag();net.minecraft.nbt.ListTag list=new net.minecraft.nbt.ListTag();list.add(data.copy());level.put("Entities",list);
-        level.putInt("xPos",chunk.getPos().x);level.putInt("zPos",chunk.getPos().z);root.put("Level",level);root.putInt("DataVersion",2730);
+        CompoundTag root=new CompoundTag();net.minecraft.nbt.ListTag list=new net.minecraft.nbt.ListTag();list.add(data.copy());root.put("entities",list);
+        root.putInt("xPos",chunk.getPos().x);root.putInt("zPos",chunk.getPos().z);root.put("sections",new net.minecraft.nbt.ListTag());root.putInt("DataVersion",2975);
         // Current fixture NBT follows the real native conversion boundary too.
         // The post-load admission callback remains Minecraft's own method.
         CompoundTag fixed=cyano.lootable.upgrade.NativeNbt.update(
                 cyano.lootable.upgrade.UpgradePreservation.wrapper(net.minecraft.util.datafix.DataFixers.getDataFixer()),
-                net.minecraft.util.datafix.fixes.References.CHUNK,root,2730,2730);
+                net.minecraft.util.datafix.fixes.References.CHUNK,root,2975,2975);
         try {
             java.lang.reflect.Method nativeRead=null;
             for(java.lang.reflect.Method method:net.minecraft.world.level.chunk.storage.ChunkSerializer.class.getDeclaredMethods())
-                if(java.lang.reflect.Modifier.isStatic(method.getModifiers()) && !method.isSynthetic() && method.getReturnType()==void.class && java.util.Arrays.equals(method.getParameterTypes(),new Class<?>[]{ServerLevel.class,CompoundTag.class,net.minecraft.world.level.chunk.LevelChunk.class})) {
+                if(java.lang.reflect.Modifier.isStatic(method.getModifiers()) && !method.isSynthetic() && method.getReturnType()==net.minecraft.world.level.chunk.LevelChunk.PostLoadProcessor.class && java.util.Arrays.equals(method.getParameterTypes(),new Class<?>[]{ServerLevel.class,CompoundTag.class})) {
                     if(nativeRead!=null)throw new IllegalStateException("Ambiguous native entity admission");nativeRead=method;
                 }
             if(nativeRead==null)throw new IllegalStateException("Missing native entity admission");
-            nativeRead.setAccessible(true);nativeRead.invoke(null,world,fixed.getCompound("Level"),chunk);
+            nativeRead.setAccessible(true);
+            net.minecraft.world.level.chunk.LevelChunk.PostLoadProcessor processor=(net.minecraft.world.level.chunk.LevelChunk.PostLoadProcessor)nativeRead.invoke(null,world,fixed);
+            if(processor==null)throw new IllegalStateException("Native entity admission returned no processor");
+            processor.run(chunk);
             Object manager=singleField(ServerLevel.class,net.minecraft.world.level.entity.PersistentEntitySectionManager.class).get(world);
             net.minecraft.world.level.entity.EntitySectionStorage<?> sections=(net.minecraft.world.level.entity.EntitySectionStorage<?>)
                     singleField(manager.getClass(),net.minecraft.world.level.entity.EntitySectionStorage.class).get(manager);
-            java.util.UUID id=fixed.getCompound("Level").getList("Entities",10).getCompound(0).getUUID("UUID");
+            java.util.UUID id=fixed.getList("entities",10).getCompound(0).getUUID("UUID");
             return sections.getExistingSectionsInChunk(chunk.getPos().toLong()).flatMap(section->section.getEntities())
                     .filter(entity->entity instanceof Entity && ((Entity)entity).getUUID().equals(id)).map(entity->(Entity)entity).findFirst().orElse(null);
         }catch(ReflectiveOperationException failure){throw new IllegalStateException("Native chunk admission failed",failure);}
@@ -148,7 +151,7 @@ final class FixtureApi {
         world.setChunkForced(x,z,false);
         // Expire temporary native load tickets and execute real save/unload work.
         for(int tick=0;tick<1200 && provider.hasChunk(x,z);tick++) {
-            provider.tick(()->true);
+            provider.tick(()->true,true);
             for(int task=0;task<1000 && provider.pollTask();task++) { }
             if((tick&31)==0)Thread.yield();
         }

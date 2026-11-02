@@ -14,18 +14,18 @@ group = project.mod_group
 version = project.mod_version
 base.archivesName = project.mod_artifact
 
-// Gradle uses Java 17; every compiler, test and game process uses this JDK 16.
+// Gradle uses Java 17; every compiler, test and game process uses this JDK 17.
 // Eclipse does not inherit the command-line helper's environment. Keep its
 // machine-specific toolchain selection in an ignored local properties file.
 Properties localJavaSetup = new Properties()
 File localJavaSetupFile = file('gradle-local.properties')
 if (localJavaSetupFile.isFile()) localJavaSetupFile.withInputStream { localJavaSetup.load(it) }
-def pinnedJava16 = providers.environmentVariable('LOOTABLEBODIES_JAVA16_HOME')
-        .orElse(providers.gradleProperty('lootablebodies.java16.home'))
-        .orElse(providers.provider { localJavaSetup.getProperty('lootablebodies.java16.home') })
-def exactJava16Spec = pinnedJava16.isPresent() ?
+def pinnedJava17 = providers.environmentVariable('LOOTABLEBODIES_JAVA17_HOME')
+        .orElse(providers.gradleProperty('lootablebodies.java17.home'))
+        .orElse(providers.provider { localJavaSetup.getProperty('lootablebodies.java17.home') })
+def exactJava17Spec = pinnedJava17.isPresent() ?
         org.gradle.jvm.toolchain.internal.SpecificInstallationToolchainSpec.fromJavaHome(
-                project.services.get(org.gradle.api.internal.provider.PropertyFactory), file(pinnedJava16.get())) : null
+                project.services.get(org.gradle.api.internal.provider.PropertyFactory), file(pinnedJava17.get())) : null
 def pinnedJava25 = providers.environmentVariable('LOOTABLEBODIES_MAVENIZER_JAVA_HOME')
         .orElse(providers.gradleProperty('lootablebodies.mavenizer.java.home'))
         .orElse(providers.provider { localJavaSetup.getProperty('lootablebodies.mavenizer.java.home') })
@@ -37,18 +37,18 @@ ext.mavenizerLauncher = exactJava25Spec != null ? javaToolchains.launcherFor(exa
 fgtools.configure('mavenizer') { javaLauncher.set(mavenizerLauncher) }
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(16)
+        languageVersion = JavaLanguageVersion.of(17)
         vendor = JvmVendorSpec.ADOPTIUM
     }
     withSourcesJar()
     withJavadocJar()
 }
-ext.productionLauncher = exactJava16Spec != null ? javaToolchains.launcherFor(exactJava16Spec) :
+ext.productionLauncher = exactJava17Spec != null ? javaToolchains.launcherFor(exactJava17Spec) :
         javaToolchains.launcherFor(java.toolchain)
 fgtools.configure('slimelauncher') { javaLauncher.set(productionLauncher) }
-def productionCompiler = exactJava16Spec != null ? javaToolchains.compilerFor(exactJava16Spec) :
+def productionCompiler = exactJava17Spec != null ? javaToolchains.compilerFor(exactJava17Spec) :
         javaToolchains.compilerFor(java.toolchain)
-def productionJavadoc = exactJava16Spec != null ? javaToolchains.javadocToolFor(exactJava16Spec) :
+def productionJavadoc = exactJava17Spec != null ? javaToolchains.javadocToolFor(exactJava17Spec) :
         javaToolchains.javadocToolFor(java.toolchain)
 
 tasks.register('verifyJavaSetup') {
@@ -58,9 +58,9 @@ tasks.register('verifyJavaSetup') {
         def metadata = productionLauncher.get().metadata
         Properties release = new Properties()
         metadata.installationPath.file('release').asFile.withInputStream { release.load(it) }
-        if (release.getProperty('SEMANTIC_VERSION') != '"16.0.2+7"' ||
-                release.getProperty('IMPLEMENTOR') != '"Eclipse Foundation"') {
-            throw new GradleException("Production requires Temurin 16.0.2+7, found ${metadata.javaRuntimeVersion} ${metadata.vendor}")
+        if (release.getProperty('SEMANTIC_VERSION') != '"17.0.20.1+1"' ||
+                release.getProperty('IMPLEMENTOR') != '"Eclipse Adoptium"') {
+            throw new GradleException("Production requires Temurin 17.0.20.1+1, found ${metadata.javaRuntimeVersion} ${metadata.vendor}")
         }
         logger.lifecycle("Gradle Java: ${System.getProperty('java.runtime.version')}; production: ${metadata}")
         def worker = mavenizerLauncher.get().metadata
@@ -69,14 +69,14 @@ tasks.register('verifyJavaSetup') {
         if (workerRelease.getProperty('JAVA_RUNTIME_VERSION') != '"25.0.3+9-LTS"' ||
                 workerRelease.getProperty('IMPLEMENTOR') != '"Eclipse Adoptium"')
             throw new GradleException('The separate Mavenizer worker requires Temurin 25.0.3+9-LTS')
-        logger.lifecycle("Mavenizer worker: ${worker}; game/compilation remain on Java 16")
+        logger.lifecycle("Mavenizer worker: ${worker}; game/compilation remain on Java 17")
     }
 }
 tasks.withType(JavaCompile).configureEach {
     dependsOn 'verifyJavaSetup'
     javaCompiler = productionCompiler
-    sourceCompatibility = '16'
-    targetCompatibility = '16'
+    sourceCompatibility = '17'
+    targetCompatibility = '17'
     options.encoding = 'UTF-8'
     options.compilerArgs.addAll(['-Xmaxerrs','1000'])
 }
@@ -91,10 +91,17 @@ tasks.withType(Test).configureEach {
 // The full test task retains its archive/isolation prerequisites and all tests.
 tasks.register('nativeBoundaryTest', Test) {
     group = 'verification'
-    description = 'Runs native 1.17 conversion and storage regressions without launching Minecraft.'
+    description = 'Runs native conversion, storage and early-read regressions without launching Minecraft.'
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
-    include '**/Native117*Test.class'
+    include '**/Native117*Test.class', '**/Native118*Test.class', '**/EarlyWorldPreservationTest.class', '**/HookRegistrationOrderTest.class'
+}
+tasks.register('generateNative118Fixtures', JavaExec) {
+    group = 'verification'
+    dependsOn 'testClasses'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'cyano.lootable.buildtest.Native118FixtureGenerator'
+    args providers.gradleProperty('nativeFixtureOutput').getOrElse('build/native118-fixture-preparation-01')
 }
 tasks.withType(JavaExec).configureEach { javaLauncher = productionLauncher }
 tasks.withType(Javadoc).configureEach {
@@ -103,6 +110,23 @@ tasks.withType(Javadoc).configureEach {
     options.encoding = 'UTF-8'
     options.addStringOption('Xdoclint:none', '-quiet')
     options.addBooleanOption('notimestamp', true)
+}
+// Windows JDKs use redirect files for these notices; Linux JDKs use links.
+// Package the complete java.base notices on both platforms.
+tasks.named('javadoc', Javadoc) {
+    def legalNames = ['ADDITIONAL_LICENSE_INFO', 'ASSEMBLY_EXCEPTION', 'LICENSE']
+    inputs.files(productionJavadoc.map { tool ->
+        legalNames.collect { new File(tool.metadata.installationPath.asFile, "legal/java.base/${it}") }
+    }).withPropertyName('completeJdkLegalNotices')
+    doLast {
+        File jdk = javadocTool.get().metadata.installationPath.asFile
+        legalNames.each { name ->
+            String notice = new File(jdk, "legal/java.base/${name}").getText('UTF-8').replace('\r\n', '\n')
+            if (notice.length() < 100 || notice.startsWith('Please see '))
+                throw new GradleException("Incomplete JDK legal notice ${name}")
+            new File(destinationDir, "legal/${name}").setText(notice, 'UTF-8')
+        }
+    }
 }
 tasks.withType(AbstractArchiveTask).configureEach {
     preserveFileTimestamps = false
@@ -189,8 +213,11 @@ dependencies {
     implementation minecraft.dependency("net.minecraftforge:forge:${minecraft_version}-${forge_version}")
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
     testImplementation 'org.junit.platform:junit-platform-launcher:1.12.2'
+    testImplementation 'org.ow2.asm:asm-util:9.7.1'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.12.2'
+    testRuntimeOnly 'org.openjdk.nashorn:nashorn-core:15.4'
+    testRuntimeOnly 'net.minecraftforge:coremods:5.2.5'
 }
 
 tasks.named('processResources', ProcessResources) {
@@ -211,7 +238,7 @@ tasks.named('jar', Jar) {
             'Implementation-Version': project.version, 'Implementation-Vendor': project.mod_vendor,
             'Maven-Artifact': "${project.group}:${base.archivesName.get()}:${project.version}",
             'Implementation-License': project.mod_license,
-            'Built-On-Java': '16', 'Built-On': "${minecraft_version}-${forge_version}",
+            'Built-On-Java': '17', 'Built-On': "${minecraft_version}-${forge_version}",
             'FMLAT': 'accesstransformer.cfg')
     filesMatching(archiveTextPatterns, normalizeArchiveText)
 }
@@ -232,8 +259,12 @@ ext.releaseJar = renamer.classes(tasks.named('jar', Jar)) {
         filesMatching(archiveTextPatterns, normalizeArchiveText)
     }
 }
-// Java 16 writes this extensionless index with the host line separator. Keep
-// the accepted 1.17 documentation bytes identical on Windows and Linux.
+tasks.named('sourcesJar', Jar) {
+    inputs.property('accessTransformerLineEndings', 'lf')
+    filesMatching('META-INF/accesstransformer.cfg', normalizeArchiveText)
+}
+// Java 17 writes this extensionless index with the host line separator. Keep
+// the 1.18 documentation bytes identical on Windows and Linux.
 tasks.named('javadocJar', Jar) {
     filesMatching('element-list') {
         filter(FixCrLfFilter, eol: FixCrLfFilter.CrLf.newInstance('crlf'),

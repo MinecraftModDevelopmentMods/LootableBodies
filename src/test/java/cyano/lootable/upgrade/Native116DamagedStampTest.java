@@ -13,13 +13,14 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.storage.ChunkStorage;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.io.CleanupMode;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Captured from the sealed released 1.15 writer; never candidate-generated. */
 class Native116DamagedStampTest {
     static {net.minecraft.SharedConstants.tryDetectVersion();net.minecraft.server.Bootstrap.bootStrap();}
-    @TempDir Path world;
-    @AfterEach void close(){UpgradePreservation.close();}
+    @TempDir(cleanup=CleanupMode.ON_SUCCESS) Path world;
+    @AfterEach void close(){UpgradePreservation.close();System.out.println("NATIVE_DAMAGED_STAMP_FIXTURE="+world);}
     private CompoundTag original()throws Exception {
         Path fixture=Paths.get("src/test/resources/native115-release-chunk.nbt");
         byte[] hash=java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(fixture));StringBuilder text=new StringBuilder();for(byte value:hash)text.append(String.format("%02X",value));
@@ -49,11 +50,15 @@ class Native116DamagedStampTest {
     }
     @Test void bothNativeAnvilPassesRetainNestedChestDataWithMissingChunkStamps()throws Exception {
         CompoundTag source=original();assertEquals(2230,source.getInt("DataVersion"));
-        CompoundTag expected=NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,source.copy(),2230,2586);
+        CompoundTag nativeInput=source.copy();ChunkStorage.injectDatafixingContext(nativeInput,Level.OVERWORLD,java.util.Optional.empty());
+        CompoundTag expected=NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,nativeInput,2230,2975);
         CompoundTag damaged=source.copy();damaged.remove("DataVersion");preserve(damaged);
-        try(ChunkStorage loader=new ChunkStorage(world.resolve("reader").toFile(),UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),false)) {
-            CompoundTag actual=loader.upgradeChunkTag(Level.OVERWORLD,()->{throw new AssertionError("Current source must not replay legacy structure conversion");},damaged.copy());
-            assertEquals(expected.getCompound("Level").get("TileEntities"),actual.getCompound("Level").get("TileEntities"));
+        byte[] originalRegion=Files.readAllBytes(world.resolve("region/r.0.0.mca"));
+        try(ChunkStorage loader=new ChunkStorage(world.resolve("reader"),UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),false)) {
+            CompoundTag actual=loader.upgradeChunkTag(Level.OVERWORLD,()->{throw new AssertionError("Current source must not replay legacy structure conversion");},damaged.copy(),java.util.Optional.empty());
+            assertNotNull(expected.get("block_entities"));assertFalse(actual.contains("Level"));
+            assertEquals(expected.get("block_entities"),actual.get("block_entities"));
+            assertArrayEquals(originalRegion,Files.readAllBytes(world.resolve("region/r.0.0.mca")));
             assertEquals(source.getCompound("Level").get("TileEntities"),original().getCompound("Level").get("TileEntities"));
         }
     }

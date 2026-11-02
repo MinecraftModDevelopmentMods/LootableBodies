@@ -74,19 +74,19 @@ def allowed_native_session_lock(before, after, world, original=None):
     return [name] if actual==marker+original[3:] else []
 
 
-def allowed_native37_platform_additions(before,after,world,original_config=None):
-    """Exact pinned Forge37 spec corrections, proved with the actual native spec."""
+def allowed_native40_platform_additions(before,after,world,original_config=None):
+    """Exact pinned Forge40 spec corrections, proved with the actual native spec."""
     name='serverconfig/forge-server.toml'
     if name not in after:return []
     actual=(world/name).read_bytes()
     if digest(world/name)!=after[name]:return []
     try:
-        defaults=tomllib.loads((Path(__file__).parent/'fixtures/forge37-server-default.toml').read_text())
+        defaults=tomllib.loads((Path(__file__).parent/'fixtures/forge40-server-default.toml').read_text())
         upgraded=tomllib.loads(actual.decode('utf-8'))
         if name not in before:return [name] if same_typed_values(defaults,upgraded) else []
         if original_config is None or before[name]!=__import__('hashlib').sha256(original_config).hexdigest().upper():return []
         previous=tomllib.loads(original_config.decode('utf-8'));server=previous['server']
-        retired={'removeErroringEntities':bool,'removeErroringTileEntities':bool,
+        retired={'removeErroringTileEntities':bool,
                  'logCascadingWorldGeneration':bool,'fixVanillaCascading':bool,
                  'dimensionUnloadQueueDelay':int,'clumpingThreshold':int}
         for key,kind in retired.items():
@@ -122,6 +122,32 @@ def inject_unsafe_journal(world, case):
         journal.write_bytes(b'cannot create a journal directory here')
 
 
+def inject_future_entity_version(world):
+    """One copied genuine public17 chunk, valid future Int; never touch source."""
+    from nbt_regions import Tag,read_region,write_disposable_region
+    import struct
+    path=world/'entities/r.0.0.mca'
+    chunks=read_region(path)
+    candidates=[]
+    for index,chunk in chunks.items():
+        root=chunk['root'].value
+        entries=root.get('Entities')
+        if entries is None or entries.kind!=9 or entries.value[0] not in (0,10):raise ValueError('Malformed genuine entity list')
+        bodies=[e for e in entries.value[1] if e.value.get('id',Tag(8,'')).value=='lootablebodies:corpse']
+        if bodies:candidates.append((index,root,bodies))
+    if len(candidates)!=1:raise ValueError('Expected one genuine near public17 corpse chunk')
+    index,root,bodies=candidates[0]
+    if root.get('DataVersion')!=Tag(3,2730) or any(e.value.get('LootableBodiesDataVersion')!=Tag(3,7) for e in bodies):
+        raise ValueError('Future-version control requires genuine native17 writer data')
+    before=digest(path);original=world.parent/'future-entity-original.mca'
+    if original.exists():raise ValueError('Future fixture original already exists')
+    shutil.copy2(path,original)
+    root['DataVersion']=Tag(3,2976);write_disposable_region(path,chunks)
+    return {'region':path.relative_to(world).as_posix(),'chunk_index':index,'source_version':2730,
+            'injected_version':2976,'nbt_type':'Int','original_sha256':before,'mutated_sha256':digest(path),
+            'original_copy':str(original),'corpse_marker':7}
+
+
 def run_abort(java, home):
     from native_runtime import run_java, HISTORICAL_JVM_ARGS
     logging=Path(__file__).resolve().parents[1]/'src/integrationTest/resources/log4j2.xml'
@@ -136,6 +162,8 @@ def main():
     parser.add_argument('--forge-home', type=Path, required=True)
     parser.add_argument('--source-world', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--conditions',nargs='+',choices=['damaged-index','blocked-journal','future-entity-version'],
+                        default=['damaged-index','blocked-journal'])
     args = parser.parse_args()
     project = Path(__file__).resolve().parents[1]
     candidate = project / 'build/libs' / MAIN_JAR
@@ -145,12 +173,14 @@ def main():
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     report = {'candidate_sha256': digest(candidate), 'cases': {}}
-    for case in ['damaged-index', 'blocked-journal']:
+    if len(set(args.conditions))!=len(args.conditions):raise ValueError('Duplicate refusal condition')
+    for case in args.conditions:
         home = root / case
         prepare(home, args.forge_home.resolve(), candidate, probe)
         shutil.copytree(source, home / 'world')
         world = home / 'world'
-        inject_unsafe_journal(world, case)
+        mutation=inject_future_entity_version(world) if case=='future-entity-version' else None
+        if mutation is None:inject_unsafe_journal(world, case)
         before = source_files(world)
         config = world/'serverconfig/forge-server.toml'
         original_config = config.read_bytes() if config.is_file() else None
@@ -160,12 +190,14 @@ def main():
         text = log.read_text(encoding='utf-8', errors='replace')
         if "Lootable Bodies could not preserve this world's corpses" not in text:
             raise RuntimeError('Missing explicit preservation abort: ' + str(log))
+        if mutation and 'Saved entity chunk comes from a newer Minecraft version' not in text:
+            raise RuntimeError('Missing actual typed future entity-version refusal')
         if any(token in text for token in ['Preparing start region', 'Preparing spawn area',
                                            'LOOTABLE_BODIES_RUNTIME_PASS', 'Done (']):
             raise RuntimeError('World loading continued after unsafe preservation')
         after = source_files(world)
         raw_after = dict(after)
-        platform_additions = allowed_native37_platform_additions(before, after, world, original_config)
+        platform_additions = allowed_native40_platform_additions(before, after, world, original_config)
         lock_updates=allowed_native_session_lock(before,after,world,original_lock)
         for name in platform_additions+lock_updates:
             if name in before: after[name] = before[name]
@@ -191,6 +223,7 @@ def main():
                                  'stock_forge_config_created': [name for name in platform_additions if name not in before],
                                  'stock_forge_config_updated': [name for name in platform_additions if name in before]}
         report['cases'][case]['native_session_lock_updates']=lock_updates
+        if mutation:report['cases'][case]['fixture_mutation']=mutation
         print('UPGRADE_ABORT_PASS', case, flush=True)
     (root / 'result.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
 

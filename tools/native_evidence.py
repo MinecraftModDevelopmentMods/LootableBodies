@@ -1,11 +1,12 @@
-"""Independently audit native17 local receipts, complete logs and diagnostic bytes.
+"""Independently audit native18 local receipts, complete logs and diagnostic bytes.
 
 Default auditing binds the recorded cwd to the actual owned process home.
-Relocated auditing is a separately tested download contract; hosted native17
+Relocated auditing is a separately tested download contract; hosted native18
 execution and promotion remain disabled and have not been exercised.
 """
 from pathlib import Path,PurePosixPath
 import hashlib,json
+from native_runtime import FORGE,HISTORICAL_JVM_ARGS
 
 def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest().upper()
 
@@ -17,9 +18,18 @@ def audit_phase(home,phase,*,refusal=False,relocated=False):
     if receipt['timeout']!=(180 if refusal else 240):raise ValueError('Changed hosted deadline')
     if (receipt['returncode']==0)==refusal:raise ValueError('Unexpected hosted JVM exit')
     command=receipt['command']
-    if command.count('-XX:ActiveProcessorCount=2')!=1:raise ValueError('Missing native worker budget')
-    if any(s.startswith('-XX:ActiveProcessorCount=') and s!='-XX:ActiveProcessorCount=2' for s in command):
-        raise ValueError('Conflicting native worker budget')
+    # Default-worker receipts remain their original sealed proof. The one
+    # independently qualified native40 override is limited to history/refusal
+    # phases; it cannot excuse another cap, duplicate flag, CPU or GC selection.
+    if any(s.startswith(('-XX:ActiveProcessorCount=','-XX:ParallelGCThreads=','-XX:ConcGCThreads='))
+            or (s.startswith(('-XX:+Use','-XX:-Use')) and s.endswith('GC')) for s in command):
+        raise ValueError('Unqualified native40 worker or GC override')
+    worker_args=[s for s in command if s.startswith('-Dmax.bg.threads')]
+    if worker_args:
+        from verify_world_upgrades import PHASES
+        if (tuple(worker_args)!=HISTORICAL_JVM_ARGS or
+                not ((refusal and phase=='abort') or (not refusal and phase in PHASES))):
+            raise ValueError('Unqualified or out-of-scope native40 preparation-worker override')
     if relocated:
         # Downloaded artifacts retain their original machine cwd. Require the
         # complete case/condition suffix; all bytes are read only under home.
@@ -29,12 +39,15 @@ def audit_phase(home,phase,*,refusal=False,relocated=False):
     elif Path(receipt['cwd']).resolve()!=home.resolve():raise ValueError('Receipt belongs to another actual process home')
     prefix='@libraries/net/minecraftforge/forge/'
     arguments=[part for part in command if part.startswith(prefix)]
-    expected={prefix+'1.17.1-37.1.1/'+name for name in ('win_args.txt','unix_args.txt')} if relocated else {
-        prefix+'1.17.1-37.1.1/'+('win_args.txt' if __import__('os').name=='nt' else 'unix_args.txt')}
-    if len(arguments)!=1 or arguments[0] not in expected or '--nogui' not in command:raise ValueError('Receipt did not launch native37 modules')
-    if not any(item.startswith('-Xlog:gc*,safepoint:file=') for item in command):raise ValueError('Missing native16 unified GC evidence')
+    version=FORGE.removeprefix('forge-')
+    expected={prefix+version+'/'+name for name in ('win_args.txt','unix_args.txt')} if relocated else {
+        prefix+version+'/'+('win_args.txt' if __import__('os').name=='nt' else 'unix_args.txt')}
+    if len(arguments)!=1 or arguments[0] not in expected or '--nogui' not in command:raise ValueError('Receipt did not launch native40 modules')
+    if not any(item.startswith('-Xlog:gc*,safepoint:file=') for item in command):raise ValueError('Missing native17 unified GC evidence')
     if not refusal and '-Dlootablebodies.phase='+phase not in command:raise ValueError('Receipt belongs to another phase')
-    if 'gc.txt' not in receipt['evidence']:raise ValueError('Missing GC evidence')
+    for name in ('gc.txt','initial-threads.txt','initial-heap-gc.txt'):
+        if name not in receipt['evidence'] or not (directory/name).is_file() or not (directory/name).stat().st_size:
+            raise ValueError('Missing mandatory native diagnostics: '+name)
     for name,sha in receipt['evidence'].items():
         if Path(name).name!=name or not (directory/name).is_file() or digest(directory/name)!=sha:
             raise ValueError('Missing or changed hosted native evidence: '+name)

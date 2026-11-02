@@ -3,5 +3,23 @@ plugins {
 }
 rootProject.name = 'LootableBodies'
 
+// Release uploads remain restricted by the confirmed-controller guard in gradle/release.gradle.
+gradle.taskGraph.whenReady { graph ->
+    // Hosted jobs compile/audit artifacts; all test JVMs and game tasks are local.
+    // This also rejects an accidental build/check dependency on a costly task.
+    if (System.getenv('GITHUB_ACTIONS') == 'true') {
+        def localOnly = graph.allTasks.findAll { task ->
+            task instanceof org.gradle.api.tasks.testing.Test ||
+            task instanceof org.gradle.api.tasks.JavaExec ||
+            task.name in ['integrationTest', 'clientIntegrationTest', 'forgeControlServer',
+                          'localRuntimeVerification', 'prepareLegacyWorldFixtures',
+                          'generateNative118Fixtures'] ||
+            task.name.startsWith('integration')
+        }
+        if (!localOnly.empty) throw new GradleException(
+            'Run expensive verification locally before publishing: ' + localOnly*.path.join(', '))
+    }
+}
+
 // Publication remains restricted to the confirmed MMD release controller in
 // gradle/release.gradle; local Maven and unconfirmed uploads are rejected there.

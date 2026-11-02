@@ -1,7 +1,7 @@
 package buildcontrol;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fmlserverevents.FMLServerStartedEvent;
+import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.TickEvent;
 /** Independent native Forge control, without a Lootable Bodies dependency. */
 @Mod("forgeplatformcontrol")
@@ -15,7 +15,7 @@ public final class ForgeControl {
         int rounds=Integer.getInteger("lootablebodies.control.resourceReloads",0);
         if(rounds>0)event.enqueueWork(()->ResourceControl.run(rounds));
     }
-    @SubscribeEvent public void started(FMLServerStartedEvent event) {
+    @SubscribeEvent public void started(ServerStartedEvent event) {
         if(net.minecraftforge.fml.ModList.get().getModContainerById("lootablebodies").isPresent())throw new AssertionError("Independent Forge control contains Lootable Bodies");
         if(net.minecraftforge.fml.loading.FMLEnvironment.dist==net.minecraftforge.api.distmarker.Dist.DEDICATED_SERVER) {
             if(Boolean.getBoolean("lootablebodies.control.tcpServer"))System.out.println("FORGE_PLATFORM_CONTROL_READY");
@@ -25,7 +25,7 @@ public final class ForgeControl {
     private int checkTicks,checkDeaths;
     @SubscribeEvent public void deathTick(TickEvent.ServerTickEvent event) {
         if(event.phase!=TickEvent.Phase.END || !Boolean.getBoolean("lootablebodies.control.deaths"))return;
-        net.minecraft.server.MinecraftServer server=net.minecraftforge.fmllegacy.server.ServerLifecycleHooks.getCurrentServer();
+        net.minecraft.server.MinecraftServer server=net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
         net.minecraft.server.level.ServerPlayer p=server.getPlayerList().getPlayerByName("ControlOnly");
         if(p==null || !p.isAlive())return;
         if(++checkTicks==1) {
@@ -136,13 +136,13 @@ public final class ForgeControl {
             System.out.println("FORGE_PLATFORM_CONTROL_PASS");mc.stop();stage=3;
         }
         private void createWorld(net.minecraft.client.Minecraft client) {
-            net.minecraft.core.RegistryAccess.RegistryHolder registries=net.minecraft.core.RegistryAccess.builtin();
+            net.minecraft.core.RegistryAccess.Frozen registries=net.minecraft.core.RegistryAccess.BUILTIN.get();
             net.minecraft.core.Registry<net.minecraft.world.level.dimension.DimensionType> types=registries.registryOrThrow(net.minecraft.core.Registry.DIMENSION_TYPE_REGISTRY);
             net.minecraft.core.Registry<net.minecraft.world.level.biome.Biome> biomes=registries.registryOrThrow(net.minecraft.core.Registry.BIOME_REGISTRY);
             net.minecraft.world.level.levelgen.WorldGenSettings settings=new net.minecraft.world.level.levelgen.WorldGenSettings(4267321L,false,false,
                 net.minecraft.world.level.levelgen.WorldGenSettings.withOverworld(types,
-                    net.minecraft.world.level.dimension.DimensionType.defaultDimensions(types,biomes,registries.registryOrThrow(net.minecraft.core.Registry.NOISE_GENERATOR_SETTINGS_REGISTRY),4267321L),
-                    new net.minecraft.world.level.levelgen.FlatLevelSource(net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings.getDefault(biomes))));
+                    net.minecraft.world.level.dimension.DimensionType.defaultDimensions(registries,4267321L),
+                    new net.minecraft.world.level.levelgen.FlatLevelSource(registries.registryOrThrow(net.minecraft.core.Registry.STRUCTURE_SET_REGISTRY),net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings.getDefault(biomes,registries.registryOrThrow(net.minecraft.core.Registry.STRUCTURE_SET_REGISTRY)))));
             client.createLevel("platform-fixture",new net.minecraft.world.level.LevelSettings("Platform fixture",net.minecraft.world.level.GameType.CREATIVE,false,net.minecraft.world.Difficulty.NORMAL,false,new net.minecraft.world.level.GameRules(),net.minecraft.world.level.DataPackConfig.DEFAULT),registries,settings);
         }
     }

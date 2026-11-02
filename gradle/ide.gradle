@@ -1,5 +1,5 @@
 eclipse {
-    jdt.javaRuntimeName = 'JavaSE-16'
+    jdt.javaRuntimeName = 'JavaSE-17'
     classpath {
         downloadSources = true
         downloadJavadoc = true
@@ -36,10 +36,12 @@ tasks.register('configureEclipseBuildship') {
         File localJavaSetup = file('gradle-local.properties')
         Properties toolchains = new Properties()
         if (localJavaSetup.isFile()) localJavaSetup.withInputStream { toolchains.load(it) }
-        toolchains.setProperty('lootablebodies.java16.home',
+        toolchains.setProperty('lootablebodies.java17.home',
                 productionLauncher.get().metadata.installationPath.asFile.canonicalPath)
         toolchains.setProperty('lootablebodies.mavenizer.java.home',
                 mavenizerLauncher.get().metadata.installationPath.asFile.canonicalPath)
+        toolchains.setProperty('minecraftAssetsDirectory', minecraftAssets.asFile.canonicalPath)
+        toolchains.setProperty('minecraftNativesDirectory', minecraftNatives.asFile.canonicalPath)
         File workspacePrefs=new File(projectDir.parentFile,'.metadata/.plugins/org.eclipse.core.runtime/.settings/org.eclipse.buildship.core.prefs')
         Properties workspace=new Properties()
         if(workspacePrefs.isFile())workspacePrefs.withInputStream { workspace.load(it) }
@@ -64,16 +66,15 @@ tasks.register('isolateEclipseProductionRuns') {
             File launch = file(name)
             if (!launch.isFile()) throw new GradleException("Generate ${name} with genEclipseRuns first")
             String contents = launch.getText('UTF-8')
-            File nativeRoot=file(providers.gradleProperty('minecraftNativesDirectory')
-                .getOrElse('.gradle/native117-client-inputs/natives'))
-            if(!nativeRoot.isDirectory())throw new GradleException('Prepare the official native1.17 client inputs before generating Eclipse launches')
-            contents=contents.replace('{asset_index}','1.17')
+            File nativeRoot=minecraftNatives.asFile
+            if(!nativeRoot.isDirectory())throw new GradleException('Prepare the official native1.18 client inputs before generating Eclipse launches')
+            contents=contents.replace('{asset_index}','1.18')
                 .replace('{assets_root}',minecraftAssets.asFile.absolutePath)
                 .replace('{natives}',nativeRoot.absolutePath)
             String eclipseRoot=file('bin/main').absolutePath
             String eclipseMods="${mod_id}%%${eclipseRoot}${File.pathSeparator}${mod_id}%%${eclipseRoot}"
             contents=contents.replaceAll(/(<mapEntry key="MOD_CLASSES" value=")[^"]*("\/>)/) {whole,start,end -> start+eclipseMods+end}
-            contents = contents.replace('/JavaSE-8', '/JavaSE-16')
+            contents = contents.replace('/JavaSE-8', '/JavaSE-17')
             contents = contents.replaceAll(/<booleanAttribute key="org.eclipse.jdt.launching.ATTR_EXCLUDE_TEST_CODE" value="[^"]*"\/>/, '')
             contents = contents.replace('</launchConfiguration>',
                     '  <booleanAttribute key="org.eclipse.jdt.launching.ATTR_EXCLUDE_TEST_CODE" value="true"/>\n</launchConfiguration>')
@@ -127,7 +128,7 @@ tasks.register('verifyEclipseProductionClasspath') {
                     xml =~ /(?i)(src\/test|bin\/test|junit-|integration-test|mockito|byte-buddy)/ ||
                     !xml.contains('PROJECT_ATTR" value="LootableBodies"'))
                 throw new GradleException("${name} has the wrong project or exposes tests")
-            if (!xml.contains('--fml.mcVersion 1.17.1') || xml.contains('{asset_index}') ||
+            if (!xml.contains("--fml.mcVersion ${minecraft_version}") || xml.contains('{asset_index}') ||
                     xml.contains('{assets_root}') || xml.contains('{natives}'))
                 throw new GradleException('Eclipse Minecraft version is unresolved')
             def launchModel = new groovy.xml.XmlSlurper().parseText(xml)
@@ -142,7 +143,7 @@ tasks.register('verifyEclipseProductionClasspath') {
             if (file(directory).canonicalFile != file(providers.gradleProperty('gameRunDirectory').getOrElse('run')).canonicalFile)
                 throw new GradleException("${name} must use the production run directory, found ${directory}")
             if (name == 'runServer.launch' && !xml.contains('--nogui'))
-                throw new GradleException('Forge 28 dedicated server needs --nogui')
+                throw new GradleException('The dedicated server needs --nogui')
         }
     }
 }

@@ -17,7 +17,7 @@ class Native115PacketTest {
     static { net.minecraft.SharedConstants.tryDetectVersion();net.minecraft.server.Bootstrap.bootStrap(); }
     private static final long SEED=0x13572468ABCDEF01L;
     private ClientboundRespawnPacket packet(ResourceKey<Level> dimension,long seed) {
-        DimensionType type=RegistryAccess.builtin().registryOrThrow(Registry.DIMENSION_TYPE_REGISTRY).getOrThrow(DimensionType.OVERWORLD_LOCATION);
+        net.minecraft.core.Holder<DimensionType> type=RegistryAccess.builtinCopy().registryOrThrow(Registry.DIMENSION_TYPE_REGISTRY).getHolderOrThrow(DimensionType.OVERWORLD_LOCATION);
         return new ClientboundRespawnPacket(type,dimension,seed,GameType.SURVIVAL,GameType.CREATIVE,false,true,true);
     }
     @Test void native115HashedSeedSurvivesDecodedPacketObservation() throws Exception {
@@ -30,9 +30,7 @@ class Native115PacketTest {
             String expected="RESPAWN dimension=minecraft:the_nether hashedSeed="+SEED;
             assertEquals(expected,NativeRespawnDescription.describe(outgoing));
             assertEquals(expected,NativeRespawnDescription.describe(incoming));
-            for(Field field:ClientboundRespawnPacket.class.getDeclaredFields()) if(field.getType()==DimensionType.class) {
-                field.setAccessible(true);assertNotNull(field.get(incoming),"Native codec dimension type was lost");
-            }
+            assertNotNull(incoming.getDimensionType().value(),"Native codec dimension type was lost");
             assertEquals(before.length,bytes.readerIndex());
             byte[] after=new byte[before.length];bytes.getBytes(0,after);assertArrayEquals(before,after);
         } finally {bytes.release();}

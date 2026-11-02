@@ -43,7 +43,7 @@ def main():
         prepare(home,args.forge_home.resolve(),jar)
         command=[str(args.java.resolve()),'-Xmx1G',
             '-Dlog4j.configurationFile='+(project/'src/integrationTest/resources/log4j2.xml').as_uri(),
-            '@libraries/net/minecraftforge/forge/1.17.1-37.1.1/'+('win_args.txt' if os.name=='nt' else 'unix_args.txt'),'--nogui'];cwd=home
+            '@libraries/net/minecraftforge/forge/'+FORGE.removeprefix('forge-')+'/'+('win_args.txt' if os.name=='nt' else 'unix_args.txt'),'--nogui'];cwd=home
     seed_flat_fixture(home,args.flat_header,args.flat_header_sha256)
     results=[]
     for phase in ['fresh','reload']:
@@ -72,7 +72,7 @@ def main():
                     remaining=whole_deadline-time.monotonic()
                     if remaining<=0:raise subprocess.TimeoutExpired(command,210)
                     receipt=subprocess.run([str(binary),option,str(pid)],stdout=stream,stderr=subprocess.STDOUT,timeout=min(10,remaining))
-                if receipt.returncode or not target.stat().st_size:raise RuntimeError('Actual native16 diagnostic failed: '+str(target))
+                if receipt.returncode or not target.stat().st_size:raise RuntimeError('Actual native17 diagnostic failed: '+str(target))
                 diagnostics[target.name]=digest(target)
             process.stdin.write('stop\n');process.stdin.flush()
             remaining=whole_deadline-time.monotonic()
