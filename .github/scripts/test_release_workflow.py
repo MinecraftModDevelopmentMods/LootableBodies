@@ -310,6 +310,13 @@ class ReleaseWorkflowTests(unittest.TestCase):
         legacy=workflow.split('- name: Build, test and audit the release',1)[1].split('      - name:',1)[0]
         self.assertIn("minecraft_version != '1.18.2'",legacy)
 
+    def test_118_setup_java_notation_keeps_the_qualified_runtime(self):
+        text=WORKFLOW.read_text()
+        pins=[line for line in text.splitlines() if 'java-version:' in line and '17.0.20' in line]
+        self.assertEqual(4,len(pins))
+        self.assertTrue(all('17.0.20+101' in line and '17.0.20.1+1' not in line for line in pins))
+        self.assertIn("'17.0.20.1+1' if native18",script('Validate identity, exact commit and successful checks'))
+
     def test_identity_changes_are_rejected(self):
         for mutation in [{'mod_id': 'other'}, {'minecraft_version': '1.10.2'}, {'mod_license': 'CC0-1.0'}]:
             with self.subTest(mutation=mutation), self.assertRaises(SystemExit):
