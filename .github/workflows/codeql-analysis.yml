@@ -41,7 +41,7 @@ jobs:
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: '17.0.20.1+1'
+          java-version: '17.0.20+101'
 
       - name: Pin production JDK
         run: |

@@ -19,6 +19,8 @@ def gradle_roots(command):
     return roots
 
 def validate_workflow(text):
+    if "java-version: '17.0.20+101'" not in text or any('java-version:' in line and '17.0.20.1+1' in line for line in text.splitlines()):
+        raise ValueError('Use the setup-java SemVer identifier for the exact qualified JDK')
     commands='\n'.join(line.strip() for line in text.splitlines() if line.startswith('          ') and not line.strip().startswith('#'))
     for forbidden in ('unittest discover','-m unittest','native_runtime.py','native117_ci.py','verify_world_upgrades.py','verify_packaged','prepare_native','xvfb-run','--seed-only'):
         if forbidden in commands:raise ValueError('Expensive hosted command: '+forbidden)
@@ -71,6 +73,9 @@ def require_qualified_manifest(record):
 
 def check_source(root):
     validate_workflow((root/'.github/workflows/native118.yml').read_text(encoding='utf-8'))
+    for workflow in ('codeql-analysis.yml','deploy-release.yml'):
+        if any('java-version:' in line and '17.0.20.1+1' in line for line in (root/'.github/workflows'/workflow).read_text(encoding='utf-8').splitlines()):
+            raise ValueError('Non-SemVer JDK input in '+workflow)
     if 'feature/**' in(root/'.github/workflows/build.yml').read_text():raise ValueError('Copied legacy CI still catches modern feature branches')
     if 'workflow_dispatch:' in(root/'.github/workflows/migration-matrix.yml').read_text():raise ValueError('Copied legacy migration workflow can still dispatch on a modern ref')
     guard=(root/'settings.gradle').read_text()

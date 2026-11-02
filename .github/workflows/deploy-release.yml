@@ -213,13 +213,13 @@ jobs:
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20.1+1' || needs.preflight.outputs.minecraft_version == '1.17.1' && '16.0.2+7' || '8.0.502+7' }}
+          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.17.1' && '16.0.2+7' || '8.0.502+7' }}
       - name: Install Gradle Java
         if: needs.preflight.outputs.minecraft_version != '1.18.2'
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20.1+1' || '17.0.1+12' }}
+          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20+101' || '17.0.1+12' }}
       - name: Pin the production toolchain
         if: needs.preflight.outputs.minecraft_version != '1.18.2'
         run: |
@@ -371,12 +371,12 @@ jobs:
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20.1+1' || needs.preflight.outputs.minecraft_version == '1.17.1' && '16.0.2+7' || '8.0.502+7' }}
+          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.17.1' && '16.0.2+7' || '8.0.502+7' }}
       - name: Install Gradle Java
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20.1+1' || '17.0.1+12' }}
+          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20+101' || '17.0.1+12' }}
       - name: Pin the production toolchain
         run: |
           if [ '${{ needs.preflight.outputs.minecraft_version }}' = '1.18.2' ]; then

@@ -4,6 +4,10 @@ from pathlib import Path
 from hosted_policy import gradle_roots,validate_workflow,require_qualified_manifest,check_source
 
 class HostedPolicyTests(unittest.TestCase):
+    def test_raw_jdk_version_is_rejected_before_java_preparation(self):
+        text=(Path(__file__).resolve().parents[1]/'.github/workflows/native118.yml').read_text()
+        with self.assertRaises(ValueError):validate_workflow(text.replace('17.0.20+101','17.0.20.1+1'))
+
     def test_hosted_roots_allow_archive_builds_and_reject_every_test_or_game_entry(self):
         base='./gradlew assemble verifyProductionRuntimeClasspath prepareReleaseBundle '
         self.assertEqual(3,len(gradle_roots(base+'--no-daemon 2>&1 | tee build.log')))
