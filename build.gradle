@@ -111,6 +111,23 @@ tasks.withType(Javadoc).configureEach {
     options.addStringOption('Xdoclint:none', '-quiet')
     options.addBooleanOption('notimestamp', true)
 }
+// Windows JDKs use redirect files for these notices; Linux JDKs use links.
+// Package the complete java.base notices on both platforms.
+tasks.named('javadoc', Javadoc) {
+    def legalNames = ['ADDITIONAL_LICENSE_INFO', 'ASSEMBLY_EXCEPTION', 'LICENSE']
+    inputs.files(productionJavadoc.map { tool ->
+        legalNames.collect { new File(tool.metadata.installationPath.asFile, "legal/java.base/${it}") }
+    }).withPropertyName('completeJdkLegalNotices')
+    doLast {
+        File jdk = javadocTool.get().metadata.installationPath.asFile
+        legalNames.each { name ->
+            String notice = new File(jdk, "legal/java.base/${name}").getText('UTF-8').replace('\r\n', '\n')
+            if (notice.length() < 100 || notice.startsWith('Please see '))
+                throw new GradleException("Incomplete JDK legal notice ${name}")
+            new File(destinationDir, "legal/${name}").setText(notice, 'UTF-8')
+        }
+    }
+}
 tasks.withType(AbstractArchiveTask).configureEach {
     preserveFileTimestamps = false
     reproducibleFileOrder = true
@@ -241,6 +258,10 @@ ext.releaseJar = renamer.classes(tasks.named('jar', Jar)) {
                 'Maven-Artifact': "${project.group}:${base.archivesName.get()}:${project.version}:${name == 'sourcesJar' ? 'sources' : 'javadoc'}")
         filesMatching(archiveTextPatterns, normalizeArchiveText)
     }
+}
+tasks.named('sourcesJar', Jar) {
+    inputs.property('accessTransformerLineEndings', 'lf')
+    filesMatching('META-INF/accesstransformer.cfg', normalizeArchiveText)
 }
 // Java 17 writes this extensionless index with the host line separator. Keep
 // the 1.18 documentation bytes identical on Windows and Linux.

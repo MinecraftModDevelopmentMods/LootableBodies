@@ -88,10 +88,22 @@ ext.auditReleaseArchives = { File directory ->
                         'cyano/lootable/entities/EntityLootableBody.class')).bytes, 'ISO-8859-1')
                 if (!entity.contains('m_7378_') || !entity.contains('m_7380_'))
                     throw new GradleException('Production jar does not have runtime SRG mappings')
-            } else if (index == 1 && !names.contains('cyano/lootable/LootableBodies.java')) {
-                throw new GradleException('Sources jar does not contain production sources')
-            } else if (index == 2 && !names.contains('index.html')) {
-                throw new GradleException('Javadoc jar has no index')
+            } else if (index == 1) {
+                if (!names.contains('cyano/lootable/LootableBodies.java'))
+                    throw new GradleException('Sources jar does not contain production sources')
+                def entry = zip.getEntry('META-INF/accesstransformer.cfg')
+                if (!entry || zip.getInputStream(entry).getText('UTF-8').contains('\r'))
+                    throw new GradleException('Source access transformer must use LF line endings')
+            } else if (index == 2) {
+                if (!names.contains('index.html')) throw new GradleException('Javadoc jar has no index')
+                File jdk = tasks.named('javadoc', Javadoc).get().javadocTool.get().metadata.installationPath.asFile
+                ['ADDITIONAL_LICENSE_INFO', 'ASSEMBLY_EXCEPTION', 'LICENSE'].each { noticeName ->
+                    String complete = new File(jdk, "legal/java.base/${noticeName}").getText('UTF-8').replace('\r\n', '\n')
+                    def entry = zip.getEntry("legal/${noticeName}")
+                    if (complete.length() < 100 || complete.startsWith('Please see ') || !entry ||
+                            zip.getInputStream(entry).getText('UTF-8') != complete)
+                        throw new GradleException("Missing/changed complete JDK legal notice ${noticeName}")
+                }
             }
         }
     }
