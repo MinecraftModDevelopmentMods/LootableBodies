@@ -69,13 +69,14 @@ class ReleaseWorkflowTests(unittest.TestCase):
             '1.15.2': ('115021', 'master-1.15.2', '31.2.57'),
             '1.16.5': ('116051', 'master-1.16.5', '36.2.42'),
             '1.17.1': ('117011', 'master-1.17.1', '37.1.1'),
-            '1.18.2': ('118021', 'master-1.18.2', '40.3.12')}[minecraft]
+            '1.18.2': ('118021', 'master-1.18.2', '40.3.12'),
+            '1.19.4': ('119041', 'master-1.19.4', '45.4.5')}[minecraft]
         version = '2.4.2.' + suffix
         files={name:'C'*64 for name in ['main.jar','sources.jar','javadoc.jar','release.pom','CHANGELOG.txt','SHA256SUMS']}
         receipt={'schema':1,'source':SHA,'version':version,'files':files,'evidence_sha256':'F'*64,'qualified_locally':True,'manual_accepted':True}
         if local_receipt is not None:receipt=local_receipt
         values = dict(minecraft_version=minecraft, forge_version=forge, loader_name='forge', loader_code='1',
-            java_version='17' if minecraft=='1.18.2' else '16' if minecraft=='1.17.1' else '8', java_toolchain_version='17.0.20.1+1' if minecraft=='1.18.2' else '16.0.2+7' if minecraft=='1.17.1' else '8.0.502+7', gradle_java_version='17', mod_id='lootablebodies',
+            java_version='17' if minecraft in ('1.18.2','1.19.4') else '16' if minecraft=='1.17.1' else '8', java_toolchain_version='17.0.20.1+1' if minecraft in ('1.18.2','1.19.4') else '16.0.2+7' if minecraft=='1.17.1' else '8.0.502+7', gradle_java_version='17', mod_id='lootablebodies',
             mod_artifact='LootableBodies', mod_group='zone.moddev.mc.lootablebodies', mod_license='LGPL-2.1-only',
             curseforge_project_id='240968', mod_version=version)
         if mutation:
@@ -85,13 +86,13 @@ class ReleaseWorkflowTests(unittest.TestCase):
                          '1.14.4': MATRIX114 + ['Validate release workflow'],
                          '1.15.2': MATRIX115, '1.16.5': MATRIX116}.get(minecraft, []) if names is None else names
         if minecraft=='1.17.1' and names is None:checks=CORE117+MATRIX117
-        if minecraft=='1.18.2' and names is None:checks=CORE118
+        if minecraft in ('1.18.2','1.19.4') and names is None:checks=CORE118
 
         def command(args, **options):
             if args[0] == 'git':
                 return SHA + '\n'
-            if any('/actions/workflows/native'+code+'.yml/' in args[-1] for code in ['117','118']):
-                code='118' if minecraft=='1.18.2' else '117'
+            if any('/actions/workflows/native'+code+'.yml/' in args[-1] for code in ['117','118','119']):
+                code={'1.17.1':'117','1.18.2':'118','1.19.4':'119'}[minecraft]
                 row=dict(id=int(code),head_sha=SHA,head_branch=branch,event='push',path='.github/workflows/native'+code+'.yml',conclusion='success')
                 if qualification:row.update(qualification)
                 return json.dumps({'workflow_runs':[row]})
@@ -111,12 +112,12 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 'MINECRAFT_VERSION': minecraft, 'SOURCE_BRANCH': branch,
                 'GITHUB_OUTPUT': str(Path(directory) / 'output'),
                 'LOCAL_QUALIFICATION':json.dumps(receipt) if receipt else ''}), \
-                patch('pathlib.Path.read_text', side_effect=['\n'.join(k+'='+v for k,v in values.items()),json.dumps({'files':files,'local_qualification_complete':True,'qualification_integrity_status':'verified'})]), \
+                patch('pathlib.Path.read_text', side_effect=['\n'.join(k+'='+v for k,v in values.items()),json.dumps({'files':files,'local_qualification_complete':True,'qualification_integrity_status':'verified','manual_accepted':True})]), \
                 patch('subprocess.check_output', side_effect=command), patch('subprocess.run', side_effect=existing):
             exec(compile(code, 'release-preflight', 'exec'), {})
 
-    def test_future_119_candidate_cannot_dispatch_publication(self):
-        code, values = self.select('2.4.10.119041')
+    def test_future_120_candidate_cannot_dispatch_publication(self):
+        code, values = self.select('2.4.11.120011')
         self.assertNotEqual(0, code)
         self.assertEqual({}, values)
 
@@ -315,7 +316,25 @@ class ReleaseWorkflowTests(unittest.TestCase):
         pins=[line for line in text.splitlines() if 'java-version:' in line and '17.0.20' in line]
         self.assertEqual(4,len(pins))
         self.assertTrue(all('17.0.20+101' in line and '17.0.20.1+1' not in line for line in pins))
-        self.assertIn("'17.0.20.1+1' if native18",script('Validate identity, exact commit and successful checks'))
+        self.assertIn("'17.0.20.1+1' if archive_only",script('Validate identity, exact commit and successful checks'))
+
+    def test_119_requires_manual_acceptance_and_exact_artifacts(self):
+        code, values = self.select('2.4.10.119041')
+        self.assertEqual(0, code)
+        self.assertEqual('master-1.19.4', values['source_branch'])
+        self.validate('1.19.4')
+        for missing in CORE118:
+            with self.subTest(missing=missing), self.assertRaises(SystemExit):
+                self.validate('1.19.4', names=[name for name in CORE118 if name != missing])
+        for kwargs in [{'audit_success':False}, {'local_receipt':{}},
+                       {'qualification':{'path':'.github/workflows/native118.yml'}},
+                       {'mutation':{'java_version':'8'}}]:
+            with self.subTest(kwargs=kwargs), self.assertRaises(SystemExit):
+                self.validate('1.19.4', **kwargs)
+        step = WORKFLOW.read_text().split('- name: Verify all six native119 bytes before publication', 1)[1].split('      - name:', 1)[0]
+        self.assertIn('python3 -B tools/native119_build.py --bundle build/release/bundle', step)
+        self.assertNotIn('gradlew', step)
+        self.assertIn("minecraft_version == '1.19.4' && 'Java 17'", WORKFLOW.read_text())
 
     def test_identity_changes_are_rejected(self):
         for mutation in [{'mod_id': 'other'}, {'minecraft_version': '1.10.2'}, {'mod_license': 'CC0-1.0'}]:
