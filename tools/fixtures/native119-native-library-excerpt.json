@@ -1,0 +1,63 @@
+{
+  "source_url": "https://piston-meta.mojang.com/v1/packages/4fc30c189872faebae2617aba033cc17fec5899f/1.19.4.json",
+  "source_sha1": "4FC30C189872FAEBAE2617ABA033CC17FEC5899F",
+  "libraries": [
+    {
+      "downloads": {
+        "artifact": {
+          "path": "org/lwjgl/lwjgl-glfw/3.3.1/lwjgl-glfw-3.3.1-natives-windows.jar",
+          "sha1": "ed892f945cf7e79c8756796f32d00fa4ceaf573b",
+          "size": 145512,
+          "url": "https://libraries.minecraft.net/org/lwjgl/lwjgl-glfw/3.3.1/lwjgl-glfw-3.3.1-natives-windows.jar"
+        }
+      },
+      "name": "org.lwjgl:lwjgl-glfw:3.3.1:natives-windows",
+      "rules": [
+        {
+          "action": "allow",
+          "os": {
+            "name": "windows"
+          }
+        }
+      ]
+    },
+    {
+      "downloads": {
+        "artifact": {
+          "path": "org/lwjgl/lwjgl-glfw/3.3.1/lwjgl-glfw-3.3.1-natives-windows-arm64.jar",
+          "sha1": "beda65ee503443e60aa196d58ed31f8d001dc22a",
+          "size": 123808,
+          "url": "https://libraries.minecraft.net/org/lwjgl/lwjgl-glfw/3.3.1/lwjgl-glfw-3.3.1-natives-windows-arm64.jar"
+        }
+      },
+      "name": "org.lwjgl:lwjgl-glfw:3.3.1:natives-windows-arm64",
+      "rules": [
+        {
+          "action": "allow",
+          "os": {
+            "name": "windows"
+          }
+        }
+      ]
+    },
+    {
+      "downloads": {
+        "artifact": {
+          "path": "org/lwjgl/lwjgl-glfw/3.3.1/lwjgl-glfw-3.3.1-natives-windows-x86.jar",
+          "sha1": "b997e3391d6ce8f05487e7335d95c606043884a1",
+          "size": 139251,
+          "url": "https://libraries.minecraft.net/org/lwjgl/lwjgl-glfw/3.3.1/lwjgl-glfw-3.3.1-natives-windows-x86.jar"
+        }
+      },
+      "name": "org.lwjgl:lwjgl-glfw:3.3.1:natives-windows-x86",
+      "rules": [
+        {
+          "action": "allow",
+          "os": {
+            "name": "windows"
+          }
+        }
+      ]
+    }
+  ]
+}

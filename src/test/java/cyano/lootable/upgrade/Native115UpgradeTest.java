@@ -24,17 +24,17 @@ class Native115UpgradeTest {
         root.put("Level", level); return root;
     }
     private CompoundTag convert(CompoundTag root, int source) {
-        return NbtUtils.update(UpgradePreservation.wrapper(DataFixers.getDataFixer()),
-                DataFixTypes.CHUNK, root, source, 2586);
+        return DataFixTypes.CHUNK.update(UpgradePreservation.wrapper(DataFixers.getDataFixer()),
+                root, source, 2586);
     }
     private int[] currentBiomes() {
         int[] values = new int[1024];
         for (int i = 0; i < values.length; i++) values[i] = i;
         return values;
     }
-    @Test void currentFormatUsesThe118SchemaAndItsOwnMarker() {
-        assertEquals(2975, UpgradePreservation.MINECRAFT_VERSION);
-        assertEquals(8, UpgradePreservation.DATA_VERSION);
+    @Test void currentFormatUsesThe119SchemaAndItsOwnMarker() {
+        assertEquals(3337, UpgradePreservation.MINECRAFT_VERSION);
+        assertEquals(9, UpgradePreservation.DATA_VERSION);
     }
     @Test void currentBiomeValuesSurvivePlausibleOlderStampsAndRepeatedConversion() {
         int[] values = currentBiomes(); CompoundTag original = chunk(values), before = original.copy();
@@ -78,7 +78,7 @@ class Native115UpgradeTest {
         ListTag items = new ListTag(); items.add(item); raw.put("Equipment", items);
         context.putInt("DataVersion", 1976); CompoundTag before = raw.copy();
         CompoundTag staged = NativeSafeFixer.stageCorpse(raw, context);
-        assertEquals(8, staged.getInt(UpgradePreservation.VERSION));
+        assertEquals(9, staged.getInt(UpgradePreservation.VERSION));
         CompoundTag record = staged.getList("LootableBodiesUnresolved", 10).getCompound(0);
         assertEquals(item, record.get("Data")); assertEquals("Equipment", record.getString("Source"));
         assertEquals(1976, record.getCompound("SourceVersions").getInt("DataVersion"));

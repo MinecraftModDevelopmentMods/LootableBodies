@@ -9,7 +9,6 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.TextComponent;
 
 /**
  * Created by Chris on 4/12/2016.
@@ -20,7 +19,7 @@ public class CorpseGUIContainer extends net.minecraft.client.gui.screens.invento
 	private final ResourceLocation image = new ResourceLocation(LootableBodies.MODID+":textures/gui/corpse.png");
 
 	public CorpseGUIContainer(Inventory playerItems, Container entity) {
-		this(new CorpseContainer(playerItems,entity),playerItems,entity instanceof net.minecraft.world.entity.Entity?((net.minecraft.world.entity.Entity)entity).getDisplayName():new TextComponent(LootableBodies.NAME));
+		this(new CorpseContainer(playerItems,entity),playerItems,entity instanceof net.minecraft.world.entity.Entity?((net.minecraft.world.entity.Entity)entity).getDisplayName():Component.literal(LootableBodies.NAME));
     }
     public CorpseGUIContainer(CorpseContainer container, Inventory playerItems, Component title){
         super(container,playerItems,title);

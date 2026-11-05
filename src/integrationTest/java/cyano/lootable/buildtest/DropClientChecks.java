@@ -86,7 +86,7 @@ final class DropClientChecks {
                 CompoundTag expected=new CompoundTag();expected.put("Inventory",savedPlayer.copy());try(FileOutputStream out=new FileOutputStream(new File(folder(mc),"drop-creative-player.nbt"))){NbtIo.writeCompressed(expected,out);}
                 mc.getSingleplayerServer().getPlayerList().saveAll();mc.getSingleplayerServer().saveAllChunks(false,true,false);});next(20);
         } else if(stage==20 && done()){quit(mc);next(21);}
-        else if(stage==21 && FixtureConnections.stopped(mc)){mc.loadLevel("build-fixture");next(22);}
+        else if(stage==21 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"build-fixture");next(22);}
         else if(stage==22 && ready(mc) && frames>20){schedule(mc,()->{
             RuntimeChecks.awaitChunk(player(mc).getLevel(),2,0);body(mc).baseTick();RuntimeChecks.verifyExpected(folder(mc),"drop-creative-final",body(mc));
             RuntimeChecks.require(savedPlayer.equals(player(mc).getInventory().save(new ListTag())),"Creative player inventory changed on disk reload");player(mc).connection.teleport(40.5,80,7.5,0,0);

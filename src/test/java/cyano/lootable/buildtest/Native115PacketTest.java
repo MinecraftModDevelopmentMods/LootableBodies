@@ -17,8 +17,9 @@ class Native115PacketTest {
     static { net.minecraft.SharedConstants.tryDetectVersion();net.minecraft.server.Bootstrap.bootStrap(); }
     private static final long SEED=0x13572468ABCDEF01L;
     private ClientboundRespawnPacket packet(ResourceKey<Level> dimension,long seed) {
-        net.minecraft.core.Holder<DimensionType> type=RegistryAccess.builtinCopy().registryOrThrow(Registry.DIMENSION_TYPE_REGISTRY).getHolderOrThrow(DimensionType.OVERWORLD_LOCATION);
-        return new ClientboundRespawnPacket(type,dimension,seed,GameType.SURVIVAL,GameType.CREATIVE,false,true,true);
+        return new ClientboundRespawnPacket(net.minecraft.world.level.dimension.BuiltinDimensionTypes.OVERWORLD,
+                dimension,seed,GameType.SURVIVAL,GameType.CREATIVE,false,true,
+                ClientboundRespawnPacket.KEEP_ALL_DATA,java.util.Optional.empty());
     }
     @Test void native115HashedSeedSurvivesDecodedPacketObservation() throws Exception {
         FriendlyByteBuf bytes=new FriendlyByteBuf(Unpooled.buffer());
@@ -30,7 +31,7 @@ class Native115PacketTest {
             String expected="RESPAWN dimension=minecraft:the_nether hashedSeed="+SEED;
             assertEquals(expected,NativeRespawnDescription.describe(outgoing));
             assertEquals(expected,NativeRespawnDescription.describe(incoming));
-            assertNotNull(incoming.getDimensionType().value(),"Native codec dimension type was lost");
+            assertEquals(net.minecraft.world.level.dimension.BuiltinDimensionTypes.OVERWORLD,incoming.getDimensionType(),"Native codec dimension type key was lost");
             assertEquals(before.length,bytes.readerIndex());
             byte[] after=new byte[before.length];bytes.getBytes(0,after);assertArrayEquals(before,after);
         } finally {bytes.release();}
@@ -49,7 +50,7 @@ class Native115PacketTest {
                         NativeRespawnDescription.describe(packet(Level.NETHER,SEED)));
     }
     @Test void observationKeepsUnknownDimensionKeysAndEveryDecodedField() throws Exception {
-        ResourceKey<Level> key=ResourceKey.create(Registry.DIMENSION_REGISTRY,new net.minecraft.resources.ResourceLocation("fixture:unhandled"));
+        ResourceKey<Level> key=ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION,new net.minecraft.resources.ResourceLocation("fixture:unhandled"));
         ClientboundRespawnPacket packet=packet(key,SEED);
         java.util.Map<Field,Object> before=new java.util.HashMap<>();
         for(Field field:ClientboundRespawnPacket.class.getDeclaredFields()){field.setAccessible(true);before.put(field,field.get(packet));}

@@ -52,8 +52,8 @@ final class EffectHurtChecks {
         // Forge 1.12 assigns IDs through registry events. Fill the isolated test
         // registry through its public API so unsigned-byte coverage still uses 200.
         for(int i=0;MobEffect.byId(199)==null && i<200;i++)
-            net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.register(new MobEffect(net.minecraft.world.effect.MobEffectCategory.BENEFICIAL,0){}.setRegistryName("lootablebodiesbuildtest:padding_"+i));
-        net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.register(extended.setRegistryName("lootablebodiesbuildtest:extended_effect"));
+            net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.register(new net.minecraft.resources.ResourceLocation("lootablebodiesbuildtest:padding_"+i),new MobEffect(net.minecraft.world.effect.MobEffectCategory.BENEFICIAL,0){});
+        net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.register(new net.minecraft.resources.ResourceLocation("lootablebodiesbuildtest:extended_effect"),extended);
         RuntimeChecks.require(MobEffect.getId(extended)==200,"Fixture potion must exercise unsigned byte ID 200");
         // Older probes saved a different number of padding effects. Retain their
         // registry names during upgrades without changing fresh-world ID tests.
@@ -61,7 +61,7 @@ final class EffectHurtChecks {
             for(int i=0;i<200;i++) {
                 net.minecraft.resources.ResourceLocation name=new net.minecraft.resources.ResourceLocation("lootablebodiesbuildtest:padding_"+i);
                 if(!net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.containsKey(name))
-                    net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.register(new MobEffect(net.minecraft.world.effect.MobEffectCategory.BENEFICIAL,0){}.setRegistryName(name));
+                    net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.register(name,new MobEffect(net.minecraft.world.effect.MobEffectCategory.BENEFICIAL,0){});
             }
     }
     static void run(MinecraftServer server,ServerLevel target,File folder) throws Exception {

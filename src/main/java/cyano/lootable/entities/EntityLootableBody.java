@@ -28,7 +28,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.level.block.entity.SkullBlockEntity;
 import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.damagesource.EntityDamageSource;
+import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.core.Direction;
 import net.minecraft.core.NonNullList;
@@ -95,7 +95,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		// Keep MobEntity's actual defaults (including follow range 16 and
 		// configured corpse health), rather than the generic attribute defaults.
 		for(AttributeInstance attribute : corpseAttributes()) {
-			String name = attribute.getAttribute().getRegistryName().toString();
+			String name = net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getKey(attribute.getAttribute()).toString();
 			defaultAttributeBases.put(name,attribute.getBaseValue());
 			defaultAttributeModifiers.put(name,new ArrayList<>(attribute.getModifiers()));
 		}
@@ -139,9 +139,9 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 			// A Forge ticket can tick our centre chunk while neighbouring support
 			// terrain is absent. Never treat those missing collision boxes as air.
 			AABB bounds = getBoundingBox();
-			BlockPos from = new BlockPos(bounds.minX + Math.min(0D,getDeltaMovement().x), 0,
+			BlockPos from = BlockPos.containing(bounds.minX + Math.min(0D,getDeltaMovement().x), 0,
 					bounds.minZ + Math.min(0D,getDeltaMovement().z));
-			BlockPos to = new BlockPos(bounds.maxX + Math.max(0D,getDeltaMovement().x), 0,
+			BlockPos to = BlockPos.containing(bounds.maxX + Math.max(0D,getDeltaMovement().x), 0,
 					bounds.maxZ + Math.max(0D,getDeltaMovement().z));
 			if(!getCommandSenderWorld().hasChunksAt(from,to)) return;
 		}
@@ -377,44 +377,17 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 
 	@Override
 	protected void actuallyHurt(DamageSource src, float amount){
-		String type = String.valueOf(src == null ? null : src.getMsgId()); // null protection
-		if(src instanceof EntityDamageSource && src.getEntity() instanceof Player){
-			Player player = (Player)src.getEntity();
-			ItemStack item = player.getItemInHand(InteractionHand.MAIN_HAND);
-			if(!emptyStack(item)) {
-				if (item.getItem() instanceof ShovelItem || item.canPerformAction(net.minecraftforge.common.ToolActions.SHOVEL_DIG)) {
-					this.kill();
-				}
-			}
-		}
-		if(type.equals(DamageSource.OUT_OF_WORLD.getMsgId())) {
-			super.actuallyHurt(src,amount); // kill command and falling out of the world
-			return;
-		}
-
-		if(type.equals(DamageSource.IN_WALL.getMsgId())){
-			this.jumpOutOfWall();
-		}
-
-		// damage handling
-		if(LootableBodies.completelyInvulnerable) return;
-
-		if(src instanceof EntityDamageSource ){
-			if(LootableBodies.hurtByAttacks) super.actuallyHurt(src,amount);
-			return;
-		}
-
-		if(matchesAny(type, DamageSource.ANVIL, DamageSource.CACTUS, DamageSource.FALL, DamageSource.FALLING_BLOCK, DamageSource.FLY_INTO_WALL, DamageSource.IN_FIRE, DamageSource.LAVA, DamageSource.MAGIC, DamageSource.LIGHTNING_BOLT, DamageSource.ON_FIRE)){
-			if(LootableBodies.hurtByEnvironment)super.actuallyHurt(src,amount);
-			return;
-		}
-
-		if(LootableBodies.hurtByMisc){
-			super.actuallyHurt(src,amount);
-			return;
-		}
-	}
-
+        if(CorpseDamageRules.kind(src)==CorpseDamageRules.Kind.ATTACK && src.getEntity() instanceof Player){
+            Player player=(Player)src.getEntity();
+            ItemStack item=player.getItemInHand(InteractionHand.MAIN_HAND);
+            if(!emptyStack(item) && (item.getItem() instanceof ShovelItem || item.canPerformAction(net.minecraftforge.common.ToolActions.SHOVEL_DIG)))
+                this.kill();
+        }
+        if(CorpseDamageRules.isWall(src))this.jumpOutOfWall();
+        if(CorpseDamageRules.allows(src,LootableBodies.completelyInvulnerable,
+                LootableBodies.hurtByAttacks,LootableBodies.hurtByEnvironment,LootableBodies.hurtByMisc))
+            super.actuallyHurt(src,amount);
+    }
 
 
 	public GameProfile getGameProfile(){
@@ -426,7 +399,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	}
     /** Refreshes an existing client body after enabling player skins in the GUI. */
     public String getCustomNameTag(){return getCustomName()==null?"":getCustomName().getString();}
-    public void setCustomNameTag(String name){setCustomName(name==null || name.isEmpty()?null:new net.minecraft.network.chat.TextComponent(name));}
+    public void setCustomNameTag(String name){setCustomName(name==null || name.isEmpty()?null:net.minecraft.network.chat.Component.literal(name));}
 
     public void refreshClientSkin() {
         GameProfile profile = gpSwap.get();
@@ -466,7 +439,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
     }
     private java.util.List<AttributeInstance> corpseAttributes() {
         java.util.List<AttributeInstance> result=new java.util.ArrayList<>();
-        for(net.minecraft.world.entity.ai.attributes.Attribute key:net.minecraft.core.Registry.ATTRIBUTE)
+        for(net.minecraft.world.entity.ai.attributes.Attribute key:net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES)
             if(getAttributes().hasAttribute(key))result.add(getAttribute(key));
         return result;
     }
@@ -489,7 +462,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
         default:break;
         }
         net.minecraft.resources.ResourceLocation id=net.minecraft.resources.ResourceLocation.tryParse(name);
-        net.minecraft.world.entity.ai.attributes.Attribute key=id==null?null:net.minecraft.core.Registry.ATTRIBUTE.getOptional(id).orElse(null);
+        net.minecraft.world.entity.ai.attributes.Attribute key=id==null || !net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.containsKey(id)?null:net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getValue(id);
         return key!=null && getAttributes().hasAttribute(key)?getAttribute(key):null;
     }
 
@@ -531,8 +504,8 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	}
 
 	private boolean escapeTerrainLoaded(AABB bounds) {
-		return level.hasChunksAt(new BlockPos(bounds.minX-1,0,bounds.minZ-1),
-				new BlockPos(bounds.maxX+1,0,bounds.maxZ+1));
+		return level.hasChunksAt(BlockPos.containing(bounds.minX-1,0,bounds.minZ-1),
+				BlockPos.containing(bounds.maxX+1,0,bounds.maxZ+1));
 	}
 
 	private boolean tryWallExit(double x,double y,double z) {
@@ -548,7 +521,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	@Override
 	public void kill() {
 		if(terminate < 0) terminate = DEATH_COUNTDOWN;
-		this.hurt(DamageSource.OUT_OF_WORLD, this.getMaxHealth());
+		this.hurt(damageSources().outOfWorld(), this.getMaxHealth());
 		this.setChanged();
 	}
 
@@ -565,7 +538,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 
 
 	@Override
-	protected int getExperienceReward(final Player p_getExperiencePoints_1_) {
+	public int getExperienceReward() {
 		return 0;
 	}
 
@@ -592,8 +565,8 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	}
 
 	@Override
-	public boolean canBeControlledByRider() {
-		return false;
+	public net.minecraft.world.entity.LivingEntity getControllingPassenger() {
+		return null;
 	}
 
 
@@ -805,12 +778,6 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		return isEmpty();
 	}
 
-	private static boolean matchesAny(String damageType, DamageSource... list){
-		for(int i = 0; i < list.length; i++){
-			if(damageType.equalsIgnoreCase(list[i].getMsgId())) return true;
-		}
-		return false;
-	}
 
 	@Override
 	public MobType getMobType()
@@ -1035,7 +1002,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	}
 
 	private void restoreAttribute(AttributeInstance attribute) {
-		String name = attribute.getAttribute().getRegistryName().toString();
+		String name = net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getKey(attribute.getAttribute()).toString();
 		for(AttributeModifier modifier : new ArrayList<>(attribute.getModifiers())) attribute.removeModifier(modifier);
 		attribute.setBaseValue(defaultAttributeBases.getOrDefault(name,attribute.getAttribute().getDefaultValue()));
 		List<AttributeModifier> defaults = defaultAttributeModifiers.get(name);
@@ -1123,7 +1090,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 					? attributeNamed(record.getString("Name")) : null;
 			Double base = finiteNumber(record.get("Base"));
 			if(attribute == null || base == null) { retainInvalid("Attribute",record); continue; }
-			String name = attribute.getAttribute().getRegistryName().toString();
+			String name = net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getKey(attribute.getAttribute()).toString();
 			// corpse_HP has always allowed 1..Short.MAX_VALUE. Preserve a base
 			// saved under an older config, including vanilla's existing cap.
 			boolean configuredHealth = attribute.getAttribute() == Attributes.MAX_HEALTH
@@ -1232,7 +1199,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
                     if(text==null){retainInvalid(key,raw);return null;}name=text.getString();
                 }catch(RuntimeException malformed){retainInvalid(key,raw);return null;}
             }
-            String packet=net.minecraft.network.chat.Component.Serializer.toJson(new net.minecraft.network.chat.TextComponent(name));
+            String packet=net.minecraft.network.chat.Component.Serializer.toJson(net.minecraft.network.chat.Component.literal(name));
             if(name.length()<=32767 && name.getBytes(StandardCharsets.UTF_8).length<=32767
                     && packet.getBytes(StandardCharsets.UTF_8).length<=32767)return name.trim().isEmpty()?"":name;
         }

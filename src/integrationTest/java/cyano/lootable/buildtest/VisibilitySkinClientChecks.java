@@ -24,7 +24,7 @@ final class VisibilitySkinClientChecks {
     private SkinManager original;
     void tick(Minecraft mc) throws Exception {
         if(stage==0 && mc.screen instanceof TitleScreen) {
-            mc.options.pauseOnLostFocus=false;mc.options.framerateLimit=30;mc.options.renderDistance=4;
+            mc.options.pauseOnLostFocus=false;mc.options.framerateLimit().set(30);mc.options.renderDistance().set(4);
             FixtureApi.ClientWorlds.create(mc,"skin-fixture","Skin fixture",net.minecraft.world.level.GameType.SURVIVAL,true);stage=1;
         } else if(stage==1 && mc.level!=null && mc.player!=null && ++frames>60) {
             VisibilitySkinChecks.run(mc);
@@ -42,14 +42,14 @@ final class VisibilitySkinClientChecks {
     }
     private static final class Panel extends Screen {
         private final EntityLootableBody[] bodies=new EntityLootableBody[3];
-        Panel(Minecraft mc){super(new net.minecraft.network.chat.TextComponent("Skin visibility fixture"));for(int i=0;i<3;i++){bodies[i]=new EntityLootableBody(mc.level);bodies[i].setGameProfile(new GameProfile(new UUID(0,512+i),"VisibilityModel"));}}
+        Panel(Minecraft mc){super(net.minecraft.network.chat.Component.literal("Skin visibility fixture"));for(int i=0;i<3;i++){bodies[i]=new EntityLootableBody(mc.level);bodies[i].setGameProfile(new GameProfile(new UUID(0,512+i),"VisibilityModel"));}}
         @Override public void render(com.mojang.blaze3d.vertex.PoseStack matrices,int mouseX,int mouseY,float partial) {
             fill(matrices,0,0,width,height,0xff304050);
             String[] names={"Failed skin: wide arms","Failed skin: slim arms","Local texture"};boolean local=LootableBodies.useLocalSkin;
             try {for(int i=0;i<3;i++) {
                 LootableBodies.useLocalSkin=i==2;int x=(2*i+1)*width/6;
                 drawCenteredString(matrices,font,names[i],x,35,0xffffff);
-                InventoryScreen.renderEntityInInventory(x,height*2/3,65,20,-20,bodies[i]);
+                InventoryScreen.renderEntityInInventoryFollowsMouse(matrices,x,height*2/3,65,20,-20,bodies[i]);
             }} finally {LootableBodies.useLocalSkin=local;}
         }
         @Override public boolean isPauseScreen(){return false;}

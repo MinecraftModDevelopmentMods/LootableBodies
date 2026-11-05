@@ -17,13 +17,14 @@ public final class FixtureItems {
     }
     public static final class RegistryItems {
         @net.minecraftforge.eventbus.api.SubscribeEvent
-        public void register(net.minecraftforge.event.RegistryEvent.Register<Item> event) {
+        public void register(net.minecraftforge.registries.RegisterEvent event) {
+            if(!event.getRegistryKey().equals(net.minecraft.core.registries.Registries.ITEM))return;
             // Native18 creates an intrusive holder inside Item's constructor;
             // construction belongs to the same open registration event.
             keepsake=new Item(new Item.Properties()) {
                 @Override public ICapabilityProvider initCapabilities(ItemStack stack,CompoundTag nbt){return new Stored();}
-            }.setRegistryName("lootablebodiesbuildtest:keepsake");
-            event.getRegistry().register(keepsake);
+            };
+            event.register(net.minecraft.core.registries.Registries.ITEM,new ResourceLocation("lootablebodiesbuildtest:keepsake"),()->keepsake);
         }
     }
     private static final class Stored implements ICapabilitySerializable<CompoundTag> {

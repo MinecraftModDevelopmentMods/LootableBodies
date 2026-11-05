@@ -2,7 +2,7 @@ package cyano.lootable.buildtest;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
-import net.minecraft.network.chat.TextComponent;
+import net.minecraft.network.chat.Component;
 import net.minecraft.nbt.LongArrayTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.CompoundTag;
@@ -55,19 +55,19 @@ public final class RuntimeChecks {
     }
     @SubscribeEvent public void rejectFirstCorpseOpen(net.minecraftforge.event.entity.player.PlayerInteractEvent.EntityInteract event) {
         if(Boolean.getBoolean("lootablebodies.rejectFirstCorpseOpen") && !rejectedFirstCorpseOpen
-                && !event.getWorld().isClientSide && event.getTarget() instanceof EntityLootableBody) {
+                && !event.getLevel().isClientSide && event.getTarget() instanceof EntityLootableBody) {
             rejectedFirstCorpseOpen=true;
             event.setCanceled(true);
             System.out.println("CORPSE_GUI_FIRST_INTERACTION_REJECTED_CONTROL");
         }
     }
-    @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.LOWEST) public void fixtureAdmission(net.minecraftforge.event.entity.EntityJoinWorldEvent event) {
+    @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.LOWEST) public void fixtureAdmission(net.minecraftforge.event.entity.EntityJoinLevelEvent event) {
         NbtWorldChecks.verifyGraphicalAdmission(event.getEntity());
-        if(pendingDeathId!=null && event.getEntity() instanceof EntityLootableBody && !event.getWorld().isClientSide
+        if(pendingDeathId!=null && event.getEntity() instanceof EntityLootableBody && !event.getLevel().isClientSide
                 && "BuildDeath".equals(((EntityLootableBody)event.getEntity()).getCustomNameTag()))event.getEntity().setUUID(pendingDeathId);
-        if(Boolean.getBoolean("lootablebodies.assertFixtureAdmission") && event.getEntity() instanceof EntityLootableBody && !event.getWorld().isClientSide && !event.getEntity().isAddedToWorld()) {
+        if(Boolean.getBoolean("lootablebodies.assertFixtureAdmission") && event.getEntity() instanceof EntityLootableBody && !event.getLevel().isClientSide && !event.getEntity().isAddedToWorld()) {
             EntityLootableBody body=(EntityLootableBody)event.getEntity();
-            require(event.getWorld().getChunkSource().hasChunk(net.minecraft.util.Mth.floor(body.getX())>>4,net.minecraft.util.Mth.floor(body.getZ())>>4),"Manual corpse fixture spawned before chunk admission: "+body.blockPosition()+" name="+body.getCustomNameTag());
+            require(event.getLevel().getChunkSource().hasChunk(net.minecraft.util.Mth.floor(body.getX())>>4,net.minecraft.util.Mth.floor(body.getZ())>>4),"Manual corpse fixture spawned before chunk admission: "+body.blockPosition()+" name="+body.getCustomNameTag());
         }
     }
     @SubscribeEvent public void started(ServerStartedEvent event) {
@@ -98,9 +98,9 @@ public final class RuntimeChecks {
     public static void run(MinecraftServer server, String phase) throws Exception {
         ServerLevel world = server.getLevel(FixtureApi.dimensionKey(0));
         File folder = world.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();
-        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.9.118021"), "identity/version");
+        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.10.119041"), "identity/version");
         require(net.minecraftforge.fml.ModList.get().getModContainerById("lootablebodies").get().getModInfo().getVersion().toString().equals(phase.equals("seed") ? "2.4.0" : phase.equals("issues") ?
-                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.9.118021") : "2.4.9.118021"), "loaded release version");
+                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.10.119041") : "2.4.10.119041"), "loaded release version");
         if (!defaultsChecked) require(LootableBodies.addBonesToCorpse && LootableBodies.displayNameTag && !LootableBodies.hurtByEnvironment &&
                 !LootableBodies.hurtByAttacks && !LootableBodies.hurtByMisc && LootableBodies.corpseHP == 20 &&
                 LootableBodies.ticksPerItemDecay == 6000 && LootableBodies.corpseDecayTime == 72000 &&
@@ -217,7 +217,7 @@ public final class RuntimeChecks {
         ListTag contents = new ListTag();
         CompoundTag item = new CompoundTag(); new ItemStack(Items.DIAMOND,3).save(item); contents.add(item);
         nested.put("contents", contents); custom.put("nested", nested);
-        stack.setTag(custom);if(index<=5)stack.setDamageValue(index<4?index+2:index==4?17:9); stack.setHoverName(new net.minecraft.network.chat.TextComponent("Fixture " + index));
+        stack.setTag(custom);if(index<=5)stack.setDamageValue(index<4?index+2:index==4?17:9); stack.setHoverName(net.minecraft.network.chat.Component.literal("Fixture " + index));
         if (index == 4) stack.enchant(net.minecraft.world.item.enchantment.Enchantments.UNBREAKING, 2);
         return stack;
     }
@@ -266,7 +266,7 @@ public final class RuntimeChecks {
         // Assign the fixture ID before the native entity-section manager indexes
         // the real death-created body, never by mutating an admitted UUID.
         pendingDeathId=DEATH;
-        try {player.die(DamageSource.OUT_OF_WORLD);}finally{pendingDeathId=null;}
+        try {player.die(player.damageSources().outOfWorld());}finally{pendingDeathId=null;}
         EntityLootableBody corpse = null;
         for (Entity entity : new ArrayList<Entity>(FixtureApi.entities(world)))
             if (entity instanceof EntityLootableBody && "BuildDeath".equals(((EntityLootableBody)entity).getCustomNameTag())) corpse=(EntityLootableBody)entity;

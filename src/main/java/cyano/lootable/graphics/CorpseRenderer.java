@@ -8,7 +8,7 @@ import cyano.lootable.entities.EntityLootableBody;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
-import com.mojang.math.Vector3f;
+import com.mojang.math.Axis;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.model.geom.ModelPart;
@@ -38,10 +38,10 @@ public class CorpseRenderer extends LivingEntityRenderer<EntityLootableBody, Pla
         thickArmsModel = new FrozenPlayerModel(context.bakeLayer(ModelLayers.PLAYER),false);
         addLayer(new HumanoidArmorLayer<>(this,
                 new FrozenArmorModel(context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
-                new FrozenArmorModel(context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR))));
-        addLayer(new ItemInHandLayer<>(this));
+                new FrozenArmorModel(context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)),context.getModelManager()));
+        addLayer(new ItemInHandLayer<>(this,context.getItemInHandRenderer()));
         addLayer(new ArrowLayer<>(context,this));
-        addLayer(new CustomHeadLayer<>(this,context.getModelSet()));
+        addLayer(new CustomHeadLayer<>(this,context.getModelSet(),context.getItemInHandRenderer()));
     }
 
     public PlayerModel<EntityLootableBody> getMainModel() { return getModel(); }
@@ -80,8 +80,8 @@ public class CorpseRenderer extends LivingEntityRenderer<EntityLootableBody, Pla
 
     @Override protected void setupRotations(EntityLootableBody entity, PoseStack matrices,
             float age, float yaw, float partialTicks) {
-        matrices.mulPose(Vector3f.XP.rotationDegrees(90F));
-        matrices.mulPose(Vector3f.ZP.rotationDegrees(entity.getRotation()));
+        matrices.mulPose(Axis.XP.rotationDegrees(90F));
+        matrices.mulPose(Axis.ZP.rotationDegrees(entity.getRotation()));
         matrices.translate(0D, -0.85D, -0.125D);
         super.setupRotations(entity, matrices, 0F, 0F, partialTicks);
     }

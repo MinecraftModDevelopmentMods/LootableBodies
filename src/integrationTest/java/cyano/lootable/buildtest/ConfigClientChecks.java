@@ -34,7 +34,7 @@ final class ConfigClientChecks {
         if(++frames<20)return;frames=0;
         if(report==null)report=new File(mc.gameDirectory,"config-checks.txt");
         if(stage==0 && mc.screen instanceof TitleScreen) {
-            mc.options.pauseOnLostFocus=false;mc.options.framerateLimit=30;mc.options.renderDistance=4;
+            mc.options.pauseOnLostFocus=false;mc.options.framerateLimit().set(30);mc.options.renderDistance().set(4);
             if(Boolean.getBoolean("lootablebodies.configUiReload")) {
                 check(LootableBodies.corpseHP==31 && LootableBodies.corpseDecayTime==200 && LootableBodies.ticksPerItemDecay==0,"pending_rules_apply_after_process_restart");
                 check(!LootableBodies.useLocalSkin && LootableBodies.displayNameTag,"appearance_survives_restart");new File(mc.gameDirectory,"config-restart.pass").createNewFile();finish(mc);stage=5;return;
@@ -88,7 +88,7 @@ final class ConfigClientChecks {
     private void openConfig(Minecraft mc)throws Exception {click(mods,20);check(mc.screen instanceof CorpseConfigGui,"mods_button_opens_regular_config");root=(CorpseConfigGui)mc.screen;}
     private static Object get(Object target,String name)throws Exception {for(Class<?> type=target.getClass();type!=null;type=type.getSuperclass())try{Field f=type.getDeclaredField(name);f.setAccessible(true);return f.get(target);}catch(NoSuchFieldException absent){}throw new NoSuchFieldException(name);}
     private static Button button(Screen screen,int id)throws Exception {if(screen instanceof ModListScreen && id==20)return (Button)get(screen,"configButton");for(Object value:screen.children())if(value instanceof CorpseConfigGui.SettingButton && ((CorpseConfigGui.SettingButton)value).id==id)return (CorpseConfigGui.SettingButton)value;throw new AssertionError("Missing GUI button "+id);}
-    private static void click(Screen screen,int id)throws Exception {Button button=button(screen,id);RuntimeChecks.require(button.active,"Disabled GUI button "+id);button.onClick(button.x+1,button.y+1);}
+    private static void click(Screen screen,int id)throws Exception {Button button=button(screen,id);RuntimeChecks.require(button.active,"Disabled GUI button "+id);button.onClick(button.getX()+1,button.getY()+1);}
     @SuppressWarnings("unchecked") private static EditBox field(CorpseConfigGui screen,String key)throws Exception {
         for(int attempt=0;attempt<10;attempt++){EditBox field=((Map<String,EditBox>)get(screen,"fields")).get(key);if(field!=null)return field;int page=(Integer)get(screen,"page");try{click(screen,4);}catch(AssertionError end){while((Integer)get(screen,"page")>0)click(screen,3);}if(page==(Integer)get(screen,"page") && attempt>0)break;}
         throw new AssertionError("Missing config text field "+key);

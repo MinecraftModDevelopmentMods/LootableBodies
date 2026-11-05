@@ -94,14 +94,14 @@ tasks.register('nativeBoundaryTest', Test) {
     description = 'Runs native conversion, storage and early-read regressions without launching Minecraft.'
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
-    include '**/Native117*Test.class', '**/Native118*Test.class', '**/EarlyWorldPreservationTest.class', '**/HookRegistrationOrderTest.class'
+    include '**/Native117*Test.class', '**/Native118*Test.class', '**/Native119*Test.class', '**/EarlyWorldPreservationTest.class', '**/HookRegistrationOrderTest.class'
 }
-tasks.register('generateNative118Fixtures', JavaExec) {
+tasks.register('generateNative119Fixtures', JavaExec) {
     group = 'verification'
     dependsOn 'testClasses'
     classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'cyano.lootable.buildtest.Native118FixtureGenerator'
-    args providers.gradleProperty('nativeFixtureOutput').getOrElse('build/native118-fixture-preparation-01')
+    mainClass = 'cyano.lootable.buildtest.Native119FixtureGenerator'
+    args providers.gradleProperty('nativeFixtureOutput').getOrElse('build/native119-fixture-preparation-01')
 }
 tasks.withType(JavaExec).configureEach { javaLauncher = productionLauncher }
 tasks.withType(Javadoc).configureEach {
@@ -217,7 +217,7 @@ dependencies {
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.12.2'
     testRuntimeOnly 'org.openjdk.nashorn:nashorn-core:15.4'
-    testRuntimeOnly 'net.minecraftforge:coremods:5.2.5'
+    testRuntimeOnly 'net.minecraftforge:coremods:5.2.4'
 }
 
 tasks.named('processResources', ProcessResources) {

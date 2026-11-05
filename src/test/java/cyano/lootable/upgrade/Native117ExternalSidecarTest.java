@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Actual native oversized-chunk writer, never historical-world provenance. */
 class Native117ExternalSidecarTest {
-    @TempDir Path temporary;
+    @TempDir(cleanup=org.junit.jupiter.api.io.CleanupMode.ON_SUCCESS) Path temporary;
     @Test void actualNativeExternalChunkRefusesConservativelyWithAllOriginalBytesIntact() throws Exception {
         String exported=System.getProperty("lootablebodies.exportNativeExternalWorld");
         Path world=exported==null?temporary.resolve("world"):Paths.get(exported);

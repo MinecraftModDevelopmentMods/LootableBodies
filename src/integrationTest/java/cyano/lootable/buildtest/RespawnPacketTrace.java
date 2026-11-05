@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.protocol.game.ClientboundAddMobPacket;
+import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
 import net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket;
 import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
@@ -35,7 +35,9 @@ final class RespawnPacketTrace extends ChannelDuplexHandler {
     private RespawnPacketTrace(File log,After after){this.log=log;this.after=after;}
     static void install(Connection manager,File log,After after) {
         Channel channel=manager.channel();
-        channel.eventLoop().submit(()->channel.pipeline().addBefore("packet_handler","corpse_packet_trace",new RespawnPacketTrace(log,after))).syncUninterruptibly();
+        // Native19 assembles decoded spawn children into a bundle before the
+        // packet listener. Observe that real wire stream before aggregation.
+        channel.eventLoop().submit(()->channel.pipeline().addBefore("bundler","corpse_packet_trace",new RespawnPacketTrace(log,after))).syncUninterruptibly();
     }
     @Override public void channelRead(ChannelHandlerContext context,Object packet) throws Exception {
         String description=describe(packet);if(description!=null)record("IN "+description);
@@ -55,11 +57,11 @@ final class RespawnPacketTrace extends ChannelDuplexHandler {
         if(packet instanceof ICustomPacket) {
             ICustomPacket<?> f=(ICustomPacket<?>)packet;if(!f.getName().toString().equals("fml:play"))return null;
             FriendlyByteBuf b=new FriendlyByteBuf(f.getInternalData().duplicate());if(b.readableBytes()<6 || b.readVarInt()!=0)return null;
-            int type=b.readVarInt(),id=b.readInt();net.minecraft.world.entity.EntityType<?> entityType=net.minecraft.core.Registry.ENTITY_TYPE.byId(type);
-            String name=entityType==null?"unknown":entityType.getRegistryName().getNamespace();
+            int type=b.readVarInt(),id=b.readInt();net.minecraft.world.entity.EntityType<?> entityType=net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.byId(type);
+            String name=entityType==null?"unknown":net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entityType).getNamespace();
             return "MOD_SPAWN id="+id+" mod="+name+" type="+type+" uuid="+new UUID(b.readLong(),b.readLong());
         }
-        if(!(packet instanceof ClientboundAddMobPacket||packet instanceof ClientboundRespawnPacket||packet instanceof ClientboundRemoveEntitiesPacket||packet instanceof ClientboundForgetLevelChunkPacket
+        if(!(packet instanceof ClientboundAddEntityPacket||packet instanceof ClientboundRespawnPacket||packet instanceof ClientboundRemoveEntitiesPacket||packet instanceof ClientboundForgetLevelChunkPacket
             ||packet instanceof ClientboundLevelChunkWithLightPacket||packet instanceof ClientboundPlayerCombatEnterPacket||packet instanceof ClientboundPlayerCombatEndPacket
             ||packet instanceof ClientboundPlayerCombatKillPacket||packet instanceof ClientboundSetEntityDataPacket||packet instanceof ServerboundClientCommandPacket))return null;
         if(packet instanceof ClientboundRespawnPacket) {
@@ -70,10 +72,10 @@ final class RespawnPacketTrace extends ChannelDuplexHandler {
         FriendlyByteBuf b=new FriendlyByteBuf(Unpooled.buffer());
         try {
             ((Packet<?>)packet).write(b);
-            if(packet instanceof ClientboundAddMobPacket) {
+            if(packet instanceof ClientboundAddEntityPacket) {
                 int id=b.readVarInt();UUID uuid=b.readUUID();int type=b.readVarInt();
-                net.minecraft.world.entity.EntityType<?> entityType=Registry.ENTITY_TYPE.byId(type);
-                String name=entityType==null?"unknown":entityType.getRegistryName().getNamespace();
+                net.minecraft.world.entity.EntityType<?> entityType=net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.byId(type);
+                String name=entityType==null?"unknown":net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entityType).getNamespace();
                 return "MOD_SPAWN id="+id+" mod="+name+" type="+type+" uuid="+uuid;
             }
             if(packet instanceof ClientboundRemoveEntitiesPacket){int[] ids=new int[b.readVarInt()];for(int i=0;i<ids.length;i++)ids[i]=b.readVarInt();return "DESTROY ids="+Arrays.toString(ids);}

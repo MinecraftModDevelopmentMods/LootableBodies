@@ -62,19 +62,20 @@ ext.auditReleaseArchives = { File directory ->
                     if (!names.contains(it)) throw new GradleException("Missing production entry ${it}")
                 }
                 String info=zip.getInputStream(zip.getEntry('META-INF/mods.toml')).getText('UTF-8')
-                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.18.2]"'].each {
+                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.19.4]"'].each {
                     if(!info.contains(it))throw new GradleException("Incorrect production metadata: ${it}")
                 }
                 def pack=new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack
-                if(pack.pack_format!=9 || pack['forge:resource_pack_format']!=8 || pack['forge:data_pack_format']!=9)
-                    throw new GradleException('Native pack formats must be pack9/resource8/data9')
+                if(pack.pack_format!=13 || pack['forge:server_data_pack_format']!=12 ||
+                        pack.containsKey('forge:resource_pack_format') || pack.containsKey('forge:data_pack_format'))
+                    throw new GradleException('Native pack formats must be resource13/server-data12')
                 def coremods=new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('META-INF/coremods.json')).getText('UTF-8'))
                 if(coremods!=[lootablebodies_preservation:'coremods/early-world-preservation.js'])
                     throw new GradleException('Missing or changed early native save attachment')
                 def atEntry=zip.getEntry('META-INF/accesstransformer.cfg')
                 def atRules=atEntry?zip.getInputStream(atEntry).getText('UTF-8').readLines()
                         .collect {it.split('#',2)[0].trim()}.findAll {!it.isEmpty()}:[]
-                if(atRules!=['public-f net.minecraft.util.datafix.DataFixers f_14510_',
+                if(atRules!=['public-f net.minecraft.util.datafix.DataFixers f_216514_',
                         'public net.minecraft.world.level.block.entity.SkullBlockEntity f_59755_',
                         'public net.minecraft.world.level.block.entity.SkullBlockEntity f_59756_'] ||
                         manifest.getValue('FMLAT')!='accesstransformer.cfg')

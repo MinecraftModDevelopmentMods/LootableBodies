@@ -77,7 +77,7 @@ public final class VisibilityChecks {
                 ServerLevel w=world();w.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBSPAWNING).set(false,null);w.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);
                 // Forge25's forced player spawn can fall back to world spawn.
                 // Keep this disposable respawn within the intended viewing area.
-                w.setDefaultSpawnPos(new BlockPos(96,PLAYER_Y,93),0F);server.getCommands().performCommand(server.createCommandSourceStack(),"gamerule spawnRadius 0");
+                w.setDefaultSpawnPos(new BlockPos(96,PLAYER_Y,93),0F);server.getCommands().performPrefixedCommand(server.createCommandSourceStack(),"gamerule spawnRadius 0");
                 w.setDayTime(6000);
                 for(int x=88;x<=170;x++)for(int z=89;z<=103;z++)w.setBlockAndUpdate(new BlockPos(x,GROUND_Y,z),Blocks.OBSIDIAN.defaultBlockState());
                 for(ServerPlayer p:new ServerPlayer[]{a,b}) {p.setGameMode(GameType.SURVIVAL);p.getInventory().clearContent();FixtureApi.spawn(p,new BlockPos(96,PLAYER_Y,93),true,false,p.level.dimension());}

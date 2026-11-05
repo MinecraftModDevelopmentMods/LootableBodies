@@ -1,0 +1,12 @@
+{
+  "kind": "Synthetic flat header produced by actual native19 PrimaryLevelData and WorldDimensions registry codec; not a historical source world",
+  "minecraft": "1.19.4",
+  "forge": "45.4.5",
+  "native_data_version": 3337,
+  "java": "Temurin17.0.20.1+1",
+  "sha256": "9792ED9B0BF8A00ACB6BFFAEB50DC8B9C462CD9B6C96A9E6ED5CA65CFD534A55",
+  "generator_source": "src/test/java/cyano/lootable/buildtest/Native119FixtureGenerator.java",
+  "generator_source_sha256": "B99F1EB21351313AF1D79D04DEFAFDE492CD0C6838964F9A5143A187472DCD88",
+  "last_played_normalized": 0,
+  "world_seed": 4267321
+}

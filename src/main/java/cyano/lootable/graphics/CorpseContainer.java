@@ -84,7 +84,11 @@ public class CorpseContainer extends net.minecraft.world.inventory.AbstractConta
 
 	@Override
 	public boolean stillValid(Player entityplayer) {
-		return targetInventory.stillValid(entityplayer);
+		boolean valid = targetInventory.stillValid(entityplayer);
+		// Native19 checks validity before calling clicked. Clear an abandoned
+		// drag here too, so a rejected distant packet cannot poison the next drag.
+		if(!valid) resetQuickCraft();
+		return valid;
 	}
 
 	@Override
@@ -233,10 +237,10 @@ public class CorpseContainer extends net.minecraft.world.inventory.AbstractConta
 		ItemTossEvent event = new ItemTossEvent(dropped,player);
 		if(MinecraftForge.EVENT_BUS.post(event)) return false;
 		if(capturing != null) {
-			capturing.add(event.getEntityItem());
+			capturing.add(event.getEntity());
 			return true;
 		}
-		return player.level.addFreshEntity(event.getEntityItem());
+		return player.level.addFreshEntity(event.getEntity());
 	}
 
 	@Override

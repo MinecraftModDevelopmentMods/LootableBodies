@@ -38,14 +38,12 @@ final class FixtureApi {
     @OnlyIn(Dist.CLIENT)
     static final class ClientWorlds {
         static void create(net.minecraft.client.Minecraft client,String folder,String title,net.minecraft.world.level.GameType mode,boolean commands) {
-            net.minecraft.core.RegistryAccess.Frozen registries=net.minecraft.core.RegistryAccess.BUILTIN.get();
-            net.minecraft.core.Registry<net.minecraft.world.level.dimension.DimensionType> types=registries.registryOrThrow(net.minecraft.core.Registry.DIMENSION_TYPE_REGISTRY);
-            net.minecraft.core.Registry<net.minecraft.world.level.biome.Biome> biomes=registries.registryOrThrow(net.minecraft.core.Registry.BIOME_REGISTRY);
-            net.minecraft.world.level.levelgen.WorldGenSettings settings=new net.minecraft.world.level.levelgen.WorldGenSettings(4267321L,false,false,
-                net.minecraft.world.level.levelgen.WorldGenSettings.withOverworld(types,
-                    net.minecraft.world.level.dimension.DimensionType.defaultDimensions(registries,4267321L),
-                    new net.minecraft.world.level.levelgen.FlatLevelSource(registries.registryOrThrow(net.minecraft.core.Registry.STRUCTURE_SET_REGISTRY),net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings.getDefault(biomes,registries.registryOrThrow(net.minecraft.core.Registry.STRUCTURE_SET_REGISTRY)))));
-            client.createLevel(folder,new net.minecraft.world.level.LevelSettings(title,mode,false,net.minecraft.world.Difficulty.NORMAL,commands,new net.minecraft.world.level.GameRules(),net.minecraft.world.level.DataPackConfig.DEFAULT),registries,settings);
+            client.createWorldOpenFlows().createFreshLevel(folder,
+                new net.minecraft.world.level.LevelSettings(title,mode,false,net.minecraft.world.Difficulty.NORMAL,commands,
+                    new net.minecraft.world.level.GameRules(),net.minecraft.world.level.WorldDataConfiguration.DEFAULT),
+                new net.minecraft.world.level.levelgen.WorldOptions(4267321L,false,false),
+                access->access.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET)
+                    .getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions());
         }
     }
     static List<Entity> entities(Level world) {
@@ -60,12 +58,12 @@ final class FixtureApi {
     static Entity readChunkEntity(CompoundTag data, ServerLevel world, net.minecraft.world.level.chunk.LevelChunk chunk) {
         // Invoke the actual native chunk serializer; do not replace its admission callback.
         CompoundTag root=new CompoundTag();net.minecraft.nbt.ListTag list=new net.minecraft.nbt.ListTag();list.add(data.copy());root.put("entities",list);
-        root.putInt("xPos",chunk.getPos().x);root.putInt("zPos",chunk.getPos().z);root.put("sections",new net.minecraft.nbt.ListTag());root.putInt("DataVersion",2975);
+        root.putInt("xPos",chunk.getPos().x);root.putInt("zPos",chunk.getPos().z);root.put("sections",new net.minecraft.nbt.ListTag());root.putInt("DataVersion",3337);
         // Current fixture NBT follows the real native conversion boundary too.
         // The post-load admission callback remains Minecraft's own method.
         CompoundTag fixed=cyano.lootable.upgrade.NativeNbt.update(
                 cyano.lootable.upgrade.UpgradePreservation.wrapper(net.minecraft.util.datafix.DataFixers.getDataFixer()),
-                net.minecraft.util.datafix.fixes.References.CHUNK,root,2975,2975);
+                net.minecraft.util.datafix.fixes.References.CHUNK,root,3337,3337);
         try {
             java.lang.reflect.Method nativeRead=null;
             for(java.lang.reflect.Method method:net.minecraft.world.level.chunk.storage.ChunkSerializer.class.getDeclaredMethods())

@@ -1,0 +1,17 @@
+{
+  "minecraft": "1.19.4",
+  "forge": "45.4.5",
+  "platform": "Windows amd64",
+  "qualified": true,
+  "proof_sha256": "24A5407626528E1AB0E0DC0F9D15CEB96C71E40854B77903E6315BE1D19F79EB",
+  "events": [
+    "minecraft:item.brush.brushing",
+    "minecraft:item.brush.brush_sand_completed",
+    "minecraft:item.goat_horn.play",
+    "minecraft:entity.goat.screaming.horn_break",
+    "minecraft:music.overworld.cherry_grove"
+  ],
+  "sound_definition_sha256": "094B16E7F9D733ACDE8F87AD0206529926F3866E5CE483C78A3C0DA94BF68A31",
+  "control_sha256": "BA2137006F78F901F2112FACFB075F1037B5BEB8F91D14709AC46FE5830C98A2",
+  "scope": "Explicit client-only diagnostic classification; generic/server audits remain unchanged. Missing/stale proof or actual errors/resources remain fatal."
+}

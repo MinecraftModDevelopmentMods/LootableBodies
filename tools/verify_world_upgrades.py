@@ -66,6 +66,18 @@ ORIGINS.update({
     'via117-115': ORIGINS['released-115'],
     'via117-116': ORIGINS['released-116'],
 })
+ORIGINS.update({
+    'released-118': ('1.18.2','2.4.9.118021','34EF41EFCE4666A684EA202DAF8712162A1C403A90120BA11EF0260533FB690F'),
+    'recovery-118': ('1.18.2','2.4.9.118021','34EF41EFCE4666A684EA202DAF8712162A1C403A90120BA11EF0260533FB690F'),
+    'via118-110': ORIGINS['original-110'],
+    'via118-111': ORIGINS['released-111'],
+    'via118-112': ORIGINS['released-112'],
+    'via118-113': ORIGINS['released-113'],
+    'via118-114': ORIGINS['released-114'],
+    'via118-115': ORIGINS['released-115'],
+    'via118-116': ORIGINS['released-116'],
+    'via118-117': ORIGINS['released-117'],
+})
 FORGE = {'1.12.2': 'forge-1.12.2-14.23.5.2859','1.10.2': 'forge-1.10.2-12.18.3.2511', '1.11.2': 'forge-1.11.2-13.20.1.2588'}
 FORGE_SHA = {'1.12.2': 'BD8314729D787E35164476D75AFB337AFB9783917E4F6FA1F77F049ADBA22F2D','1.10.2': '809C2EA5B4D4F3E5A294D3A326744F20FEC412A1263E708297D00F512E377542',
              '1.11.2': 'B6DFF35B5CCB0E6353FB89B5330FE930DB8FBE8B63787C9FC2F70196BD108998'}
@@ -562,7 +574,7 @@ def verify(args, project):
         raise ValueError('--prepared-sources or --seeds is required for the upgrade matrix')
     if prepared and args.seeds:raise ValueError('Choose one unambiguous source route')
     if not args.forge_home:
-        raise ValueError('--forge-home is required for the native18 upgrade matrix')
+        raise ValueError('--forge-home is required for the native19 upgrade matrix')
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     candidate = project / 'build/libs' / MAIN_JAR
@@ -614,7 +626,7 @@ def verify(args, project):
             for phase in PHASES:
                 run_upgrade(args.java.resolve(), home, phase)
                 wave = 0 if phase.startswith('upgrade-near') else 1 if phase.startswith('upgrade-far') else 2 if phase == 'upgrade-late' else -1
-                from native118_persistence import count_persisted
+                from native119_persistence import count_persisted
                 persisted = count_persisted(world,wave)
                 if persisted < (3 if wave >= 0 else 8):
                     raise RuntimeError('Missing persisted corpses after world save')

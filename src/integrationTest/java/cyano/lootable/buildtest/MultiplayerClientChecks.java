@@ -27,8 +27,8 @@ final class MultiplayerClientChecks {
     private boolean finished;
     private int lastPhase=-1,frames,ticks;
     void register(){if(role!=null&&!Boolean.getBoolean("lootablebodies.visibility")&&!Boolean.getBoolean("lootablebodies.respawn")){net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);MinecraftForge.EVENT_BUS.register(this);}}
-    @SubscribeEvent public void mouse(net.minecraftforge.client.event.ScreenEvent.MouseClickedEvent.Pre e){e.setCanceled(true);}
-    @SubscribeEvent public void key(net.minecraftforge.client.event.ScreenEvent.KeyboardKeyPressedEvent.Pre e){e.setCanceled(true);}
+    @SubscribeEvent public void mouse(net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre e){e.setCanceled(true);}
+    @SubscribeEvent public void key(net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre e){e.setCanceled(true);}
     @SubscribeEvent public void tick(TickEvent.ClientTickEvent e){
         if(e.phase!=TickEvent.Phase.END)return;Minecraft mc=Minecraft.getInstance();
         if(mc.isWindowActive())mc.mouseHandler.releaseMouse();net.minecraft.client.KeyMapping.releaseAll();
@@ -38,7 +38,7 @@ final class MultiplayerClientChecks {
             if(new File(MultiplayerChecks.sync(),"abort").exists())throw new AssertionError("Multiplayer runner abort");
             if(FixtureConnections.retry(mc,role))connecting=false;
             if(!connecting && FixtureConnections.ready(role) && mc.screen instanceof TitleScreen){
-                connecting=true;mc.options.pauseOnLostFocus=false;mc.options.framerateLimit=30;mc.options.renderDistance=4;
+                connecting=true;mc.options.pauseOnLostFocus=false;mc.options.framerateLimit().set(30);mc.options.renderDistance().set(4);
                 FixtureConnections.connect(mc);
             }
             if(mc.level==null || mc.player==null)return;

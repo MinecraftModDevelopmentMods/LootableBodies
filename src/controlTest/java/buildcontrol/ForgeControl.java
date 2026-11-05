@@ -31,7 +31,7 @@ public final class ForgeControl {
         if(++checkTicks==1) {
             p.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
             double x=checkDeaths%2==0?96.5:-.4,z=checkDeaths%2==0?96.5:-.4;
-            for(int a=-6;a<=6;a++)for(int b=-6;b<=6;b++)p.level.setBlockAndUpdate(new net.minecraft.core.BlockPos(x+a,80,z+b),net.minecraft.world.level.block.Blocks.OBSIDIAN.defaultBlockState());
+            for(int a=-6;a<=6;a++)for(int b=-6;b<=6;b++)p.level.setBlockAndUpdate(net.minecraft.core.BlockPos.containing(x+a,80,z+b),net.minecraft.world.level.block.Blocks.OBSIDIAN.defaultBlockState());
             p.setRespawnPosition(p.level.dimension(),new net.minecraft.core.BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),0F,true,false);
             p.connection.teleport(x,81,z,0,0);
         }
@@ -92,7 +92,7 @@ public final class ForgeControl {
         private net.minecraft.client.multiplayer.ServerStatusPinger pinger;
         private net.minecraft.client.multiplayer.ServerData destination;
         private void tcp(net.minecraft.client.Minecraft mc) {
-            mc.options.pauseOnLostFocus=false;mc.options.framerateLimit=30;
+            mc.options.pauseOnLostFocus=false;mc.options.framerateLimit().set(30);
             if(++wait>1600)throw new AssertionError("Native Forge control login timed out");
             if(stage==1 && wait%40==0 && mc.screen instanceof net.minecraft.client.gui.screens.ConnectScreen) {
                 try {
@@ -136,14 +136,12 @@ public final class ForgeControl {
             System.out.println("FORGE_PLATFORM_CONTROL_PASS");mc.stop();stage=3;
         }
         private void createWorld(net.minecraft.client.Minecraft client) {
-            net.minecraft.core.RegistryAccess.Frozen registries=net.minecraft.core.RegistryAccess.BUILTIN.get();
-            net.minecraft.core.Registry<net.minecraft.world.level.dimension.DimensionType> types=registries.registryOrThrow(net.minecraft.core.Registry.DIMENSION_TYPE_REGISTRY);
-            net.minecraft.core.Registry<net.minecraft.world.level.biome.Biome> biomes=registries.registryOrThrow(net.minecraft.core.Registry.BIOME_REGISTRY);
-            net.minecraft.world.level.levelgen.WorldGenSettings settings=new net.minecraft.world.level.levelgen.WorldGenSettings(4267321L,false,false,
-                net.minecraft.world.level.levelgen.WorldGenSettings.withOverworld(types,
-                    net.minecraft.world.level.dimension.DimensionType.defaultDimensions(registries,4267321L),
-                    new net.minecraft.world.level.levelgen.FlatLevelSource(registries.registryOrThrow(net.minecraft.core.Registry.STRUCTURE_SET_REGISTRY),net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings.getDefault(biomes,registries.registryOrThrow(net.minecraft.core.Registry.STRUCTURE_SET_REGISTRY)))));
-            client.createLevel("platform-fixture",new net.minecraft.world.level.LevelSettings("Platform fixture",net.minecraft.world.level.GameType.CREATIVE,false,net.minecraft.world.Difficulty.NORMAL,false,new net.minecraft.world.level.GameRules(),net.minecraft.world.level.DataPackConfig.DEFAULT),registries,settings);
+            client.createWorldOpenFlows().createFreshLevel("platform-fixture",
+                new net.minecraft.world.level.LevelSettings("Platform fixture",net.minecraft.world.level.GameType.CREATIVE,false,
+                    net.minecraft.world.Difficulty.NORMAL,false,new net.minecraft.world.level.GameRules(),net.minecraft.world.level.WorldDataConfiguration.DEFAULT),
+                new net.minecraft.world.level.levelgen.WorldOptions(4267321L,false,false),
+                access->access.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET)
+                    .getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions());
         }
     }
 }

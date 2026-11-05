@@ -24,8 +24,8 @@ final class SavedEffectIdentity {
                 (record.contains("forge:id") && record.getString("forge:id").isEmpty());
     }
     static void write(CompoundTag accepted,CompoundTag record,MobEffect effect) {
-        accepted.putByte("Id",(byte)MobEffect.getId(effect));
+        accepted.putInt("Id",MobEffect.getId(effect));
         if(record.contains("forge:id",8) && !record.getString("forge:id").isEmpty())
-            accepted.putString("forge:id",effect.getRegistryName().toString());
+            accepted.putString("forge:id",ForgeRegistries.MOB_EFFECTS.getKey(effect).toString());
     }
 }

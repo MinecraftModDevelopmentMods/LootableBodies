@@ -9,7 +9,8 @@ import shutil
 import os
 from native_runtime import seed_flat_fixture
 from owned_process import native_process
-from audit_runtime_logs import audit
+from native119_logs import audit
+from native119_client_logs import audit_client
 from fixture_login import LoginMonitor, start_clients, write_receipts, archive_live_logs
 from verify_multiplayer import client_command
 from verify_packaged import prepare, FORGE, MAIN, digest, run
@@ -111,7 +112,8 @@ def main():
     write_receipts(home)
     for name in ['server','clientA','clientB']:
         if digest(home/name/'mods'/MAIN)!=before: raise RuntimeError('Candidate copy changed')
-        audit(home/(name+'.log'),native=True);audit(home/name/'logs/latest.log',native=True);audit(home/name/'logs/debug.log',native=True)
+        selected_audit=audit if name=='server' else audit_client
+        selected_audit(home/(name+'.log'),native=True);selected_audit(home/name/'logs/latest.log',native=True);selected_audit(home/name/'logs/debug.log',native=True)
         if list((home/name).rglob('crash-reports/*.txt')): raise RuntimeError('Crash report')
     for role in ['A','B']:
         if not (home/('client'+role)/(args.mode+'-client.pass')).is_file(): raise RuntimeError('Client did not finish '+role)

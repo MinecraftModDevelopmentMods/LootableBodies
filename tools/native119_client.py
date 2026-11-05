@@ -1,16 +1,41 @@
-"""Pinned native40 client preparation and descriptor-driven Java17 launch."""
+"""Pinned native45 client preparation and descriptor-driven Java17 launch."""
 import hashlib
 import json
 import os
 from pathlib import Path
 import platform
 import re
+import struct
 import zipfile
 
-BASE_VERSION = '1.18.2'
-VERSION = '1.18.2-forge-40.3.12'
-BASE_SHA1 = '334b33fcba3c9be4b7514624c965256535bd7eba'
-FORGE_SHA256 = '270C29DEEE4B28627444BAE949873C030DD14DADBCFA83A210901C8B7986281F'
+BASE_VERSION = '1.19.4'
+VERSION = '1.19.4-forge-45.4.5'
+BASE_SHA1 = '4fc30c189872faebae2617aba033cc17fec5899f'
+FORGE_SHA256 = '15F2EF110009308A16D7C58E009BEBBAC748F53B021440CB8FC27B90BB255288'
+
+
+def native_for_platform(library,system,architecture):
+    parts=library['name'].split(':')
+    if len(parts)<4 or not parts[3].startswith('natives-'):
+        return True
+    variants={('windows','amd64'):'natives-windows',('windows','x86'):'natives-windows-x86',
+              ('windows','arm64'):'natives-windows-arm64',('linux','amd64'):'natives-linux',
+              ('osx','amd64'):'natives-macos',('osx','arm64'):'natives-macos-arm64'}
+    if (system,architecture) not in variants:
+        raise RuntimeError('Unsupported native client platform: '+system+'/'+architecture)
+    return parts[3]==variants[system,architecture]
+
+
+def validate_native_image(content,system,architecture):
+    if system!='windows':return
+    machines={'amd64':0x8664,'x86':0x014c,'arm64':0xAA64}
+    if architecture not in machines or len(content)<64 or content[:2]!=b'MZ':
+        raise RuntimeError('Missing or malformed Windows native image')
+    offset=struct.unpack_from('<I',content,0x3c)[0]
+    if offset+6>len(content) or content[offset:offset+4]!=b'PE\0\0':
+        raise RuntimeError('Malformed Windows native PE header')
+    if struct.unpack_from('<H',content,offset+4)[0]!=machines[architecture]:
+        raise RuntimeError('Native PE architecture differs from selected client platform')
 
 
 def descriptors(runtime):
@@ -18,9 +43,9 @@ def descriptors(runtime):
     base = runtime/'versions'/BASE_VERSION/(BASE_VERSION+'.json')
     forge = runtime/'versions'/VERSION/(VERSION+'.json')
     if not base.is_file() or hashlib.sha1(base.read_bytes()).hexdigest() != BASE_SHA1:
-        raise RuntimeError('Incorrect official native1.18.2 client descriptor')
+        raise RuntimeError('Incorrect official native1.19.4 client descriptor')
     if not forge.is_file() or hashlib.sha256(forge.read_bytes()).hexdigest().upper() != FORGE_SHA256:
-        raise RuntimeError('Incorrect installed native40 client descriptor')
+        raise RuntimeError('Incorrect installed native45 client descriptor')
     return json.loads(base.read_text()), json.loads(forge.read_text())
 
 
@@ -39,6 +64,21 @@ def prepare(runtime, output):
     natives = output/'natives'; natives.mkdir()
     modules, inputs = {}, {}
 
+    def extract(archive):
+        count=0
+        with zipfile.ZipFile(archive) as jar:
+            for entry in jar.infolist():
+                if entry.is_dir() or entry.filename.startswith('META-INF/'):
+                    continue
+                if Path(entry.filename).suffix.lower() not in ('.dll','.so','.dylib','.jnilib'):
+                    continue
+                target=natives/Path(entry.filename).name;content=jar.read(entry)
+                validate_native_image(content,system,architecture)
+                if target.exists() and target.read_bytes()!=content:
+                    raise RuntimeError('Conflicting native client input: '+target.name)
+                target.write_bytes(content);count+=1
+        if not count:raise RuntimeError('Native library archive has no platform payload: '+str(archive))
+
     def artifact(record, *, generated=False):
         relative = Path(record['path'])
         if relative.is_absolute() or '..' in relative.parts:
@@ -55,28 +95,20 @@ def prepare(runtime, output):
 
     for metadata in (base, forge):
         for library in metadata['libraries']:
-            if not allowed(library, system, architecture):
+            if not allowed(library, system, architecture) or not native_for_platform(library,system,architecture):
                 continue
             downloads = library.get('downloads', {})
             if downloads.get('artifact'):
                 path = artifact(downloads['artifact'], generated=metadata is forge)
                 parts = library['name'].split(':')
                 modules[':'.join(parts[:2]+parts[3:])] = path
+                if len(parts)>3 and parts[3].startswith('natives-'):
+                    extract(path)
             classifier = library.get('natives', {}).get(system)
             if classifier:
                 classifier = classifier.replace('${arch}', '32' if architecture == 'x86' else '64')
                 archive = artifact(downloads['classifiers'][classifier])
-                with zipfile.ZipFile(archive) as jar:
-                    for entry in jar.infolist():
-                        if entry.is_dir() or entry.filename.startswith('META-INF/'):
-                            continue
-                        if Path(entry.filename).suffix.lower() not in ('.dll','.so','.dylib','.jnilib'):
-                            continue
-                        target = natives/Path(entry.filename).name
-                        content = jar.read(entry)
-                        if target.exists() and target.read_bytes() != content:
-                            raise RuntimeError('Conflicting native client input: '+target.name)
-                        target.write_bytes(content)
+                extract(archive)
     client = runtime/'versions'/BASE_VERSION/(BASE_VERSION+'.jar')
     expected = base['downloads']['client']['sha1']
     if not client.is_file() or hashlib.sha1(client.read_bytes()).hexdigest() != expected:
@@ -145,13 +177,13 @@ def command(java, home, runtime, assets, prepared, *, username, extra=()):
     base, forge, record = load(runtime,prepared)
     index = assets/'indexes'/(base['assetIndex']['id']+'.json')
     if not index.is_file() or hashlib.sha1(index.read_bytes()).hexdigest() != base['assetIndex']['sha1']:
-        raise RuntimeError('Incorrect official native1.18 asset index')
+        raise RuntimeError('Incorrect official native1.19.4 asset index')
     values = {'version_name':VERSION,'library_directory':record['library_directory'],
               'classpath_separator':os.pathsep,'classpath':os.pathsep.join(record['classpath']),
               'natives_directory':record['natives'],'launcher_name':'LootableBodiesTests','launcher_version':'1',
               'auth_player_name':username,'game_directory':str(home),'assets_root':str(assets),
               'assets_index_name':base['assetIndex']['id'],'auth_uuid':'00000000-0000-4000-8000-000000000001',
-              # Native40 explicitly selects OfflineSocialInteractions for0.
+              # Native45 explicitly selects OfflineSocialInteractions for0.
               'auth_access_token':'0','user_type':'legacy','version_type':'release',
               # Match native Main's explicit empty defaults for offline users.
               'clientid':'','auth_xuid':'',
@@ -163,4 +195,4 @@ def command(java, home, runtime, assets, prepared, *, username, extra=()):
     jvm_values = dict(values,version_name=BASE_VERSION)
     jvm = expand(base['arguments']['jvm']+forge['arguments']['jvm'],jvm_values,**options)
     game = expand(base['arguments']['game']+forge['arguments']['game'],values,**options)
-    return [str(java),'-Xmx2G',*jvm,*extra,forge['mainClass'],*game]
+    return [str(java),'-Dfile.encoding=UTF-8','-Xmx2G',*jvm,*extra,forge['mainClass'],*game]

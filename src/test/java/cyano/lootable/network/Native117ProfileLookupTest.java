@@ -15,7 +15,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 class Native117ProfileLookupTest {
-    @TempDir Path directory;
+    @TempDir(cleanup=org.junit.jupiter.api.io.CleanupMode.ON_SUCCESS) Path directory;
     final GameProfile initial=new GameProfile(null,"Owner");
     GameProfile cached=new GameProfile(UUID.fromString("00000000-0000-4000-8000-000000000201"),"Owner");
     GameProfile added;

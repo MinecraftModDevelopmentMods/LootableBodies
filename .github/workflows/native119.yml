@@ -1,16 +1,16 @@
-name: LootableBodies 1.18 CI
+name: LootableBodies 1.19 CI
 
 on:
   push:
-    branches: [master-1.18.2]
+    branches: [master-1.19.4]
   pull_request:
-    branches: [master-1.18.2]
+    branches: [master-1.19.4]
 
 permissions:
   contents: read
 
 concurrency:
-  group: native118-${{ github.workflow }}-${{ github.ref }}
+  group: native119-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -40,7 +40,7 @@ jobs:
       - name: Require local qualification before build preparation
         run: |
           set -euo pipefail
-          python3 -B tools/hosted_policy.py --require-qualified-manifest 2>&1 | tee "$RUNNER_TEMP/native118-build.log"
+          python3 -B tools/hosted_policy.py --require-qualified-manifest 2>&1 | tee "$RUNNER_TEMP/native119-build.log"
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
@@ -58,21 +58,21 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew assemble verifyProductionRuntimeClasspath prepareReleaseBundle --no-daemon --no-build-cache --stacktrace 2>&1 | tee -a "$RUNNER_TEMP/native118-build.log"
-          python3 -B tools/native118_build.py 2>&1 | tee -a "$RUNNER_TEMP/native118-build.log"
+          ./gradlew assemble verifyProductionRuntimeClasspath prepareReleaseBundle --no-daemon --no-build-cache --stacktrace 2>&1 | tee -a "$RUNNER_TEMP/native119-build.log"
+          python3 -B tools/native119_build.py 2>&1 | tee -a "$RUNNER_TEMP/native119-build.log"
       - name: Retain the exact six release files
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: LootableBodies-1.18.2-${{ github.sha }}
+          name: LootableBodies-1.19.4-${{ github.sha }}
           if-no-files-found: error
           path: build/release/bundle/*
       - name: Retain build evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: native118-fast-${{ github.sha }}
+          name: native119-fast-${{ github.sha }}
           if-no-files-found: error
           path: |
             build/reports/**
             build/release/bundle/*
-            ${{ runner.temp }}/native118-build.log
+            ${{ runner.temp }}/native119-build.log

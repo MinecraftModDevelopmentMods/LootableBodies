@@ -37,7 +37,7 @@ import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.GameType;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.entity.EntityJoinWorldEvent;
+import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.item.ItemTossEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
@@ -214,7 +214,7 @@ final class ContainerInteractionChecks {
         Set<Entity> before=new HashSet<>(FixtureApi.entities(world));
         try {test.run();results.add("PASS "+name);System.out.println("CONTAINER_CHECK_PASS "+name);}
         catch(Throwable error){failures++;results.add("FAIL "+name+": "+error);System.out.println("CONTAINER_CHECK_FAIL "+name+": "+error);error.printStackTrace();}
-        finally{for(Entity entity:new ArrayList<Entity>(FixtureApi.entities(world)))if(!before.contains(entity))world.removeEntity(entity);}
+        finally{for(Entity entity:new ArrayList<Entity>(FixtureApi.entities(world)))if(!before.contains(entity))entity.discard();}
     }
     private static ServerPlayer player() {
         ServerPlayer p=new ServerPlayer(server,world,
@@ -350,7 +350,7 @@ final class ContainerInteractionChecks {
     }
     public static final class RejectedDrops {
         boolean join,toss;
-        @SubscribeEvent public void join(EntityJoinWorldEvent e){if(join && e.getEntity() instanceof ItemEntity)e.setCanceled(true);}
+        @SubscribeEvent public void join(EntityJoinLevelEvent e){if(join && e.getEntity() instanceof ItemEntity)e.setCanceled(true);}
         @SubscribeEvent public void toss(ItemTossEvent e){if(toss)e.setCanceled(true);}
     }
     private static void displacement(boolean rejectJoin,boolean rejectToss) throws Exception {

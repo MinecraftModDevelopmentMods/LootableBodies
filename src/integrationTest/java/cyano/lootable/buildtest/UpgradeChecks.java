@@ -115,14 +115,20 @@ final class UpgradeChecks {
         CompoundTag twice=new CompoundTag();again.addAdditionalSaveData(twice);
         RuntimeChecks.require(NameLifetimeChecks.same(once.get("LootableBodiesUnresolved"),twice.get("LootableBodiesUnresolved")),"Ambiguous bed duplicated or changed during reload");
     }
+    private static Object mappingField(net.minecraftforge.registries.MissingMappingsEvent.Mapping<?> mapping,String name) {
+        try {
+            java.lang.reflect.Field field=net.minecraftforge.registries.MissingMappingsEvent.Mapping.class.getDeclaredField(name);
+            field.setAccessible(true);return field.get(mapping);
+        } catch(ReflectiveOperationException failure){throw new AssertionError("Native mapping observation",failure);}
+    }
     private static void soundMapping() throws Exception {
         net.minecraftforge.registries.IForgeRegistry<net.minecraft.sounds.SoundEvent> registry=net.minecraftforge.registries.ForgeRegistries.SOUND_EVENTS;
-        net.minecraftforge.event.RegistryEvent.MissingMappings.Mapping<net.minecraft.sounds.SoundEvent> old=new net.minecraftforge.event.RegistryEvent.MissingMappings.Mapping<>(registry,registry,new net.minecraft.resources.ResourceLocation("minecraft:entity.experience_orb.touch"),196);
-        net.minecraftforge.event.RegistryEvent.MissingMappings.Mapping<net.minecraft.sounds.SoundEvent> other=new net.minecraftforge.event.RegistryEvent.MissingMappings.Mapping<>(registry,registry,new net.minecraft.resources.ResourceLocation("absentfixture:other_sound"),197);
-        net.minecraftforge.event.RegistryEvent.MissingMappings<net.minecraft.sounds.SoundEvent> event=new net.minecraftforge.event.RegistryEvent.MissingMappings<>(new net.minecraft.resources.ResourceLocation("minecraft:soundevents"),registry,Arrays.asList(old,other));
+        net.minecraftforge.registries.MissingMappingsEvent.Mapping<net.minecraft.sounds.SoundEvent> old=new net.minecraftforge.registries.MissingMappingsEvent.Mapping<>(registry,registry,new net.minecraft.resources.ResourceLocation("minecraft:entity.experience_orb.touch"),196);
+        net.minecraftforge.registries.MissingMappingsEvent.Mapping<net.minecraft.sounds.SoundEvent> other=new net.minecraftforge.registries.MissingMappingsEvent.Mapping<>(registry,registry,new net.minecraft.resources.ResourceLocation("absentfixture:other_sound"),197);
+        net.minecraftforge.registries.MissingMappingsEvent event=new net.minecraftforge.registries.MissingMappingsEvent(registry.getRegistryKey(),registry,Arrays.asList(old,other));
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(event);
-        RuntimeChecks.require(old.getAction()==net.minecraftforge.event.RegistryEvent.MissingMappings.Action.REMAP && old.getTarget()==registry.getValue(new net.minecraft.resources.ResourceLocation("minecraft:entity.experience_orb.pickup")),"Known vanilla sound rename not remapped");
-        RuntimeChecks.require(other.getAction()==net.minecraftforge.event.RegistryEvent.MissingMappings.Action.DEFAULT,"Unrelated missing mappings must retain Forge's normal handling");
+        RuntimeChecks.require(mappingField(old,"action")==net.minecraftforge.registries.MissingMappingsEvent.Action.REMAP && mappingField(old,"target")==registry.getValue(new net.minecraft.resources.ResourceLocation("minecraft:entity.experience_orb.pickup")),"Known vanilla sound rename not remapped");
+        RuntimeChecks.require(mappingField(other,"action")==net.minecraftforge.registries.MissingMappingsEvent.Action.DEFAULT,"Unrelated missing mappings must retain Forge's normal handling");
     }
     private static void nativeRenames() {
         rename(net.minecraftforge.registries.ForgeRegistries.ITEMS,"sign","oak_sign");
@@ -132,13 +138,13 @@ final class UpgradeChecks {
         rename(net.minecraftforge.registries.ForgeRegistries.BLOCKS,"sign","oak_sign");
         rename(net.minecraftforge.registries.ForgeRegistries.BLOCKS,"wall_sign","oak_wall_sign");
     }
-    private static <T extends net.minecraftforge.registries.IForgeRegistryEntry<T>> void rename(net.minecraftforge.registries.IForgeRegistry<T> registry,String oldName,String current) {
-        net.minecraftforge.event.RegistryEvent.MissingMappings.Mapping<T> old=new net.minecraftforge.event.RegistryEvent.MissingMappings.Mapping<>(registry,registry,new net.minecraft.resources.ResourceLocation("minecraft",oldName),30000);
-        net.minecraftforge.event.RegistryEvent.MissingMappings.Mapping<T> other=new net.minecraftforge.event.RegistryEvent.MissingMappings.Mapping<>(registry,registry,new net.minecraft.resources.ResourceLocation("absentfixture",oldName),30001);
-        net.minecraftforge.event.RegistryEvent.MissingMappings<T> event=new net.minecraftforge.event.RegistryEvent.MissingMappings<>(registry.getRegistryName(),registry,Arrays.asList(old,other));
+    private static <T> void rename(net.minecraftforge.registries.IForgeRegistry<T> registry,String oldName,String current) {
+        net.minecraftforge.registries.MissingMappingsEvent.Mapping<T> old=new net.minecraftforge.registries.MissingMappingsEvent.Mapping<>(registry,registry,new net.minecraft.resources.ResourceLocation("minecraft",oldName),30000);
+        net.minecraftforge.registries.MissingMappingsEvent.Mapping<T> other=new net.minecraftforge.registries.MissingMappingsEvent.Mapping<>(registry,registry,new net.minecraft.resources.ResourceLocation("absentfixture",oldName),30001);
+        net.minecraftforge.registries.MissingMappingsEvent event=new net.minecraftforge.registries.MissingMappingsEvent(registry.getRegistryKey(),registry,Arrays.asList(old,other));
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(event);
-        RuntimeChecks.require(old.getAction()==net.minecraftforge.event.RegistryEvent.MissingMappings.Action.REMAP && old.getTarget()==registry.getValue(new net.minecraft.resources.ResourceLocation("minecraft",current)),"Native registry rename event not remapped: "+oldName);
-        RuntimeChecks.require(other.getAction()==net.minecraftforge.event.RegistryEvent.MissingMappings.Action.DEFAULT,"Foreign registry rename was consumed");
+        RuntimeChecks.require(mappingField(old,"action")==net.minecraftforge.registries.MissingMappingsEvent.Action.REMAP && mappingField(old,"target")==registry.getValue(new net.minecraft.resources.ResourceLocation("minecraft",current)),"Native registry rename event not remapped: "+oldName);
+        RuntimeChecks.require(mappingField(other,"action")==net.minecraftforge.registries.MissingMappingsEvent.Action.DEFAULT,"Foreign registry rename was consumed");
     }
     private static void legacyProfessions() {
         net.minecraft.resources.ResourceLocation name=new net.minecraft.resources.ResourceLocation("minecraft:villagerprofessions");

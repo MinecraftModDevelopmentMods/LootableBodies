@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Native RegionFile codec and entity-chunk shapes; not historical-world qualification. */
 class Native117EntityRegionTest {
-    @TempDir Path world;
+    @TempDir(cleanup=org.junit.jupiter.api.io.CleanupMode.ON_SUCCESS) Path world;
     private static final UUID ID=UUID.fromString("00000000-1171-4171-8171-000000000001");
     private CompoundTag body(UUID id) {
         CompoundTag body=new CompoundTag();body.putString("id","lootablebodies:corpse");body.putUUID("UUID",id);

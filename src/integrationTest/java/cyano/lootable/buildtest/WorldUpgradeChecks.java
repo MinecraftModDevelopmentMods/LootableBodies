@@ -81,7 +81,7 @@ final class WorldUpgradeChecks {
         if(phase.equals("upgrade-final") && ledger.getString("Removed").isEmpty()) {
             for(int i=0;i<bodies.size();i++) {
                 CompoundTag record=bodies.getCompound(i);ServerLevel world=server.getLevel(FixtureApi.dimensionKey(record.getInt("Dimension")));EntityLootableBody body=find(world,HistoricalUuid.read(record.getCompound("Body"),"UUID"));
-                if(body!=null && body.isEmpty()) {ledger.putString("Removed",body.getUUID().toString());BlockPos position=body.blockPosition();world.removeEntity(body);world.getChunkAt(position).setUnsaved(true);break;}
+                if(body!=null && body.isEmpty()) {ledger.putString("Removed",body.getUUID().toString());BlockPos position=body.blockPosition();body.discard();world.getChunkAt(position).setUnsaved(true);break;}
             }
             require(!ledger.getString("Removed").isEmpty(),"No safely empty corpse available for non-resurrection check");
         }
@@ -195,7 +195,7 @@ final class WorldUpgradeChecks {
         for(int slot=0;slot<player.getContainerSize();slot++) {
             ItemStack stack=player.getItem(slot);if(stack.isEmpty())continue;Container destination=null;int empty=-1;
             if(stored.size()>0) {destination=(Container)world.getBlockEntity(position(stored.getCompound(stored.size()-1)));for(int i=0;i<destination.getContainerSize();i++)if(destination.getItem(i).isEmpty()){empty=i;break;}}
-            if(empty<0){BlockPos pos=new BlockPos(body.getX()+10,80+stored.size(),body.getZ()+10);world.setBlockAndUpdate(pos,net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());destination=(Container)world.getBlockEntity(pos);CompoundTag place=new CompoundTag();place.putInt("x",pos.getX());place.putInt("y",pos.getY());place.putInt("z",pos.getZ());stored.add(place);empty=0;}
+            if(empty<0){BlockPos pos=BlockPos.containing(body.getX()+10,80+stored.size(),body.getZ()+10);world.setBlockAndUpdate(pos,net.minecraft.world.level.block.Blocks.CHEST.defaultBlockState());destination=(Container)world.getBlockEntity(pos);CompoundTag place=new CompoundTag();place.putInt("x",pos.getX());place.putInt("y",pos.getY());place.putInt("z",pos.getZ());stored.add(place);empty=0;}
             destination.setItem(empty,stack.copy());destination.setChanged();player.setItem(slot,ItemStack.EMPTY);
         }
     }

@@ -96,7 +96,7 @@ final class NbtRecoveryChecks {
         Set<Entity> before=new HashSet<>(FixtureApi.entities(world));
         try{test.run();results.add("PASS "+name);System.out.println("NBT_CHECK_PASS "+name);}
         catch(Throwable e){failures++;results.add("FAIL "+name+": "+e);System.out.println("NBT_CHECK_FAIL "+name+": "+e);e.printStackTrace();}
-        finally{for(Entity e:new ArrayList<Entity>(FixtureApi.entities(world)))if(!before.contains(e))world.removeEntity(e);}
+        finally{for(Entity e:new ArrayList<Entity>(FixtureApi.entities(world)))if(!before.contains(e))e.discard();}
     }
     static ItemStack item(int index,int count){ItemStack s=RuntimeChecks.stack(index);s.setCount(count);return s;}
     static CompoundTag entry(int index,int count,int slot){CompoundTag n=item(index,count).save(new CompoundTag());n.putByte("Slot",(byte)slot);return n;}

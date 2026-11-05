@@ -23,13 +23,13 @@ public final class CorpseConfigGui extends Screen {
     private int page,perPage;
     private boolean invalid;
     public CorpseConfigGui(Screen parent){this(parent,null,new LinkedHashMap<>(),0);for(String key:keys())pending.put(key,property(key).getString());}
-    private CorpseConfigGui(Screen parent,String group,Map<String,String> pending,int page){super(new net.minecraft.network.chat.TextComponent(LootableBodies.NAME));this.parent=parent;this.group=group;this.pending=new LinkedHashMap<>(pending);this.page=page;}
+    private CorpseConfigGui(Screen parent,String group,Map<String,String> pending,int page){super(net.minecraft.network.chat.Component.literal(LootableBodies.NAME));this.parent=parent;this.group=group;this.pending=new LinkedHashMap<>(pending);this.page=page;}
     private static List<String> keys(){List<String> result=new ArrayList<>(Arrays.asList(APPEARANCE));result.addAll(Arrays.asList(RULES));return result;}
     private static Property property(String key){for(String category:new String[]{"options","corpse damage","corpse decay","corpse recovery"}){Property value=LootableBodies.getConfiguration().getCategory(category).get(key);if(value!=null)return value;}throw new IllegalArgumentException(key);}
     private Button button(int id,int x,int y,int width,String label,Runnable click){return addRenderableWidget(new SettingButton(id,x,y,width,label,click));}
     public static final class SettingButton extends Button {
         public final int id;
-        SettingButton(int id,int x,int y,int width,String label,Runnable action){super(x,y,width,20,new net.minecraft.network.chat.TextComponent(label),button->action.run());this.id=id;}
+        SettingButton(int id,int x,int y,int width,String label,Runnable action){super(x,y,width,20,net.minecraft.network.chat.Component.literal(label),button->action.run(),DEFAULT_NARRATION);this.id=id;}
     }
     @Override protected void init(){
         fields.clear();rows.clear();int left=width/2-155;
@@ -42,7 +42,7 @@ public final class CorpseConfigGui extends Screen {
             for(int i=start;i<end;i++){
                 String key=keys[i];Property value=property(key);int y=48+(i-start)*26;rows.put(key,y);
                 if(value.getType()=='B')button(20+i,width/2+70,y,85,booleanLabel(key),()->{capture();pending.put(key,Boolean.toString(!Boolean.parseBoolean(pending.get(key))));init(minecraft,width,height);});
-                else {EditBox field=new EditBox(font,width/2+60,y+1,95,18,new net.minecraft.network.chat.TranslatableComponent(property(key).getLanguageKey()));field.setMaxLength(64);field.setValue(pending.get(key));fields.put(key,field);addWidget(field);}
+                else {EditBox field=new EditBox(font,width/2+60,y+1,95,18,net.minecraft.network.chat.Component.translatable(property(key).getLanguageKey()));field.setMaxLength(64);field.setValue(pending.get(key));fields.put(key,field);addWidget(field);}
             }
             if(page>0)button(3,left,height-56,80,"<",()->changePage(-1));
             if(end<keys.length)button(4,width/2+75,height-56,80,">",()->changePage(1));
@@ -73,9 +73,9 @@ public final class CorpseConfigGui extends Screen {
         }
         super.render(matrices,mouseX,mouseY,partialTicks);for(EditBox field:fields.values())field.render(matrices,mouseX,mouseY,partialTicks);
         for(Map.Entry<String,Integer> row:rows.entrySet())if(mouseX>=width/2-155 && mouseX<width/2+155 && mouseY>=row.getValue() && mouseY<row.getValue()+22)
-            renderComponentTooltip(matrices,java.util.Collections.singletonList(new net.minecraft.network.chat.TranslatableComponent(property(row.getKey()).getLanguageKey()+".tooltip")),mouseX,mouseY);
+            renderComponentTooltip(matrices,java.util.Collections.singletonList(net.minecraft.network.chat.Component.translatable(property(row.getKey()).getLanguageKey()+".tooltip")),mouseX,mouseY);
         if(group==null && mouseX>=width/2-155 && mouseX<width/2+155 && mouseY>=95 && mouseY<115)
-            renderComponentTooltip(matrices,java.util.Collections.singletonList(new net.minecraft.network.chat.TranslatableComponent("lootablebodies.config.rules.tooltip")),mouseX,mouseY);
+            renderComponentTooltip(matrices,java.util.Collections.singletonList(net.minecraft.network.chat.Component.translatable("lootablebodies.config.rules.tooltip")),mouseX,mouseY);
         if(invalid)drawCenteredString(matrices,font,I18n.get("lootablebodies.config.invalid"),width/2,height-72,0xff5555);
     }
     @Override public void onClose(){capture();minecraft.setScreen(parent);}

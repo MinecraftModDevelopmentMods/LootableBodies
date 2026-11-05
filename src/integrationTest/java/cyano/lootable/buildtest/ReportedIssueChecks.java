@@ -6,8 +6,8 @@ import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.network.protocol.game.ServerboundClientCommandPacket;
-import net.minecraft.network.protocol.game.ClientboundPlayerInfoPacket;
-import net.minecraft.network.chat.TextComponent;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
+import net.minecraft.network.chat.Component;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.CompoundTag;
 
@@ -78,14 +78,14 @@ final class ReportedIssueChecks {
         finally {
             for(Entity entity:new ArrayList<Entity>(FixtureApi.entities(world))) if(!before.contains(entity)) {
                 if(entity instanceof ServerPlayer) server.getPlayerList().remove((ServerPlayer)entity);
-                else world.removeEntity(entity);
+                else entity.discard();
             }
         }
     }
     private static ItemStack shovel() {
         ItemStack stack=new ItemStack(Items.DIAMOND_SHOVEL);
         stack.setTag(RuntimeChecks.stack(300).getTag().copy());stack.setDamageValue(17);
-        stack.setHoverName(new net.minecraft.network.chat.TextComponent("Issue 5 original shovel")); return stack;
+        stack.setHoverName(net.minecraft.network.chat.Component.literal("Issue 5 original shovel")); return stack;
     }
     static Map<String,Integer> inventory(EntityLootableBody body) {
         Map<String,Integer> total=new TreeMap<>();
@@ -138,15 +138,30 @@ final class ReportedIssueChecks {
                     && RuntimeChecks.sameStack(observed.carried,p.containerMenu.getCarried()),"Native menu correction did not match its authoritative state/cursor");
         } finally {wire.release();}
     }
+    private static void addFixturePlayer(ServerPlayer player)throws ReflectiveOperationException {
+        if(!(player.connection instanceof QuietConnection))throw new AssertionError("Quiet fixture bookkeeping received a real connection");
+        // Forge40's removed addPlayer method only appended this list. Preserve
+        // that fixture behavior; real TCP joins use the ordinary native login.
+        java.util.List<ServerPlayer> players=null;
+        for(java.lang.reflect.Field field:net.minecraft.server.players.PlayerList.class.getDeclaredFields()) {
+            if(field.getType()!=java.util.List.class || !field.getGenericType().getTypeName().contains(ServerPlayer.class.getName()))continue;
+            field.setAccessible(true);Object value=field.get(server.getPlayerList());
+            if(value==server.getPlayerList().getPlayers())continue;
+            if(players!=null)throw new AssertionError("Ambiguous native fixture player list");
+            @SuppressWarnings("unchecked") java.util.List<ServerPlayer> found=(java.util.List<ServerPlayer>)value;players=found;
+        }
+        if(players==null || players.contains(player))throw new AssertionError("Missing or duplicate native fixture player list entry");
+        players.add(player);
+        RuntimeChecks.require(server.getPlayerList().getPlayers().contains(player),"Fixture player list observation");
+    }
     private static void deathSequence() throws Exception {
         world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);RuntimeChecks.awaitChunk(world,2,0);
         ServerPlayer p=new ServerPlayer(server,world,new GameProfile(UUID.randomUUID(),"IssueFive"));
         p.connection=new QuietConnection(p);p.setGameMode(GameType.SURVIVAL);p.setPos(32.5,80,0.5);
         // Vanilla clients need player-list information before a tracked player
         // spawn, including the brief spawn-point visit during real respawn.
-        server.getPlayerList().broadcastAll(new net.minecraft.network.protocol.game.ClientboundPlayerInfoPacket(
-                net.minecraft.network.protocol.game.ClientboundPlayerInfoPacket.Action.ADD_PLAYER,p));
-        RuntimeChecks.require(world.addFreshEntity(p),"Fixture player spawn");server.getPlayerList().addPlayer(p);
+        server.getPlayerList().broadcastAll(net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(java.util.List.of(p)));
+        RuntimeChecks.require(world.addFreshEntity(p),"Fixture player spawn");addFixturePlayer(p);
         p.getInventory().selected=4;p.getInventory().items.set(4,shovel());p.getInventory().items.set(9,RuntimeChecks.stack(301));
         Map<String,Integer> expected=tagged(p);
         EntityLootableBody first=death(p);RuntimeChecks.require(expected.equals(tagged(first)),"First death lost inventory");

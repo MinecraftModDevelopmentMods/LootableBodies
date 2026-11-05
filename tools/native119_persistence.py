@@ -1,4 +1,4 @@
-"""Read-only native18 saved entity inspection, distinct from old-writer proof."""
+"""Read-only native19 saved entity inspection, distinct from old-writer proof."""
 import re,struct
 from nbt_regions import Tag,read_region
 
@@ -7,7 +7,7 @@ def count_persisted(world,wave):
     def selected(region):return wave<0 or region.name==['r.0.0.mca','r.8.8.mca','r.16.16.mca'][wave]
     names=('lootablebodies.Corpse','lootablebodies:corpse')
     # A region can still contain unopened old terrain chunks. Inspect both
-    # actual layouts without relabelling untouched terrain as converted18.
+    # actual layouts without relabelling untouched terrain as converted19.
     for region in world.rglob('region/r.*.mca'):
         if not selected(region):continue
         for chunk in read_region(region).values():
@@ -26,15 +26,15 @@ def count_persisted(world,wave):
         rx,rz=map(int,match.groups())
         for index,chunk in read_region(region).items():
             root=chunk['root'].value;position=root.get('Position');entities=root.get('Entities')
-            if root.get('DataVersion')!=Tag(3,2975):raise ValueError('Wrong native18 entity-chunk data version')
+            if root.get('DataVersion')!=Tag(3,3337):raise ValueError('Wrong native19 entity-chunk data version')
             if position is None or position.kind!=11 or len(position.value)!=8 or struct.unpack('>ii',position.value)!=(rx*32+(index&31),rz*32+(index>>5)):
-                raise ValueError('Wrong native18 entity-chunk Position/index')
-            if entities is None or entities.kind!=9 or entities.value[0] not in (0,10):raise ValueError('Wrong native18 root Entities list')
+                raise ValueError('Wrong native19 entity-chunk Position/index')
+            if entities is None or entities.kind!=9 or entities.value[0] not in (0,10):raise ValueError('Wrong native19 root Entities list')
             for entity in entities.value[1]:
                 if entity.value.get('id',Tag(8,'')).value not in names:continue
-                if entity.value['id']!=Tag(8,'lootablebodies:corpse') or entity.value.get('LootableBodiesDataVersion')!=Tag(3,8):raise ValueError('Wrong native18 corpse identity/marker')
+                if entity.value['id']!=Tag(8,'lootablebodies:corpse') or entity.value.get('LootableBodiesDataVersion')!=Tag(3,9):raise ValueError('Wrong native19 corpse identity/marker')
                 identity=entity.value.get('UUID')
-                if identity is None or identity.kind!=11 or len(identity.value)!=16:raise ValueError('Wrong native18 corpse UUID type')
+                if identity is None or identity.kind!=11 or len(identity.value)!=16:raise ValueError('Wrong native19 corpse UUID type')
                 if identity.value in seen:raise ValueError('Duplicate persisted corpse UUID')
                 seen.add(identity.value);count+=1
     return count
