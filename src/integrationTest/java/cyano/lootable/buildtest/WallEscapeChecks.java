@@ -161,7 +161,7 @@ final class WallEscapeChecks {
     private static void damage() {
         BlockPos centre = site(false); terrain(centre, true); world.removeBlock(centre.above(),false);
         EntityLootableBody body = body(centre); float health = body.getHealth();
-        body.hurt(DamageSource.IN_WALL, 1); clear(body);
+        body.hurt(body.damageSources().inWall(), 1); clear(body);
         RuntimeChecks.require(body.isAlive() && body.getHealth() == health, "Default suffocation health rules changed");
     }
 
@@ -214,7 +214,7 @@ final class WallEscapeChecks {
             CompoundTag expected;
             try (InputStream in = new FileInputStream(new File(folder,"wall-escape-"+trapped+".nbt"))) { expected = NbtIo.readCompressed(in); }
             ListTag pos = expected.getList("Pos",6);
-            BlockPos savedPosition=new BlockPos(pos.getDouble(0),pos.getDouble(1),pos.getDouble(2));
+            BlockPos savedPosition=BlockPos.containing(pos.getDouble(0),pos.getDouble(1),pos.getDouble(2));
             // Terrain admission completes before the native entity-storage inbox.
             RuntimeChecks.awaitChunk(world,savedPosition.getX()>>4,savedPosition.getZ()>>4);
             EntityLootableBody body = RuntimeChecks.find(world, expected.getUUID("UUID"));

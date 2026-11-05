@@ -13,8 +13,10 @@ final class NativeRespawnDescription {
             long seed=0;
             for(Field field:ClientboundRespawnPacket.class.getDeclaredFields()) {
                 if(field.getType()==ResourceKey.class) {
+                    field.setAccessible(true);ResourceKey<?> key=(ResourceKey<?>)field.get(packet);
+                    if(key==null || !key.isFor(net.minecraft.core.registries.Registries.DIMENSION))continue;
                     if(dimension!=null)throw new AssertionError("Ambiguous respawn world key");
-                    field.setAccessible(true);dimension=(ResourceKey<?>)field.get(packet);
+                    dimension=key;
                 } else if(field.getType()==long.class) {
                     field.setAccessible(true);seed=field.getLong(packet);
                 }

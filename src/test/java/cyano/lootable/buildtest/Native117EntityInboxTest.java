@@ -49,6 +49,7 @@ class Native117EntityInboxTest {
                     public void onTickingEnd(Saved e) { }
                     public void onTrackingStart(Saved e) { tracked.incrementAndGet(); }
                     public void onTrackingEnd(Saved e) { }
+                    public void onSectionChange(Saved e) { }
                 }, storage);
         Fixture() { manager.updateChunkStatus(POS, Visibility.TRACKED); }
     }

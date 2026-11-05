@@ -3,7 +3,7 @@ import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.entity.boss.enderdragon.phases.AbstractDragonPhaseInstance;
-import net.minecraft.network.chat.TextComponent;
+import net.minecraft.network.chat.Component;
 
 import cyano.lootable.entities.EntityLootableBody;
 import cyano.lootable.graphics.CorpseGUIContainer;
@@ -41,8 +41,8 @@ final class RespawnPacketClientChecks {
     private File observations;
     private Level profileWorld;
     void register(){if(Boolean.getBoolean("lootablebodies.respawn")&&role!=null){net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);MinecraftForge.EVENT_BUS.register(this);}}
-    @SubscribeEvent public void mouse(net.minecraftforge.client.event.ScreenEvent.MouseClickedEvent.Pre e){e.setCanceled(true);}
-    @SubscribeEvent public void key(net.minecraftforge.client.event.ScreenEvent.KeyboardKeyPressedEvent.Pre e){e.setCanceled(true);}
+    @SubscribeEvent public void mouse(net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre e){e.setCanceled(true);}
+    @SubscribeEvent public void key(net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre e){e.setCanceled(true);}
     private void respawn(Minecraft mc) {
         if((!role.equals("A")&&!Boolean.getBoolean("lootablebodies.respawn.simultaneous"))||mc.player==null)return;
         if(mc.screen instanceof DeathScreen) {
@@ -96,7 +96,7 @@ final class RespawnPacketClientChecks {
             uuid=state[2].equals("none")?null:UUID.fromString(state[2]);entityId=Integer.parseInt(state[3]);frames++;
             if(FixtureConnections.retry(mc,role))connecting=false;
             if(!connecting&&FixtureConnections.ready(role)&&mc.screen instanceof TitleScreen) {
-                connecting=true;mc.options.pauseOnLostFocus=false;mc.options.framerateLimit=30;mc.options.renderDistance=4;
+                connecting=true;mc.options.pauseOnLostFocus=false;mc.options.framerateLimit().set(30);mc.options.renderDistance().set(4);
                 FixtureConnections.connect(mc);
             }
             if(mc.level==null||mc.player==null)return;
@@ -135,7 +135,7 @@ final class RespawnPacketClientChecks {
                 // Close the transport before clearing the world. The next main
                 // loop drains already queued destroy packets against that world;
                 // clearing it here races vanilla 1.11's unguarded packet handler.
-                mc.getConnection().getConnection().disconnect(new net.minecraft.network.chat.TextComponent("Disposable check complete"));
+                mc.getConnection().getConnection().disconnect(net.minecraft.network.chat.Component.literal("Disposable check complete"));
                 finished=true;
             }
         } catch(Throwable failure){failure.printStackTrace();try{Files.write(RespawnPacketChecks.file(role+".failure").toPath(),failure.toString().getBytes(StandardCharsets.UTF_8));}catch(IOException ignored){}finished=true;mc.stop();}

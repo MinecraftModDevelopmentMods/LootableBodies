@@ -31,7 +31,7 @@ class Native118EarlyHookTest {
             assertTrue(config.has("lootablebodies_preservation"),"Production early-read attachment is missing");
             path=config.get("lootablebodies_preservation").getAsString();
         }
-        engine=Native118CoremodEngineTest.actualEngine();assertNotNull(engine,"Use the actual target Forge JavaScript engine/filter");
+        engine=Native119CoremodEngineTest.actualEngine();assertNotNull(engine,"Use the actual target Forge JavaScript engine/filter");
         try(InputStream input=getClass().getClassLoader().getResourceAsStream(path)) {
             assertNotNull(input);engine.eval(new InputStreamReader(input,StandardCharsets.UTF_8));
         }

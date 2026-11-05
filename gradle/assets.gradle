@@ -1,5 +1,6 @@
 // Keep development launches independent of any installed Minecraft instance.
 ext.minecraftGameHome = layout.projectDirectory.dir('.gradle/minecraft-home')
+ext.minecraftAssetIndex = '3'
 // Buildship refresh has no command-line -P arguments. Retain a prepared local
 // client location rather than requiring its assets/natives to be copied.
 Properties localMinecraftSetup = new Properties()
@@ -9,7 +10,7 @@ String assetFolder=org.gradle.internal.os.OperatingSystem.current().isMacOsX()?'
 ext.minecraftAssets = layout.projectDirectory.dir(providers.gradleProperty('minecraftAssetsDirectory')
         .getOrElse(localMinecraftSetup.getProperty('minecraftAssetsDirectory',minecraftGameHome.dir(assetFolder).asFile.absolutePath)))
 ext.minecraftNatives = layout.projectDirectory.dir(providers.gradleProperty('minecraftNativesDirectory')
-        .getOrElse(localMinecraftSetup.getProperty('minecraftNativesDirectory','.gradle/native118-client-inputs/natives')))
+        .getOrElse(localMinecraftSetup.getProperty('minecraftNativesDirectory','.gradle/native119-client-inputs/natives')))
 tasks.register('prepareMinecraftAssets') {
     group = 'ide'
     doLast {
@@ -24,10 +25,12 @@ tasks.register('prepareMinecraftAssets') {
                 java.nio.file.Files.move(pending.toPath(),output.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING)
             }
         }
-        File descriptor=new File(root,'1.18.2.json')
-        download('https://piston-meta.mojang.com/v1/packages/334b33fcba3c9be4b7514624c965256535bd7eba/1.18.2.json','334b33fcba3c9be4b7514624c965256535bd7eba',descriptor)
+        File descriptor=new File(root,'1.19.4.json')
+        download('https://piston-meta.mojang.com/v1/packages/4fc30c189872faebae2617aba033cc17fec5899f/1.19.4.json','4fc30c189872faebae2617aba033cc17fec5899f',descriptor)
         def version=new groovy.json.JsonSlurper().parse(descriptor)
-        File index=new File(root,'indexes/1.18.json')
+        if(version.id!='1.19.4' || version.assetIndex.id!=minecraftAssetIndex)
+            throw new GradleException('Prepared Minecraft client metadata has the wrong target identity')
+        File index=new File(root,"indexes/${minecraftAssetIndex}.json")
         download(version.assetIndex.url,version.assetIndex.sha1,index)
         Set<String> hashes=new groovy.json.JsonSlurper().parse(index).objects.values().collect {it.hash} as Set
         hashes.each {hash ->

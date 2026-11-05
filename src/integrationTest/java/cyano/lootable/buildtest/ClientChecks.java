@@ -31,10 +31,10 @@ public final class ClientChecks {
     private final VisibilitySkinClientChecks visibilitySkins = new VisibilitySkinClientChecks();
     private final ConfigClientChecks configScreen = new ConfigClientChecks();
     private final NamelessCorpseClientChecks namelessNames = new NamelessCorpseClientChecks();
-    @SubscribeEvent public void mouse(net.minecraftforge.client.event.ScreenEvent.MouseClickedEvent.Pre event) {
+    @SubscribeEvent public void mouse(net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre event) {
         event.setCanceled(true);
     }
-    @SubscribeEvent public void keyboard(net.minecraftforge.client.event.ScreenEvent.KeyboardKeyPressedEvent.Pre event) {
+    @SubscribeEvent public void keyboard(net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre event) {
         event.setCanceled(true);
     }
     @SubscribeEvent public void tooltip(net.minecraftforge.client.event.RenderTooltipEvent.Color event) {
@@ -67,8 +67,8 @@ public final class ClientChecks {
             if(Boolean.getBoolean("lootablebodies.issueClientCheck")) {reportedIssues.tick(mc);return;}
             if(stage==0 && mc.screen instanceof TitleScreen) {
                 mc.options.pauseOnLostFocus=false;
-                mc.options.framerateLimit=30;
-                mc.options.renderDistance=4;
+                mc.options.framerateLimit().set(30);
+                mc.options.renderDistance().set(4);
                 if(Boolean.getBoolean("lootablebodies.clientResumeDrops")) {
                     RuntimeChecks.require(!Boolean.getBoolean("lootablebodies.clientStopBeforeDrops") &&
                             new File(mc.gameDirectory,"client-connected.pass").isFile(),"Missing connected phase for graphical continuation");
@@ -78,7 +78,7 @@ public final class ClientChecks {
                     // RuntimeChecks.run in the original continuous process.
                     cyano.lootable.LootableBodies.allowCorpseDecay=false;
                     cyano.lootable.LootableBodies.ticksPerItemDecay=-1;
-                    stage=40; mc.loadLevel("build-fixture");
+                    stage=40; mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"build-fixture");
                 } else {
                     stage=1;
                     FixtureApi.ClientWorlds.create(mc,"build-fixture","Build fixture",net.minecraft.world.level.GameType.CREATIVE,false);
@@ -105,7 +105,7 @@ public final class ClientChecks {
                 mc.player.closeContainer(); stage=4;
                 FixtureConnections.disconnect(mc);
             } else if(stage==4 && FixtureConnections.stopped(mc)) {
-                stage=5; mc.loadLevel("build-fixture");
+                stage=5; mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"build-fixture");
             } else if(stage==5 && mc.player!=null && mc.level!=null && mc.getSingleplayerServer()!=null) {
                 stage=6;
                 pending=mc.getSingleplayerServer().submitAsync(() -> {

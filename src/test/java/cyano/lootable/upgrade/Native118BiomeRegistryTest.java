@@ -1,7 +1,7 @@
 package cyano.lootable.upgrade;
 
 import com.mojang.serialization.Dynamic;
-import net.minecraft.data.BuiltinRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.resources.ResourceLocation;
@@ -21,7 +21,8 @@ class Native118BiomeRegistryTest {
         CavesAndCliffsRenames.RENAMES.forEach((old,current)->{
             assertEquals(current,nativeName(old,2730),old);
             ResourceLocation target=new ResourceLocation(current);
-            assertTrue(BuiltinRegistries.BIOME.containsKey(target),current);
+            assertTrue(cyano.lootable.buildtest.Native119Registries.lookup().lookupOrThrow(Registries.BIOME)
+                    .get(net.minecraft.resources.ResourceKey.create(Registries.BIOME,target)).isPresent(),current);
             assertEquals(target,LegacyRegistryMappings.biomeReplacement(new ResourceLocation(old)),old);
         });
     }
@@ -30,7 +31,8 @@ class Native118BiomeRegistryTest {
             String current=CavesAndCliffsRenames.RENAMES.getOrDefault(renamed,renamed);
             if(current.equals("minecraft:deep_warm_ocean"))current="minecraft:warm_ocean";
             ResourceLocation target=new ResourceLocation(current);
-            assertTrue(BuiltinRegistries.BIOME.containsKey(target),current);
+            assertTrue(cyano.lootable.buildtest.Native119Registries.lookup().lookupOrThrow(Registries.BIOME)
+                    .get(net.minecraft.resources.ResourceKey.create(Registries.BIOME,target)).isPresent(),current);
             assertEquals(target,LegacyRegistryMappings.biomeReplacement(new ResourceLocation(old)),old);
         });
     }

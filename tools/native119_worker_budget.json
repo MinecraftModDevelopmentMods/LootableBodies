@@ -1,0 +1,24 @@
+{
+  "minecraft": "1.19.4",
+  "forge": "45.4.5",
+  "java": "Temurin17.0.20.1+1",
+  "platform": "Windows amd64",
+  "qualified": true,
+  "reloads": 200,
+  "jvms": 4,
+  "jvm_args": [],
+  "scope": "Actual native45 default preparation workers plus Main owner-thread apply executor,200reloads/four independent JVMs before any world/candidate. No native40 override or baseline reused.",
+  "max_concurrent_workers": 2,
+  "no_candidate": true,
+  "no_worlds": true,
+  "source_and_sdk_seals_unchanged": true,
+  "controller_sha256": "A6A78C3762981344E8BF70E22EFFF19C72769B4FEEB06E18ECA8CC4940037C58",
+  "server_input_manifest_sha256": "78D29D355E881D9111135B5CB39C738B3F2F3F088467668C410A576D143E90C1",
+  "qualification_evidence_sha256": "923E74DE68419C8D1418F219476D1870064B20C9BFFC7A6F5AE2CE86E6C8EDF2",
+  "preparation_workers_observed": [
+    23
+  ],
+  "visible_cpus_observed": [
+    24
+  ]
+}

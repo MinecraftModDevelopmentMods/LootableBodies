@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import native_runtime
 
 
-class Native117LaunchTests(unittest.TestCase):
+class Native119LaunchTests(unittest.TestCase):
     def test_posix_native_diagnostics_fixture_uses_the_posix_tools(self):
         with patch.object(native_runtime,'os',SimpleNamespace(name='posix')):
             self.test_packaged_server_uses_installer_module_arguments_and_java17_gc()
@@ -31,7 +31,7 @@ class Native117LaunchTests(unittest.TestCase):
             command=run.call_args.args[0]
             self.assertNotIn('-jar',command)
             self.assertIn('-Xmx2G',command)
-            self.assertTrue(any(arg.startswith('@libraries/net/minecraftforge/forge/1.18.2-40.3.12/') for arg in command))
+            self.assertTrue(any(arg.startswith('@libraries/net/minecraftforge/forge/1.19.4-45.4.5/') for arg in command))
             gc=next((arg for arg in command if arg.startswith('-Xlog:')),None)
             self.assertIsNotNone(gc)
             self.assertIn('gc*,safepoint',gc)
@@ -49,24 +49,24 @@ class Native117LaunchTests(unittest.TestCase):
                     native_runtime.run_java(java,home,'fixture')
                 run.assert_not_called()
 
-    def test_server_inputs_pin_native40_instead_of_the_old_launcher(self):
-        self.assertEqual('forge-1.18.2-40.3.12',native_runtime.FORGE)
-        for path in ('libraries/net/minecraftforge/forge/1.18.2-40.3.12/win_args.txt',
-                     'libraries/net/minecraftforge/forge/1.18.2-40.3.12/unix_args.txt',
-                     'libraries/net/minecraftforge/forge/1.18.2-40.3.12/forge-1.18.2-40.3.12-server.jar'):
+    def test_server_inputs_pin_native45_instead_of_the_old_launcher(self):
+        self.assertEqual('forge-1.19.4-45.4.5',native_runtime.FORGE)
+        for path in ('libraries/net/minecraftforge/forge/1.19.4-45.4.5/win_args.txt',
+                     'libraries/net/minecraftforge/forge/1.19.4-45.4.5/unix_args.txt',
+                     'libraries/net/minecraftforge/forge/1.19.4-45.4.5/forge-1.19.4-45.4.5-server.jar'):
             self.assertIn(path,native_runtime.SERVER_INPUTS)
         self.assertFalse(any('1.16.5' in path for path in native_runtime.SERVER_INPUTS))
 
-    def test_native40_historical_workers_have_their_own_fresh_qualification_binding(self):
+    def test_native45_historical_workers_have_their_own_fresh_qualification_binding(self):
         proof=native_runtime.WORKER_BUDGET_PROOF
-        self.assertEqual(('1.18.2','40.3.12',200,4,True),tuple(proof[key] for key in
+        self.assertEqual(('1.19.4','45.4.5',200,4,True),tuple(proof[key] for key in
             ('minecraft','forge','reloads','jvms','qualified')))
         self.assertTrue(proof['no_candidate'] and proof['no_worlds'] and proof['source_and_sdk_seals_unchanged'])
         self.assertRegex(proof['qualification_evidence_sha256'],r'^[A-F0-9]{64}$')
         source=Path(__file__).resolve().parents[1]/'src/controlTest/java/buildcontrol/ResourceControl.java'
         self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest().upper(),proof['controller_sha256'])
-        self.assertEqual(('-Dmax.bg.threads=1',),native_runtime.HISTORICAL_JVM_ARGS)
-        self.assertEqual(1,proof['native_preparation_workers'])
+        self.assertEqual((),native_runtime.HISTORICAL_JVM_ARGS)
+        self.assertEqual([],proof['jvm_args'])
 
     def test_owned_server_does_not_trigger_native_bare_json_flat_settings_fallback(self):
         with tempfile.TemporaryDirectory() as directory:

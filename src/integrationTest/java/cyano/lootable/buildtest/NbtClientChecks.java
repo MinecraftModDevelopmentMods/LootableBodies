@@ -50,7 +50,7 @@ final class NbtClientChecks {
             NbtWorldChecks.seed(p.getLevel(),bodyId,COORDINATE,folder(mc),"graphical");
         });next(1);}
         else if(stage==1 && done() && frames>20){quit(mc);next(2);}
-        else if(stage==2 && FixtureConnections.stopped(mc)){mc.loadLevel("build-fixture");next(3);}
+        else if(stage==2 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"build-fixture");next(3);}
         else if(stage==3 && ready(mc) && frames>20){schedule(mc,()->player(mc).connection.teleport(COORDINATE+8.5,80,COORDINATE-.5,0,0));next(30);}
         else if(stage==30 && done() && frames>20){schedule(mc,()->{
             RuntimeChecks.require(NbtWorldChecks.graphicalAdmissions==1,"Missing exact first native graphical disk admission");
@@ -68,7 +68,7 @@ final class NbtClientChecks {
             mc.getSingleplayerServer().getPlayerList().saveAll();mc.getSingleplayerServer().saveAllChunks(false,true,false);mark(mc,"malformed_network_recovery_preserves_raw_records");
         });next(7);}
         else if(stage==7 && done()){checkPlayer(mc.player.getInventory());quit(mc);next(8);}
-        else if(stage==8 && FixtureConnections.stopped(mc)){mc.loadLevel("build-fixture");next(9);}
+        else if(stage==8 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"build-fixture");next(9);}
         else if(stage==9 && ready(mc) && frames>20){schedule(mc,()->player(mc).connection.teleport(COORDINATE+8.5,80,COORDINATE-.5,0,0));next(90);}
         else if(stage==90 && done() && frames>20){schedule(mc,()->{
             RuntimeChecks.require(NbtWorldChecks.graphicalAdmissions==2,"Missing exact second native graphical disk admission");

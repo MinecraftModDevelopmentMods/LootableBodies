@@ -1,8 +1,8 @@
-name: Audit LootableBodies 1.18 artifacts
-run-name: Audit 1.18.2 artifacts from ${{ github.event.workflow_run.head_sha }}
+name: Audit LootableBodies 1.19 artifacts
+run-name: Audit 1.19.4 artifacts from ${{ github.event.workflow_run.head_sha }}
 on:
   workflow_run:
-    workflows: [LootableBodies 1.18 CI]
+    workflows: [LootableBodies 1.19 CI]
     types: [completed]
 permissions:
   contents: read
@@ -12,7 +12,7 @@ jobs:
     if: >-
       github.repository == 'MinecraftModDevelopmentMods/LootableBodies' &&
       github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'master-1.18.2'
+      github.event.workflow_run.head_branch == 'master-1.19.4'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -21,7 +21,7 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: LootableBodies-1.18.2-${{ github.event.workflow_run.head_sha }}
+          name: LootableBodies-1.19.4-${{ github.event.workflow_run.head_sha }}
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
           path: audited
@@ -29,11 +29,11 @@ jobs:
         env:
           SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          python3 -B tools/native118_build.py --bundle audited
+          python3 -B tools/native119_build.py --bundle audited
           python3 - <<'PY'
           import json,os
           from pathlib import Path
-          accepted=json.loads(Path('.github/release118.json').read_text())
+          accepted=json.loads(Path('.github/release119.json').read_text())
           Path('independent-audit.json').write_text(json.dumps({'source':os.environ['SOURCE_SHA'],'files':accepted['files'],'all_six_exact':True,'identical_to_locally_audited_bundle':True},indent=2)+'\n')
           PY
       # Exact hashes reuse the local class61/licence/identity/mapping audit.
@@ -43,6 +43,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: native118-independent-audit-${{ github.event.workflow_run.head_sha }}
+          name: native119-independent-audit-${{ github.event.workflow_run.head_sha }}
           if-no-files-found: error
           path: independent-audit.json

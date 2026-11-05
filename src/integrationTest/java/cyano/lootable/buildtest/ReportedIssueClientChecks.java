@@ -3,7 +3,7 @@ import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.network.chat.TextComponent;
+import net.minecraft.network.chat.Component;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.CompoundTag;
 
@@ -45,13 +45,13 @@ final class ReportedIssueClientChecks {
     static ItemStack original() {
         ItemStack s=new ItemStack(Items.DIAMOND_SHOVEL);
         s.setTag(RuntimeChecks.stack(300).getTag().copy());s.setDamageValue(17);
-        s.setHoverName(new net.minecraft.network.chat.TextComponent("Issue 5 original shovel"));return s;
+        s.setHoverName(net.minecraft.network.chat.Component.literal("Issue 5 original shovel"));return s;
     }
     void tick(Minecraft mc) throws Exception {
         frames++;
         if(stage==0 && mc.screen instanceof TitleScreen) {
             report=new File(mc.gameDirectory,"issue5-client-checks.txt");RuntimeChecks.require(!report.exists(),"Stale issue5 report");
-            mc.options.pauseOnLostFocus=false;mc.options.framerateLimit=30;mc.options.renderDistance=4;
+            mc.options.pauseOnLostFocus=false;mc.options.framerateLimit().set(30);mc.options.renderDistance().set(4);
             FixtureApi.ClientWorlds.create(mc,"issue-fixture","Issue fixture",net.minecraft.world.level.GameType.SURVIVAL,true);next(1);
         } else if(stage==1 && ready(mc)) {
             schedule(mc,()->{
@@ -118,7 +118,7 @@ final class ReportedIssueClientChecks {
             mc.player.closeContainer();schedule(mc,()->save(mc));next(12);
         } else if(stage==12 && done()) {quit(mc);next(13);
         } else if(stage==13 && FixtureConnections.stopped(mc)) {
-            mc.loadLevel("issue-fixture");next(14);
+            mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"issue-fixture");next(14);
         } else if(stage==14 && ready(mc) && frames>25) {
             schedule(mc,()->{verifyDisk(mc);verifyOriginals(body(mc));mark("first_disk_reload_complete_corpse_inventory");});next(15);
         } else if(stage==15 && done() && open(mc,secondId)) {next(16);
@@ -138,7 +138,7 @@ final class ReportedIssueClientChecks {
             });next(18);
         } else if(stage==18 && done()) {quit(mc);next(19);
         } else if(stage==19 && FixtureConnections.stopped(mc)) {
-            mc.loadLevel("issue-fixture");next(20);
+            mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"issue-fixture");next(20);
         } else if(stage==20 && ready(mc) && frames>25) {
             schedule(mc,()->{verifyDisk(mc);mark("second_disk_reload_complete_player_and_corpse_inventory");});next(21);
         } else if(stage==21 && done()) {
@@ -196,7 +196,7 @@ final class ReportedIssueClientChecks {
                     // platform. Give this disposable fixture a stable place
                     // beside the actual corpse before sending normal clicks.
                     for(int dx=-1;dx<=1;dx++)for(int dz=-1;dz<=1;dz++)
-                        p.level.setBlockAndUpdate(new BlockPos(x+dx,y-1,z+dz),Blocks.STONE.defaultBlockState());
+                        p.level.setBlockAndUpdate(BlockPos.containing(x+dx,y-1,z+dz),Blocks.STONE.defaultBlockState());
                     p.setDeltaMovement(0,0,0);
                     p.connection.teleport(x,y,z,0,0);
                     System.out.println("ISSUE5_VIEWER_APPROACH corpse="+id);

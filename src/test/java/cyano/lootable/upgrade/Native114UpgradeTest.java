@@ -28,14 +28,14 @@ class Native114UpgradeTest {
         body.put("Equipment", equipment); ListTag aux = new ListTag(); aux.add(item(47)); body.put("Aux", aux);
         return body;
     }
-    @Test void currentFormatNamesThe118VanillaSchema() {
-        assertEquals(2975, UpgradePreservation.MINECRAFT_VERSION);
-        assertEquals(8, UpgradePreservation.DATA_VERSION);
+    @Test void currentFormatNamesThe119VanillaSchema() {
+        assertEquals(3337, UpgradePreservation.MINECRAFT_VERSION);
+        assertEquals(9, UpgradePreservation.DATA_VERSION);
     }
     @Test void released113EquipmentAndOverflowAreRetainedBeforeNativeConversion() {
         CompoundTag original = body(3), before = original.copy();
         CompoundTag staged = NativeSafeFixer.stageCorpse(original, context(1631));
-        assertEquals(8, staged.getInt(UpgradePreservation.VERSION));
+        assertEquals(9, staged.getInt(UpgradePreservation.VERSION));
         assertEquals(original.getUUID("UUID"), staged.getUUID("UUID"));
         assertTrue(staged.getList("Equipment", 10).isEmpty());
         ListTag records = staged.getList("LootableBodiesUnresolved", 10); assertEquals(49, records.size());
@@ -53,12 +53,12 @@ class Native114UpgradeTest {
         record.put("SourceVersions", context(922)); ListTag recovery = new ListTag(); recovery.add(record.copy());
         original.put("LootableBodiesUnresolved", recovery);
         CompoundTag staged = NativeSafeFixer.stageCorpse(original, context(1631));
-        assertEquals(8, staged.getInt(UpgradePreservation.VERSION));
+        assertEquals(9, staged.getInt(UpgradePreservation.VERSION));
         assertEquals(record, staged.getList("LootableBodiesUnresolved", 10).getCompound(49));
         assertEquals(record, original.getList("LootableBodiesUnresolved", 10).getCompound(0));
     }
     @Test void currentRecordsAreNotWrappedOrDuplicatedAgain() {
-        CompoundTag original = body(8);
+        CompoundTag original = body(9);
         assertEquals(original, NativeSafeFixer.stageCorpse(original, context(1976)));
     }
     @Test void vanilla114ItemRenamesRunForReleased113InventoryCopies() {

@@ -37,7 +37,7 @@ final class NbtWorldChecks {
     static void registerItem(){
         String phase=System.getProperty("lootablebodies.phase","");
         if(phase.startsWith("nbt-return") || phase.startsWith("upgrade-return") || phase.startsWith("upgrade-final")) {
-            returning=new Item(new Item.Properties()).setRegistryName(new ResourceLocation(RETURNING));net.minecraftforge.registries.ForgeRegistries.ITEMS.register(returning);
+            returning=new Item(new Item.Properties());net.minecraftforge.registries.ForgeRegistries.ITEMS.register(new ResourceLocation(RETURNING),returning);
         }
     }
     static void run(MinecraftServer server,String phase) throws Exception {

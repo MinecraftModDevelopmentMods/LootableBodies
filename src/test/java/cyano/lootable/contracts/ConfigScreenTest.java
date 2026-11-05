@@ -14,7 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ConfigScreenTest {
-    @TempDir Path directory;
+    @TempDir(cleanup=org.junit.jupiter.api.io.CleanupMode.ON_SUCCESS) Path directory;
     private LegacyConfiguration load(String contents) throws Exception {
         Path file = directory.resolve("lootablebodies.cfg");
         Files.write(file, contents.getBytes(StandardCharsets.UTF_8));
@@ -126,7 +126,7 @@ class ConfigScreenTest {
     }
     @Test void corpseLayoutKeepsItsOriginalUnlabelledForeground()throws Exception {
         cyano.lootable.graphics.CorpseGUIContainer screen=new cyano.lootable.graphics.CorpseGUIContainer(
-            (cyano.lootable.graphics.CorpseContainer)null,new net.minecraft.world.entity.player.Inventory(null),new net.minecraft.network.chat.TextComponent("Saved owner"));
+            (cyano.lootable.graphics.CorpseContainer)null,new net.minecraft.world.entity.player.Inventory(null),net.minecraft.network.chat.Component.literal("Saved owner"));
         java.lang.reflect.Method foreground=cyano.lootable.graphics.CorpseGUIContainer.class.getDeclaredMethod(
             "renderLabels",com.mojang.blaze3d.vertex.PoseStack.class,int.class,int.class);foreground.setAccessible(true);
         // The original layout uses all seven rows. Native labels would draw

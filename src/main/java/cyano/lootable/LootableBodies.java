@@ -8,12 +8,13 @@ import cyano.lootable.upgrade.UpgradePreservation;
 import cyano.lootable.upgrade.ChunkVersionContext;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.SpawnEggItem;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.RegistryEvent;
+import net.minecraftforge.registries.RegisterEvent;
+import net.minecraft.core.registries.Registries;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.common.Mod;
@@ -26,7 +27,7 @@ import net.minecraftforge.fml.loading.FMLPaths;
 public final class LootableBodies {
     public static final String MODID = "lootablebodies";
     public static final String NAME = "DrCyano's Lootable Bodies";
-    public static final String VERSION = "2.4.9.118021";
+    public static final String VERSION = "2.4.10.119041";
     public static final ResourceLocation CORPSE_ID = new ResourceLocation("lootablebodies:corpse");
     public static EntityType<EntityLootableBody> CORPSE;
     public static Item CORPSE_EGG;
@@ -59,10 +60,13 @@ public final class LootableBodies {
             event.enqueueWork(cyano.lootable.upgrade.EarlyWorldPreservation::install));
         bus.addListener(cyano.lootable.upgrade.LegacyProfessionRegistry::create);
         bus.addListener((net.minecraftforge.event.entity.EntityAttributeCreationEvent event)->event.put(corpseType(),EntityLootableBody.corpseAttributeDefaults().build()));
-        bus.addGenericListener(EntityType.class,this::registerEntities);
-        bus.addGenericListener(Item.class,this::registerItems);
-        bus.addGenericListener(net.minecraft.world.entity.ai.memory.MemoryModuleType.class,cyano.lootable.upgrade.LegacyRegistryMappings::retiredMemories);
-        bus.addGenericListener(net.minecraft.world.inventory.MenuType.class,this::registerContainers);
+        bus.addListener(this::registerEntities);
+        bus.addListener(this::registerItems);
+        bus.addListener(cyano.lootable.upgrade.LegacyRegistryMappings::retiredMemories);
+        bus.addListener(this::registerContainers);
+        bus.addListener((net.minecraftforge.event.CreativeModeTabEvent.BuildContents event) -> {
+            if(event.getTab()==CreativeModeTabs.SPAWN_EGGS)event.accept(CORPSE_EGG);
+        });
         MinecraftForge.EVENT_BUS.register(new PlayerDeathEventHandler());
         MinecraftForge.EVENT_BUS.register(this);
         DistExecutor.runWhenOn(Dist.CLIENT,()->ClientProxy::register);
@@ -77,21 +81,24 @@ public final class LootableBodies {
         }
         return CORPSE;
     }
-    private void registerEntities(RegistryEvent.Register<EntityType<?>> event) {
-        event.getRegistry().register(corpseType().setRegistryName(CORPSE_ID));
+    private void registerEntities(RegisterEvent event) {
+        event.register(Registries.ENTITY_TYPE,CORPSE_ID,LootableBodies::corpseType);
     }
-    private void registerItems(RegistryEvent.Register<Item> event) {
-        CORPSE_EGG=new SpawnEggItem(corpseType(),1,1,new Item.Properties().tab(CreativeModeTab.TAB_MISC))
-                .setRegistryName(MODID,"corpse_spawn_egg");
-        event.getRegistry().register(CORPSE_EGG);
-    }
-    private void registerContainers(RegistryEvent.Register<net.minecraft.world.inventory.MenuType<?>> event) {
-        CORPSE_CONTAINER=net.minecraftforge.common.extensions.IForgeMenuType.create((window,inventory,buffer)-> {
-            net.minecraft.world.entity.Entity body=inventory.player.level.getEntity(buffer.readVarInt());
-            if(!(body instanceof EntityLootableBody))throw new IllegalStateException("Corpse container has no matching entity");
-            return new cyano.lootable.graphics.CorpseContainer(window,inventory,(EntityLootableBody)body);
+    private void registerItems(RegisterEvent event) {
+        event.register(Registries.ITEM,new ResourceLocation(MODID,"corpse_spawn_egg"),()-> {
+            CORPSE_EGG=new SpawnEggItem(corpseType(),1,1,new Item.Properties());
+            return CORPSE_EGG;
         });
-        event.getRegistry().register(CORPSE_CONTAINER.setRegistryName(CORPSE_ID));
+    }
+    private void registerContainers(RegisterEvent event) {
+        event.register(Registries.MENU,CORPSE_ID,()-> {
+            CORPSE_CONTAINER=net.minecraftforge.common.extensions.IForgeMenuType.create((window,inventory,buffer)-> {
+                net.minecraft.world.entity.Entity body=inventory.player.level.getEntity(buffer.readVarInt());
+                if(!(body instanceof EntityLootableBody))throw new IllegalStateException("Corpse container has no matching entity");
+                return new cyano.lootable.graphics.CorpseContainer(window,inventory,(EntityLootableBody)body);
+            });
+            return CORPSE_CONTAINER;
+        });
     }
     public static LootableBodies getInstance(){return INSTANCE;}
     @SubscribeEvent public void beforeWorldLoading(ServerAboutToStartEvent event) {
@@ -106,12 +113,12 @@ public final class LootableBodies {
         }
     }
     @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.HIGHEST)
-    public void worldLoaded(net.minecraftforge.event.world.WorldEvent.Load event) {
-        if(event.getWorld() instanceof net.minecraft.server.level.ServerLevel)ChunkVersionContext.installWorld((net.minecraft.server.level.ServerLevel)event.getWorld());
+    public void worldLoaded(net.minecraftforge.event.level.LevelEvent.Load event) {
+        if(event.getLevel() instanceof net.minecraft.server.level.ServerLevel)ChunkVersionContext.installWorld((net.minecraft.server.level.ServerLevel)event.getLevel());
     }
     @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.HIGHEST)
-    public void beforeSpawn(net.minecraftforge.event.world.WorldEvent.CreateSpawnPosition event) {
-        if(event.getWorld() instanceof net.minecraft.server.level.ServerLevel)ChunkVersionContext.installWorld((net.minecraft.server.level.ServerLevel)event.getWorld());
+    public void beforeSpawn(net.minecraftforge.event.level.LevelEvent.CreateSpawnPosition event) {
+        if(event.getLevel() instanceof net.minecraft.server.level.ServerLevel)ChunkVersionContext.installWorld((net.minecraft.server.level.ServerLevel)event.getLevel());
     }
     @SubscribeEvent public void worldStopped(ServerStoppedEvent event){UpgradePreservation.close();}
     private static boolean or(boolean... values){for(boolean value:values)if(value)return true;return false;}

@@ -22,7 +22,7 @@ import net.minecraft.world.level.GameType;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.util.FakePlayerFactory;
 import com.mojang.authlib.GameProfile;
-import net.minecraftforge.event.entity.EntityJoinWorldEvent;
+import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
@@ -42,13 +42,13 @@ public final class PortBaselineChecks {
             net.minecraft.network.FriendlyByteBuf buffer=new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
             try {
                 EntityLootableBody corpse=new EntityLootableBody(world);
-                net.minecraft.network.protocol.game.ClientboundAddMobPacket sent=new net.minecraft.network.protocol.game.ClientboundAddMobPacket(corpse);
+                net.minecraft.network.protocol.game.ClientboundAddEntityPacket sent=new net.minecraft.network.protocol.game.ClientboundAddEntityPacket(corpse);
                 sent.write(buffer);
-                net.minecraft.network.protocol.game.ClientboundAddMobPacket received=new net.minecraft.network.protocol.game.ClientboundAddMobPacket(buffer);
+                net.minecraft.network.protocol.game.ClientboundAddEntityPacket received=new net.minecraft.network.protocol.game.ClientboundAddEntityPacket(buffer);
                 require(RespawnPacketTrace.describe(sent).equals(RespawnPacketTrace.describe(received)),"Spawn observer differs before/after native decoding");
                 require(RespawnPacketTrace.describe(received).contains("mod=lootablebodies "),"Negative control cannot identify corpse spawns");
                 buffer.clear();
-                net.minecraft.network.protocol.game.ClientboundRespawnPacket outgoing=new net.minecraft.network.protocol.game.ClientboundRespawnPacket(world.dimensionTypeRegistration(),world.dimension(),0x13572468ABCDEF01L,GameType.SURVIVAL,GameType.CREATIVE,false,true,true);
+                net.minecraft.network.protocol.game.ClientboundRespawnPacket outgoing=new net.minecraft.network.protocol.game.ClientboundRespawnPacket(world.dimensionTypeRegistration().unwrapKey().orElseThrow(),world.dimension(),0x13572468ABCDEF01L,GameType.SURVIVAL,GameType.CREATIVE,false,true,net.minecraft.network.protocol.game.ClientboundRespawnPacket.KEEP_ALL_DATA,java.util.Optional.empty());
                 outgoing.write(buffer);
                 net.minecraft.network.protocol.game.ClientboundRespawnPacket incoming=new net.minecraft.network.protocol.game.ClientboundRespawnPacket(buffer);
                 require(RespawnPacketTrace.describe(outgoing).equals(RespawnPacketTrace.describe(incoming)),"Respawn observer differs before/after native decoding");
@@ -59,11 +59,11 @@ public final class PortBaselineChecks {
             ServerPlayer player=FakePlayerFactory.get(world,new GameProfile(UUID.randomUUID(),"PortFixture"));
             ArrayList<ItemEntity> drops=new ArrayList<>();
             drops.add(new ItemEntity(world,8,80,8,new ItemStack(Items.DIAMOND,7)));
-            Object veto=new Object() { @SubscribeEvent public void join(EntityJoinWorldEvent e) {
+            Object veto=new Object() { @SubscribeEvent public void join(EntityJoinLevelEvent e) {
                 if(e.getEntity() instanceof EntityLootableBody) e.setCanceled(true);
             }};
             MinecraftForge.EVENT_BUS.register(veto);
-            try { new PlayerDeathEventHandler().entityDropEvent(new LivingDropsEvent(player,DamageSource.GENERIC,drops,0,false)); }
+            try { new PlayerDeathEventHandler().entityDropEvent(new LivingDropsEvent(player,player.damageSources().generic(),drops,0,false)); }
             finally { MinecraftForge.EVENT_BUS.unregister(veto); }
             require(drops.size()==1 && drops.get(0).getItem().getCount()==7,"original drops were discarded");
         });

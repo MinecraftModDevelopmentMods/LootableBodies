@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Synthetic boundary contracts; historical world qualification uses real old writers. */
 class NativeUpgradeBoundaryTest {
-    @TempDir Path world;
+    @TempDir(cleanup=org.junit.jupiter.api.io.CleanupMode.ON_SUCCESS) Path world;
     private static final UUID ID=UUID.fromString("00000000-3333-4333-8333-000000000001");
     private static final DataFixer VANILLA=DataFixers.getDataFixer();
     @AfterEach void close(){UpgradePreservation.close();}
@@ -57,7 +57,7 @@ class NativeUpgradeBoundaryTest {
     }
     @Test void legacyIdentityAndEveryRawInventoryEntrySurviveBothAnvilPasses()throws Exception {
         CompoundTag body=corpse(),source=chunk(body,true);byte[] before=encoded(source);CompoundTag result=update(source),saved=findCorpse(result);
-        assertEquals("lootablebodies:corpse",saved.getString("id"));assertEquals(8,saved.getInt("LootableBodiesDataVersion"));assertEquals(ID,saved.getUUID("UUID"));
+        assertEquals("lootablebodies:corpse",saved.getString("id"));assertEquals(9,saved.getInt("LootableBodiesDataVersion"));assertEquals(ID,saved.getUUID("UUID"));
         ListTag records=saved.getList("LootableBodiesUnresolved",10);assertEquals(49,records.size());
         for(int i=0;i<48;i++){CompoundTag record=records.getCompound(i);assertEquals("Equipment",record.getString("Source"));assertArrayEquals(encoded(body.getList("Equipment",10).getCompound(i)),encoded(record.getCompound("Data")));assertEquals(512,record.getCompound("SourceVersions").getInt("DataVersion"));}
         assertEquals("Aux",records.getCompound(48).getString("Source"));assertArrayEquals(before,encoded(source));assertFalse(saved.contains("LootableBodiesUpgradePayload"));assertFalse(saved.contains("LootableBodiesInventorySource"));

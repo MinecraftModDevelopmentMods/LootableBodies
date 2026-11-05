@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Synthetic region files test the preservation boundary, not old-world qualification. */
 class UpgradeJournalTest {
-    @TempDir Path world;
+    @TempDir(cleanup=org.junit.jupiter.api.io.CleanupMode.ON_SUCCESS) Path world;
     private static final UUID ID=UUID.fromString("00000000-1111-4111-8111-000000000001");
     private Object scan() throws Exception {
         try { return Class.forName("cyano.lootable.upgrade.UpgradeJournal").getMethod("scan",Path.class).invoke(null,world); }

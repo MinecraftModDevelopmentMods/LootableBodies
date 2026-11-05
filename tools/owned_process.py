@@ -77,6 +77,10 @@ class OwnedProcess:
 
 
 def native_process(command,*,cwd,log,timeout,console_input=False):
+    command=list(command)
+    encodings=[s for s in command if s.startswith('-Dfile.encoding=')]
+    if encodings and encodings!=['-Dfile.encoding=UTF-8']:raise ValueError('Owned runtime requires one explicit UTF-8 encoding')
+    if not encodings:command.insert(1,'-Dfile.encoding=UTF-8')
     validate_logging_inputs(command)
     java=Path(command[0]).resolve();metadata=java.parent.parent/'release'
     values=dict(line.split('=',1) for line in metadata.read_text().splitlines() if '=' in line)

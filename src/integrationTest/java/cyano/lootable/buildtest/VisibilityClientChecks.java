@@ -2,7 +2,7 @@ package cyano.lootable.buildtest;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.world.entity.boss.enderdragon.phases.AbstractDragonPhaseInstance;
-import net.minecraft.network.chat.TextComponent;
+import net.minecraft.network.chat.Component;
 
 import cyano.lootable.entities.EntityLootableBody;
 import cyano.lootable.graphics.CorpseGUIContainer;
@@ -37,8 +37,8 @@ final class VisibilityClientChecks {
     private net.minecraft.network.Connection traced;
     private net.minecraft.client.multiplayer.ClientLevel profileWorld;
     void register(){if(Boolean.getBoolean("lootablebodies.visibility")&&role!=null){net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);MinecraftForge.EVENT_BUS.register(this);}}
-    @SubscribeEvent public void mouse(net.minecraftforge.client.event.ScreenEvent.MouseClickedEvent.Pre e){e.setCanceled(true);}
-    @SubscribeEvent public void key(net.minecraftforge.client.event.ScreenEvent.KeyboardKeyPressedEvent.Pre e){e.setCanceled(true);}
+    @SubscribeEvent public void mouse(net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre e){e.setCanceled(true);}
+    @SubscribeEvent public void key(net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre e){e.setCanceled(true);}
     @SubscribeEvent public void rendered(RenderLivingEvent.Post<?,?> e){
         if(e.getEntity() instanceof EntityLootableBody) {
             rendered.add(e.getEntity().getUUID());
@@ -66,7 +66,7 @@ final class VisibilityClientChecks {
             System.out.println("VISIBILITY_PREDEATH_RENDER_READY "+receipt);ack();
         }catch(Throwable failure){failure.printStackTrace();finished=true;mc.stop();}
     }
-    @SubscribeEvent public void deathScreenDrawn(net.minecraftforge.client.event.ScreenEvent.DrawScreenEvent.Post e) {
+    @SubscribeEvent public void deathScreenDrawn(net.minecraftforge.client.event.ScreenEvent.Render.Post e) {
         if(!role.equals("A") || !(e.getScreen() instanceof DeathScreen) || (phase!=2&&phase!=14) || done.contains(phase))return;
         Minecraft mc=Minecraft.getInstance();
         try {
@@ -79,7 +79,7 @@ final class VisibilityClientChecks {
             System.out.println("VISIBILITY_DEATH_RENDER_PROOF "+role+" "+receipt);ack();
         } catch(Throwable error){error.printStackTrace();finished=true;mc.stop();}
     }
-    @SubscribeEvent public void removed(net.minecraftforge.event.entity.EntityLeaveWorldEvent e) {
+    @SubscribeEvent public void removed(net.minecraftforge.event.entity.EntityLeaveLevelEvent e) {
         Entity entity=e.getEntity();
         if(entity instanceof EntityLootableBody && entity.level.isClientSide) {
             System.out.println("VISIBILITY_CLIENT_REMOVAL "+role+" phase="+phase+" uuid="+entity.getUUID()+" reason="+entity.getRemovalReason()+" rendered="+rendered.contains(entity.getUUID()));
@@ -115,7 +115,7 @@ final class VisibilityClientChecks {
             if(n!=phase){phase=n;frames=0;guiFrames=0;respawnSent=false;rendered.clear();deathRendered.clear();System.out.println("VISIBILITY_CLIENT_PHASE "+role+" "+phase);}frames++;
             if(FixtureConnections.retry(mc,role))connecting=false;
             if(!connecting && FixtureConnections.ready(role) && mc.level==null && mc.screen instanceof TitleScreen && (phase==0 || phase==9 || phase==11)) {
-                connecting=true;mc.options.pauseOnLostFocus=false;mc.options.framerateLimit=30;mc.options.renderDistance=4;
+                connecting=true;mc.options.pauseOnLostFocus=false;mc.options.framerateLimit().set(30);mc.options.renderDistance().set(4);
                 FixtureConnections.connect(mc);
             }
             if(mc.level==null || mc.player==null)return;
@@ -166,7 +166,7 @@ final class VisibilityClientChecks {
             } else if(phase==18) {
                 new File(mc.gameDirectory,"visibility-client.pass").createNewFile();System.out.println("LOOTABLE_BODIES_VISIBILITY_CLIENT_PASS role="+role);
                 mc.player.closeContainer();
-                mc.getConnection().getConnection().disconnect(new net.minecraft.network.chat.TextComponent("Disposable check complete"));
+                mc.getConnection().getConnection().disconnect(net.minecraft.network.chat.Component.literal("Disposable check complete"));
                 finished=true;
             } else if(phase==20) {
                 if(body(mc,"first")==null&&body(mc,"second")==null)ack();

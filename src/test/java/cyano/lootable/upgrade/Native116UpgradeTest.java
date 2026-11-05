@@ -34,8 +34,8 @@ class Native116UpgradeTest {
         }
         body.put("Equipment",inventory);return body;
     }
-    @Test void currentFormatUsesThe118SchemaAndMarker() {
-        assertEquals(2975,UpgradePreservation.MINECRAFT_VERSION);assertEquals(8,UpgradePreservation.DATA_VERSION);
+    @Test void currentFormatUsesThe119SchemaAndMarker() {
+        assertEquals(3337,UpgradePreservation.MINECRAFT_VERSION);assertEquals(9,UpgradePreservation.DATA_VERSION);
     }
     @Test void legacyCorpseUuidSurvivesShieldingWithoutTruncatingCustomInventory() {
         CompoundTag body=legacy(),before=body.copy(),context=new CompoundTag();context.putInt("DataVersion",2230);
@@ -75,7 +75,7 @@ class Native116UpgradeTest {
         CompoundTag root=new CompoundTag();root.putString("LevelName","Disposable fixture");
         root.put("WorldGenSettings",settings());CompoundTag before=root.copy();
         CompoundTag fixed=NativeNbt.update(UpgradePreservation.wrapper(DataFixers.getDataFixer()),
-            net.minecraft.util.datafix.DataFixTypes.LEVEL.getType(),root,-1,2586);
+            References.LEVEL,root,-1,2586);
         assertEquals(before.get("WorldGenSettings"),fixed.get("WorldGenSettings"));assertEquals(before,root);
     }
     @Test void registrationProtectsTheNativeLevelReaderBeforeServerCreation() throws Exception {

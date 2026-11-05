@@ -22,9 +22,9 @@ class Native118EntityBoundaryTest {
         Path file=write(world,raw);byte[] original=Files.readAllBytes(file);
         UpgradeJournal journal=UpgradePreservation.prepareEarly(world);
         assertEquals(1,journal.size());
-        CompoundTag converted=NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.ENTITY_CHUNK,raw,-1,2975);
+        CompoundTag converted=NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.ENTITY_CHUNK,raw,-1,3337);
         CompoundTag actual=converted.getList("Entities",10).getCompound(0);
-        assertEquals(8,actual.getInt(UpgradePreservation.VERSION));
+        assertEquals(9,actual.getInt(UpgradePreservation.VERSION));
         assertEquals(2730,actual.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
         assertEquals(50,actual.getList("LootableBodiesUnresolved",10).size());
         for(int slot=0;slot<48;slot++)assertEquals(corpse.getList("Equipment",10).getCompound(slot),actual.getList("LootableBodiesUnresolved",10).getCompound(slot).getCompound("Data"));
@@ -40,7 +40,7 @@ class Native118EntityBoundaryTest {
         assertNull(UpgradePreservation.journal());assertArrayEquals(original,Files.readAllBytes(file));
     }
     @Test void futureSeparateEntityVersionRefusesEvenWhenItsCorpseHasAnOlderKnownMarker() throws Exception {
-        CompoundTag raw=chunk(2976,body(new UUID(118,172),7)),before=raw.copy();
+        CompoundTag raw=chunk(3338,body(new UUID(118,172),7)),before=raw.copy();
         Path file=write(world,raw);byte[] original=Files.readAllBytes(file);
         assertThrows(IOException.class,()->UpgradePreservation.prepareEarly(world));
         assertNull(UpgradePreservation.journal());assertEquals(before,raw);assertArrayEquals(original,Files.readAllBytes(file));
@@ -51,8 +51,8 @@ class Native118EntityBoundaryTest {
             UpgradePreservation.close();Path folder=world.resolve("typed-"+i);
             CompoundTag raw=chunk(2730,body(new UUID(118,173+i),7));raw.put("DataVersion",stamps[i]);CompoundTag before=raw.copy();
             Path file=write(folder,raw);byte[] original=Files.readAllBytes(file);UpgradePreservation.prepareEarly(folder);
-            CompoundTag converted=NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.ENTITY_CHUNK,raw,-1,2975).getList("Entities",10).getCompound(0);
-            assertEquals(8,converted.getInt(UpgradePreservation.VERSION));assertEquals(2730,converted.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
+            CompoundTag converted=NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.ENTITY_CHUNK,raw,-1,3337).getList("Entities",10).getCompound(0);
+            assertEquals(9,converted.getInt(UpgradePreservation.VERSION));assertEquals(2730,converted.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
             assertEquals(50,converted.getList("LootableBodiesUnresolved",10).size());assertEquals(before,raw);assertArrayEquals(original,Files.readAllBytes(file));
         }
     }

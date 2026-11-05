@@ -75,7 +75,7 @@ final class ConnectedClientChecks {
             screenshot(mc,"connected-corpse-after-shift-recovery.png");
             quit(mc); next(7);
         } else if(stage==7 && FixtureConnections.stopped(mc)) {
-            mc.loadLevel("build-fixture"); next(8);
+            mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"build-fixture"); next(8);
         } else if(stage==8 && ready(mc) && frames>30) {
             schedule(mc,() -> {
                 verifyReload(mc,"connected-after-recovery","connected-player-after-recovery");
@@ -106,7 +106,7 @@ final class ConnectedClientChecks {
             screenshot(mc,"connected-corpse-after-normal-recovery.png");
             quit(mc); next(13);
         } else if(stage==13 && FixtureConnections.stopped(mc)) {
-            mc.loadLevel("build-fixture"); next(14);
+            mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"build-fixture"); next(14);
         } else if(stage==14 && ready(mc) && frames>30) {
             schedule(mc,() -> {
                 verifyReload(mc,"connected-final","connected-player-final");

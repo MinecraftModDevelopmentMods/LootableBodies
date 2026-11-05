@@ -50,7 +50,7 @@ public final class RespawnPacketChecks {
             fixture=new RespawnPacketChecks(server);
             // Cold software-rendered clients may need more than 500 server ticks
             // to reach their first login. Exercise the actual fixture tick path.
-            for(int tick=0;tick<1000;tick++)fixture.tick(new TickEvent.ServerTickEvent(TickEvent.Phase.END));
+            for(int tick=0;tick<1000;tick++)fixture.tick(new TickEvent.ServerTickEvent(TickEvent.Phase.END,()->true,server));
             RuntimeChecks.require(!fixture.finished&&fixture.index==0&&fixture.phase==0&&fixture.phaseTicks==0,
                 "Client startup consumed the death/respawn case deadline");
             System.out.println("RESPAWN_STARTUP_CLOCK_PASS waiting_ticks=1000 case_ticks=0");
@@ -63,7 +63,7 @@ public final class RespawnPacketChecks {
     static File file(String name){return new File(System.getProperty("lootablebodies.multiplayer.sync"),name);}
     private ServerPlayer player(String role){return server.getPlayerList().getPlayerByName("Container"+role);}
     private boolean ack(String role,int p){return file(role+".case-"+index+"-"+p).isFile();}
-    private void trace(ServerPlayer p){if(p!=null&&traced.add(p.getGameProfile().getName()))RespawnPacketTrace.install(p.connection.getConnection(),file(p.getGameProfile().getName()+"-server-packets.txt"),null);}
+    private void trace(ServerPlayer p){if(p!=null&&traced.add(p.getGameProfile().getName()))RespawnPacketTrace.install(p.connection.connection,file(p.getGameProfile().getName()+"-server-packets.txt"),null);}
     @SubscribeEvent public void tick(TickEvent.ServerTickEvent e) {
         if(e.phase!=TickEvent.Phase.END||finished)return;
         try {
@@ -82,7 +82,7 @@ public final class RespawnPacketChecks {
                 if(a.level.dimension()!=dim)transfer(a,dim);
                 if(b.level.dimension()!=dim)transfer(b,dim);
                 double x=kind==6?-.4:96.5,z=kind==6?-.4:96.5;
-                FixtureArena.prepare(new BlockPos(x,79,z),w::setBlockAndUpdate);
+                FixtureArena.prepare(BlockPos.containing(x,79,z),w::setBlockAndUpdate);
                 FixtureArena.prepare(new BlockPos(160,79,96),w::setBlockAndUpdate);
                 w.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBSPAWNING).set(false,null);w.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);
                 a.setGameMode(GameType.SURVIVAL);b.setGameMode(GameType.SURVIVAL);a.getInventory().clearContent();b.getInventory().clearContent();

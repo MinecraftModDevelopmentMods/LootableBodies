@@ -75,10 +75,10 @@ def prepareOwnedLoaderConfig = { File root ->
     }
 }
 
-// Use an actual native40 codec header in each newly owned flat fixture world.
+// Use an actual native45 codec header in each newly owned flat fixture world.
 def prepareOwnedFlatWorld = { File root ->
-    File header = file('tools/fixtures/native118-flat-level.dat')
-    if (!header.isFile() || releaseDigest(header) != 'A806A2751860CDB3D8566510D6A714435F36A6182C026825943BCC24838AC031')
+    File header = file('tools/fixtures/native119-flat-level.dat')
+    if (!header.isFile() || releaseDigest(header) != '9792ED9B0BF8A00ACB6BFFAEB50DC8B9C462CD9B6C96A9E6ED5CA65CFD534A55')
         throw new GradleException('Missing or changed native flat fixture header')
     File world = new File(root,'world')
     if (world.exists()) throw new GradleException('Refusing to replace an existing fixture world')

@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Use the actual target CoreMods engine and its Java class-access filter. */
-class Native118CoremodEngineTest {
+class Native119CoremodEngineTest {
     static void blackboardFixture()throws Exception {
         Class<?> launcher=Class.forName("cpw.mods.modlauncher.Launcher");
         if(launcher.getField("INSTANCE").get(null)==null) {
@@ -36,7 +36,7 @@ class Native118CoremodEngineTest {
         blackboardFixture();
         Class<?> factory=Class.forName("net.minecraftforge.coremod.NashornFactory");
         String source=factory.getProtectionDomain().getCodeSource().getLocation().toString();
-        assertTrue(source.endsWith("coremods-5.2.5.jar"),source);System.out.println("COREMOD_ENGINE_SOURCE="+source);
+        assertTrue(source.endsWith("coremods-5.2.4.jar"),source);System.out.println("COREMOD_ENGINE_SOURCE="+source);
         Method create=factory.getDeclaredMethod("createEngine");create.setAccessible(true);
         return (ScriptEngine)create.invoke(null);
     }
@@ -70,7 +70,7 @@ class Native118CoremodEngineTest {
     }
     private Class<?> define(ClassNode node) {
         ClassWriter writer=new ClassWriter(ClassWriter.COMPUTE_MAXS);node.accept(writer);byte[] bytes=writer.toByteArray();
-        class ReaderLoader extends ClassLoader {ReaderLoader(){super(Native118CoremodEngineTest.class.getClassLoader());}Class<?> define(){return defineClass(node.name.replace('/','.'),bytes,0,bytes.length);}}
+        class ReaderLoader extends ClassLoader {ReaderLoader(){super(Native119CoremodEngineTest.class.getClassLoader());}Class<?> define(){return defineClass(node.name.replace('/','.'),bytes,0,bytes.length);}}
         return new ReaderLoader().define();
     }
     private void verify(Class<?> reader)throws Exception {

@@ -37,7 +37,7 @@ final class NamelessCorpseClientChecks {
     private static final UUID BODY = UUID.fromString("00000000-0000-4000-8000-000000000119");
     private int stage, frames, locale;
     private Future<?> pending;
-    private LanguageInfo originalLanguage;
+    private String originalLanguage;
     private boolean originalUnicode, originalBidi;
     private boolean renderedBody;
 
@@ -51,7 +51,7 @@ final class NamelessCorpseClientChecks {
 
     private static String translation(Minecraft mc, String code) throws Exception {
         com.google.gson.JsonObject values;
-        try(Reader in=new InputStreamReader(mc.getResourceManager().getResource(new ResourceLocation("lootablebodies","lang/"+code+".json")).getInputStream(),StandardCharsets.UTF_8)) {
+        try(Reader in=new InputStreamReader(mc.getResourceManager().getResource(new ResourceLocation("lootablebodies","lang/"+code+".json")).orElseThrow().open(),StandardCharsets.UTF_8)) {
             values=new com.google.gson.JsonParser().parse(in).getAsJsonObject();
         }
         String expected=values.get("entity.lootablebodies.Corpse.name").getAsString();
@@ -71,7 +71,7 @@ final class NamelessCorpseClientChecks {
         retained.putString("Source","FutureFixture"); retained.putString("Data","retain verbatim");
         data.put("LootableBodiesUnresolved",NbtRecoveryChecks.list(retained));
         body = (EntityLootableBody)FixtureApi.loadEntity(data,mc.level);
-        RuntimeChecks.require(body != null && new ResourceLocation("lootablebodies:corpse").equals(body.getType().getRegistryName()), "Registry/display identity changed");
+        RuntimeChecks.require(body != null && new ResourceLocation("lootablebodies:corpse").equals(net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(body.getType())), "Registry/display identity changed");
         CompoundTag before = NameLifetimeChecks.saved(body);
         RuntimeChecks.require(expected.equals(body.getName().getString()), "Untranslated nameless corpse in "+code+": "+body.getName().getString());
         RuntimeChecks.require(expected.equals(body.getDisplayName().getString()), "Wrong rendered name in "+code);
@@ -97,9 +97,9 @@ final class NamelessCorpseClientChecks {
 
     void tick(Minecraft mc) throws Exception {
         if(stage==0 && mc.screen instanceof TitleScreen) {
-            mc.options.pauseOnLostFocus=false;mc.options.framerateLimit=30;mc.options.renderDistance=4;
+            mc.options.pauseOnLostFocus=false;mc.options.framerateLimit().set(30);mc.options.renderDistance().set(4);
             originalLanguage=mc.getLanguageManager().getSelected();
-            originalUnicode=mc.options.forceUnicodeFont; originalBidi=mc.font.isBidirectional();
+            originalUnicode=mc.options.forceUnicodeFont().get(); originalBidi=mc.font.isBidirectional();
             MinecraftForge.EVENT_BUS.register(this);
             FixtureApi.ClientWorlds.create(mc,"name-fixture","Name fixture",net.minecraft.world.level.GameType.CREATIVE,false);stage=1;
         } else if(stage==1 && mc.level!=null && mc.player!=null && mc.getSingleplayerServer()!=null) {
@@ -125,7 +125,7 @@ final class NamelessCorpseClientChecks {
             String code=LOCALES[locale];
             if(frames++==0) {
                 renderedBody=false;
-                mc.getLanguageManager().setSelected(new LanguageInfo(code,code,code,false));
+                mc.getLanguageManager().setSelected(code);
                 mc.getLanguageManager().onResourceManagerReload(mc.getResourceManager());
 
                 // Native16 LanguageMap controls bidirectional text after resource reload.

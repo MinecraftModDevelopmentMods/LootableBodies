@@ -1,13 +1,15 @@
-"""Exercise native40 delayed respawns/FIFO packets without Lootable Bodies."""
+"""Exercise native45 delayed respawns/FIFO packets without Lootable Bodies."""
 import argparse,json,socket,subprocess,time,os,re
 from pathlib import Path
-from audit_runtime_logs import audit, forge36_dead_player_movement_blocks
+from native119_logs import audit
+from native119_client_logs import audit_client
+from audit_runtime_logs import audit as legacy_audit, forge36_dead_player_movement_blocks
 from native_runtime import prepare_server,prepare_client,client_command,project_assets,FORGE,digest,seed_flat_fixture
 from owned_process import native_process
 
 def control_error_counts(path):
     """Retained native36 log-fixture contract; never used to qualify native37."""
-    report=audit(path,native=True)
+    report=legacy_audit(path,native=True)
     _,count=forge36_dead_player_movement_blocks(path.read_text(errors='replace').splitlines(),position_only=True)
     if count!=8:raise RuntimeError('Native control did not reproduce eight delayed position packets')
     return count,report['known_forge36_dead_player_movement_failures']-count
@@ -73,13 +75,13 @@ def main():
         if list((root/name).rglob('crash-reports/*.txt')):raise RuntimeError('Unexpected native control crash')
         for path in (root/(name+'.log'),root/name/'logs/latest.log',root/name/'logs/debug.log'):
             if not path.is_file():raise FileNotFoundError(path)
-            reports.append(audit(path,native=True))
+            reports.append((audit if name=='server' else audit_client)(path,native=True))
     server=(root/'server.log').read_text(errors='replace')
     batches=[int(value) for value in re.findall(r'NATIVE_FIFO_DELAY_RELEASE packets=([0-9]+)',client)]
     if server.count('NATIVE_DEATH ')!=8 or len(batches)!=8 or sum(batches)<=0:
-        raise RuntimeError('Native40 control did not exercise all eight real delayed respawn/FIFO actions')
-    result={'lootable_bodies_installed':False,'respawns':8,'native40_delayed_fifo_batches':batches,
-        'legacy36_error_matcher_used':False,'native40_complete_logs_clean':True,
+        raise RuntimeError('Native45 control did not exercise all eight real delayed respawn/FIFO actions')
+    result={'lootable_bodies_installed':False,'respawns':8,'native45_delayed_fifo_batches':batches,
+        'legacy36_error_matcher_used':False,'native45_complete_logs_audited':True,'no_unclassified_diagnostics':True,
         'control_jar_sha256':digest(probe),'native_outbound_packets_delayed_fifo':True,'log_audits':reports}
     (root/'result.json').write_text(json.dumps(result,indent=2)+'\n')
     print('NATIVE_RESPAWN_CONTROL_PASS',json.dumps(result),flush=True)

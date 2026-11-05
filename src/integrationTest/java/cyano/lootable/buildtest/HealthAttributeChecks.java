@@ -105,7 +105,7 @@ final class HealthAttributeChecks {
         float hp=LootableBodies.corpseHP;Set<Entity> before=new HashSet<>(FixtureApi.entities(world));
         try{test.run();results.add("PASS "+name);System.out.println("HEALTH_ATTRIBUTE_PASS "+name);}
         catch(Throwable e){failures++;results.add("FAIL "+name+": "+e);System.out.println("HEALTH_ATTRIBUTE_FAIL "+name+": "+e);e.printStackTrace();}
-        finally{LootableBodies.corpseHP=hp;for(Entity e:new ArrayList<Entity>(FixtureApi.entities(world)))if(!before.contains(e))world.removeEntity(e);}
+        finally{LootableBodies.corpseHP=hp;for(Entity e:new ArrayList<Entity>(FixtureApi.entities(world)))if(!before.contains(e))e.discard();}
     }
     static CompoundTag base(){EntityLootableBody b=new EntityLootableBody(world);b.setPos(160.5,80,160.5);b.setNoGravity(true);b.setUserName("HealthFixture");b.setItem(6,NbtRecoveryChecks.item(120,17));RuntimeChecks.disableVacuum(b);return NameLifetimeChecks.saved(b);}
     static EntityLootableBody read(CompoundTag n){CompoundTag before=n.copy();EntityLootableBody b=new EntityLootableBody(world);b.load(n);RuntimeChecks.require(NameLifetimeChecks.same(before,n),"Input NBT mutated");return b;}

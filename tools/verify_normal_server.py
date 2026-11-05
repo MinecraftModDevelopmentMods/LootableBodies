@@ -7,7 +7,7 @@ import subprocess
 import time
 import re
 import shutil
-from audit_runtime_logs import audit
+from native119_logs import audit
 from verify_packaged import prepare, digest, FORGE, MAIN
 from native_runtime import seed_loader_defaults,seed_flat_fixture
 from owned_process import native_process

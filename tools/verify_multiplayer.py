@@ -8,7 +8,8 @@ import shutil
 import socket
 import subprocess
 import time
-from audit_runtime_logs import audit
+from native119_logs import audit
+from native119_client_logs import audit_client
 from fixture_login import LoginMonitor, start_clients, write_receipts, archive_live_logs
 from native_runtime import project_assets,FORGE,digest,prepare_server as prepare,run_server as run,client_command as native_client_command,prepare_client,seed_flat_fixture
 from owned_process import native_process
@@ -93,7 +94,8 @@ def main():
         raise RuntimeError('Missing multiplayer check result')
     write_receipts(root)
     for name in ('server','clientA','clientB'):
-        audit(root/(name+'.log'),native=True);audit(root/name/'logs/latest.log',native=True);audit(root/name/'logs/debug.log',native=True)
+        selected_audit=audit if name=='server' else audit_client
+        selected_audit(root/(name+'.log'),native=True);selected_audit(root/name/'logs/latest.log',native=True);selected_audit(root/name/'logs/debug.log',native=True)
         if list((root/name).rglob('crash-reports/*')): raise RuntimeError('Crash report '+name)
         if digest(root/name/'mods'/MAIN)!=before: raise RuntimeError('Candidate mismatch '+name)
     for role in ('A','B'):

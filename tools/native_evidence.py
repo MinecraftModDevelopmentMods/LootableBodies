@@ -1,7 +1,7 @@
-"""Independently audit native18 local receipts, complete logs and diagnostic bytes.
+"""Independently audit native19 local receipts, complete logs and diagnostic bytes.
 
 Default auditing binds the recorded cwd to the actual owned process home.
-Relocated auditing is a separately tested download contract; hosted native18
+Relocated auditing is a separately tested download contract; hosted native19
 execution and promotion remain disabled and have not been exercised.
 """
 from pathlib import Path,PurePosixPath
@@ -15,21 +15,13 @@ def audit_phase(home,phase,*,refusal=False,relocated=False):
     receipt=json.loads((directory/'result.json').read_text())
     if receipt['timed_out'] or type(receipt['returncode']) is not int or receipt['pid']<=0:
         raise ValueError('Incomplete or timed-out native JVM receipt')
-    if receipt['timeout']!=(180 if refusal else 240):raise ValueError('Changed hosted deadline')
-    if (receipt['returncode']==0)==refusal:raise ValueError('Unexpected hosted JVM exit')
+    if receipt['timeout']!=(180 if refusal else 240):raise ValueError('Changed native deadline')
+    if (receipt['returncode']==0)==refusal:raise ValueError('Unexpected native JVM exit')
     command=receipt['command']
-    # Default-worker receipts remain their original sealed proof. The one
-    # independently qualified native40 override is limited to history/refusal
-    # phases; it cannot excuse another cap, duplicate flag, CPU or GC selection.
-    if any(s.startswith(('-XX:ActiveProcessorCount=','-XX:ParallelGCThreads=','-XX:ConcGCThreads='))
+    # Native45 was qualified with defaults; no old CPU/worker/GC cap is valid.
+    if any(s.startswith(('-XX:ActiveProcessorCount','-XX:ParallelGCThreads','-XX:ConcGCThreads','-Dmax.bg.threads'))
             or (s.startswith(('-XX:+Use','-XX:-Use')) and s.endswith('GC')) for s in command):
-        raise ValueError('Unqualified native40 worker or GC override')
-    worker_args=[s for s in command if s.startswith('-Dmax.bg.threads')]
-    if worker_args:
-        from verify_world_upgrades import PHASES
-        if (tuple(worker_args)!=HISTORICAL_JVM_ARGS or
-                not ((refusal and phase=='abort') or (not refusal and phase in PHASES))):
-            raise ValueError('Unqualified or out-of-scope native40 preparation-worker override')
+        raise ValueError('Unqualified native45 worker or GC override')
     if relocated:
         # Downloaded artifacts retain their original machine cwd. Require the
         # complete case/condition suffix; all bytes are read only under home.
@@ -42,7 +34,7 @@ def audit_phase(home,phase,*,refusal=False,relocated=False):
     version=FORGE.removeprefix('forge-')
     expected={prefix+version+'/'+name for name in ('win_args.txt','unix_args.txt')} if relocated else {
         prefix+version+'/'+('win_args.txt' if __import__('os').name=='nt' else 'unix_args.txt')}
-    if len(arguments)!=1 or arguments[0] not in expected or '--nogui' not in command:raise ValueError('Receipt did not launch native40 modules')
+    if len(arguments)!=1 or arguments[0] not in expected or '--nogui' not in command:raise ValueError('Receipt did not launch native45 modules')
     if not any(item.startswith('-Xlog:gc*,safepoint:file=') for item in command):raise ValueError('Missing native17 unified GC evidence')
     if not refusal and '-Dlootablebodies.phase='+phase not in command:raise ValueError('Receipt belongs to another phase')
     for name in ('gc.txt','initial-threads.txt','initial-heap-gc.txt'):
@@ -56,7 +48,7 @@ def audit_phase(home,phase,*,refusal=False,relocated=False):
             raise ValueError('Incomplete hosted diagnostic attempt')
     for name in (phase+'.log',phase+'.latest.log',phase+'.debug.log'):
         if not (home/name).is_file() or not (home/name).stat().st_size:raise ValueError('Missing complete native log: '+name)
-    text=(home/(phase+'.log')).read_text(errors='replace')
+    text=(home/(phase+'.log')).read_text(encoding='utf-8')
     if refusal:
         if "Lootable Bodies could not preserve this world's corpses" not in text:raise ValueError('Missing preservation refusal')
         if any(s in text for s in ('Preparing start region','Preparing spawn area','LOOTABLE_BODIES_RUNTIME_PASS','Done (')):
@@ -65,7 +57,7 @@ def audit_phase(home,phase,*,refusal=False,relocated=False):
         if not comparison['sealed_source_unchanged'] or any(comparison[k] for k in ('world_added','world_removed','world_changed')):
             raise ValueError('Unsafe refusal changed source/world data')
     elif 'LOOTABLE_BODIES_WORLD_UPGRADE_PASS phase='+phase not in text:
-        raise ValueError('Missing actual hosted phase assertions')
+        raise ValueError('Missing actual native phase assertions')
     logs={str(home/name):digest(home/name) for name in (phase+'.log',phase+'.latest.log',phase+'.debug.log')}
     if refusal:logs[str(home/'comparison.json')]=digest(home/'comparison.json')
     return {'receipt':str(directory/'result.json'),'sha256':digest(directory/'result.json'),
@@ -103,7 +95,7 @@ def audit_case_mods(home,report):
 def audit_shard(folder,report,*,relocated=False):
     positive=folder/'migration-results';aborts=folder/'migration-abort'
     records=[];logs=[]
-    from audit_runtime_logs import audit
+    from native119_logs import audit
     for case,details in report['cases'].items():
         home=positive/case
         mods=audit_case_mods(home,report)
@@ -118,7 +110,7 @@ def audit_shard(folder,report,*,relocated=False):
     if len(declared)!=len(records) or actual!=declared:raise ValueError('Missing, duplicate or extra native receipt')
     for path in positive.rglob('*'):
         if path.is_file() and path.name.endswith(('.log','.log.gz')):
-            audit(path,native=True,fixture_logins=True);logs.append({'path':str(path),'sha256':digest(path)})
+            audit(path);logs.append({'path':str(path),'sha256':digest(path)})
         if path.is_file() and 'crash-reports' in path.parts:raise ValueError('Unexpected hosted crash report')
     if not logs:raise ValueError('Missing hosted positive complete logs')
     return {'receipts':records,'positive_complete_logs':logs}
