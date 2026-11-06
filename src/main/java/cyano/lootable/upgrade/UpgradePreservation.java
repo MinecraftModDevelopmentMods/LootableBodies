@@ -6,8 +6,8 @@ import net.minecraft.nbt.ListTag;
 import com.mojang.datafixers.DataFixer;
 /** World-local originals and the native conversion boundary. */
 public final class UpgradePreservation {
-    public static final int DATA_VERSION=10;
-    public static final int MINECRAFT_VERSION=3465;
+    public static final int DATA_VERSION=11;
+    public static final int MINECRAFT_VERSION=3839;
     public static final String VERSION="LootableBodiesDataVersion";
     public static final String SOURCES="LootableBodiesSourceVersions";
     public static final String ITEMS_PENDING="LootableBodiesInventorySource";
@@ -23,13 +23,15 @@ public final class UpgradePreservation {
         ItemMigration.register(safe);
     }
     public static synchronized UpgradeJournal prepare(Path world)throws IOException {
-        UpgradeJournal complete=UpgradeJournal.scan(world);
+        return activate(UpgradeJournal.scan(world),null);
+    }
+    static synchronized UpgradeJournal prepareEarly(Path world,Path header)throws IOException {
+        return activate(UpgradeJournal.scan(world,header),world.toRealPath());
+    }
+    private static UpgradeJournal activate(UpgradeJournal complete,Path openedWorld)throws IOException {
         validateEntityChunks(complete);
         // Do not expose an incomplete new world to concurrent native readers.
-        journal=complete;earlyWorld=null;return complete;
-    }
-    static synchronized UpgradeJournal prepareEarly(Path world)throws IOException {
-        UpgradeJournal complete=prepare(world);earlyWorld=world.toRealPath();return complete;
+        journal=complete;earlyWorld=openedWorld;return complete;
     }
     public static synchronized UpgradeJournal prepareForStart(Path world)throws IOException {
         if(journal!=null && world.toRealPath().equals(earlyWorld)){
@@ -64,7 +66,7 @@ public final class UpgradePreservation {
         for(int m=0;m<mods.size();m++) {
             CompoundTag mod=mods.getCompound(m);if(!mod.getString("ModId").equals("minecraft"))continue;
             String release=mod.getString("ModVersion");
-            family=release.equals("1.20.1")?MINECRAFT_VERSION:release.equals("1.19.4")?3337:release.equals("1.18.2")?2975:release.equals("1.17.1")?2730:release.equals("1.16.5")?2586:release.equals("1.15.2")?2230:release.equals("1.14.4")?1976:release.equals("1.13.2")?1631:release.equals("1.12.2")?1343:release.equals("1.11.2")?922:release.equals("1.10.2")?512:-1;
+            family=release.equals("1.20.6")?MINECRAFT_VERSION:release.equals("1.20.1")?3465:release.equals("1.19.4")?3337:release.equals("1.18.2")?2975:release.equals("1.17.1")?2730:release.equals("1.16.5")?2586:release.equals("1.15.2")?2230:release.equals("1.14.4")?1976:release.equals("1.13.2")?1631:release.equals("1.12.2")?1343:release.equals("1.11.2")?922:release.equals("1.10.2")?512:-1;
         }
         int stamped=versions.contains("ChunkDataVersion",3)?versions.getInt("ChunkDataVersion"):-1;
         int writer=versions.contains("CorpseWriterDataVersion",3)?versions.getInt("CorpseWriterDataVersion"):-1;

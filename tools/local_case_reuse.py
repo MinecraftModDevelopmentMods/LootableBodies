@@ -13,8 +13,8 @@ DEPENDENCIES=('gradle.properties','src/integrationTest/resources/log4j2.xml',
  'tools/native_runtime.py','tools/runtime_diagnostics.py','tools/command_logs.py',
  'tools/prepared_worlds.py','tools/historical_workers.py','tools/release_identity.py',
  'tools/nbt_regions.py','tools/native120_persistence.py','tools/audit_runtime_logs.py',
- 'tools/native_evidence.py','tools/native120_server_inputs.json',
- 'tools/native120_worker_budget.json','tools/native120_logs.py')
+ 'tools/native_evidence.py','tools/native1206_server_inputs.json',
+ 'tools/native1206_worker_budget.json','tools/native120_logs.py')
 
 def normal_program(text):
     tree=ast.parse(text)

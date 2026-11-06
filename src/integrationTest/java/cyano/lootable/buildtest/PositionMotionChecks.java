@@ -11,7 +11,6 @@ import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ByteTag;
 import net.minecraft.nbt.ByteArrayTag;
-import net.minecraft.core.PositionImpl;
 
 import cyano.lootable.entities.EntityLootableBody;
 import java.io.*;

@@ -64,14 +64,14 @@ public final class CorpseConfigGui extends Screen {
             else if(property.getType()=='D' || property.getType()=='I')try{double number=Double.parseDouble(value);if(!Double.isFinite(number)||number<property.getMin()||number>property.getMax())return false;}catch(NumberFormatException error){return false;}
         }return true;
     }
-    @Override public void tick(){for(EditBox field:fields.values())field.tick();}
     @Override public void render(GuiGraphics graphics,int mouseX,int mouseY,float partialTicks){
-        renderBackground(graphics);graphics.drawCenteredString(font,LootableBodies.NAME,width/2,12,0xffffff);
+        super.render(graphics,mouseX,mouseY,partialTicks);
+        graphics.drawCenteredString(font,LootableBodies.NAME,width/2,12,0xffffff);
         graphics.drawCenteredString(font,I18n.get(group==null?"lootablebodies.config.local_file":"lootablebodies.config."+group),width/2,28,0xcccccc);
         for(Map.Entry<String,Integer> row:rows.entrySet()){
             String text=I18n.get(property(row.getKey()).getLanguageKey());graphics.drawString(font,font.plainSubstrByWidth(text,205),width/2-155,row.getValue()+6,0xffffff);
         }
-        super.render(graphics,mouseX,mouseY,partialTicks);for(EditBox field:fields.values())field.render(graphics,mouseX,mouseY,partialTicks);
+        for(EditBox field:fields.values())field.render(graphics,mouseX,mouseY,partialTicks);
         for(Map.Entry<String,Integer> row:rows.entrySet())if(mouseX>=width/2-155 && mouseX<width/2+155 && mouseY>=row.getValue() && mouseY<row.getValue()+22)
             graphics.renderComponentTooltip(font,java.util.Collections.singletonList(net.minecraft.network.chat.Component.translatable(property(row.getKey()).getLanguageKey()+".tooltip")),mouseX,mouseY);
         if(group==null && mouseX>=width/2-155 && mouseX<width/2+155 && mouseY>=95 && mouseY<115)

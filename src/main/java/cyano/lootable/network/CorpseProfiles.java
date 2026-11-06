@@ -1,26 +1,32 @@
 package cyano.lootable.network;
 
 import com.mojang.authlib.GameProfile;
-import com.mojang.authlib.minecraft.MinecraftSessionService;
-import net.minecraft.server.players.GameProfileCache;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
-/** Synchronous native services; callers own the bounded background worker. */
+/** Uses the native profile cache without waiting on the client thread. */
 public final class CorpseProfiles {
+    private static final UUID UNRESOLVED = new UUID(0,0);
+
     private CorpseProfiles() { }
-    public static GameProfile resolve(GameProfile initial,GameProfileCache cache,MinecraftSessionService service) {
-        if(initial==null || cache==null || service==null)return initial;
+
+    public static GameProfile placeholder(String name) {
+        return new GameProfile(UNRESOLVED,name);
+    }
+
+    public static boolean isResolved(GameProfile profile) {
+        return profile!=null && !UNRESOLVED.equals(profile.getId());
+    }
+
+    public static CompletableFuture<GameProfile> resolve(GameProfile initial,
+            Function<String,CompletableFuture<Optional<GameProfile>>> lookup) {
         try {
-            GameProfile cached=cache.get(initial.getName()).orElse(initial);
-            if(cached.getId()==null)return initial;
-            GameProfile resolved=new GameProfile(cached.getId(),cached.getName());
-            resolved.getProperties().putAll(cached.getProperties());
-            if(!resolved.getProperties().containsKey("textures"))resolved=service.fillProfileProperties(resolved,true);
-            if(resolved==null)return initial;
-            cache.add(resolved);
-            return resolved;
-        }catch(RuntimeException unavailable) {
-            cyano.lootable.ModLog.fine("Corpse profile lookup unavailable; using default skin");
-            return initial;
+            return lookup.apply(initial.getName()).handle((value,failure) ->
+                    failure==null?value.filter(CorpseProfiles::isResolved).orElse(initial):initial);
+        } catch (RuntimeException unavailable) {
+            return CompletableFuture.completedFuture(initial);
         }
     }
 }

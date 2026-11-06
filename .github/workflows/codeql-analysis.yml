@@ -3,11 +3,11 @@ name: CodeQL
 on:
   push:
     branches:
-      - master-1.20.1
+      - master-1.20.6
       - 'feature/**'
   pull_request:
     branches:
-      - master-1.20.1
+      - master-1.20.6
   schedule:
     - cron: '43 7 * * 4'
 
@@ -37,15 +37,15 @@ jobs:
           distribution: temurin
           java-version: '25.0.3+9.0.LTS'
 
-      - name: Install pinned Java 17 Gradle and compilation runtime
+      - name: Install pinned Java 21 Gradle and compilation runtime
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: '17.0.20+101'
+          java-version: '21.0.7+6'
 
       - name: Pin production JDK
         run: |
-          echo "LOOTABLEBODIES_JAVA17_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          echo "LOOTABLEBODIES_JAVA21_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
           echo "LOOTABLEBODIES_MAVENIZER_JAVA_HOME=$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
 
       - name: Set up Gradle

@@ -27,8 +27,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraftforge.common.util.FakePlayer;
-import net.minecraftforge.common.util.FakePlayerFactory;
 import net.minecraftforge.fml.common.*;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -98,9 +96,9 @@ public final class RuntimeChecks {
     public static void run(MinecraftServer server, String phase) throws Exception {
         ServerLevel world = server.getLevel(FixtureApi.dimensionKey(0));
         File folder = world.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();
-        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.11.120011"), "identity/version");
+        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.12.120061"), "identity/version");
         require(net.minecraftforge.fml.ModList.get().getModContainerById("lootablebodies").get().getModInfo().getVersion().toString().equals(phase.equals("seed") ? "2.4.0" : phase.equals("issues") ?
-                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.11.120011") : "2.4.11.120011"), "loaded release version");
+                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.12.120061") : "2.4.12.120061"), "loaded release version");
         if (!defaultsChecked) require(LootableBodies.addBonesToCorpse && LootableBodies.displayNameTag && !LootableBodies.hurtByEnvironment &&
                 !LootableBodies.hurtByAttacks && !LootableBodies.hurtByMisc && LootableBodies.corpseHP == 20 &&
                 LootableBodies.ticksPerItemDecay == 6000 && LootableBodies.corpseDecayTime == 72000 &&
@@ -215,14 +213,14 @@ public final class RuntimeChecks {
         custom.put("typed_longs",new LongArrayTag(new long[]{Long.MIN_VALUE,index,Long.MAX_VALUE}));
         CompoundTag nested = new CompoundTag(); nested.putInt("unchanged", index * 17);
         ListTag contents = new ListTag();
-        CompoundTag item = new CompoundTag(); new ItemStack(Items.DIAMOND,3).save(item); contents.add(item);
+        contents.add(FixtureStackData.save(new ItemStack(Items.DIAMOND,3)));
         nested.put("contents", contents); custom.put("nested", nested);
-        stack.setTag(custom);if(index<=5)stack.setDamageValue(index<4?index+2:index==4?17:9); stack.setHoverName(net.minecraft.network.chat.Component.literal("Fixture " + index));
+        FixtureStackData.setCustom(stack,custom);if(index<=5)stack.setDamageValue(index<4?index+2:index==4?17:9); stack.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,net.minecraft.network.chat.Component.literal("Fixture " + index));
         if (index == 4) stack.enchant(net.minecraft.world.item.enchantment.Enchantments.UNBREAKING, 2);
         return stack;
     }
     static net.minecraft.world.level.chunk.LevelChunk awaitChunk(ServerLevel world,int x,int z) {
-        net.minecraft.world.level.chunk.LevelChunk admitted=(net.minecraft.world.level.chunk.LevelChunk)world.getChunkSource().getChunk(x,z,net.minecraft.world.level.chunk.ChunkStatus.FULL,true);
+        net.minecraft.world.level.chunk.LevelChunk admitted=(net.minecraft.world.level.chunk.LevelChunk)world.getChunkSource().getChunk(x,z,net.minecraft.world.level.chunk.status.ChunkStatus.FULL,true);
         require(world.getChunkSource().hasChunk(x,z),"Fixture must await native chunk admission before spawning a corpse");
         FixtureApi.awaitEntityInbox(world,x,z);
         return admitted;
@@ -254,9 +252,9 @@ public final class RuntimeChecks {
     }
     static void death(MinecraftServer server, ServerLevel world, File folder) throws Exception {
         ServerPlayer player = new ServerPlayer(server, world,
-                new GameProfile(UUID.fromString("00000000-0000-4000-8000-000000000104"),"BuildDeath"));
+                new GameProfile(UUID.fromString("00000000-0000-4000-8000-000000000104"),"BuildDeath"),net.minecraft.server.level.ClientInformation.createDefault());
         player.connection = new net.minecraft.server.network.ServerGamePacketListenerImpl(server,
-                new net.minecraft.network.Connection(net.minecraft.network.protocol.PacketFlow.SERVERBOUND), player);
+                new net.minecraft.network.Connection(net.minecraft.network.protocol.PacketFlow.SERVERBOUND), player,net.minecraft.server.network.CommonListenerCookie.createInitial(player.getGameProfile(),false));
         player.setPos(32.5,80,0.5); awaitChunk(world,2,0); require(world.getChunkSource().hasChunk(2,0),"Death fixture must await native chunk admission before spawning its corpse");
         world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);
         player.getInventory().items.set(0,stack(4));
@@ -302,7 +300,7 @@ public final class RuntimeChecks {
         NbtIo.writeCompressed(data,new FileOutputStream(new File(folder,name+".nbt")));
     }
     static void verifyExpected(File folder,String name,EntityLootableBody body) throws Exception {
-        CompoundTag expected = NbtIo.readCompressed(new FileInputStream(new File(folder,name+".nbt")));
+        CompoundTag expected = NbtIo.readCompressed(new File(folder,name+".nbt").toPath(),net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));
         CompoundTag actual = new CompoundTag(); body.saveAsPassenger(actual); compare(expected,actual);
     }
     static void compare(CompoundTag expected,CompoundTag actual) {

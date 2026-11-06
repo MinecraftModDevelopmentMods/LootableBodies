@@ -39,20 +39,22 @@ public final class EarlyWorldPreservation {
         }
     }
     /** Called before Forge reads extra data or native level conversion. */
-    public static void beforeRead(LevelStorageSource.LevelStorageAccess save) {
+    public static void beforeRead(LevelStorageSource.LevelStorageAccess save,boolean fallback) {
         try {
             if(!installed)throw new IllegalStateException("Early preservation was not installed before world loading");
-            Path world=save.getLevelPath(LevelResource.ROOT),header=world.resolve("level.dat");
-            if(!Files.isRegularFile(header) && Files.isRegularFile(world.resolve("level.dat_old")))header=world.resolve("level.dat_old");
-            if(Files.isRegularFile(header)) {
-                CompoundTag root;
-                try(DataInputStream input=new DataInputStream(new GZIPInputStream(Files.newInputStream(header)))) {
-                    root=NbtIo.read(input,new NbtAccounter(64L*1024*1024));
-                }
-                Tag original=root.get("lootablebodies");
-                if(original!=null)metadata.put(save,original.copy());else metadata.remove(save);
-            } else metadata.remove(save);
-            UpgradePreservation.prepareEarly(world);
+            Path world=save.getLevelPath(LevelResource.ROOT);
+            Path header=world.resolve(fallback?"level.dat_old":"level.dat");
+            if(!Files.isRegularFile(header)) {
+                metadata.remove(save);
+                return; // The native reader selects or rejects the fallback.
+            }
+            CompoundTag root;
+            try(DataInputStream input=new DataInputStream(new GZIPInputStream(Files.newInputStream(header)))) {
+                root=NbtIo.read(input,NbtAccounter.create(64L*1024*1024));
+            }
+            Tag original=root.get("lootablebodies");
+            if(original!=null)metadata.put(save,original.copy());else metadata.remove(save);
+            UpgradePreservation.prepareEarly(world,header);
         } catch(IOException | RuntimeException unsafe){throw new UnsafeWorldUpgrade(unsafe);}
     }
     /** Restore only this mod's original field on the same native save access. */

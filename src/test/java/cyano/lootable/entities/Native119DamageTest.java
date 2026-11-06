@@ -7,7 +7,7 @@ import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.data.worldgen.BootstapContext;
+import net.minecraft.data.worldgen.BootstrapContext;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.resources.ResourceKey;
@@ -28,9 +28,9 @@ class Native119DamageTest {
         net.minecraft.SharedConstants.tryDetectVersion();
         net.minecraft.server.Bootstrap.bootStrap();
         MappedRegistry<DamageType> registry=new MappedRegistry<>(Registries.DAMAGE_TYPE,Lifecycle.stable());
-        DamageTypes.bootstrap(new BootstapContext<DamageType>() {
+        DamageTypes.bootstrap(new BootstrapContext<DamageType>() {
             public Holder.Reference<DamageType> register(ResourceKey<DamageType> key,DamageType value,Lifecycle life) {
-                return registry.register(key,value,life);
+                return registry.register(key,value,new net.minecraft.core.RegistrationInfo(java.util.Optional.empty(),life));
             }
             public <S> HolderGetter<S> lookup(ResourceKey<? extends Registry<? extends S>> key) {
                 throw new AssertionError("Damage type bootstrap unexpectedly needs another registry: "+key);
@@ -38,7 +38,7 @@ class Native119DamageTest {
         });
         // Deliberately shares the vanilla anvil message, but has its own mod identity.
         custom=registry.register(ResourceKey.create(Registries.DAMAGE_TYPE,new ResourceLocation("example:custom")),
-                new DamageType("anvil",0),Lifecycle.stable());
+                new DamageType("anvil",0),net.minecraft.core.RegistrationInfo.BUILT_IN);
         registry.freeze();
         sources=new DamageSources(new RegistryAccess.ImmutableRegistryAccess(java.util.List.of(registry)));
         // No world/entity behavior is used here. Plain JUnit has no loaded
@@ -110,7 +110,7 @@ class Native119DamageTest {
     }
     private static final class SourceEntity extends Entity {
         SourceEntity(){super(EntityType.FALLING_BLOCK,null);}
-        protected void defineSynchedData(){ }
+        protected void defineSynchedData(net.minecraft.network.syncher.SynchedEntityData.Builder builder){ }
         protected void readAdditionalSaveData(CompoundTag tag){ }
         protected void addAdditionalSaveData(CompoundTag tag){ }
         public Packet<net.minecraft.network.protocol.game.ClientGamePacketListener> getAddEntityPacket(){throw new UnsupportedOperationException("No network in this unit fixture");}

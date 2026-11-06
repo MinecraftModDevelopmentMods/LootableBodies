@@ -20,7 +20,6 @@ import net.minecraft.server.level.ServerLevel;
 
 import net.minecraft.world.level.GameType;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.common.util.FakePlayerFactory;
 import com.mojang.authlib.GameProfile;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
@@ -39,24 +38,24 @@ public final class PortBaselineChecks {
         failures=0;
         ServerLevel world=server.getLevel(FixtureApi.dimensionKey(0));
         check("native_received_packet_observer_is_non_destructive", () -> {
-            net.minecraft.network.FriendlyByteBuf buffer=new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+            var buffer=new net.minecraft.network.RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(),world.registryAccess());
             try {
                 EntityLootableBody corpse=new EntityLootableBody(world);
                 net.minecraft.network.protocol.game.ClientboundAddEntityPacket sent=new net.minecraft.network.protocol.game.ClientboundAddEntityPacket(corpse);
-                sent.write(buffer);
-                net.minecraft.network.protocol.game.ClientboundAddEntityPacket received=new net.minecraft.network.protocol.game.ClientboundAddEntityPacket(buffer);
+                net.minecraft.network.protocol.game.ClientboundAddEntityPacket.STREAM_CODEC.encode(buffer,sent);
+                net.minecraft.network.protocol.game.ClientboundAddEntityPacket received=net.minecraft.network.protocol.game.ClientboundAddEntityPacket.STREAM_CODEC.decode(buffer);
                 require(RespawnPacketTrace.describe(sent).equals(RespawnPacketTrace.describe(received)),"Spawn observer differs before/after native decoding");
                 require(RespawnPacketTrace.describe(received).contains("mod=lootablebodies "),"Negative control cannot identify corpse spawns");
                 buffer.clear();
-                net.minecraft.network.protocol.game.ClientboundRespawnPacket outgoing=new net.minecraft.network.protocol.game.ClientboundRespawnPacket(world.dimensionTypeRegistration().unwrapKey().orElseThrow(),world.dimension(),0x13572468ABCDEF01L,GameType.SURVIVAL,GameType.CREATIVE,false,true,net.minecraft.network.protocol.game.ClientboundRespawnPacket.KEEP_ALL_DATA,java.util.Optional.empty(),0);
-                outgoing.write(buffer);
-                net.minecraft.network.protocol.game.ClientboundRespawnPacket incoming=new net.minecraft.network.protocol.game.ClientboundRespawnPacket(buffer);
+                net.minecraft.network.protocol.game.ClientboundRespawnPacket outgoing=new net.minecraft.network.protocol.game.ClientboundRespawnPacket(new net.minecraft.network.protocol.game.CommonPlayerSpawnInfo(world.dimensionTypeRegistration(),world.dimension(),0x13572468ABCDEF01L,GameType.SURVIVAL,GameType.CREATIVE,false,true,java.util.Optional.empty(),0),net.minecraft.network.protocol.game.ClientboundRespawnPacket.KEEP_ALL_DATA);
+                net.minecraft.network.protocol.game.ClientboundRespawnPacket.STREAM_CODEC.encode(buffer,outgoing);
+                net.minecraft.network.protocol.game.ClientboundRespawnPacket incoming=net.minecraft.network.protocol.game.ClientboundRespawnPacket.STREAM_CODEC.decode(buffer);
                 require(RespawnPacketTrace.describe(outgoing).equals(RespawnPacketTrace.describe(incoming)),"Respawn observer differs before/after native decoding");
                 require(RespawnPacketTrace.describe(incoming).equals("RESPAWN dimension=minecraft:overworld hashedSeed="+0x13572468ABCDEF01L),"Native 1.16 hashed seed missing from the packet observation");
             } finally {buffer.release();}
         });
         check("rejected_spawn_keeps_death_inventory", () -> {
-            ServerPlayer player=FakePlayerFactory.get(world,new GameProfile(UUID.randomUUID(),"PortFixture"));
+            ServerPlayer player=new ServerPlayer(server,world,new GameProfile(UUID.randomUUID(),"PortFixture"),net.minecraft.server.level.ClientInformation.createDefault());
             ArrayList<ItemEntity> drops=new ArrayList<>();
             drops.add(new ItemEntity(world,8,80,8,new ItemStack(Items.DIAMOND,7)));
             Object veto=new Object() { @SubscribeEvent public void join(EntityJoinLevelEvent e) {
@@ -71,18 +70,18 @@ public final class PortBaselineChecks {
             EntityLootableBody body=new EntityLootableBody(world);
             CompoundTag nbt=new CompoundTag(); body.addAdditionalSaveData(nbt);
             ListTag equipment=new ListTag();
-            for(int i=0;i<2;i++) { CompoundTag item=new ItemStack(Items.DIAMOND,i+2).save(new CompoundTag()); item.putByte("Slot",(byte)10); equipment.add(item); }
+            for(int i=0;i<2;i++) { CompoundTag item=FixtureStackData.save(new ItemStack(Items.DIAMOND,i+2)); item.putByte("Slot",(byte)10); equipment.add(item); }
             nbt.put("Equipment",equipment); body.readAdditionalSaveData(nbt);
             CompoundTag saved=new CompoundTag();body.addAdditionalSaveData(saved);
             int count=0; for(String key:Arrays.asList("Equipment","Aux")) {
                 ListTag list=saved.getList(key,10);
-                for(int i=0;i<list.size();i++) count+=list.getCompound(i).getByte("Count");
+                for(int i=0;i<list.size();i++) count+=list.getCompound(i).getInt("count");
             }
             require(count==5,"duplicate slot overwrote a recoverable stack");
         });
         check("missing_item_keeps_raw_recovery_record", () -> {
             EntityLootableBody body=new EntityLootableBody(world); CompoundTag nbt=new CompoundTag();body.addAdditionalSaveData(nbt);
-            CompoundTag item=new ItemStack(Items.DIAMOND,7).save(new CompoundTag());item.putString("id","missingfixture:keepsake");item.putByte("Slot",(byte)10);
+            CompoundTag item=FixtureStackData.save(new ItemStack(Items.DIAMOND,7));item.putString("id","missingfixture:keepsake");item.putByte("Slot",(byte)10);
             ListTag list=new ListTag();list.add(item);nbt.put("Equipment",list);body.readAdditionalSaveData(nbt);
             CompoundTag saved=new CompoundTag();body.addAdditionalSaveData(saved);
             require(saved.getList("LootableBodiesUnresolved",10).size()==1,"missing item was erased");
@@ -90,7 +89,7 @@ public final class PortBaselineChecks {
         });
         check("invalid_slot_retains_inventory", () -> {
             EntityLootableBody body=new EntityLootableBody(world); CompoundTag nbt=new CompoundTag();body.addAdditionalSaveData(nbt);
-            CompoundTag item=new ItemStack(Items.EMERALD,9).save(new CompoundTag());item.putInt("Slot",12345);
+            CompoundTag item=FixtureStackData.save(new ItemStack(Items.EMERALD,9));item.putInt("Slot",12345);
             ListTag list=new ListTag();list.add(item);nbt.put("Equipment",list);body.readAdditionalSaveData(nbt);
             CompoundTag saved=new CompoundTag();body.addAdditionalSaveData(saved);
             require(!body.isEmpty(),"invalid slot discarded inventory");

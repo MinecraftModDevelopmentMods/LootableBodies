@@ -94,7 +94,7 @@ public final class InventorySafetyChecks {
         InventoryTestPlayer player=new InventoryTestPlayer(server,world,
                 new GameProfile(UUID.nameUUIDFromBytes(("inventory-fixture-"+(sequence++)).getBytes(java.nio.charset.StandardCharsets.UTF_8)),"InventoryFixture"));
         player.connection=new net.minecraft.server.network.ServerGamePacketListenerImpl(server,
-                new net.minecraft.network.Connection(net.minecraft.network.protocol.PacketFlow.SERVERBOUND),player);
+                new net.minecraft.network.Connection(net.minecraft.network.protocol.PacketFlow.SERVERBOUND),player,net.minecraft.server.network.CommonListenerCookie.createInitial(player.getGameProfile(),false));
         player.setPos(64.5,80,64.5); RuntimeChecks.awaitChunk(world,4,4);
         return player;
     }
@@ -118,17 +118,17 @@ public final class InventorySafetyChecks {
     private static CompoundTag data(EntityLootableBody body) {
         CompoundTag result=new CompoundTag(); body.addAdditionalSaveData(result); return result;
     }
-    private static CompoundTag encoded(ItemStack stack) { return stack.save(new CompoundTag()); }
+    private static CompoundTag encoded(ItemStack stack) { return FixtureStackData.save(stack); }
     private static Map<String,Integer> inventory(EntityLootableBody body) {
         Map<String,Integer> result=new TreeMap<>();
         for(int i=0;i<body.getContainerSize();i++) add(result,body.getItem(i));
         ListTag aux=data(body).getList("Aux",10);
-        for(int i=0;i<aux.size();i++) add(result,ItemStack.of(aux.getCompound(i)));
+        for(int i=0;i<aux.size();i++) add(result,FixtureStackData.load(aux.getCompound(i)));
         return result;
     }
     private static void add(Map<String,Integer> result,ItemStack stack) {
         if((stack == null || stack.isEmpty()) || stack.getCount()<=0) return;
-        CompoundTag tag=encoded(stack); tag.remove("Count");
+        CompoundTag tag=encoded(stack); tag.remove("count");
         String key=tag.toString(); result.put(key,result.getOrDefault(key,0)+stack.getCount());
     }
     private static Map<String,Integer> dropped() {
@@ -143,7 +143,7 @@ public final class InventorySafetyChecks {
     private static void failedSpawn() {
         InventoryTestPlayer player=player(); RejectingWorld rejected=new RejectingWorld(world);
         player.setFixtureLevel(rejected);
-        ItemStack bones=new ItemStack(Items.BONE,9); bones.setHoverName(net.minecraft.network.chat.Component.literal("Saved bones"));
+        ItemStack bones=new ItemStack(Items.BONE,9); bones.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,net.minecraft.network.chat.Component.literal("Saved bones"));
         List<ItemEntity> drops=drops(player,bones,item(19,23));
         List<CompoundTag> before=new ArrayList<>(); for(ItemEntity e:drops) before.add(encoded(e.getItem()));
         PlayerDeathEventHandler handler=new PlayerDeathEventHandler();
@@ -215,7 +215,7 @@ public final class InventorySafetyChecks {
         @SubscribeEvent public void join(EntityJoinLevelEvent event) {
             if(event.getEntity() instanceof ItemEntity) {
                 ItemStack stack=((ItemEntity)event.getEntity()).getItem();
-                if(rejectAll || stack.hasTag() && rejectFixture.equals(stack.getTag().getString("fixture"))) event.setCanceled(true);
+                if(rejectAll || FixtureStackData.hasCustom(stack) && rejectFixture.equals(FixtureStackData.custom(stack).getString("fixture"))) event.setCanceled(true);
             }
         }
     }
@@ -364,7 +364,7 @@ public final class InventorySafetyChecks {
     /** Controlled false-return seam; no dimension registration, disk writes or chunks of its own. */
     private static final class InventoryTestPlayer extends ServerPlayer {
         InventoryTestPlayer(MinecraftServer server, ServerLevel world, GameProfile profile) {
-            super(server,world,profile);
+            super(server,world,profile,net.minecraft.server.level.ClientInformation.createDefault());
         }
 
         void setFixtureLevel(Level world) {
@@ -386,6 +386,8 @@ public final class InventorySafetyChecks {
 
         @Override public net.minecraft.world.ticks.LevelTickAccess<net.minecraft.world.level.block.Block> getBlockTicks(){return delegate.getBlockTicks();}
         @Override public net.minecraft.world.ticks.LevelTickAccess<net.minecraft.world.level.material.Fluid> getFluidTicks(){return delegate.getFluidTicks();}
+        @Override public net.minecraft.world.TickRateManager tickRateManager(){return delegate.tickRateManager();}
+        @Override public net.minecraft.world.item.alchemy.PotionBrewing potionBrewing(){return delegate.potionBrewing();}
         @Override public net.minecraft.world.item.crafting.RecipeManager getRecipeManager(){return delegate.getRecipeManager();}
         @Override public net.minecraft.world.scores.Scoreboard getScoreboard(){return delegate.getScoreboard();}
         @Override public net.minecraft.server.MinecraftServer getServer(){return delegate.getServer();}
@@ -397,13 +399,13 @@ public final class InventorySafetyChecks {
         @Override public void playSeededSound(net.minecraft.world.entity.player.Player player,double x,double y,double z,net.minecraft.core.Holder<net.minecraft.sounds.SoundEvent> sound,net.minecraft.sounds.SoundSource category,float volume,float pitch,long seed){delegate.playSeededSound(player,x,y,z,sound,category,volume,pitch,seed);}
         @Override public void playSeededSound(net.minecraft.world.entity.player.Player player,Entity entity,net.minecraft.core.Holder<net.minecraft.sounds.SoundEvent> sound,net.minecraft.sounds.SoundSource category,float volume,float pitch,long seed){delegate.playSeededSound(player,entity,sound,category,volume,pitch,seed);}
         @Override public Entity getEntity(int id){return delegate.getEntity(id);}
-        @Override public net.minecraft.world.level.saveddata.maps.MapItemSavedData getMapData(String id){return delegate.getMapData(id);}
-        @Override public void setMapData(String id,net.minecraft.world.level.saveddata.maps.MapItemSavedData data){delegate.setMapData(id,data);}
-        @Override public int getFreeMapId(){return delegate.getFreeMapId();}
+        @Override public net.minecraft.world.level.saveddata.maps.MapItemSavedData getMapData(net.minecraft.world.level.saveddata.maps.MapId id){return delegate.getMapData(id);}
+        @Override public void setMapData(net.minecraft.world.level.saveddata.maps.MapId id,net.minecraft.world.level.saveddata.maps.MapItemSavedData data){delegate.setMapData(id,data);}
+        @Override public net.minecraft.world.level.saveddata.maps.MapId getFreeMapId(){return delegate.getFreeMapId();}
         @Override public void destroyBlockProgress(int id,net.minecraft.core.BlockPos pos,int progress){delegate.destroyBlockProgress(id,pos,progress);}
         @Override public void levelEvent(net.minecraft.world.entity.player.Player player,int type,net.minecraft.core.BlockPos pos,int data){delegate.levelEvent(player,type,pos,data);}
-        @Override public void gameEvent(Entity source,net.minecraft.world.level.gameevent.GameEvent event,net.minecraft.core.BlockPos pos){delegate.gameEvent(source,event,pos);}
-        @Override public void gameEvent(net.minecraft.world.level.gameevent.GameEvent event,net.minecraft.world.phys.Vec3 position,net.minecraft.world.level.gameevent.GameEvent.Context context){delegate.gameEvent(event,position,context);}
+        @Override public void gameEvent(Entity source,net.minecraft.core.Holder<net.minecraft.world.level.gameevent.GameEvent> event,net.minecraft.core.BlockPos pos){delegate.gameEvent(source,event,pos);}
+        @Override public void gameEvent(net.minecraft.core.Holder<net.minecraft.world.level.gameevent.GameEvent> event,net.minecraft.world.phys.Vec3 position,net.minecraft.world.level.gameevent.GameEvent.Context context){delegate.gameEvent(event,position,context);}
         @Override public java.util.List<? extends net.minecraft.world.entity.player.Player> players(){return delegate.players();}
         @Override public String gatherChunkSourceStats(){return delegate.gatherChunkSourceStats();}
         @Override public net.minecraft.world.level.entity.LevelEntityGetter<Entity> getEntities(){return delegate.getEntities();}

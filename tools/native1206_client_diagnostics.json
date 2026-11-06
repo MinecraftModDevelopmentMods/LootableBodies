@@ -1,0 +1,14 @@
+{
+  "minecraft": "1.20.6",
+  "forge": "50.2.14",
+  "platform": "Windows amd64",
+  "qualified": true,
+  "events": [
+    "minecraft:item.goat_horn.play",
+    "minecraft:entity.goat.screaming.horn_break"
+  ],
+  "control_sha256": "2D954016DD9DEADBF8B2B5A2586782EE4910D093897D752D5D724DC5B695DE48",
+  "proof_sha256": "F31EAE648C319A32D48A4396E118BF963C40BB52711A6AA02C0CFBB331BBAD26",
+  "sound_definition_sha256": "C73D61C4DE2E673D2AD70FB916A6CFC37D04AB9EF67785BDEE37CB6A4818CE2D",
+  "scope": "Two ordered, unbound vanilla sound events observed without the mod or a world. Other diagnostics remain strict."
+}

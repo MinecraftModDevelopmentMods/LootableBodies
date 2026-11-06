@@ -9,7 +9,6 @@ import cyano.lootable.LootableBodies;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.MobType;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
@@ -17,7 +16,6 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.Container;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ShovelItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.nbt.Tag;
@@ -30,6 +28,9 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.core.Direction;
+import net.minecraft.core.Holder;
+import net.minecraft.world.entity.ai.attributes.Attribute;
+import cyano.lootable.network.CorpseProfiles;
 import net.minecraft.core.NonNullList;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.resources.ResourceLocation;
@@ -43,10 +44,6 @@ import org.apache.commons.lang3.ObjectUtils;
 import java.util.*;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.RejectedExecutionException;
 
 
 public class EntityLootableBody extends Mob implements Container, net.minecraft.world.MenuProvider{
@@ -73,14 +70,6 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	private long decayTimestamp;
 
 	private final AtomicReference<GameProfile> gpSwap = new AtomicReference<>(null) ; // for lazy-evaluation of player skins
-	// Profile services can be slow or unavailable. A bounded daemon worker must
-	// never hold up client ticks or prevent the default corpse from being drawn.
-	private static final ThreadPoolExecutor PROFILE_LOOKUPS = new ThreadPoolExecutor(0, 1, 30L,
-			TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(64), task -> {
-		Thread thread = new Thread(task,"Lootable Bodies skin lookup");
-		thread.setDaemon(true);
-		return thread;
-	});
 	private int terminate = -1;
 	private static final int DEATH_COUNTDOWN = 10;
 
@@ -94,7 +83,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		// Keep MobEntity's actual defaults (including follow range 16 and
 		// configured corpse health), rather than the generic attribute defaults.
 		for(AttributeInstance attribute : corpseAttributes()) {
-			String name = net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getKey(attribute.getAttribute()).toString();
+			String name = net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getKey(attribute.getAttribute().value()).toString();
 			defaultAttributeBases.put(name,attribute.getBaseValue());
 			defaultAttributeModifiers.put(name,new ArrayList<>(attribute.getModifiers()));
 		}
@@ -178,7 +167,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		if(ObjectUtils.notEqual(oldName,nameUpdate)){
 			oldName = nameUpdate;
 			if(nameUpdate != null && nameUpdate.trim().length() > 0) {
-				GameProfile gp = new GameProfile(null, nameUpdate);
+				GameProfile gp = CorpseProfiles.placeholder(nameUpdate);
 				setGameProfile(gp);
 				if((!LootableBodies.useLocalSkin) && isClient) resolveProfile(gp);
 				this.setCustomNameTag(nameUpdate);
@@ -296,11 +285,13 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	private ItemStack decayItem(ItemStack item, int amount) {
 		if(!emptyStack(item)
 				&& item.getCount() == 1
-				&& item.isDamageableItem()
-				&& item.getItem().isDamageable(item)){
+				&& item.isDamageableItem()){
 			int durabilityRemaining = item.getMaxDamage() - item.getDamageValue() - 1;
 			if(durabilityRemaining > 0){
-				item.hurtAndBreak(Math.min(durabilityRemaining,amount),this,broken->{});
+				item.hurtAndBreak(Math.min(durabilityRemaining,amount),getRandom(),null,()->{
+                    item.shrink(1);
+                    item.setDamageValue(0);
+                });
 			}
 		}
 		return item;
@@ -361,7 +352,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 			if(amount > 0) this.setItem(slot,stack.split(amount));
 			return stack.getCount() > 0 ? stack : ItemStack.EMPTY;
 		} else if(current.getCount() < inventorySizeLimit
-				&& ItemStack.isSameItemSameTags(stack,current)){
+				&& cyano.lootable.ItemStacks.canMerge(stack,current)){
 			int delta = Math.min(stack.getCount(),inventorySizeLimit - current.getCount());
 			current.grow(delta);
 			stack.shrink(delta);
@@ -401,24 +392,12 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 
     public void refreshClientSkin() {
         GameProfile profile = gpSwap.get();
-        if (getCommandSenderWorld().isClientSide && !LootableBodies.useLocalSkin && profile != null && profile.getId() == null)
+        if (getCommandSenderWorld().isClientSide && !LootableBodies.useLocalSkin && profile != null && !CorpseProfiles.isResolved(profile))
             resolveProfile(profile);
     }
 	private void resolveProfile(GameProfile initial) {
-		final net.minecraft.server.players.GameProfileCache cache=SkullBlockEntity.profileCache;
-		final com.mojang.authlib.minecraft.MinecraftSessionService service=SkullBlockEntity.sessionService;
-		try {
-			PROFILE_LOOKUPS.execute(() -> {
-				// Native37's skull helper delegates to another asynchronous worker,
-				// outside this exception boundary. Keep both native service calls
-				// on our bounded worker, and let a newer name/profile win the CAS.
-				GameProfile resolved=cyano.lootable.network.CorpseProfiles.resolve(initial,cache,service);
-				if(resolved != null)gpSwap.compareAndSet(initial,resolved);
-			});
-		} catch(RejectedExecutionException busy) {
-			// Keep the already installed default profile when the bounded queue is full.
-			ModLog.fine("Corpse profile lookup busy; using default skin");
-		}
+        CorpseProfiles.resolve(initial,SkullBlockEntity::fetchGameProfile)
+                .thenAccept(resolved->gpSwap.compareAndSet(initial,resolved));
 	}
 	public void setUserName(String name){
 		this.setCustomNameTag(name);
@@ -437,8 +416,10 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
     }
     private java.util.List<AttributeInstance> corpseAttributes() {
         java.util.List<AttributeInstance> result=new java.util.ArrayList<>();
-        for(net.minecraft.world.entity.ai.attributes.Attribute key:net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES)
-            if(getAttributes().hasAttribute(key))result.add(getAttribute(key));
+        for(ResourceLocation name:net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getKeys()) {
+            Holder<Attribute> key=net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getHolder(name).orElse(null);
+            if(key!=null && getAttributes().hasAttribute(key))result.add(getAttribute(key));
+        }
         return result;
     }
     private AttributeInstance attributeNamed(String name) {
@@ -456,11 +437,13 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
         case "zombie.spawnReinforcements":name="minecraft:zombie.spawn_reinforcements";break;
         case "forge.swimSpeed":name="forge:swim_speed";break;
         case "forge.nameTagDistance":name="forge:nametag_distance";break;
-        case "forge.entity_gravity":name="forge:entity_gravity";break;
+        case "forge.entity_gravity":
+        case "forge:entity_gravity":name="minecraft:generic.gravity";break;
+        case "forge:step_height_addition":name="minecraft:generic.step_height";break;
         default:break;
         }
         net.minecraft.resources.ResourceLocation id=net.minecraft.resources.ResourceLocation.tryParse(name);
-        net.minecraft.world.entity.ai.attributes.Attribute key=id==null || !net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.containsKey(id)?null:net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getValue(id);
+        Holder<Attribute> key=id==null?null:net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getHolder(id).orElse(null);
         return key!=null && getAttributes().hasAttribute(key)?getAttribute(key):null;
     }
 
@@ -547,7 +530,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	}
 
 	@Override
-	protected ResourceLocation getDefaultLootTable() {
+	protected net.minecraft.resources.ResourceKey<net.minecraft.world.level.storage.loot.LootTable> getDefaultLootTable() {
 		return net.minecraft.world.level.storage.loot.BuiltInLootTables.EMPTY;
 	}
 
@@ -585,9 +568,6 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	}
 
 
-	@Override public boolean canBreatheUnderwater() {
-		return true;
-	}
 
 	////////// IInventory //////////
 	/**
@@ -778,11 +758,6 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	}
 
 
-	@Override
-	public MobType getMobType()
-	{
-		return MobType.UNDEAD;
-	}
 
 
 	@Override
@@ -792,14 +767,14 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		if(sourceVersions.isEmpty()) root.remove(UpgradePreservation.SOURCES);
 		else root.put(UpgradePreservation.SOURCES,sourceVersions.copy());
 		root.remove("ActiveEffects");
+		root.remove("active_effects");
 		super.addAdditionalSaveData(root);
 		final ListTag equipmentListTag = new ListTag();
 		for (int i = 0; i < this.getContainerSize(); i++) {
 			ItemStack item = this.getItem(i);
 			if (!emptyStack(item)) {
-				CompoundTag slotTag = new CompoundTag();
+				CompoundTag slotTag = (CompoundTag)item.save(registryAccess());
 				slotTag.putByte("Slot", (byte)i);
-				item.save(slotTag);
 				equipmentListTag.add(slotTag);
 			}
 		}
@@ -812,9 +787,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 			while (iter.hasNext()) {
 				ItemStack i = iter.next();
 				if(emptyStack(i)) continue;
-				final CompoundTag nbttagcompound1 = new CompoundTag();
-				i.save(nbttagcompound1);
-				nbtauxtaglist.add(nbttagcompound1);
+				nbtauxtaglist.add(i.save(registryAccess()));
 			}
 			root.put("Aux", nbtauxtaglist);
 		}
@@ -942,7 +915,11 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		getActiveEffects().clear();
 		for(AttributeInstance attribute : corpseAttributes()) restoreAttribute(attribute);
 		vanilla.put("Attributes",readAttributes(root.get("Attributes")));
-		vanilla.put("ActiveEffects",readEffects(root.get("ActiveEffects")));
+		vanilla.remove("ActiveEffects");
+		if(root.contains("active_effects") && root.contains("ActiveEffects"))
+			retainInvalid("ActiveEffects",root.get("ActiveEffects"));
+		vanilla.put("active_effects",readEffects(root.contains("active_effects")
+				?root.get("active_effects"):root.get("ActiveEffects")));
 		vanilla.putShort("HurtTime",(short)readTimer(root,"HurtTime",Short.MAX_VALUE,0));
 		// Health must be checked against the loaded, validated effective maximum.
 		vanilla.remove("Health");
@@ -1001,63 +978,80 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	}
 
 	private void restoreAttribute(AttributeInstance attribute) {
-		String name = net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getKey(attribute.getAttribute()).toString();
+		String name = net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getKey(attribute.getAttribute().value()).toString();
 		for(AttributeModifier modifier : new ArrayList<>(attribute.getModifiers())) attribute.removeModifier(modifier);
-		attribute.setBaseValue(defaultAttributeBases.getOrDefault(name,attribute.getAttribute().getDefaultValue()));
+		attribute.setBaseValue(defaultAttributeBases.getOrDefault(name,attribute.getAttribute().value().getDefaultValue()));
 		List<AttributeModifier> defaults = defaultAttributeModifiers.get(name);
 		if(defaults != null) for(AttributeModifier modifier : defaults) attribute.addPermanentModifier(modifier);
 	}
 
-	private ListTag readEffects(Tag raw) {
-		ListTag clean = new ListTag();
-		if(raw == null) return clean;
-		if(!isInventoryList(raw)) { retainInvalid("ActiveEffects",raw); return clean; }
-		Set<MobEffect> seen = new HashSet<>();
-		ListTag list = (ListTag)raw;
-		for(int i = 0; i < list.size(); i++) {
-			CompoundTag record = list.getCompound(i);
-			Tag rawId = record.get("Id"), rawAmplifier = record.get("Amplifier");
-			Long id = integral(rawId);
-			// IDs are unsigned bytes on disk. Amplifiers are read as signed
-			// bytes by this engine; preserve all canonical byte encodings.
-			if(rawId != null && rawId.getId() == 1) id = id & 255L;
-			Long amplifier = rawAmplifier == null ? Long.valueOf(0) : integral(rawAmplifier);
-			Long duration = record.contains("Duration") ? integral(record.get("Duration")) : Long.valueOf(0);
-            MobEffect potion = SavedEffectIdentity.resolve(record,id);
-			if(potion == null || duration == null || duration < 0 || duration > Integer.MAX_VALUE
-					|| amplifier == null || amplifier > 127 || (amplifier < 0 && rawAmplifier.getId() != 1)
-					|| !seen.add(potion)) {
-				retainInvalid("ActiveEffect",record); continue;
-			}
-			CompoundTag accepted = new CompoundTag();
-            SavedEffectIdentity.write(accepted,record,potion); accepted.putInt("Duration",duration.intValue());
-			accepted.putByte("Amplifier",amplifier.byteValue());
-            boolean changed = SavedEffectIdentity.needsLegacyRecovery(record,id) || !Arrays.asList("Id","forge:id","Duration","Amplifier","Ambient","ShowParticles","ShowIcon","CurativeItems").containsAll(record.getAllKeys());
-			// Forge 1.11 persists curative stacks. Preserve their complete custom
-			// data; an unreadable list uses Forge's defaults and stays recoverable.
-			if(record.contains("CurativeItems")) {
-				Tag rawCuratives = record.get("CurativeItems");
-				boolean valid = isInventoryList(rawCuratives);
-				if(valid) {
-					ListTag items = (ListTag)rawCuratives;
-					for(int c=0; c<items.size(); c++)
-						if(decodeInventoryItem(items.getCompound(c)) == null) { valid=false; break; }
-				}
-				if(valid) accepted.put("CurativeItems",rawCuratives.copy());
-				else changed = true;
-			}
-			for(String key : Arrays.asList("Ambient","ShowParticles","ShowIcon")) {
-				boolean fallback = key.equals("ShowIcon") ? accepted.getBoolean("ShowParticles") : key.equals("ShowParticles");
-				Long flag = integral(record.get(key));
-				if(!record.contains(key)) accepted.putBoolean(key,fallback);
-				else if(flag != null && flag >= 0 && flag <= 1) accepted.putBoolean(key,flag == 1);
-				else { accepted.putBoolean(key,fallback); changed = true; }
-			}
-			if(changed) retainInvalid("ActiveEffect",record);
-			clean.add(accepted);
-		}
-		return clean;
-	}
+    private ListTag readEffects(Tag raw) {
+        ListTag clean=new ListTag();
+        if(raw==null)return clean;
+        if(!isInventoryList(raw)) {
+            retainInvalid("ActiveEffects",raw);
+            return clean;
+        }
+        Set<Holder<MobEffect>> seen=new HashSet<>();
+        for(Tag entry:(ListTag)raw) {
+            CompoundTag record=(CompoundTag)entry;
+            Tag oldId=record.get("Id");
+            Long id=integral(oldId);
+            if(id!=null && oldId.getId()==1)id=id&255L;
+            Holder<MobEffect> effect=SavedEffectIdentity.resolve(record,id);
+            boolean legacy=!record.contains("id");
+            boolean[] changed={legacy && record.contains("forge:id")
+                    && (record.getString("forge:id").isEmpty() || id==null || id<1 || id>255)};
+            CompoundTag accepted=effect==null?null:effectDetails(record,legacy,changed,0);
+            if(accepted==null || !seen.add(effect)) {
+                retainInvalid("ActiveEffect",record);
+                continue;
+            }
+            accepted.putString("id",net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.getKey(effect.value()).toString());
+            if(changed[0])retainInvalid("ActiveEffect",record);
+            clean.add(accepted);
+        }
+        return clean;
+    }
+
+    private static CompoundTag effectDetails(CompoundTag raw,boolean legacy,boolean[] changed,int depth) {
+        if(depth>=16)return null;
+        String durationKey=legacy?"Duration":"duration", amplifierKey=legacy?"Amplifier":"amplifier";
+        String ambientKey=legacy?"Ambient":"ambient", particlesKey=legacy?"ShowParticles":"show_particles";
+        String iconKey=legacy?"ShowIcon":"show_icon", hiddenKey=legacy?"HiddenEffect":"hidden_effect";
+        Long duration=raw.contains(durationKey)?integral(raw.get(durationKey)):Long.valueOf(0);
+        Long amplifier=raw.contains(amplifierKey)?integral(raw.get(amplifierKey)):Long.valueOf(0);
+        if(legacy && amplifier!=null && raw.contains(amplifierKey,1))amplifier=Math.max(0L,amplifier);
+        int minimumDuration=legacy?0:-1;
+        int maximumAmplifier=legacy?127:255;
+        if(duration==null || duration<minimumDuration || duration>Integer.MAX_VALUE
+                || amplifier==null || amplifier<0 || amplifier>maximumAmplifier)return null;
+        CompoundTag result=new CompoundTag();
+        result.putInt("duration",duration.intValue());
+        result.putInt("amplifier",amplifier.intValue());
+        result.putBoolean("ambient",effectFlag(raw,ambientKey,false,changed));
+        boolean particles=effectFlag(raw,particlesKey,true,changed);
+        result.putBoolean("show_particles",particles);
+        result.putBoolean("show_icon",effectFlag(raw,iconKey,particles,changed));
+        if(raw.contains(hiddenKey)) {
+            CompoundTag hidden=raw.contains(hiddenKey,10)?effectDetails(raw.getCompound(hiddenKey),legacy,changed,depth+1):null;
+            if(hidden==null)return null;
+            result.put("hidden_effect",hidden);
+        }
+        // The Forge 50 effect codec has no CurativeItems field. Retain that
+        // legacy payload with its original effect record for recovery.
+        if(!Set.of("id","Id","forge:id",durationKey,amplifierKey,ambientKey,particlesKey,iconKey,hiddenKey)
+                .containsAll(raw.getAllKeys()))changed[0]=true;
+        return result;
+    }
+
+    private static boolean effectFlag(CompoundTag raw,String key,boolean fallback,boolean[] changed) {
+        if(!raw.contains(key))return fallback;
+        Long value=integral(raw.get(key));
+        if(value!=null && (value==0 || value==1))return value==1;
+        changed[0]=true;
+        return fallback;
+    }
 
 	private static Double finiteNumber(Tag raw) {
 		if(!(raw instanceof NumericTag) || raw.getId() < 1 || raw.getId() > 6) return null;
@@ -1089,16 +1083,27 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 					? attributeNamed(record.getString("Name")) : null;
 			Double base = finiteNumber(record.get("Base"));
 			if(attribute == null || base == null) { retainInvalid("Attribute",record); continue; }
-			String name = net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getKey(attribute.getAttribute()).toString();
+            if(record.getString("Name").equals("forge:step_height_addition")) {
+                Tag modifiers=record.get("Modifiers");
+                if(base < -512D || base > 512D || !Set.of("Name","Base","Modifiers").containsAll(record.getAllKeys())
+                        || (modifiers!=null && (!(modifiers instanceof ListTag listValue) || !listValue.isEmpty()))) {
+                    retainInvalid("Attribute",record);continue;
+                }
+                // Forge used to add this delta after reading the normal step
+                // height. Modern Minecraft stores the complete step height.
+                double nativeDefault=attribute.getAttribute().value().getDefaultValue();
+                base=base==0D?nativeDefault:Math.max(0D,(double)(float)nativeDefault+base);
+            }
+			String name = net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getKey(attribute.getAttribute().value()).toString();
 			// corpse_HP has always allowed 1..Short.MAX_VALUE. Preserve a base
 			// saved under an older config, including vanilla's existing cap.
 			boolean configuredHealth = attribute.getAttribute() == Attributes.MAX_HEALTH
 					&& base >= 1D && base <= Short.MAX_VALUE;
             // Forge15 allowed this base up to Float.MAX_VALUE. Native16 caps
             // the effective distance at64; keep the valid saved base unchanged.
-            boolean legacyNameDistance=attribute.getAttribute()==net.minecraftforge.common.ForgeMod.NAMETAG_DISTANCE.get()
+            boolean legacyNameDistance=attribute.getAttribute().value()==net.minecraftforge.common.ForgeMod.NAMETAG_DISTANCE.get()
                     && base>=0D && base<=Float.MAX_VALUE;
-			if((attribute.getAttribute().sanitizeValue(base) != base
+			if((attribute.getAttribute().value().sanitizeValue(base) != base
 					&& !configuredHealth && !legacyNameDistance && !base.equals(defaultAttributeBases.get(name))) || !seen.add(name)) {
 				retainInvalid("Attribute",record); continue;
 			}
@@ -1194,11 +1199,11 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
             String name=root.getString(key);
             if(key.equals("CustomName") && root.getInt(UpgradePreservation.VERSION)>=3) {
                 try {
-                    net.minecraft.network.chat.Component text=net.minecraft.network.chat.Component.Serializer.fromJson(name);
+                    net.minecraft.network.chat.Component text=net.minecraft.network.chat.Component.Serializer.fromJson(name,registryAccess());
                     if(text==null){retainInvalid(key,raw);return null;}name=text.getString();
                 }catch(RuntimeException malformed){retainInvalid(key,raw);return null;}
             }
-            String packet=net.minecraft.network.chat.Component.Serializer.toJson(net.minecraft.network.chat.Component.literal(name));
+            String packet=net.minecraft.network.chat.Component.Serializer.toJson(net.minecraft.network.chat.Component.literal(name),registryAccess());
             if(name.length()<=32767 && name.getBytes(StandardCharsets.UTF_8).length<=32767
                     && packet.getBytes(StandardCharsets.UTF_8).length<=32767)return name.trim().isEmpty()?"":name;
         }
@@ -1230,47 +1235,36 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		return data instanceof NumericTag && data.getId() >= 1 && data.getId() <= 4 ? ((NumericTag)data).getAsLong() : null;
 	}
 
-	private ItemStack decodeInventoryItem(CompoundTag raw) {
-		// Ambiguous fields, unavailable IDs and unhandled capability data stay
-		// verbatim. Never guess an item, truncate a count or erase custom data.
-		for(String key : raw.getAllKeys()) if(!Arrays.asList("id","Count","Damage","tag","ForgeCaps","Slot").contains(key)) return null;
-		if(!raw.contains("id",8)) return null;
-		Long count = integral(raw.get("Count"));
-		Long legacyDamage = raw.contains("Damage") ? integral(raw.get("Damage")) : Long.valueOf(0L);
-        Long damage = raw.getCompound("tag").contains("Damage") ? integral(raw.getCompound("tag").get("Damage")) : legacyDamage;
-        if(legacyDamage == null || legacyDamage < 0 || legacyDamage > 32767
-                || (raw.contains("Damage") && (damage==null || legacyDamage.longValue()!=damage.longValue())))return null;
-		if(count == null || count <= 0 || count > 127 || damage == null || damage < 0 || damage > 32767) return null;
-		if((raw.contains("tag") && !raw.contains("tag",10)) || (raw.contains("ForgeCaps") && !raw.contains("ForgeCaps",10))) return null;
-		try {
-			ResourceLocation id = new ResourceLocation(raw.getString("id"));
-			if(!net.minecraftforge.registries.ForgeRegistries.ITEMS.containsKey(id)) return null;
-			Item registered = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(id);
-			if(registered == null || Item.getId(registered) == 0) return null;
-			CompoundTag input = raw.copy();
-			input.putString("id",id.toString());
-			input.putByte("Count",count.byteValue());
-			if(raw.contains("Damage"))input.putShort("Damage",legacyDamage.shortValue());
-			ItemStack stack = ItemStack.of(input);
-			if(emptyStack(stack) || stack.getItem() != registered || stack.getCount() != count.intValue()
-					|| stack.getDamageValue() != damage.intValue() || stack.getMaxStackSize() <= 0) return null;
-			// Forge16 lazily echoes capability NBT before gathering providers.
-			// Resolve them before comparing: unsupported payloads must remain raw,
-			// rather than disappearing later during an inventory transaction.
-			if(raw.contains("ForgeCaps"))
-				stack.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.ITEM_HANDLER);
-			CompoundTag encoded = stack.save(new CompoundTag());
-            Tag expectedTag=raw.get("tag");
-            // Native16 writes an explicit zero for missing tool durability.
-            // Allow only that canonical default, retaining every other byte.
-            if(registered.isDamageable(stack) && !raw.getCompound("tag").contains("Damage") && damage==0L) {
-                CompoundTag canonical=raw.getCompound("tag").copy();canonical.putInt("Damage",0);expectedTag=canonical;
-            }
-            if(!Objects.equals(expectedTag,encoded.get("tag"))
-                    || !Objects.equals(raw.get("ForgeCaps"),encoded.get("ForgeCaps"))) return null;
-			return stack;
-		} catch(RuntimeException unreadable) { return null; }
-	}
+    private ItemStack decodeInventoryItem(CompoundTag raw) {
+        // Only restore a component stack that the live registry can round-trip.
+        // Unsupported components, legacy capability data and malformed counts
+        // remain byte-for-byte in the existing Source/Data recovery records.
+        if(!Set.of("id","count","components","Slot").containsAll(raw.getAllKeys())
+                || !raw.contains("id",8) || (raw.contains("components") && !raw.contains("components",10)))return null;
+        Long count=raw.contains("count")?integral(raw.get("count")):Long.valueOf(1);
+        ResourceLocation id=ResourceLocation.tryParse(raw.getString("id"));
+        if(id==null || count==null || count<=0 || count>127)return null;
+        try {
+            CompoundTag input=raw.copy();
+            input.remove("Slot");
+            input.putString("id",id.toString());
+            input.putInt("count",count.intValue());
+            var ops=registryAccess().createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE);
+            ItemStack stack=ItemStack.CODEC.parse(ops,input).result().orElse(ItemStack.EMPTY);
+            if(emptyStack(stack) || stack.getCount()!=count || stack.getMaxStackSize()<=0)return null;
+            // The component codec accepts a raw value that the gameplay
+            // accessor silently clamps. Keep that original stack recoverable.
+            Integer damage=stack.get(net.minecraft.core.component.DataComponents.DAMAGE);
+            if(damage!=null && damage!=stack.getDamageValue())return null;
+            CompoundTag encoded=(CompoundTag)stack.save(registryAccess());
+            if(!id.toString().equals(encoded.getString("id"))
+                    || encoded.getInt("count")!=count
+                    || !ItemMigration.sameSavedComponents(input.getCompound("components"),encoded.getCompound("components")))return null;
+            return stack;
+        } catch(RuntimeException unreadable) {
+            return null;
+        }
+    }
 
 	private void readInventoryEntry(String source, CompoundTag raw, CompoundTag retained) {
 		CompoundTag context=retained!=null && retained.contains("SourceVersions",10) ? retained.getCompound("SourceVersions") : inventoryVersions;
@@ -1300,15 +1294,4 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		while(stack.getCount() > 0) auxInventory.addLast(stack.split(Math.min(stack.getCount(),limit)));
 	}
 
-	public boolean useThinArms() {
-		GameProfile p = this.getGameProfile();
-		if(p != null){
-			if(p.isLegacy()) return false;
-			UUID uid = p.getId();
-			if(uid != null){
-				return (uid.hashCode() & 1) == 1;
-			}
-		}
-		return false;
-	}
 }

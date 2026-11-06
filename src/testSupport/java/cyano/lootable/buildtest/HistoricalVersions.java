@@ -14,6 +14,7 @@ public final class HistoricalVersions {
         if ("1.17.1".equals(minecraft)) return 2730;
         if ("1.18.2".equals(minecraft)) return 2975;
         if ("1.19.4".equals(minecraft)) return 3337;
+        if ("1.20.1".equals(minecraft)) return 3465;
         throw new IllegalArgumentException("Unsupported historical Minecraft " + minecraft);
     }
 }

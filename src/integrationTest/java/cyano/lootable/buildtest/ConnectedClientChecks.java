@@ -75,7 +75,7 @@ final class ConnectedClientChecks {
             screenshot(mc,"connected-corpse-after-shift-recovery.png");
             quit(mc); next(7);
         } else if(stage==7 && FixtureConnections.stopped(mc)) {
-            mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"build-fixture"); next(8);
+            mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen())); next(8);
         } else if(stage==8 && ready(mc) && frames>30) {
             schedule(mc,() -> {
                 verifyReload(mc,"connected-after-recovery","connected-player-after-recovery");
@@ -106,7 +106,7 @@ final class ConnectedClientChecks {
             screenshot(mc,"connected-corpse-after-normal-recovery.png");
             quit(mc); next(13);
         } else if(stage==13 && FixtureConnections.stopped(mc)) {
-            mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"build-fixture"); next(14);
+            mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen())); next(14);
         } else if(stage==14 && ready(mc) && frames>30) {
             schedule(mc,() -> {
                 verifyReload(mc,"connected-final","connected-player-final");
@@ -173,14 +173,14 @@ final class ConnectedClientChecks {
     private void verifyGui(Minecraft mc) {
         RuntimeChecks.require(gui(mc) && mc.player.containerMenu.slots.size()==84,"Connected GUI missing slots");
         ItemStack[] expected=new ItemStack[48];ListTag list=visibleExpected.getList("Equipment",10);
-        for(int i=0;i<list.size();i++){CompoundTag tag=list.getCompound(i);expected[tag.getByte("Slot")]=ItemStack.of(tag);}
+        for(int i=0;i<list.size();i++){CompoundTag tag=list.getCompound(i);expected[tag.getByte("Slot")]=FixtureStackData.load(tag);}
         for(int i=0;i<48;i++)RuntimeChecks.require(RuntimeChecks.sameStack(expected[i],mc.player.containerMenu.getSlot(i).getItem()),"Client GUI slot differs "+i);
     }
     private static void checkPlayer(net.minecraft.world.entity.player.Inventory inventory,int index) {
         ItemStack expected=RuntimeChecks.stack(index);int count=0;
         for(int i=0;i<inventory.getContainerSize();i++){
             ItemStack stack=inventory.getItem(i);
-            if((stack != null && !stack.isEmpty()) && stack.hasTag() && stack.getTag().equals(expected.getTag())) {
+            if((stack != null && !stack.isEmpty()) && FixtureStackData.hasCustom(stack) && FixtureStackData.custom(stack).equals(FixtureStackData.custom(expected))) {
                 RuntimeChecks.require(ItemStack.isSameItem(stack,expected),"Recovered item type/damage differs");count+=stack.getCount();
             }
         }
@@ -190,7 +190,7 @@ final class ConnectedClientChecks {
     private EntityLootableBody corpse(Minecraft mc){return RuntimeChecks.find(mc.getSingleplayerServer().getLevel(FixtureApi.dimensionKey(0)),corpseId);}
     private File folder(Minecraft mc){return mc.getSingleplayerServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();}
     private static CompoundTag read(File folder,String name) throws Exception {
-        try(FileInputStream in=new FileInputStream(new File(folder,name+".nbt"))){return NbtIo.readCompressed(in);}
+        try(FileInputStream in=new FileInputStream(new File(folder,name+".nbt"))){return NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
     }
     private void schedule(Minecraft mc,Action action){pending=mc.getSingleplayerServer().submitAsync(() -> {try{action.run();}catch(Exception error){throw new RuntimeException(error);}});}
     private boolean done() throws Exception {if(!pending.isDone())return false;pending.get();return true;}

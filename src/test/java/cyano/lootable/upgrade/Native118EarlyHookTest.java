@@ -58,10 +58,12 @@ class Native118EarlyHookTest {
     @Test void actualNativeClassGetsExactlyOneEarlyReadAndOneHeaderWriteHook()throws Exception {
         ClassNode before=original();Object transformer=transformer();ClassNode after=apply(transformer,before);
         assertEquals(1,calls(after,"beforeRead"));assertEquals(1,calls(after,"beforeWrite"));
-        MethodNode read=after.methods.stream().filter(m->m.name.equals("readAdditionalLevelSaveData")&&m.desc.equals("()V")).findFirst().orElseThrow();
+        MethodNode read=after.methods.stream().filter(m->m.name.equals("getDataTag")&&m.desc.equals("(Z)Lcom/mojang/serialization/Dynamic;")).findFirst().orElseThrow();
         AbstractInsnNode first=read.instructions.getFirst();while(first.getOpcode()<0)first=first.getNext();
-        assertEquals(Opcodes.ALOAD,first.getOpcode());assertTrue(first.getNext() instanceof MethodInsnNode);
-        assertEquals("beforeRead",((MethodInsnNode)first.getNext()).name);
+        assertEquals(Opcodes.ALOAD,first.getOpcode());
+        assertEquals(Opcodes.ILOAD,first.getNext().getOpcode());
+        assertTrue(first.getNext().getNext() instanceof MethodInsnNode);
+        assertEquals("beforeRead",((MethodInsnNode)first.getNext().getNext()).name);
         ClassWriter writer=new ClassWriter(ClassWriter.COMPUTE_MAXS);after.accept(writer);assertTrue(writer.toByteArray().length>0);
         StringWriter errors=new StringWriter();CheckClassAdapter.verify(new ClassReader(writer.toByteArray()),getClass().getClassLoader(),false,new PrintWriter(errors));
         assertEquals("",errors.toString(),"Actual native bytecode must pass operand-stack verification");

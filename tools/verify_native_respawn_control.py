@@ -1,10 +1,11 @@
-"""Exercise native45 delayed respawns/FIFO packets without Lootable Bodies."""
-import argparse,json,socket,subprocess,time,os,re
+"""Exercise Forge 50 delayed respawns and FIFO packets without Lootable Bodies."""
+import argparse,gzip,json,socket,subprocess,time,os,re
 from pathlib import Path
 from native120_logs import audit
 from native120_client_logs import audit_client
 from audit_runtime_logs import audit as legacy_audit, forge36_dead_player_movement_blocks
 from native_runtime import prepare_server,prepare_client,client_command,project_assets,FORGE,digest,seed_flat_fixture
+from nbt_regions import decode
 from owned_process import native_process
 
 def control_error_counts(path):
@@ -13,6 +14,18 @@ def control_error_counts(path):
     _,count=forge36_dead_player_movement_blocks(path.read_text(errors='replace').splitlines(),position_only=True)
     if count!=8:raise RuntimeError('Native control did not reproduce eight delayed position packets')
     return count,report['known_forge36_dead_player_movement_failures']-count
+
+
+def require_forge_only_header(header):
+    """Reject saved mod registries before the isolated control starts."""
+    _, root = decode(gzip.decompress(header.read_bytes()))
+    try:
+        kind, entries = root.value['fml'].value['LoadingModList'].value
+        mods = [(entry.value['ModId'].value, entry.value['ModVersion'].value) for entry in entries]
+    except (AttributeError, KeyError, TypeError, ValueError) as error:
+        raise ValueError('Expected a Forge-only saved mod list') from error
+    if kind != 10 or sorted(mods) != [('forge', '50.2.14'), ('minecraft', '1.20.6')]:
+        raise ValueError('Expected a Forge-only saved mod list')
 
 
 def main():
@@ -27,8 +40,9 @@ def main():
     parser.add_argument('--hidden-agent',type=Path)
     parser.add_argument('--output',type=Path,required=True)
     args=parser.parse_args();project=Path(__file__).resolve().parents[1]
+    require_forge_only_header(args.flat_header)
     root=args.output.resolve();root.mkdir(parents=True,exist_ok=False)
-    probe=project/'build/control-test-mod/forge-platform-control-reobf.jar'
+    probe=project/'build/control-test-mod/forge-platform-control.jar'
     prepare_server(root/'server',args.forge_home.resolve(),probe=probe)
     seed_flat_fixture(root/'server',args.flat_header,args.flat_header_sha256)
     prepare_client(root/'client',probe=probe)
@@ -79,9 +93,10 @@ def main():
     server=(root/'server.log').read_text(errors='replace')
     batches=[int(value) for value in re.findall(r'NATIVE_FIFO_DELAY_RELEASE packets=([0-9]+)',client)]
     if server.count('NATIVE_DEATH ')!=8 or len(batches)!=8 or sum(batches)<=0:
-        raise RuntimeError('Native45 control did not exercise all eight real delayed respawn/FIFO actions')
-    result={'lootable_bodies_installed':False,'respawns':8,'native45_delayed_fifo_batches':batches,
-        'legacy36_error_matcher_used':False,'native45_complete_logs_audited':True,'no_unclassified_diagnostics':True,
+        raise RuntimeError('Forge 50 control did not exercise all eight real delayed respawn/FIFO actions')
+    result={'lootable_bodies_installed':False,'respawns':8,'forge50_delayed_fifo_batches':batches,
+        'flat_header_sha256':digest(args.flat_header),
+        'legacy36_error_matcher_used':False,'forge50_complete_logs_audited':True,'no_unclassified_diagnostics':True,
         'control_jar_sha256':digest(probe),'native_outbound_packets_delayed_fifo':True,'log_audits':reports}
     (root/'result.json').write_text(json.dumps(result,indent=2)+'\n')
     print('NATIVE_RESPAWN_CONTROL_PASS',json.dumps(result),flush=True)

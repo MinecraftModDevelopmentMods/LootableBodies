@@ -47,7 +47,7 @@ final class MultiplayerClientChecks {
             if(phase==8){
                 try(FileWriter out=new FileWriter(new File(mc.gameDirectory,"multiplayer-client.pass"))){out.write("two-client packet/GUI checks passed\n");}
                 System.out.println("LOOTABLE_BODIES_MULTIPLAYER_CLIENT_PASS role="+role);
-                finished=true;mc.player.closeContainer();mc.level.disconnect();mc.clearLevel();mc.setScreen(new TitleScreen());return;
+                finished=true;mc.player.closeContainer();mc.level.disconnect();mc.disconnect();mc.setScreen(new TitleScreen());return;
             }
             if(frames%100==0)System.out.println("TCP_CLIENT_STATE role="+role+" phase="+phase+" screen="+(mc.screen==null?"world":mc.screen.getClass().getSimpleName())+" container="+mc.player.containerMenu.getClass().getSimpleName()+" window="+mc.player.containerMenu.containerId+" position="+mc.player.blockPosition()+" completed="+completed);
             if(!(mc.screen instanceof CorpseGUIContainer)){
@@ -75,6 +75,6 @@ final class MultiplayerClientChecks {
             }
         }catch(Throwable error){error.printStackTrace();mc.stop();}
     }
-    private void ack(int phase){completed.add(phase);MultiplayerChecks.CHANNEL.sendToServer(new MultiplayerChecks.Step(phase));}
+    private void ack(int phase){completed.add(phase);MultiplayerChecks.CHANNEL.send(new MultiplayerChecks.Step(phase),net.minecraftforge.network.PacketDistributor.SERVER.noArg());}
     private void shot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),message->System.out.println(message.getString()));}
 }

@@ -78,7 +78,7 @@ public final class ClientChecks {
                     // RuntimeChecks.run in the original continuous process.
                     cyano.lootable.LootableBodies.allowCorpseDecay=false;
                     cyano.lootable.LootableBodies.ticksPerItemDecay=-1;
-                    stage=40; mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"build-fixture");
+                    stage=40; mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));
                 } else {
                     stage=1;
                     FixtureApi.ClientWorlds.create(mc,"build-fixture","Build fixture",net.minecraft.world.level.GameType.CREATIVE,false);
@@ -105,7 +105,7 @@ public final class ClientChecks {
                 mc.player.closeContainer(); stage=4;
                 FixtureConnections.disconnect(mc);
             } else if(stage==4 && FixtureConnections.stopped(mc)) {
-                stage=5; mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"build-fixture");
+                stage=5; mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));
             } else if(stage==5 && mc.player!=null && mc.level!=null && mc.getSingleplayerServer()!=null) {
                 stage=6;
                 pending=mc.getSingleplayerServer().submitAsync(() -> {

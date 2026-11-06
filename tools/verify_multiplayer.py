@@ -27,7 +27,7 @@ def reload_server(java, server, logging):
 
 
 def client_command(project,java,distribution,root,cache,shared,port,role,hidden_agent=None,probe=None,prepared=None,assets=None):
-    prepare_client(root,project/'build/libs'/MAIN,probe or project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar')
+    prepare_client(root,project/'build/libs'/MAIN,probe or project/'build/integration-test-mod/lootablebodies-build-tests.jar')
     (root/'config').mkdir(exist_ok=True);(root/'config/lootablebodies.cfg').write_text('options {\n B:local_texture=true\n}\n')
     extra=['-Dlootablebodies.multiplayer.role='+role,'-Dlootablebodies.multiplayer.sync='+str(shared),
            '-Dlootablebodies.multiplayer.port='+str(port),
@@ -51,7 +51,7 @@ def main():
     java=args.java.resolve();distribution=args.forge_home.resolve();root=args.output.resolve();root.mkdir(parents=True,exist_ok=False)
     shared=root/'sync';shared.mkdir();server=root/'server'
     jar=project/'build/libs'/MAIN;before=digest(jar)
-    prepare(server,distribution,jar,project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar')
+    prepare(server,distribution,jar,project/'build/integration-test-mod/lootablebodies-build-tests.jar')
     seed_flat_fixture(server,args.flat_header,args.flat_header_sha256)
     with socket.socket() as reservation:
         reservation.bind(('127.0.0.1',0));port=reservation.getsockname()[1]

@@ -1,30 +1,10 @@
 package cyano.lootable.buildtest;
-import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
-import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
-import net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket;
-import net.minecraft.network.protocol.game.ClientboundPlayerCombatEnterPacket;
-import net.minecraft.network.protocol.game.ClientboundPlayerCombatEndPacket;
-import net.minecraft.network.protocol.game.ClientboundPlayerCombatKillPacket;
-import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
-import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
-import net.minecraft.core.Registry;
-
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-import io.netty.channel.*;
 import java.io.*;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Arrays;
+import io.netty.channel.*;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.Connection;
-import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
-import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
-import net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket;
-import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
-import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
-import net.minecraft.network.protocol.game.ServerboundClientCommandPacket;
-import net.minecraftforge.network.ICustomPacket;
+import net.minecraft.network.protocol.game.*;
 
 /** Observes decoded packets without dropping, delaying, mutating or reordering them. */
 final class RespawnPacketTrace extends ChannelDuplexHandler {
@@ -37,13 +17,16 @@ final class RespawnPacketTrace extends ChannelDuplexHandler {
         Channel channel=manager.channel();
         // Native19 assembles decoded spawn children into a bundle before the
         // packet listener. Observe that real wire stream before aggregation.
-        channel.eventLoop().submit(()->channel.pipeline().addBefore("bundler","corpse_packet_trace",new RespawnPacketTrace(log,after))).syncUninterruptibly();
+        channel.eventLoop().submit(()->{
+            String before=channel.pipeline().get("bundler")!=null?"bundler":"packet_handler";
+            channel.pipeline().addBefore(before,"corpse_packet_trace",new RespawnPacketTrace(log,after));
+        }).syncUninterruptibly();
     }
     @Override public void channelRead(ChannelHandlerContext context,Object packet) throws Exception {
         String description=describe(packet);if(description!=null)record("IN "+description);
         if(Boolean.getBoolean("lootablebodies.respawn.dropSpawn")&&log.getName().equals("client-packets.txt")
             &&description!=null&&description.startsWith("MOD_SPAWN ")&&description.contains("mod=lootablebodies ")) {
-            record("FAULT_DROPPED "+description);if(packet instanceof ICustomPacket)((ICustomPacket<?>)packet).getInternalData().release();return;
+            record("FAULT_DROPPED "+description);return;
         }
         super.channelRead(context,packet);
         if(description!=null&&after!=null)after.received(description);
@@ -54,41 +37,25 @@ final class RespawnPacketTrace extends ChannelDuplexHandler {
     }
     private synchronized void record(String line) throws IOException {try(FileWriter out=new FileWriter(log,true)){out.write((++sequence)+" "+System.nanoTime()+" "+line+"\n");}}
     static String describe(Object packet) {
-        if(packet instanceof ICustomPacket) {
-            ICustomPacket<?> f=(ICustomPacket<?>)packet;if(!f.getName().toString().equals("fml:play"))return null;
-            FriendlyByteBuf b=new FriendlyByteBuf(f.getInternalData().duplicate());if(b.readableBytes()<6 || b.readVarInt()!=0)return null;
-            int type=b.readVarInt(),id=b.readInt();net.minecraft.world.entity.EntityType<?> entityType=net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.byId(type);
-            String name=entityType==null?"unknown":net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entityType).getNamespace();
-            return "MOD_SPAWN id="+id+" mod="+name+" type="+type+" uuid="+new UUID(b.readLong(),b.readLong());
+        if(packet instanceof ClientboundAddEntityPacket spawn) {
+            var registry=BuiltInRegistries.ENTITY_TYPE;
+            var key=registry.getKey(spawn.getType());
+            return "MOD_SPAWN id="+spawn.getId()+" mod="+key.getNamespace()+" type="
+                    +registry.getId(spawn.getType())+" uuid="+spawn.getUUID();
         }
-        if(!(packet instanceof ClientboundAddEntityPacket||packet instanceof ClientboundRespawnPacket||packet instanceof ClientboundRemoveEntitiesPacket||packet instanceof ClientboundForgetLevelChunkPacket
-            ||packet instanceof ClientboundLevelChunkWithLightPacket||packet instanceof ClientboundPlayerCombatEnterPacket||packet instanceof ClientboundPlayerCombatEndPacket
-            ||packet instanceof ClientboundPlayerCombatKillPacket||packet instanceof ClientboundSetEntityDataPacket||packet instanceof ServerboundClientCommandPacket))return null;
-        if(packet instanceof ClientboundRespawnPacket) {
-            return NativeRespawnDescription.describe((ClientboundRespawnPacket)packet);
-        }
-        // Vanilla strips receiving-side accessors from a dedicated distribution.
-        // Read an independent serialization, never its live reader index/fields.
-        FriendlyByteBuf b=new FriendlyByteBuf(Unpooled.buffer());
-        try {
-            ((Packet<?>)packet).write(b);
-            if(packet instanceof ClientboundAddEntityPacket) {
-                int id=b.readVarInt();UUID uuid=b.readUUID();int type=b.readVarInt();
-                net.minecraft.world.entity.EntityType<?> entityType=net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.byId(type);
-                String name=entityType==null?"unknown":net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entityType).getNamespace();
-                return "MOD_SPAWN id="+id+" mod="+name+" type="+type+" uuid="+uuid;
-            }
-            if(packet instanceof ClientboundRemoveEntitiesPacket){int[] ids=new int[b.readVarInt()];for(int i=0;i<ids.length;i++)ids[i]=b.readVarInt();return "DESTROY ids="+Arrays.toString(ids);}
-            if(packet instanceof ClientboundForgetLevelChunkPacket)return "UNLOAD chunk="+b.readInt()+","+b.readInt();
-            // Native 1.18 combines the complete chunk and light payload. Its
-            // first two serialized ints are still the containing coordinates.
-            if(packet instanceof ClientboundLevelChunkWithLightPacket)return "CHUNK chunk="+b.readInt()+","+b.readInt()+" full=true";
-            if(packet instanceof ClientboundPlayerCombatEnterPacket)return "COMBAT event=ENTER_COMBAT";
-            if(packet instanceof ClientboundPlayerCombatEndPacket)return "COMBAT event=END_COMBAT";
-            if(packet instanceof ClientboundPlayerCombatKillPacket)return "COMBAT event=ENTITY_DIED player="+b.readVarInt();
-            if(packet instanceof ClientboundSetEntityDataPacket)return "METADATA id="+b.readVarInt();
-            if(packet instanceof ServerboundClientCommandPacket)return "CLIENT_STATUS action="+b.readEnum(ServerboundClientCommandPacket.Action.class);
-        } catch(RuntimeException invalid){throw new AssertionError("Fixture packet serialization",invalid);}finally{b.release();}
+        if(packet instanceof ClientboundRespawnPacket respawn)return NativeRespawnDescription.describe(respawn);
+        if(packet instanceof ClientboundRemoveEntitiesPacket destroy)
+            return "DESTROY ids="+Arrays.toString(destroy.getEntityIds().toIntArray());
+        if(packet instanceof ClientboundForgetLevelChunkPacket unload)
+            return "UNLOAD chunk="+unload.pos().x+","+unload.pos().z;
+        if(packet instanceof ClientboundLevelChunkWithLightPacket chunk)
+            return "CHUNK chunk="+chunk.getX()+","+chunk.getZ()+" full=true";
+        if(packet instanceof ClientboundPlayerCombatEnterPacket)return "COMBAT event=ENTER_COMBAT";
+        if(packet instanceof ClientboundPlayerCombatEndPacket)return "COMBAT event=END_COMBAT";
+        if(packet instanceof ClientboundPlayerCombatKillPacket killed)
+            return "COMBAT event=ENTITY_DIED player="+killed.playerId();
+        if(packet instanceof ClientboundSetEntityDataPacket metadata)return "METADATA id="+metadata.id();
+        if(packet instanceof ServerboundClientCommandPacket status)return "CLIENT_STATUS action="+status.getAction();
         return null;
     }
 }

@@ -23,17 +23,17 @@ class HookRegistrationOrderTest {
         Path world=directory.resolve("serial");Files.createDirectories(world);
         CompoundTag root=new CompoundTag(),data=new CompoundTag(),owned=new CompoundTag();
         data.putInt("DataVersion",2730);root.put("Data",data);owned.putString("unknown","keep");root.put("lootablebodies",owned);
-        net.minecraft.nbt.NbtIo.writeCompressed(root,world.resolve("level.dat").toFile());
+        net.minecraft.nbt.NbtIo.writeCompressed(root,world.resolve("level.dat"));
         byte[] original=Files.readAllBytes(world.resolve("level.dat"));
         try(LevelStorageSource.LevelStorageAccess save=LevelStorageSource.createDefault(directory).createAccess("serial")) {
             installed.setBoolean(null,false);
-            Error refused=assertThrows(Error.class,()->EarlyWorldPreservation.beforeRead(save));
+            Error refused=assertThrows(Error.class,()->EarlyWorldPreservation.beforeRead(save,false));
             assertTrue(refused.getCause().getMessage().contains("not installed"));
             assertArrayEquals(original,Files.readAllBytes(world.resolve("level.dat")));
             assertFalse(Files.exists(world.resolve("data/lootablebodies-upgrade")));
             Native118UnitLifecycle.activate();
             for(int round=0;round<1000;round++){EarlyWorldPreservation.install();EarlyWorldPreservation.install();}
-            EarlyWorldPreservation.beforeRead(save);
+            EarlyWorldPreservation.beforeRead(save,false);
             CompoundTag saved=new CompoundTag();EarlyWorldPreservation.beforeWrite(save,saved);
             assertEquals(owned,saved.getCompound("lootablebodies"));
         } finally {UpgradePreservation.close();installed.setBoolean(null,wasInstalled);}

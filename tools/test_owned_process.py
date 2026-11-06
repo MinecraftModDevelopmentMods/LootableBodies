@@ -113,11 +113,11 @@ class OwnedProcessTest(unittest.TestCase):
             self.assertIsNotNone(receipt['returncode']);self.assertNotEqual(0,receipt['returncode']);self.assertFalse(receipt['timed_out'])
 
     def test_previous_runtime_and_wrong_patch_refuse_before_group_launch(self):
-        for version,vendor in [('16.0.2+7','Eclipse Foundation'),('17.0.20+8','Eclipse Adoptium')]:
+        for version,vendor in [('16.0.2+7','Eclipse Foundation'),('17.0.20.1+1','Eclipse Adoptium'),('21.0.8+9-LTS','Eclipse Adoptium'),('21.0.7+6-LTS','Other Vendor')]:
             with self.subTest(version=version),tempfile.TemporaryDirectory() as directory:
                 root=Path(directory);java=root/'jdk/bin/java.exe';java.parent.mkdir(parents=True)
-                (java.parent.parent/'release').write_text('SEMANTIC_VERSION="'+version+'"\nIMPLEMENTOR="'+vendor+'"\n')
-                with patch('owned_process.OwnedProcess') as launch,self.assertRaisesRegex(RuntimeError,'17.0.20.1'):
+                (java.parent.parent/'release').write_text('JAVA_RUNTIME_VERSION="'+version+'"\nIMPLEMENTOR="'+vendor+'"\n')
+                with patch('owned_process.OwnedProcess') as launch,self.assertRaisesRegex(RuntimeError,'21.0.7'):
                     native_process([str(java)],cwd=root,log=root/'runtime.log',timeout=5)
                 launch.assert_not_called()
 

@@ -1,7 +1,7 @@
-"""Independently audit native19 local receipts, complete logs and diagnostic bytes.
+"""Independently audit Forge 50 local receipts, complete logs and diagnostic bytes.
 
 Default auditing binds the recorded cwd to the actual owned process home.
-Relocated auditing is a separately tested download contract; hosted native19
+Relocated auditing is a separately tested download contract; hosted Forge 50
 execution and promotion remain disabled and have not been exercised.
 """
 from pathlib import Path,PurePosixPath
@@ -21,7 +21,7 @@ def audit_phase(home,phase,*,refusal=False,relocated=False):
     # Native45 was qualified with defaults; no old CPU/worker/GC cap is valid.
     if any(s.startswith(('-XX:ActiveProcessorCount','-XX:ParallelGCThreads','-XX:ConcGCThreads','-Dmax.bg.threads'))
             or (s.startswith(('-XX:+Use','-XX:-Use')) and s.endswith('GC')) for s in command):
-        raise ValueError('Unqualified native45 worker or GC override')
+        raise ValueError('Unqualified Forge 50 worker or GC override')
     if relocated:
         # Downloaded artifacts retain their original machine cwd. Require the
         # complete case/condition suffix; all bytes are read only under home.
@@ -34,8 +34,8 @@ def audit_phase(home,phase,*,refusal=False,relocated=False):
     version=FORGE.removeprefix('forge-')
     expected={prefix+version+'/'+name for name in ('win_args.txt','unix_args.txt')} if relocated else {
         prefix+version+'/'+('win_args.txt' if __import__('os').name=='nt' else 'unix_args.txt')}
-    if len(arguments)!=1 or arguments[0] not in expected or '--nogui' not in command:raise ValueError('Receipt did not launch native45 modules')
-    if not any(item.startswith('-Xlog:gc*,safepoint:file=') for item in command):raise ValueError('Missing native17 unified GC evidence')
+    if len(arguments)!=1 or arguments[0] not in expected or '--nogui' not in command:raise ValueError('Receipt did not launch Forge 50 modules')
+    if not any(item.startswith('-Xlog:gc*,safepoint:file=') for item in command):raise ValueError('Missing Java 21 unified GC evidence')
     if not refusal and '-Dlootablebodies.phase='+phase not in command:raise ValueError('Receipt belongs to another phase')
     for name in ('gc.txt','initial-threads.txt','initial-heap-gc.txt'):
         if name not in receipt['evidence'] or not (directory/name).is_file() or not (directory/name).stat().st_size:
@@ -82,7 +82,7 @@ def verify_saved_audit(root,report):
 
 def audit_case_mods(home,report):
     from release_identity import MAIN_JAR
-    expected={MAIN_JAR:report['candidate_sha256'],'lootablebodies-build-tests-reobf.jar':report['probe_sha256']}
+    expected={MAIN_JAR:report['candidate_sha256'],'lootablebodies-build-tests.jar':report['probe_sha256']}
     mods=home/'mods'
     if mods.is_symlink() or not mods.is_dir():raise ValueError('Missing or aliased native mods directory')
     archives=[p for p in mods.iterdir() if p.suffix.lower()=='.jar']

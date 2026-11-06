@@ -89,9 +89,9 @@ final class NamelessCorpseClientChecks {
         RuntimeChecks.require(expected.equals(body.getName().getString()) && !body.hasCustomName() &&
                 NameLifetimeChecks.same(cleared,NameLifetimeChecks.saved(body)), "Cleared owner did not regain transient fallback");
         ItemStack egg = new ItemStack(LootableBodies.CORPSE_EGG);
-        CompoundTag eggBefore = egg.save(new CompoundTag());
+        CompoundTag eggBefore = FixtureStackData.save(egg);
         RuntimeChecks.require(egg.getHoverName().getString().equals(net.minecraft.client.resources.language.I18n.get("item.lootablebodies.corpse_spawn_egg")) && !egg.getHoverName().getString().contains("entity.Corpse.name"), "Untranslated spawn egg in "+code);
-        RuntimeChecks.require(NameLifetimeChecks.same(eggBefore,egg.save(new CompoundTag())), "Egg name lookup mutated its native ID/NBT");
+        RuntimeChecks.require(NameLifetimeChecks.same(eggBefore,FixtureStackData.save(egg)), "Egg name lookup mutated its native ID/NBT");
         System.out.println("NAME_TRANSLATION_PASS "+code);
     }
 

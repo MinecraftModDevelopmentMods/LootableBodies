@@ -2,6 +2,7 @@ package cyano.lootable.network;
 
 import io.netty.channel.Channel;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.network.ConnectionProtocol;
@@ -20,12 +21,15 @@ public final class ClientLoginReadGuard {
         Minecraft minecraft=Minecraft.getInstance();
         if(!(minecraft.screen instanceof ConnectScreen))return;
         Connection manager=ObfuscationReflectionHelper.getPrivateValue(
-                ConnectScreen.class,(ConnectScreen)minecraft.screen,"f_95684_");
-        if(manager!=null)resumeReads(manager.channel());
+                ConnectScreen.class,(ConnectScreen)minecraft.screen,"connection");
+        if(manager!=null)resumeReads(manager.channel(),()->{
+            var protocol=manager.getInboundProtocolInfo();
+            return protocol==null?null:protocol.id();
+        });
     }
 
     /** Keep intentional pauses and all non-login connections untouched. */
-    public static void resumeReads(Channel channel) {
+    public static void resumeReads(Channel channel, Supplier<ConnectionProtocol> currentProtocol) {
         if(channel==null || !channel.isActive() || !channel.isRegistered())return;
         try {
             channel.eventLoop().execute(()-> {
@@ -33,7 +37,7 @@ public final class ClientLoginReadGuard {
                 // A queued clearReadPending from the connector thread can have
                 // removed OP_READ even though autoRead has already become true.
                 if(channel.isActive() && channel.config().isAutoRead()
-                        && channel.attr(Connection.ATTRIBUTE_PROTOCOL).get()==ConnectionProtocol.LOGIN)
+                        && currentProtocol.get()==ConnectionProtocol.LOGIN)
                     channel.read();
             });
         }catch(RejectedExecutionException closed) {

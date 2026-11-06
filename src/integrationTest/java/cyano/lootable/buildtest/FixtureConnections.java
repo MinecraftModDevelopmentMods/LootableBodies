@@ -17,7 +17,7 @@ final class FixtureConnections {
         if(mc.getSingleplayerServer()!=null)retiringServer=mc.getSingleplayerServer().getRunningThread();
         if(mc.player!=null)mc.player.closeContainer();
         if(mc.level!=null)mc.level.disconnect();
-        mc.clearLevel();mc.setScreen(new TitleScreen());
+        mc.disconnect();mc.setScreen(new TitleScreen());
     }
     static boolean stopped(Minecraft mc) {
         return ServerStopGate.ready(mc.level==null,mc.hasSingleplayerServer(),retiringServer);
@@ -27,8 +27,8 @@ final class FixtureConnections {
     }
     static void connect(Minecraft mc) {
         String address="127.0.0.1:"+Integer.parseInt(System.getProperty("lootablebodies.multiplayer.port"));
-        ServerData destination=new ServerData("Disposable check",address,false);
-        ConnectScreen.startConnecting(new TitleScreen(),mc,net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(address),destination,false);
+        ServerData destination=new ServerData("Disposable check",address,ServerData.Type.OTHER);
+        ConnectScreen.startConnecting(new TitleScreen(),mc,net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(address),destination,false,null);
     }
     static boolean retry(Minecraft mc,String role) throws Exception {
         if(!(mc.screen instanceof DisconnectedScreen)||mc.level!=null)return false;

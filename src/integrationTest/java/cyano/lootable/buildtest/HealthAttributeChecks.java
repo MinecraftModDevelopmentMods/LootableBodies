@@ -157,12 +157,27 @@ final class HealthAttributeChecks {
         stable(body);
     }
     private static void legacyForgeAttributes(){
-        String[][] names={{"forge.swimSpeed","forge:swim_speed"},{"forge.nameTagDistance","forge:nametag_distance"},{"forge.entity_gravity","forge:entity_gravity"}};
+        String[][] names={{"forge.swimSpeed","forge:swim_speed"},{"forge.nameTagDistance","forge:nametag_distance"},{"forge.entity_gravity","minecraft:generic.gravity"}};
         double[] bases={1.75D,70D,.12D};ListTag list=new ListTag();for(int i=0;i<names.length;i++)list.add(attribute(names[i][0],bases[i]));
         CompoundTag source=base();source.put("Attributes",list);source.putFloat("Health",7.5F);CompoundTag before=source.copy();EntityLootableBody body=read(source);
         value(body.getHealth(),7.5D,"Legacy Forge attributes healed a wounded corpse");
-        for(int i=0;i<names.length;i++)value(body.getAttribute(net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getValue(new net.minecraft.resources.ResourceLocation(names[i][1]))).getBaseValue(),bases[i],"Legacy Forge attribute changed");
+        for(int i=0;i<names.length;i++)value(body.getAttribute(net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getHolder(new net.minecraft.resources.ResourceLocation(names[i][1])).orElseThrow()).getBaseValue(),bases[i],"Legacy Forge attribute changed");
         RuntimeChecks.require(!NameLifetimeChecks.saved(body).contains(NameLifetimeChecks.RECOVERY),"Known legacy Forge attributes were quarantined");
+        EntityLootableBody priorRelease=read(with(attribute("forge:entity_gravity",.11D)));
+        value(priorRelease.getAttribute(Attributes.GRAVITY).getBaseValue(),.11D,"Released Forge gravity did not migrate");
+        RuntimeChecks.require(!NameLifetimeChecks.saved(priorRelease).contains(NameLifetimeChecks.RECOVERY),"Released Forge gravity was quarantined");
+        stable(priorRelease);
+        for(double delta:new double[]{0D,.25D}) {
+            EntityLootableBody stepped=read(with(attribute("forge:step_height_addition",delta)));
+            double nativeDefault=Attributes.STEP_HEIGHT.value().getDefaultValue();
+            value(stepped.getAttribute(Attributes.STEP_HEIGHT).getBaseValue(),delta==0D?nativeDefault:(double)(float)nativeDefault+delta,
+                    "Legacy Forge step height delta changed");
+            RuntimeChecks.require(!NameLifetimeChecks.saved(stepped).contains(NameLifetimeChecks.RECOVERY),"Valid legacy step height was quarantined");
+            stable(stepped);
+        }
+        CompoundTag modified=attribute("forge:step_height_addition",.25D);
+        modified.put("Modifiers",NbtRecoveryChecks.list(modifier(.5D,2)));
+        EntityLootableBody unresolved=read(with(modified));retained(unresolved,"Attribute",modified);stable(unresolved);
         RuntimeChecks.require(TypedNbt.same(before,source),"Legacy attribute source mutated");stable(body);
     }
 

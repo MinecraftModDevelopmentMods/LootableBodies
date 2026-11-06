@@ -1,6 +1,7 @@
 package cyano.lootable.upgrade;
 
 import cyano.lootable.LootableBodies;
+import java.util.Set;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
@@ -30,7 +31,9 @@ public final class LegacyRegistryMappings {
             case "cactus_green": return new ResourceLocation("minecraft:green_dye");
             case "dandelion_yellow": return new ResourceLocation("minecraft:yellow_dye");
             case "grass_path": return new ResourceLocation("minecraft:dirt_path");
+            case "grass": return ResourceLocation.withDefaultNamespace("short_grass");
             case "zombie_pigman_spawn_egg":return new ResourceLocation("minecraft:zombified_piglin_spawn_egg");
+            case "scute": return ResourceLocation.withDefaultNamespace("turtle_scute");
             case "pottery_shard_archer": return new ResourceLocation("minecraft:archer_pottery_sherd");
             case "pottery_shard_arms_up": return new ResourceLocation("minecraft:arms_up_pottery_sherd");
             case "pottery_shard_prize": return new ResourceLocation("minecraft:prize_pottery_sherd");
@@ -44,6 +47,7 @@ public final class LegacyRegistryMappings {
             case "sign": return new ResourceLocation("minecraft:oak_sign");
             case "wall_sign": return new ResourceLocation("minecraft:oak_wall_sign");
             case "grass_path": return new ResourceLocation("minecraft:dirt_path");
+            case "grass": return ResourceLocation.withDefaultNamespace("short_grass");
             default: return null;
         }
     }
@@ -51,6 +55,12 @@ public final class LegacyRegistryMappings {
     private static final ResourceLocation XP_SOUND=new ResourceLocation("minecraft:entity.experience_orb.pickup");
     private static final ResourceLocation OLD_JUNGLE_AND_FOREST_MUSIC =
             new ResourceLocation("minecraft:music.overworld.jungle_and_forest");
+    private static final Set<ResourceLocation> RETIRED_PARROT_SOUNDS = Set.of(
+            ResourceLocation.withDefaultNamespace("entity.parrot.imitate.enderman"),
+            ResourceLocation.withDefaultNamespace("entity.parrot.imitate.panda"),
+            ResourceLocation.withDefaultNamespace("entity.parrot.imitate.polar_bear"),
+            ResourceLocation.withDefaultNamespace("entity.parrot.imitate.wolf"),
+            ResourceLocation.withDefaultNamespace("entity.parrot.imitate.zombie_pigman"));
     private LegacyRegistryMappings() { }
     static <T> T requireMappingTarget(java.util.function.Supplier<T> lookup) {
         try {T target=lookup.get();if(target!=null)return target;}
@@ -100,6 +110,32 @@ public final class LegacyRegistryMappings {
             if (replacement != null) mapping.remap(requireMappingTarget(net.minecraftforge.registries.ForgeRegistries.BLOCKS.containsKey(replacement),()->net.minecraftforge.registries.ForgeRegistries.BLOCKS.getValue(replacement)));
         }
     }
+    static ResourceLocation enchantmentReplacement(ResourceLocation old) {
+        return old.equals(ResourceLocation.withDefaultNamespace("sweeping"))
+                ?ResourceLocation.withDefaultNamespace("sweeping_edge"):null;
+    }
+
+    @SubscribeEvent public static void enchantments(MissingMappingsEvent event) {
+        var registry=net.minecraftforge.registries.ForgeRegistries.ENCHANTMENTS;
+        for(var mapping:event.<net.minecraft.world.item.enchantment.Enchantment>getAllMappings(Registries.ENCHANTMENT)) {
+            ResourceLocation replacement=enchantmentReplacement(mapping.getKey());
+            if(replacement!=null)mapping.remap(requireMappingTarget(registry.containsKey(replacement),()->registry.getValue(replacement)));
+        }
+    }
+
+    static boolean retiredPotion(ResourceLocation key) {
+        return key.equals(ResourceLocation.withDefaultNamespace("empty"));
+    }
+
+    @SubscribeEvent public static void potions(MissingMappingsEvent event) {
+        for(var mapping:event.<net.minecraft.world.item.alchemy.Potion>getAllMappings(Registries.POTION)) {
+            // The native item fixer represents the old empty sentinel as an
+            // absent potion holder. A real potion here would change its contents.
+            if(retiredPotion(mapping.getKey())
+                    && net.minecraft.world.item.alchemy.PotionContents.EMPTY.potion().isEmpty())mapping.ignore();
+        }
+    }
+
     @SubscribeEvent public static void biomes(MissingMappingsEvent event) {
         for(MissingMappingsEvent.Mapping<net.minecraft.world.level.biome.Biome> mapping:event.<net.minecraft.world.level.biome.Biome>getAllMappings(Registries.BIOME)) {
             if(!mapping.getKey().getNamespace().equals("minecraft"))continue;
@@ -139,6 +175,12 @@ public final class LegacyRegistryMappings {
 
     @SubscribeEvent public static void sounds(MissingMappingsEvent event) {
         for(MissingMappingsEvent.Mapping<SoundEvent> mapping:event.<SoundEvent>getAllMappings(Registries.SOUND_EVENT)) {
+            if (RETIRED_PARROT_SOUNDS.contains(mapping.getKey())
+                    && !BuiltInRegistries.SOUND_EVENT.containsKey(mapping.getKey())) {
+                // Old saves retain these numeric bindings after vanilla removed the imitations.
+                mapping.ignore();
+                continue;
+            }
             if (mapping.getKey().equals(OLD_JUNGLE_AND_FOREST_MUSIC)) {
                 // Vanilla 1.20 defines separate music for the two biomes.
                 // Retire only the obsolete Forge numeric binding.

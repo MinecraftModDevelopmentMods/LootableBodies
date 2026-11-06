@@ -36,7 +36,7 @@ class Native119CoremodEngineTest {
         blackboardFixture();
         Class<?> factory=Class.forName("net.minecraftforge.coremod.NashornFactory");
         String source=factory.getProtectionDomain().getCodeSource().getLocation().toString();
-        assertTrue(source.endsWith("coremods-5.2.4.jar"),source);System.out.println("COREMOD_ENGINE_SOURCE="+source);
+        assertTrue(source.endsWith("coremods-5.2.6.jar"),source);System.out.println("COREMOD_ENGINE_SOURCE="+source);
         Method create=factory.getDeclaredMethod("createEngine");create.setAccessible(true);
         return (ScriptEngine)create.invoke(null);
     }

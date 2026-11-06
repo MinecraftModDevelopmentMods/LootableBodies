@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "minecraft": "1.20.6",
+  "forge": "50.2.14",
+  "data_version": 3839,
+  "generator": "minecraft:flat",
+  "sha256": "34253D55B2B3A4F1CE4107FACF5AF64ED496264ED53804405F6CDC6D45E56E74",
+  "seed": 8676444864448831725,
+  "source": "Owned disposable world header saved by the official dedicated server after the native component-stack smoke",
+  "synthetic": true,
+  "historical_writer_proof": false
+}

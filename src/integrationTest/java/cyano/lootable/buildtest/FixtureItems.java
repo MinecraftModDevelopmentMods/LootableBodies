@@ -22,7 +22,7 @@ public final class FixtureItems {
             // Native18 creates an intrusive holder inside Item's constructor;
             // construction belongs to the same open registration event.
             keepsake=new Item(new Item.Properties()) {
-                @Override public ICapabilityProvider initCapabilities(ItemStack stack,CompoundTag nbt){return new Stored();}
+                @Override public ICapabilityProvider getCapabilityProvider(ItemStack stack){return new Stored();}
             };
             event.register(net.minecraft.core.registries.Registries.ITEM,new ResourceLocation("lootablebodiesbuildtest:keepsake"),()->keepsake);
         }

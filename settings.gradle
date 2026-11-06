@@ -13,7 +13,7 @@ gradle.taskGraph.whenReady { graph ->
             task instanceof org.gradle.api.tasks.JavaExec ||
             task.name in ['integrationTest', 'clientIntegrationTest', 'forgeControlServer',
                           'localRuntimeVerification', 'prepareLegacyWorldFixtures',
-                          'generateNative120Fixtures'] ||
+                          'generateNative120Fixtures', 'generateNative1206Fixtures'] ||
             task.name.startsWith('integration')
         }
         if (!localOnly.empty) throw new GradleException(

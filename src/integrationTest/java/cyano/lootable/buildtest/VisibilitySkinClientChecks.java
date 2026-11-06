@@ -5,7 +5,6 @@ import java.io.File;
 import java.lang.reflect.Field;
 import java.util.*;
 import com.mojang.authlib.GameProfile;
-import com.mojang.authlib.minecraft.MinecraftProfileTexture;
 import cyano.lootable.LootableBodies;
 import cyano.lootable.entities.EntityLootableBody;
 import net.minecraft.client.Minecraft;
@@ -30,8 +29,8 @@ final class VisibilitySkinClientChecks {
             VisibilitySkinChecks.run(mc);
             for(Field field:Minecraft.class.getDeclaredFields())if(field.getType()==SkinManager.class){skinField=field;skinField.setAccessible(true);}
             original=(SkinManager)skinField.get(mc);
-            skinField.set(mc,new SkinManager(mc.getTextureManager(),new File(mc.gameDirectory,"skin-fixture"),mc.getMinecraftSessionService()) {
-                @Override public Map<MinecraftProfileTexture.Type,MinecraftProfileTexture> getInsecureSkinInformation(GameProfile p){throw new IllegalStateException("injected render skin cache failure");}
+            skinField.set(mc,new SkinManager(mc.getTextureManager(),new File(mc.gameDirectory,"skin-fixture").toPath(),mc.getMinecraftSessionService(),mc) {
+                @Override public net.minecraft.client.resources.PlayerSkin getInsecureSkin(GameProfile p){throw new IllegalStateException("injected render skin cache failure");}
             });
             mc.setScreen(new Panel(mc));stage=2;frames=0;
         } else if(stage==2 && ++frames>30) {
@@ -49,7 +48,7 @@ final class VisibilitySkinClientChecks {
             try {for(int i=0;i<3;i++) {
                 LootableBodies.useLocalSkin=i==2;int x=(2*i+1)*width/6;
                 graphics.drawCenteredString(font,names[i],x,35,0xffffff);
-                InventoryScreen.renderEntityInInventoryFollowsMouse(graphics,x,height*2/3,65,20,-20,bodies[i]);
+                InventoryScreen.renderEntityInInventoryFollowsMouse(graphics,x-75,65,x+75,height-40,65,0.0625F,x+20,height*2/3-20,bodies[i]);
             }} finally {LootableBodies.useLocalSkin=local;}
         }
         @Override public boolean isPauseScreen(){return false;}

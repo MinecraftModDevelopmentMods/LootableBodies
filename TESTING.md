@@ -1,7 +1,7 @@
 # Testing
 
-Run qualification for Forge 1.20.1 locally. Hosted checks cover workflow and wrapper contracts, compilation, archive checks
-and security analysis.
+Run qualification for Forge 1.20.6 locally with Forge 50.2.14 and Java 21.
+GitHub Actions checks production archives and release contracts.
 
 During development, reproduce the changed behaviour first, then batch the cheap
 Java and Python checks. Reserve the full runtime suite for a frozen candidate.
@@ -32,7 +32,9 @@ For a frozen candidate:
 
 Unchanged mod-free resource/protocol controls can be reused only with the same
 control, SDK, JDK, flags, resources and auditor contract. Changes to those inputs
-require new control qualification. Changes confined to a test fixture require
+require new control qualification. Use `tools/fixtures/native1206-forge-only-flat-level.dat`
+for the Forge-only respawn control so it starts with Forge's own saved registry.
+Changes confined to a test fixture require
 the affected proof and tool contracts, not an automatic replay of unrelated
 passed groups. A changed production migration path still requires its full
 applicable migration coverage.

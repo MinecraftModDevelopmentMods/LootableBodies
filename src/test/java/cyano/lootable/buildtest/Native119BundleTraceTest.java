@@ -10,6 +10,7 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import net.minecraft.network.*;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.protocol.*;
 import net.minecraft.network.protocol.game.*;
 import net.minecraft.world.entity.EntityType;
@@ -24,14 +25,20 @@ class Native119BundleTraceTest {
     private ClientboundAddEntityPacket spawn(int id) {
         return new ClientboundAddEntityPacket(id,new UUID(1194,id),1,2,3,4,5,EntityType.PIG,6,new Vec3(.1,.2,.3),7);
     }
-    private byte[] bytes(Packet<?> packet) {
-        FriendlyByteBuf buffer=new FriendlyByteBuf(Unpooled.buffer());
-        try {packet.write(buffer);byte[] result=new byte[buffer.readableBytes()];buffer.getBytes(0,result);return result;}
+    private byte[] bytes(ClientboundAddEntityPacket packet) {
+        RegistryFriendlyByteBuf buffer=new RegistryFriendlyByteBuf(Unpooled.buffer(),registries());
+        try {ClientboundAddEntityPacket.STREAM_CODEC.encode(buffer,packet);byte[] result=new byte[buffer.readableBytes()];buffer.getBytes(0,result);return result;}
         finally {buffer.release();}
+    }
+    private RegistryAccess registries() {
+        return RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY);
+    }
+    private ProtocolInfo<ClientGamePacketListener> protocol() {
+        return GameProtocols.CLIENTBOUND.bind(RegistryFriendlyByteBuf.decorator(registries()));
     }
     private List<Packet<?>> wire(ClientboundBundlePacket bundle) {
         List<Packet<?>> wire=new ArrayList<>();
-        ConnectionProtocol.PLAY.getBundlerInfo(PacketFlow.CLIENTBOUND).unbundlePacket(bundle,wire::add);
+        protocol().bundlerInfo().unbundlePacket(bundle,wire::add);
         return wire;
     }
     private final class Fixture implements AutoCloseable {
@@ -42,8 +49,7 @@ class Native119BundleTraceTest {
         final Path log=temporary.resolve("received-packets.txt");
         Fixture() throws Exception {
             loader=new URLClassLoader(new URL[]{Path.of("build/integration-test-mod/classes").toUri().toURL()},getClass().getClassLoader());
-            channel.attr(BundlerInfo.BUNDLER_PROVIDER).set(ConnectionProtocol.PLAY);
-            channel.pipeline().addLast("bundler",new PacketBundlePacker(PacketFlow.CLIENTBOUND));
+            channel.pipeline().addLast("bundler",new PacketBundlePacker(protocol().bundlerInfo()));
             channel.pipeline().addLast("packet_handler",new ChannelInboundHandlerAdapter(){
                 @Override public void channelRead(ChannelHandlerContext context,Object packet){received.add(packet);}
             });
@@ -68,7 +74,7 @@ class Native119BundleTraceTest {
         try(Fixture fixture=new Fixture()) {
             fixture.receive(wire(bundle));assertEquals(1,fixture.received.size());
             ClientboundBundlePacket delivered=assertInstanceOf(ClientboundBundlePacket.class,fixture.received.get(0));
-            List<Packet<ClientGamePacketListener>> children=new ArrayList<>();delivered.subPackets().forEach(children::add);
+            List<Packet<? super ClientGamePacketListener>> children=new ArrayList<>();delivered.subPackets().forEach(children::add);
             assertEquals(List.of(spawn,remove),children);assertArrayEquals(original,bytes(spawn));
             String text=Files.readString(fixture.log);
             assertTrue(text.contains(" IN MOD_SPAWN id=12 mod=minecraft ")&&text.contains("uuid="+spawn.getUUID()),"Native bundled spawn disappeared from receiving wire proof");

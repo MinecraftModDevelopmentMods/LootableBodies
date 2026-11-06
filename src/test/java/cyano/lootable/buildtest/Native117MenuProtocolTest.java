@@ -4,7 +4,9 @@ import io.netty.buffer.Unpooled;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import java.util.Arrays;
 import net.minecraft.core.NonNullList;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.*;
 import net.minecraft.nbt.CompoundTag;
@@ -15,10 +17,18 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class Native117MenuProtocolTest {
     @BeforeAll static void bootstrap(){net.minecraft.server.Bootstrap.bootStrap();}
-    private ItemStack stack(int count) {ItemStack item=new ItemStack(Items.DIAMOND,count);CompoundTag tag=new CompoundTag();tag.putString("keep","native packet");item.setTag(tag);return item;}
+    private ItemStack stack(int count) {ItemStack item=new ItemStack(Items.DIAMOND,count);CompoundTag tag=new CompoundTag();tag.putString("keep","native packet");item.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,net.minecraft.world.item.component.CustomData.of(tag));return item;}
     private byte[] bytes(Packet<?> packet) throws Exception {
-        FriendlyByteBuf buffer=new FriendlyByteBuf(Unpooled.buffer());
-        try {packet.write(buffer);byte[] bytes=new byte[buffer.readableBytes()];buffer.getBytes(0,bytes);return bytes;}finally{buffer.release();}
+        RegistryFriendlyByteBuf buffer=wire();
+        try {
+            if(packet instanceof ClientboundContainerSetContentPacket content)
+                ClientboundContainerSetContentPacket.STREAM_CODEC.encode(buffer,content);
+            else ClientboundContainerSetSlotPacket.STREAM_CODEC.encode(buffer,(ClientboundContainerSetSlotPacket)packet);
+            byte[] bytes=new byte[buffer.readableBytes()];buffer.getBytes(0,bytes);return bytes;
+        }finally{buffer.release();}
+    }
+    private RegistryFriendlyByteBuf wire() {
+        return new RegistryFriendlyByteBuf(Unpooled.buffer(),RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
     }
     @Test void fullContentCarriesStateAndCursorWithoutMutatingThePacket() throws Exception {
         NonNullList<ItemStack> slots=NonNullList.withSize(84,ItemStack.EMPTY);slots.set(47,stack(31));ItemStack cursor=stack(17);
@@ -38,10 +48,10 @@ class Native117MenuProtocolTest {
     @Test void clickCodecRetainsStatePredictedSlotsAndCarriedStack() throws Exception {
         Int2ObjectOpenHashMap<ItemStack> changed=new Int2ObjectOpenHashMap<>();changed.put(6,stack(13));changed.put(47,ItemStack.EMPTY);
         ServerboundContainerClickPacket outgoing=new ServerboundContainerClickPacket(7,32766,6,1,ClickType.PICKUP,stack(9),changed);
-        FriendlyByteBuf buffer=new FriendlyByteBuf(Unpooled.buffer());
+        RegistryFriendlyByteBuf buffer=wire();
         try {
-            outgoing.write(buffer);byte[] before=new byte[buffer.readableBytes()];buffer.getBytes(0,before);
-            ServerboundContainerClickPacket decoded=new ServerboundContainerClickPacket(buffer);
+            ServerboundContainerClickPacket.STREAM_CODEC.encode(buffer,outgoing);byte[] before=new byte[buffer.readableBytes()];buffer.getBytes(0,before);
+            ServerboundContainerClickPacket decoded=ServerboundContainerClickPacket.STREAM_CODEC.decode(buffer);
             assertEquals(7,decoded.getContainerId());assertEquals(32766,decoded.getStateId());assertEquals(6,decoded.getSlotNum());assertEquals(1,decoded.getButtonNum());
             assertEquals(ClickType.PICKUP,decoded.getClickType());assertTrue(ItemStack.matches(stack(9),decoded.getCarriedItem()));
             assertEquals(changed.keySet(),decoded.getChangedSlots().keySet());assertTrue(ItemStack.matches(stack(13),decoded.getChangedSlots().get(6)));assertTrue(decoded.getChangedSlots().get(47).isEmpty());
@@ -50,7 +60,7 @@ class Native117MenuProtocolTest {
     }
     @Test void unrelatedPacketsAreIgnoredWithoutSerializingThem() {
         Packet<ClientGamePacketListener> other=new Packet<ClientGamePacketListener>() {
-            public void write(FriendlyByteBuf buffer){throw new AssertionError("Observer serialized an unrelated packet");}
+            public net.minecraft.network.protocol.PacketType<? extends Packet<ClientGamePacketListener>> type(){throw new AssertionError("Observer serialized an unrelated packet");}
             public void handle(ClientGamePacketListener listener){throw new AssertionError("Observer handled a live packet");}
         };
         assertNull(NativeMenuObservation.decode(other));

@@ -1,28 +1,13 @@
 package cyano.lootable.buildtest;
 
-import java.lang.reflect.Field;
 import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
-import net.minecraft.resources.ResourceKey;
 
-/** Read decoded fixture packets without invoking the client-only dimension getter. */
+/** Observe the native respawn record without changing the decoded packet. */
 final class NativeRespawnDescription {
     private NativeRespawnDescription() { }
+
     static String describe(ClientboundRespawnPacket packet) {
-        try {
-            ResourceKey<?> dimension=null;
-            long seed=0;
-            for(Field field:ClientboundRespawnPacket.class.getDeclaredFields()) {
-                if(field.getType()==ResourceKey.class) {
-                    field.setAccessible(true);ResourceKey<?> key=(ResourceKey<?>)field.get(packet);
-                    if(key==null || !key.isFor(net.minecraft.core.registries.Registries.DIMENSION))continue;
-                    if(dimension!=null)throw new AssertionError("Ambiguous respawn world key");
-                    dimension=key;
-                } else if(field.getType()==long.class) {
-                    field.setAccessible(true);seed=field.getLong(packet);
-                }
-            }
-            if(dimension==null)throw new AssertionError("Missing respawn world key");
-            return "RESPAWN dimension="+dimension.location()+" hashedSeed="+seed;
-        } catch(ReflectiveOperationException invalid) {throw new AssertionError("Fixture respawn observation",invalid);}
+        var spawn=packet.commonPlayerSpawnInfo();
+        return "RESPAWN dimension="+spawn.dimension().location()+" hashedSeed="+spawn.seed();
     }
 }

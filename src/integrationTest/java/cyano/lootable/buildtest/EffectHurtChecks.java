@@ -34,6 +34,7 @@ import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
+import net.minecraft.core.Holder;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.server.MinecraftServer;
@@ -47,14 +48,14 @@ final class EffectHurtChecks {
     private static final List<String> results=new ArrayList<>();
     private static MobEffect extended;
     static void registerPotion(){
-        RuntimeChecks.require(MobEffect.byId(200)==null,"Fixture potion ID already occupied");
+        RuntimeChecks.require(net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.byId(200)==null,"Fixture potion ID already occupied");
         extended=new MobEffect(net.minecraft.world.effect.MobEffectCategory.BENEFICIAL,0x123456){};
         // Forge 1.12 assigns IDs through registry events. Fill the isolated test
         // registry through its public API so unsigned-byte coverage still uses 200.
-        for(int i=0;MobEffect.byId(199)==null && i<200;i++)
+        for(int i=0;net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.byId(199)==null && i<200;i++)
             net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.register(new net.minecraft.resources.ResourceLocation("lootablebodiesbuildtest:padding_"+i),new MobEffect(net.minecraft.world.effect.MobEffectCategory.BENEFICIAL,0){});
         net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.register(new net.minecraft.resources.ResourceLocation("lootablebodiesbuildtest:extended_effect"),extended);
-        RuntimeChecks.require(MobEffect.getId(extended)==200,"Fixture potion must exercise unsigned byte ID 200");
+        RuntimeChecks.require(net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.getId(extended)==200,"Fixture potion must exercise unsigned byte ID 200");
         // Older probes saved a different number of padding effects. Retain their
         // registry names during upgrades without changing fresh-world ID tests.
         if(System.getProperty("lootablebodies.phase","").startsWith("upgrade-"))
@@ -88,7 +89,7 @@ final class EffectHurtChecks {
         check("zero_duration_expires_normally",()->validDuration(0));
         check("maximum_duration_does_not_overflow",()->validDuration(Integer.MAX_VALUE));
         check("signed_byte_amplifier_encodings_keep_native_111_clamping",EffectHurtChecks::signedAmplifiers);
-        check("forge_curative_items_keep_complete_item_data",EffectHurtChecks::curativeItems);
+        check("legacy_curative_items_remain_in_recovery_data",EffectHurtChecks::curativeItems);
         check("malformed_curative_items_retained_with_safe_defaults",EffectHurtChecks::badCurativeItems);
         check("registered_unsigned_byte_effect_id_survives_reload",EffectHurtChecks::extendedId);
         check("duplicate_id_numeric_alias_keeps_first",EffectHurtChecks::alias);
@@ -102,7 +103,7 @@ final class EffectHurtChecks {
         check("invalid_effect_and_hurt_fields_keep_complete_unresolved_inventory",EffectHurtChecks::inventory);
         check("native_icon_flag_survives_without_quarantine",()->{CompoundTag e=effect();e.putBoolean("ShowIcon",false);EntityLootableBody b=read(with(e));require(!b.getEffect(MobEffects.NIGHT_VISION).showIcon(),"Native icon visibility changed");require(!saved(b).contains(NameLifetimeChecks.RECOVERY),"Native icon visibility quarantined");stable(b);});
         check("missing_icon_flag_follows_particle_default",()->{CompoundTag e=effect();e.remove("ShowIcon");e.putBoolean("ShowParticles",false);EntityLootableBody b=read(with(e));require(!b.getEffect(MobEffects.NIGHT_VISION).showIcon(),"Missing native icon default changed");stable(b);});
-        check("native_named_identity_survives_numeric_registry_remap",()->{CompoundTag e=effect();e.putByte("Id",(byte)MobEffect.getId(MobEffects.MOVEMENT_SPEED));EntityLootableBody b=read(with(e));require(b.getEffect(MobEffects.NIGHT_VISION)!=null && b.getEffect(MobEffects.MOVEMENT_SPEED)==null,"Native named identity did not take precedence");require(!saved(b).contains(NameLifetimeChecks.RECOVERY),"Healthy registry remap quarantined");stable(b);});
+        check("native_named_identity_survives_numeric_registry_remap",()->{CompoundTag e=effect();e.putByte("Id",(byte)1);EntityLootableBody b=read(with(e));require(b.getEffect(MobEffects.NIGHT_VISION)!=null && b.getEffect(MobEffects.MOVEMENT_SPEED)==null,"Native named identity did not take precedence");require(!saved(b).contains(NameLifetimeChecks.RECOVERY),"Healthy registry remap quarantined");stable(b);});
         check("native_named_identity_recovers_missing_legacy_number_with_raw_evidence",()->{CompoundTag e=effect();e.remove("Id");EntityLootableBody b=read(with(e));require(b.getEffect(MobEffects.NIGHT_VISION)!=null,"Known native name was lost");NameLifetimeChecks.retained(b,"ActiveEffect",e);stable(b);});
         check("unknown_or_malformed_named_identity_cannot_activate_unrelated_numeric_fallback",()->{for(Tag value:new Tag[]{IntTag.valueOf(16),StringTag.valueOf("bad name?!"),StringTag.valueOf("missing:unknown_effect")}){CompoundTag e=effect();e.put("forge:id",value);EntityLootableBody b=read(with(e));require(b.getActiveEffects().isEmpty(),"Unreadable native identity activated a different effect");NameLifetimeChecks.retained(b,"ActiveEffect",e);stable(b);}});
         check("metadata_only_does_not_prevent_empty_decay",EffectHurtChecks::empty);
@@ -114,10 +115,25 @@ final class EffectHurtChecks {
     private static CompoundTag saved(EntityLootableBody b){return NameLifetimeChecks.saved(b);}
     private static CompoundTag base(){EntityLootableBody b=new EntityLootableBody(world);b.setPos(160.5,80,160.5);b.setNoGravity(true);b.setItem(6,NbtRecoveryChecks.item(120,17));RuntimeChecks.disableVacuum(b);return saved(b);}
     private static EntityLootableBody read(CompoundTag n){CompoundTag before=n.copy();EntityLootableBody b=new EntityLootableBody(world);b.load(n);require(NameLifetimeChecks.same(before,n),"Input mutated");return b;}
-    static CompoundTag effect(MobEffect p,int duration,int amplifier){return new MobEffectInstance(p,duration,amplifier,false,true).save(new CompoundTag());}
+    static CompoundTag effect(Holder<MobEffect> effect,int duration,int amplifier) {
+        // Explicit legacy shape for malformed-old-input tests. Current native
+        // save/reload is exercised independently by attributes() below.
+        CompoundTag old=new CompoundTag();
+        var registry=net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT;
+        old.putByte("Id",(byte)registry.getId(effect.value()));
+        old.putString("forge:id",registry.getKey(effect.value()).toString());
+        old.putInt("Duration",duration);
+        old.putByte("Amplifier",(byte)amplifier);
+        old.putBoolean("ShowParticles",true);
+        old.putBoolean("ShowIcon",true);
+        return old;
+    }
+    private static Holder<MobEffect> extendedHolder() {
+        return net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.getHolder(extended).orElseThrow();
+    }
     private static CompoundTag effect(){return effect(MobEffects.NIGHT_VISION,200,1);}
     private static CompoundTag with(CompoundTag e){CompoundTag n=base();n.put("ActiveEffects",NbtRecoveryChecks.list(e));return n;}
-    private static void stable(EntityLootableBody b){CompoundTag a=saved(b),z=saved(read(a));for(String k:new String[]{"Equipment","Aux",NbtRecoveryChecks.RECOVERY,NameLifetimeChecks.RECOVERY,"ActiveEffects","HurtTime","Health","AbsorptionAmount","Attributes"})require(NameLifetimeChecks.same(a.get(k),z.get(k)),"Round trip changed "+k);require(RuntimeChecks.sameStack(b.getItem(6),NbtRecoveryChecks.item(120,17)),"Complete known inventory changed");}
+    private static void stable(EntityLootableBody b){CompoundTag a=saved(b),z=saved(read(a));for(String k:new String[]{"Equipment","Aux",NbtRecoveryChecks.RECOVERY,NameLifetimeChecks.RECOVERY,"active_effects","HurtTime","Health","AbsorptionAmount","Attributes"})require(NameLifetimeChecks.same(a.get(k),z.get(k)),"Round trip changed "+k);require(RuntimeChecks.sameStack(b.getItem(6),NbtRecoveryChecks.item(120,17)),"Complete known inventory changed");}
     private static void badHurt(Tag raw){CompoundTag n=base();n.put("HurtTime",raw.copy());EntityLootableBody b=read(n);require(b.hurtTime==0 && b.isAlive(),"Bad hurt time activated");NameLifetimeChecks.retained(b,"HurtTime",raw);stable(b);}
     private static void validHurt(Tag raw){CompoundTag n=base();n.put("HurtTime",raw);EntityLootableBody b=read(n);int v=((NumericTag)raw).getAsInt();require(b.hurtTime==v,"Valid countdown narrowed");stable(b);b.baseTick();require(b.hurtTime==v-1,"Countdown no longer ticks");}
     private static void badList(Tag raw){CompoundTag n=base();n.put("ActiveEffects",raw.copy());EntityLootableBody b=read(n);require(b.getActiveEffects().isEmpty(),"Bad effect list activated");NameLifetimeChecks.retained(b,"ActiveEffects",raw);stable(b);}
@@ -127,10 +143,25 @@ final class EffectHurtChecks {
     private static void missingOptional(){CompoundTag e=effect();for(String k:new String[]{"Duration","Amplifier","Ambient","ShowParticles"})e.remove(k);EntityLootableBody b=read(with(e));MobEffectInstance p=b.getEffect(MobEffects.NIGHT_VISION);require(p!=null && p.getDuration()==0 && p.getAmplifier()==0 && !p.isAmbient() && p.isVisible(),"Legacy defaults changed");require(!saved(b).contains(NameLifetimeChecks.RECOVERY),"Missing optional fields quarantined");stable(b);}
     private static void validDuration(int d){EntityLootableBody b=read(with(effect(MobEffects.NIGHT_VISION,d,0)));b.baseTick();MobEffectInstance p=b.getEffect(MobEffects.NIGHT_VISION);require(d==0?p==null:p!=null && p.getDuration()==d-1,"Valid duration tick/expiry changed");stable(b);}
     private static void signedAmplifiers(){for(int a:new int[]{-128,-1,0,127}){EntityLootableBody b=read(with(effect(MobEffects.NIGHT_VISION,200,a)));require(b.getEffect(MobEffects.NIGHT_VISION).getAmplifier()==Math.max(0,a),"Native 1.11 byte amplifier clamping changed");require(!saved(b).contains(NameLifetimeChecks.RECOVERY),"Canonical signed byte quarantined");stable(b);}}
-    private static void curativeItems(){CompoundTag e=effect();CompoundTag item=NbtRecoveryChecks.item(120,7).save(new CompoundTag());ListTag list=new ListTag();list.add(item);e.put("CurativeItems",list);EntityLootableBody b=read(with(e));require(b.getEffect(MobEffects.NIGHT_VISION).getCurativeItems().size()==1 && RuntimeChecks.sameStack(b.getEffect(MobEffects.NIGHT_VISION).getCurativeItems().get(0),ItemStack.of(item)),"Forge curative item NBT changed");require(!saved(b).contains(NameLifetimeChecks.RECOVERY),"Healthy Forge curative items quarantined");stable(b);}
-    private static void badCurativeItems(){CompoundTag e=effect();e.putString("CurativeItems","opaque");EntityLootableBody b=read(with(e));NameLifetimeChecks.retained(b,"ActiveEffect",e);require(!b.getEffect(MobEffects.NIGHT_VISION).getCurativeItems().isEmpty(),"Malformed curative list did not use native defaults");stable(b);}
-    private static void extendedId(){for(boolean wide:new boolean[]{false,true}){CompoundTag e=effect(extended,200,1);if(wide)e.putInt("Id",200);EntityLootableBody b=read(with(e));require(b.getEffect(extended)!=null && b.getEffect(extended).getDuration()==200,"Registered unsigned ID changed");require(!saved(b).contains(NameLifetimeChecks.RECOVERY),"Valid extended ID quarantined");stable(b);}}
-    private static void alias(){CompoundTag first=effect(extended,200,1),second=effect(extended,900,3),n=base();second.putLong("Id",200);n.put("ActiveEffects",NbtRecoveryChecks.list(first,second));EntityLootableBody b=read(n);require(b.getEffect(extended).getDuration()==200,"Numeric alias bypassed first valid effect");NameLifetimeChecks.retained(b,"ActiveEffect",second);stable(b);}
+    private static void curativeItems() {
+        CompoundTag legacy=effect();
+        CompoundTag item=FixtureStackData.save(NbtRecoveryChecks.item(120,7));
+        legacy.put("CurativeItems",NbtRecoveryChecks.list(item));
+        EntityLootableBody body=read(with(legacy));
+        require(body.getEffect(MobEffects.NIGHT_VISION)!=null,"Legacy effect itself was lost");
+        NameLifetimeChecks.retained(body,"ActiveEffect",legacy);
+        stable(body);
+    }
+    private static void badCurativeItems() {
+        CompoundTag legacy=effect();
+        legacy.putString("CurativeItems","opaque");
+        EntityLootableBody body=read(with(legacy));
+        require(body.getEffect(MobEffects.NIGHT_VISION)!=null,"Opaque curative data suppressed the known effect");
+        NameLifetimeChecks.retained(body,"ActiveEffect",legacy);
+        stable(body);
+    }
+    private static void extendedId(){for(boolean wide:new boolean[]{false,true}){CompoundTag e=effect(extendedHolder(),200,1);if(wide)e.putInt("Id",200);EntityLootableBody b=read(with(e));require(b.getEffect(extendedHolder())!=null && b.getEffect(extendedHolder()).getDuration()==200,"Registered unsigned ID changed");require(!saved(b).contains(NameLifetimeChecks.RECOVERY),"Valid extended ID quarantined");stable(b);}}
+    private static void alias(){CompoundTag first=effect(extendedHolder(),200,1),second=effect(extendedHolder(),900,3),n=base();second.putLong("Id",200);n.put("ActiveEffects",NbtRecoveryChecks.list(first,second));EntityLootableBody b=read(n);require(b.getEffect(extendedHolder()).getDuration()==200,"Numeric alias bypassed first valid effect");NameLifetimeChecks.retained(b,"ActiveEffect",second);stable(b);}
     private static void validTail(){CompoundTag bad=effect();bad.putString("Duration","opaque");CompoundTag n=base();n.put("ActiveEffects",NbtRecoveryChecks.list(bad,effect()));EntityLootableBody b=read(n);require(b.getEffect(MobEffects.NIGHT_VISION).getDuration()==200,"Bad first effect hid valid tail");NameLifetimeChecks.retained(b,"ActiveEffect",bad);stable(b);}
     private static void duplicate(){CompoundTag first=effect(),second=effect(MobEffects.NIGHT_VISION,900,3),n=base();n.put("ActiveEffects",NbtRecoveryChecks.list(first,second));EntityLootableBody b=read(n);require(b.getEffect(MobEffects.NIGHT_VISION).getDuration()==200,"Duplicate overwrote first effect");NameLifetimeChecks.retained(b,"ActiveEffect",second);stable(b);}
     private static void unknown(){CompoundTag e=effect();e.putString("Opaque","retain effect extension");EntityLootableBody b=read(with(e));require(b.getActiveEffects().size()==1,"Unknown sibling lost understood effect");NameLifetimeChecks.retained(b,"ActiveEffect",e);stable(b);}

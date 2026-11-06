@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "target": "1.20.1",
-  "status": "Gameplay and migration qualify locally. Hosted checks validate policy, production archives and security.",
+  "target": "1.20.6",
+  "status": "Forge 1.20.6 qualifies locally. Hosted checks verify production archives and release contracts.",
   "hosted": {
     "allowed": [
       "policy",

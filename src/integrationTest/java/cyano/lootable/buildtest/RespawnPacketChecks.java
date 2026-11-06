@@ -63,7 +63,7 @@ public final class RespawnPacketChecks {
     static File file(String name){return new File(System.getProperty("lootablebodies.multiplayer.sync"),name);}
     private ServerPlayer player(String role){return server.getPlayerList().getPlayerByName("Container"+role);}
     private boolean ack(String role,int p){return file(role+".case-"+index+"-"+p).isFile();}
-    private void trace(ServerPlayer p){if(p!=null&&traced.add(p.getGameProfile().getName()))RespawnPacketTrace.install(p.connection.connection,file(p.getGameProfile().getName()+"-server-packets.txt"),null);}
+    private void trace(ServerPlayer p){if(p!=null&&traced.add(p.getGameProfile().getName()))RespawnPacketTrace.install(p.connection.getConnection(),file(p.getGameProfile().getName()+"-server-packets.txt"),null);}
     @SubscribeEvent public void tick(TickEvent.ServerTickEvent e) {
         if(e.phase!=TickEvent.Phase.END||finished)return;
         try {

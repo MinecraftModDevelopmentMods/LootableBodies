@@ -28,7 +28,7 @@ class EarlyWorldPreservationTest {
         byte[] before=Files.readAllBytes(world.resolve("level.dat"));Native118UnitLifecycle.activate();
         LevelStorageSource format=new LevelStorageSource(directory,directory.resolve("backups"),new DirectoryValidator(new PathAllowList(java.util.List.of())),NativeVanillaDataFixer.get());
         try(LevelStorageSource.LevelStorageAccess save=format.createAccess("fixture")) {
-            Error failure=assertThrows(Error.class,()->EarlyWorldPreservation.beforeRead(save));
+            Error failure=assertThrows(Error.class,()->EarlyWorldPreservation.beforeRead(save,false));
             assertTrue(failure.getMessage().contains("Lootable Bodies could not preserve this world's corpses"));
         }
         assertArrayEquals(before,Files.readAllBytes(world.resolve("level.dat")));
@@ -38,7 +38,7 @@ class EarlyWorldPreservationTest {
         Path world=directory.resolve("fixture");CompoundTag root=level(2230);write(world,root);Native118UnitLifecycle.activate();
         LevelStorageSource format=new LevelStorageSource(directory,directory.resolve("backups"),new DirectoryValidator(new PathAllowList(java.util.List.of())),NativeVanillaDataFixer.get());
         try(LevelStorageSource.LevelStorageAccess save=format.createAccess("fixture")) {
-            EarlyWorldPreservation.beforeRead(save);
+            EarlyWorldPreservation.beforeRead(save,false);
             UpgradeJournal early=UpgradePreservation.journal();assertEquals(2230,early.worldVersions().getInt("WorldDataVersion"));
             write(world,level(2586));assertSame(early,UpgradePreservation.prepareForStart(world));
             assertEquals(2230,early.worldVersions().getInt("WorldDataVersion"));

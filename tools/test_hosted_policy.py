@@ -6,7 +6,7 @@ from hosted_policy import gradle_roots,validate_workflow,require_qualified_manif
 class HostedPolicyTests(unittest.TestCase):
     def test_raw_jdk_version_is_rejected_before_java_preparation(self):
         text=(Path(__file__).resolve().parents[1]/'.github/workflows/native120.yml').read_text()
-        with self.assertRaises(ValueError):validate_workflow(text.replace('17.0.20+101','17.0.20.1+1'))
+        with self.assertRaises(ValueError):validate_workflow(text.replace('21.0.7+6','21.0.7+99'))
 
     def test_hosted_roots_allow_archive_builds_and_reject_every_test_or_game_entry(self):
         base='./gradlew assemble verifyProductionRuntimeClasspath prepareReleaseBundle '
@@ -29,17 +29,17 @@ class HostedPolicyTests(unittest.TestCase):
             with self.subTest(removed=removed),self.assertRaises(ValueError):validate_workflow(text.replace(removed,''))
 
     def test_manifest_boolean_cannot_override_an_integrity_hold(self):
-        version='2.4.11.120011';base='LootableBodies-'+version
+        version='2.4.11.120061';base='LootableBodies-'+version
         names=['CHANGELOG.txt','SHA256SUMS',base+'.jar',base+'-sources.jar',base+'-javadoc.jar',base+'.pom']
-        good={'version':version,'minecraft':'1.20.1','forge':'47.4.28','local_qualification_complete':True,'qualification_integrity_status':'verified','files':{name:'A'*64 for name in names}}
+        good={'version':version,'minecraft':'1.20.6','forge':'50.2.14','local_qualification_complete':True,'qualification_integrity_status':'verified','files':{name:'A'*64 for name in names}}
         require_qualified_manifest(good)
         for field,value in [('qualification_integrity_status','blocked_receipt_mismatch'),('qualification_integrity_status',None),('local_qualification_complete',False),('minecraft','1.17.1')]:
             changed=dict(good);changed[field]=value
             with self.subTest(field=field,value=value),self.assertRaises(ValueError):require_qualified_manifest(changed)
 
     def test_missing_or_extra_file_declaration_is_fatal(self):
-        version='2.4.11.120011';base='LootableBodies-'+version
-        good={'version':version,'minecraft':'1.20.1','forge':'47.4.28','local_qualification_complete':True,'qualification_integrity_status':'verified','files':{name:'A'*64 for name in ['CHANGELOG.txt','SHA256SUMS',base+'.jar',base+'-sources.jar',base+'-javadoc.jar',base+'.pom']}}
+        version='2.4.11.120061';base='LootableBodies-'+version
+        good={'version':version,'minecraft':'1.20.6','forge':'50.2.14','local_qualification_complete':True,'qualification_integrity_status':'verified','files':{name:'A'*64 for name in ['CHANGELOG.txt','SHA256SUMS',base+'.jar',base+'-sources.jar',base+'-javadoc.jar',base+'.pom']}}
         for extra in (False,True):
             changed=json.loads(json.dumps(good))
             if extra:changed['files']['extra.jar']='B'*64

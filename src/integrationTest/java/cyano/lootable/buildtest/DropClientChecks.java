@@ -80,20 +80,20 @@ final class DropClientChecks {
         else if(stage==19 && frames>20){
             equal(mc.player.containerMenu.getCarried(),null,"Closed creative client cursor");
             schedule(mc,()->{equal(player(mc).containerMenu.getCarried(),null,"Closed creative server cursor");CompoundTag data=new CompoundTag();body(mc).addAdditionalSaveData(data);ListTag aux=data.getList("Aux",10);int count=0;
-                for(int i=0;i<aux.size();i++)if(RuntimeChecks.sameStack(ItemStack.of(aux.getCompound(i)),item(122,17)))count++;
+                for(int i=0;i<aux.size();i++)if(RuntimeChecks.sameStack(FixtureStackData.load(aux.getCompound(i)),item(122,17)))count++;
                 RuntimeChecks.require(count==1,"Cancelled creative close lost/duplicated full-inventory cursor");MinecraftForge.EVENT_BUS.unregister(reject);
                 RuntimeChecks.saveExpected(folder(mc),"drop-creative-final",body(mc));savedBody=new CompoundTag();body(mc).saveAsPassenger(savedBody);savedPlayer=player(mc).getInventory().save(new ListTag());
                 CompoundTag expected=new CompoundTag();expected.put("Inventory",savedPlayer.copy());try(FileOutputStream out=new FileOutputStream(new File(folder(mc),"drop-creative-player.nbt"))){NbtIo.writeCompressed(expected,out);}
                 mc.getSingleplayerServer().getPlayerList().saveAll();mc.getSingleplayerServer().saveAllChunks(false,true,false);});next(20);
         } else if(stage==20 && done()){quit(mc);next(21);}
-        else if(stage==21 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"build-fixture");next(22);}
+        else if(stage==21 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(22);}
         else if(stage==22 && ready(mc) && frames>20){schedule(mc,()->{
             RuntimeChecks.awaitChunk(player(mc).serverLevel(),2,0);body(mc).baseTick();RuntimeChecks.verifyExpected(folder(mc),"drop-creative-final",body(mc));
             RuntimeChecks.require(savedPlayer.equals(player(mc).getInventory().save(new ListTag())),"Creative player inventory changed on disk reload");player(mc).connection.teleport(40.5,80,7.5,0,0);
             mark(mc,"creative_cancelled_close_full_inventory_disk_reload");});next(23);
         } else if(stage==23 && done()){if(open(mc))next(24);}
         else if(stage==24 && gui(mc) && frames>20){
-            ItemStack[] expected=new ItemStack[48];ListTag list=savedBody.getList("Equipment",10);for(int i=0;i<list.size();i++){CompoundTag tag=list.getCompound(i);expected[tag.getByte("Slot")]=ItemStack.of(tag);}
+            ItemStack[] expected=new ItemStack[48];ListTag list=savedBody.getList("Equipment",10);for(int i=0;i<list.size();i++){CompoundTag tag=list.getCompound(i);expected[tag.getByte("Slot")]=FixtureStackData.load(tag);}
             for(int i=0;i<48;i++)equal(slot(mc,i),expected[i],"Reloaded creative client slot "+i);screenshot(mc,"drop-creative-final-reload.png");System.out.println("LOOTABLE_BODIES_DROP_CLIENT_PASS");return true;
         }
         return false;

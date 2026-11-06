@@ -43,7 +43,7 @@ final class FixtureApi {
                     new net.minecraft.world.level.GameRules(),net.minecraft.world.level.WorldDataConfiguration.DEFAULT),
                 new net.minecraft.world.level.levelgen.WorldOptions(4267321L,false,false),
                 access->access.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET)
-                    .getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions());
+                    .getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions(),new net.minecraft.client.gui.screens.TitleScreen());
         }
     }
     static List<Entity> entities(Level world) {
@@ -58,12 +58,12 @@ final class FixtureApi {
     static Entity readChunkEntity(CompoundTag data, ServerLevel world, net.minecraft.world.level.chunk.LevelChunk chunk) {
         // Invoke the actual native chunk serializer; do not replace its admission callback.
         CompoundTag root=new CompoundTag();net.minecraft.nbt.ListTag list=new net.minecraft.nbt.ListTag();list.add(data.copy());root.put("entities",list);
-        root.putInt("xPos",chunk.getPos().x);root.putInt("zPos",chunk.getPos().z);root.put("sections",new net.minecraft.nbt.ListTag());root.putInt("DataVersion",3465);
+        root.putInt("xPos",chunk.getPos().x);root.putInt("zPos",chunk.getPos().z);root.put("sections",new net.minecraft.nbt.ListTag());root.putInt("DataVersion",3839);
         // Current fixture NBT follows the real native conversion boundary too.
         // The post-load admission callback remains Minecraft's own method.
         CompoundTag fixed=cyano.lootable.upgrade.NativeNbt.update(
                 cyano.lootable.upgrade.UpgradePreservation.wrapper(net.minecraft.util.datafix.DataFixers.getDataFixer()),
-                net.minecraft.util.datafix.fixes.References.CHUNK,root,3465,3465);
+                net.minecraft.util.datafix.fixes.References.CHUNK,root,3839,3839);
         try {
             java.lang.reflect.Method nativeRead=null;
             for(java.lang.reflect.Method method:net.minecraft.world.level.chunk.storage.ChunkSerializer.class.getDeclaredMethods())
@@ -75,13 +75,25 @@ final class FixtureApi {
             net.minecraft.world.level.chunk.LevelChunk.PostLoadProcessor processor=(net.minecraft.world.level.chunk.LevelChunk.PostLoadProcessor)nativeRead.invoke(null,world,fixed);
             if(processor==null)throw new IllegalStateException("Native entity admission returned no processor");
             processor.run(chunk);
-            Object manager=singleField(ServerLevel.class,net.minecraft.world.level.entity.PersistentEntitySectionManager.class).get(world);
-            net.minecraft.world.level.entity.EntitySectionStorage<?> sections=(net.minecraft.world.level.entity.EntitySectionStorage<?>)
-                    singleField(manager.getClass(),net.minecraft.world.level.entity.EntitySectionStorage.class).get(manager);
             java.util.UUID id=fixed.getList("entities",10).getCompound(0).getUUID("UUID");
-            return sections.getExistingSectionsInChunk(chunk.getPos().toLong()).flatMap(section->section.getEntities())
-                    .filter(entity->entity instanceof Entity && ((Entity)entity).getUUID().equals(id)).map(entity->(Entity)entity).findFirst().orElse(null);
+            return sectionEntities(world,chunk.getPos().toLong()).filter(entity->entity.getUUID().equals(id)).findFirst().orElse(null);
         }catch(ReflectiveOperationException failure){throw new IllegalStateException("Native chunk admission failed",failure);}
+    }
+    static List<Entity> entities(ServerLevel world,int chunkX,int chunkZ) {
+        // Forge 50 may have admitted a drop to the native section before its
+        // chunk is tracked. Count both stores, once per actual entity.
+        var all=new java.util.LinkedHashSet<>(entities(world));
+        sectionEntities(world,net.minecraft.world.level.ChunkPos.asLong(chunkX,chunkZ)).forEach(all::add);
+        return new ArrayList<>(all);
+    }
+    private static java.util.stream.Stream<Entity> sectionEntities(ServerLevel world,long chunk) {
+        try {
+            Object manager=singleField(ServerLevel.class,net.minecraft.world.level.entity.PersistentEntitySectionManager.class).get(world);
+            var sections=(net.minecraft.world.level.entity.EntitySectionStorage<?>)
+                    singleField(manager.getClass(),net.minecraft.world.level.entity.EntitySectionStorage.class).get(manager);
+            return sections.getExistingSectionsInChunk(chunk).flatMap(section->section.getEntities())
+                    .filter(Entity.class::isInstance).map(Entity.class::cast);
+        }catch(IllegalAccessException failure){throw new IllegalStateException("Cannot read the native entity section",failure);}
     }
     private static java.lang.reflect.Field singleField(Class<?> owner,Class<?> type) {
         java.lang.reflect.Field found=null;
