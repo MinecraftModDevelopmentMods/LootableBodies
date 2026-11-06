@@ -19,7 +19,7 @@ def gradle_roots(command):
     return roots
 
 def validate_workflow(text):
-    if "java-version: '21.0.7+6'" not in text:
+    if "java-version: '21.0.7+6.0.LTS'" not in text:
         raise ValueError('Use the setup-java SemVer identifier for the exact qualified JDK')
     commands='\n'.join(line.strip() for line in text.splitlines() if line.startswith('          ') and not line.strip().startswith('#'))
     for forbidden in ('unittest discover','-m unittest','native_runtime.py','native117_ci.py','verify_world_upgrades.py','verify_packaged','prepare_native','xvfb-run','--seed-only'):
@@ -74,7 +74,7 @@ def require_qualified_manifest(record):
 def check_source(root):
     validate_workflow((root/'.github/workflows/native120.yml').read_text(encoding='utf-8'))
     for workflow in ('codeql-analysis.yml','deploy-release.yml'):
-        if "'21.0.7+6'" not in (root/'.github/workflows'/workflow).read_text(encoding='utf-8'):
+        if "'21.0.7+6.0.LTS'" not in (root/'.github/workflows'/workflow).read_text(encoding='utf-8'):
             raise ValueError('Missing qualified Java 21 version in '+workflow)
     if 'feature/**' in(root/'.github/workflows/build.yml').read_text():raise ValueError('Copied legacy CI still catches modern feature branches')
     if 'workflow_dispatch:' in(root/'.github/workflows/migration-matrix.yml').read_text():raise ValueError('Copied legacy migration workflow can still dispatch on a modern ref')

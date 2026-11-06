@@ -48,7 +48,7 @@ jobs:
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: '21.0.7+6'
+          java-version: '21.0.7+6.0.LTS'
       # Full Java/Python suites, games, IDE consumers and SDK installs stay local.
       # Fork pushes run policy checks only. MMD builds independently check bytes.
       - name: Compile and audit release archives

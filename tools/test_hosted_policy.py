@@ -6,7 +6,7 @@ from hosted_policy import gradle_roots,validate_workflow,require_qualified_manif
 class HostedPolicyTests(unittest.TestCase):
     def test_raw_jdk_version_is_rejected_before_java_preparation(self):
         text=(Path(__file__).resolve().parents[1]/'.github/workflows/native120.yml').read_text()
-        with self.assertRaises(ValueError):validate_workflow(text.replace('21.0.7+6','21.0.7+99'))
+        with self.assertRaises(ValueError):validate_workflow(text.replace('21.0.7+6.0.LTS','21.0.7+99'))
 
     def test_hosted_roots_allow_archive_builds_and_reject_every_test_or_game_entry(self):
         base='./gradlew assemble verifyProductionRuntimeClasspath prepareReleaseBundle '
