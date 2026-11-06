@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: Complete version from gradle.properties, ending in 110021, 111021, 112021, 113021, 114041, 115021, 116051, 117011, 118021 or 119041.
+        description: Complete version from gradle.properties, ending in 110021, 111021, 112021, 113021, 114041, 115021, 116051, 117011, 118021, 119041 or 120011.
         required: true
         type: string
       curseforge_release_level:
@@ -20,7 +20,7 @@ on:
         default: false
         type: boolean
       local_qualification:
-        description: Hash-bound local qualification receipt, required for the 1.17.1, 1.18.2 and 1.19.4 releases.
+        description: Hash-bound local qualification receipt, required for the 1.17.1, 1.18.2, 1.19.4 and 1.20.1 releases.
         required: false
         default: ''
         type: string
@@ -54,7 +54,7 @@ jobs:
           set -euo pipefail
           [[ "$GITHUB_REPOSITORY" == 'MinecraftModDevelopmentMods/LootableBodies' ]]
           [[ "$GITHUB_REF" == 'refs/heads/master-1.12' ]]
-          [[ "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(110021|111021|112021|113021|114041|115021|116051|117011|118021|119041)$ ]]
+          [[ "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(110021|111021|112021|113021|114041|115021|116051|117011|118021|119041|120011)$ ]]
           case "$RELEASE_VERSION" in
             *.110021) minecraft_version=1.10.2; source_branch=1.10.2 ;;
             *.111021) minecraft_version=1.11.2; source_branch=1.11.2-dev ;;
@@ -66,6 +66,7 @@ jobs:
             *.117011) minecraft_version=1.17.1; source_branch=master-1.17.1 ;;
             *.118021) minecraft_version=1.18.2; source_branch=master-1.18.2 ;;
             *.119041) minecraft_version=1.19.4; source_branch=master-1.19.4 ;;
+            *.120011) minecraft_version=1.20.1; source_branch=master-1.20.1 ;;
             *) exit 1 ;;
           esac
           echo "minecraft_version=$minecraft_version" >> "$GITHUB_OUTPUT"
@@ -100,12 +101,13 @@ jobs:
                      '1.16.5': ('master-1.16.5', '36.2.42', '116051'),
                      '1.17.1': ('master-1.17.1', '37.1.1', '117011'),
                      '1.18.2': ('master-1.18.2', '40.3.12', '118021'),
-                     '1.19.4': ('master-1.19.4', '45.4.5', '119041')}
+                     '1.19.4': ('master-1.19.4', '45.4.5', '119041'),
+                     '1.20.1': ('master-1.20.1', '47.4.28', '120011')}
           branch, forge, suffix = targets[minecraft]
           if os.environ['SOURCE_BRANCH'] != branch:
               raise SystemExit('The selected branch does not match its Minecraft version')
           native17 = minecraft == '1.17.1'
-          archive_only = minecraft in ('1.18.2', '1.19.4')
+          archive_only = minecraft in ('1.18.2', '1.19.4', '1.20.1')
           locally_qualified = native17 or archive_only
           expected = {'minecraft_version': minecraft, 'forge_version': forge,
                       'loader_name': 'forge', 'loader_code': '1', 'java_version': '17' if archive_only else '16' if native17 else '8',
@@ -149,13 +151,13 @@ jobs:
               except (ValueError,TypeError):
                   raise SystemExit('A local qualification receipt is required')
               keys={'schema','source','version','files','evidence_sha256','qualified_locally','manual_accepted'}
-              target_code={'1.17.1':'117','1.18.2':'118','1.19.4':'119'}[minecraft]
+              target_code={'1.17.1':'117','1.18.2':'118','1.19.4':'119','1.20.1':'120'}[minecraft]
               metadata=json.loads(Path(f'.github/release{target_code}.json').read_text())
               accepted=metadata['files']
               if archive_only and (metadata.get('local_qualification_complete') is not True or metadata.get('qualification_integrity_status')!='verified'):
                   raise SystemExit(f'The local {minecraft} qualification declaration is incomplete')
-              if minecraft == '1.19.4' and metadata.get('manual_accepted') is not True:
-                  raise SystemExit('The local 1.19.4 candidate has not been accepted')
+              if minecraft in ('1.19.4', '1.20.1') and metadata.get('manual_accepted') is not True:
+                  raise SystemExit(f'The local {minecraft} candidate has not been accepted')
               if (not isinstance(local,dict) or set(local)!=keys or type(local['schema']) is not int or local['schema']!=1
                   or local['source']!=sha or local['version']!=version or local['files']!=accepted
                   or local['qualified_locally'] is not True or local['manual_accepted'] is not True
@@ -173,7 +175,7 @@ jobs:
               matching = [check for check in checks if check['name'] == name]
               if not matching or max(matching, key=lambda c: c['id'])['conclusion'] != 'success':
                   raise SystemExit(f'The selected commit has no successful {name} check')
-          if minecraft in ('1.11.2', '1.12.2', '1.13.2', '1.14.4', '1.15.2', '1.16.5', '1.17.1', '1.18.2', '1.19.4'):
+          if minecraft in ('1.11.2', '1.12.2', '1.13.2', '1.14.4', '1.15.2', '1.16.5', '1.17.1', '1.18.2', '1.19.4', '1.20.1'):
               target = minecraft.rsplit('.', 1)[0]
               audits = json.loads(subprocess.check_output(['gh', 'api',
                   f'repos/{repo}/actions/workflows/artifact-audit-{target}.yml/runs?event=workflow_run&per_page=100'], text=True))['workflow_runs']
@@ -207,27 +209,27 @@ jobs:
         with:
           ref: ${{ needs.preflight.outputs.release_sha }}
       - name: Install Mavenizer Java
-        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4'
+        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4' && needs.preflight.outputs.minecraft_version != '1.20.1'
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: '25.0.3+9.0.LTS'
       - name: Install production Java
-        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4'
+        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4' && needs.preflight.outputs.minecraft_version != '1.20.1'
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.19.4' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.17.1' && '16.0.2+7' || '8.0.502+7' }}
+          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.19.4' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.20.1' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.17.1' && '16.0.2+7' || '8.0.502+7' }}
       - name: Install Gradle Java
-        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4'
+        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4' && needs.preflight.outputs.minecraft_version != '1.20.1'
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.19.4' && '17.0.20+101' || '17.0.1+12' }}
+          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.19.4' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.20.1' && '17.0.20+101' || '17.0.1+12' }}
       - name: Pin the production toolchain
-        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4'
+        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4' && needs.preflight.outputs.minecraft_version != '1.20.1'
         run: |
-          if [[ '${{ needs.preflight.outputs.minecraft_version }}' == '1.18.2' || '${{ needs.preflight.outputs.minecraft_version }}' == '1.19.4' ]]; then
+          if [[ '${{ needs.preflight.outputs.minecraft_version }}' == '1.18.2' || '${{ needs.preflight.outputs.minecraft_version }}' == '1.19.4' || '${{ needs.preflight.outputs.minecraft_version }}' == '1.20.1' ]]; then
             echo "LOOTABLEBODIES_JAVA17_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
           elif [ '${{ needs.preflight.outputs.minecraft_version }}' = '1.17.1' ]; then
             echo "LOOTABLEBODIES_JAVA16_HOME=$JAVA_HOME_16_X64" >> "$GITHUB_ENV"
@@ -236,7 +238,7 @@ jobs:
           fi
           echo "LOOTABLEBODIES_MAVENIZER_JAVA_HOME=$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
       - name: Set up Gradle
-        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4'
+        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4' && needs.preflight.outputs.minecraft_version != '1.20.1'
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
       - name: Download the qualified native117 six-file bundle
         if: needs.preflight.outputs.minecraft_version == '1.17.1'
@@ -280,8 +282,19 @@ jobs:
       - name: Verify all six native119 bytes before publication
         if: needs.preflight.outputs.minecraft_version == '1.19.4'
         run: python3 -B tools/native119_build.py --bundle build/release/bundle
+      - name: Download the qualified native120 six-file bundle
+        if: needs.preflight.outputs.minecraft_version == '1.20.1'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: LootableBodies-1.20.1-${{ needs.preflight.outputs.release_sha }}
+          run-id: ${{ needs.preflight.outputs.qualification_run }}
+          github-token: ${{ github.token }}
+          path: build/release/bundle
+      - name: Verify all six native120 bytes before publication
+        if: needs.preflight.outputs.minecraft_version == '1.20.1'
+        run: python3 -B tools/native120_build.py --bundle build/release/bundle
       - name: Build, test and audit the release
-        if: needs.preflight.outputs.minecraft_version != '1.17.1' && needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4'
+        if: needs.preflight.outputs.minecraft_version != '1.17.1' && needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4' && needs.preflight.outputs.minecraft_version != '1.20.1'
         run: |
           chmod +x ./gradlew
           ./gradlew clean build javadoc verifyEclipseProductionClasspath prepareReleaseBundle \
@@ -386,15 +399,15 @@ jobs:
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.19.4' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.17.1' && '16.0.2+7' || '8.0.502+7' }}
+          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.19.4' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.20.1' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.17.1' && '16.0.2+7' || '8.0.502+7' }}
       - name: Install Gradle Java
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.19.4' && '17.0.20+101' || '17.0.1+12' }}
+          java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.19.4' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.20.1' && '17.0.20+101' || '17.0.1+12' }}
       - name: Pin the production toolchain
         run: |
-          if [[ '${{ needs.preflight.outputs.minecraft_version }}' == '1.18.2' || '${{ needs.preflight.outputs.minecraft_version }}' == '1.19.4' ]]; then
+          if [[ '${{ needs.preflight.outputs.minecraft_version }}' == '1.18.2' || '${{ needs.preflight.outputs.minecraft_version }}' == '1.19.4' || '${{ needs.preflight.outputs.minecraft_version }}' == '1.20.1' ]]; then
             echo "LOOTABLEBODIES_JAVA17_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
           elif [ '${{ needs.preflight.outputs.minecraft_version }}' = '1.17.1' ]; then
             echo "LOOTABLEBODIES_JAVA16_HOME=$JAVA_HOME_16_X64" >> "$GITHUB_ENV"
@@ -452,7 +465,7 @@ jobs:
           game-versions: ${{ needs.preflight.outputs.minecraft_version }}
           game-version-filter: none
           environment: client | server
-          java: ${{ needs.preflight.outputs.minecraft_version == '1.19.4' && 'Java 17' || needs.preflight.outputs.minecraft_version == '1.17.1' && 'Java 16' || 'Java 8' }}
+          java: ${{ needs.preflight.outputs.minecraft_version == '1.19.4' && 'Java 17' || needs.preflight.outputs.minecraft_version == '1.20.1' && 'Java 17' || needs.preflight.outputs.minecraft_version == '1.17.1' && 'Java 16' || 'Java 8' }}
           fail-mode: fail
           files: |
             ${{ runner.temp }}/release-input/LootableBodies-${{ needs.preflight.outputs.release_version }}.jar
