@@ -42,13 +42,13 @@ def validate_workflow(text):
         words=shlex.split(line)
         if '|' in words:
             split=words.index('|');tail=words[split+1:]
-            if tail not in (['tee','$RUNNER_TEMP/native119-build.log'],['tee','-a','$RUNNER_TEMP/native119-build.log']):raise ValueError('Unknown hosted pipe')
+            if tail not in (['tee','$RUNNER_TEMP/native120-build.log'],['tee','-a','$RUNNER_TEMP/native120-build.log']):raise ValueError('Unknown hosted pipe')
             words=words[:split]
         if words and words[-1]=='2>&1':words=words[:-1]
         allowed=[['set','-euo','pipefail'],['chmod','+x','gradlew'],
                  ['python3','-B','tools/hosted_policy.py'],
                  ['python3','-B','tools/hosted_policy.py','--require-qualified-manifest'],
-                 ['python3','-B','tools/native119_build.py']]
+                 ['python3','-B','tools/native120_build.py']]
         if words and words[0]=='./gradlew':gradle_roots(shlex.join(words))
         elif words not in allowed:raise ValueError('Unknown hosted command: '+line)
     launches=[line.strip() for line in text.splitlines() if line.strip().startswith('./gradlew ')]
@@ -64,7 +64,7 @@ def require_qualified_manifest(record):
     if record.get('local_qualification_complete') is not True or record.get('qualification_integrity_status')!='verified':
         raise ValueError('Local qualification evidence is incomplete or on an integrity hold')
     version=record.get('version','')
-    if not re.fullmatch(r'\d+\.\d+\.\d+\.119041',version) or record.get('minecraft')!='1.19.4' or record.get('forge')!='45.4.5':raise ValueError('Wrong target qualification')
+    if not re.fullmatch(r'\d+\.\d+\.\d+\.120011',version) or record.get('minecraft')!='1.20.1' or record.get('forge')!='47.4.28':raise ValueError('Wrong target qualification')
     base='LootableBodies-'+version
     names={'CHANGELOG.txt','SHA256SUMS',base+'.jar',base+'-sources.jar',base+'-javadoc.jar',base+'.pom'}
     if set(record.get('files',{}))!=names or any(not re.fullmatch('[A-F0-9]{64}',value or '') for value in record['files'].values()):raise ValueError('Incomplete six-file declaration')
@@ -72,15 +72,17 @@ def require_qualified_manifest(record):
     # Publication still needs independently approved/rehashed local evidence.
 
 def check_source(root):
-    validate_workflow((root/'.github/workflows/native119.yml').read_text(encoding='utf-8'))
+    validate_workflow((root/'.github/workflows/native120.yml').read_text(encoding='utf-8'))
     for workflow in ('codeql-analysis.yml','deploy-release.yml'):
         if any('java-version:' in line and '17.0.20.1+1' in line for line in (root/'.github/workflows'/workflow).read_text(encoding='utf-8').splitlines()):
             raise ValueError('Non-SemVer JDK input in '+workflow)
     if 'feature/**' in(root/'.github/workflows/build.yml').read_text():raise ValueError('Copied legacy CI still catches modern feature branches')
     if 'workflow_dispatch:' in(root/'.github/workflows/migration-matrix.yml').read_text():raise ValueError('Copied legacy migration workflow can still dispatch on a modern ref')
     guard=(root/'settings.gradle').read_text()
-    for required in ("System.getenv('GITHUB_ACTIONS') == 'true'",'org.gradle.api.tasks.testing.Test','org.gradle.api.tasks.JavaExec','Run expensive verification locally before publishing'):
-        if required not in guard:raise ValueError('Missing Gradle hosted-execution guard')
+    if any(rule not in guard for rule in ("System.getenv('GITHUB_ACTIONS') == 'true'",
+            'org.gradle.api.tasks.testing.Test', 'org.gradle.api.tasks.JavaExec',
+            'Run expensive verification locally before publishing')):
+        raise ValueError('Missing hosted test and game task guard')
     runtime=(root/'gradle/runtime.gradle').read_text()
     if "tasks.named('check') { dependsOn 'integrationTest' }" in runtime or "tasks.register('localRuntimeVerification')" not in runtime:raise ValueError('Game checks must remain explicit local gates')
     policy=json.loads((root/'tools/qualification-policy.json').read_text())
@@ -89,5 +91,5 @@ def check_source(root):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--require-qualified-manifest',action='store_true');args=parser.parse_args()
     check_source(ROOT)
-    if args.require_qualified_manifest:require_qualified_manifest(json.loads((ROOT/'.github/release119.json').read_text()))
+    if args.require_qualified_manifest:require_qualified_manifest(json.loads((ROOT/'.github/release120.json').read_text()))
     print('HOSTED_COMPILE_ARCHIVE_POLICY_OK')

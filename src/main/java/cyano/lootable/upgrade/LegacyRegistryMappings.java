@@ -1,6 +1,7 @@
 package cyano.lootable.upgrade;
 
 import cyano.lootable.LootableBodies;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraftforge.registries.RegisterEvent;
@@ -30,6 +31,10 @@ public final class LegacyRegistryMappings {
             case "dandelion_yellow": return new ResourceLocation("minecraft:yellow_dye");
             case "grass_path": return new ResourceLocation("minecraft:dirt_path");
             case "zombie_pigman_spawn_egg":return new ResourceLocation("minecraft:zombified_piglin_spawn_egg");
+            case "pottery_shard_archer": return new ResourceLocation("minecraft:archer_pottery_sherd");
+            case "pottery_shard_arms_up": return new ResourceLocation("minecraft:arms_up_pottery_sherd");
+            case "pottery_shard_prize": return new ResourceLocation("minecraft:prize_pottery_sherd");
+            case "pottery_shard_skull": return new ResourceLocation("minecraft:skull_pottery_sherd");
             default: return null;
         }
     }
@@ -44,6 +49,8 @@ public final class LegacyRegistryMappings {
     }
     private static final ResourceLocation OLD_XP_SOUND=new ResourceLocation("minecraft:entity.experience_orb.touch");
     private static final ResourceLocation XP_SOUND=new ResourceLocation("minecraft:entity.experience_orb.pickup");
+    private static final ResourceLocation OLD_JUNGLE_AND_FOREST_MUSIC =
+            new ResourceLocation("minecraft:music.overworld.jungle_and_forest");
     private LegacyRegistryMappings() { }
     static <T> T requireMappingTarget(java.util.function.Supplier<T> lookup) {
         try {T target=lookup.get();if(target!=null)return target;}
@@ -67,6 +74,10 @@ public final class LegacyRegistryMappings {
         if(!old.getNamespace().equals("minecraft"))return null;
         if(old.getPath().equals("item.sweet_berries.pick_from_bush"))return new ResourceLocation("minecraft:block.sweet_berry_bush.pick_berries");
         if(old.getPath().equals("music.nether"))return new ResourceLocation("minecraft:music.nether.nether_wastes");
+        if (old.getPath().equals("item.brush.brushing"))
+            return new ResourceLocation("minecraft:item.brush.brushing.generic");
+        if (old.getPath().equals("item.brush.brush_sand_completed"))
+            return new ResourceLocation("minecraft:item.brush.brushing.sand.complete");
         for(String suffix:new String[]{"ambient","angry","death","hurt"})
             if(old.getPath().equals("entity.zombie_pigman."+suffix))return new ResourceLocation("minecraft:entity.zombified_piglin."+suffix);
         return null;
@@ -128,6 +139,15 @@ public final class LegacyRegistryMappings {
 
     @SubscribeEvent public static void sounds(MissingMappingsEvent event) {
         for(MissingMappingsEvent.Mapping<SoundEvent> mapping:event.<SoundEvent>getAllMappings(Registries.SOUND_EVENT)) {
+            if (mapping.getKey().equals(OLD_JUNGLE_AND_FOREST_MUSIC)) {
+                // Vanilla 1.20 defines separate music for the two biomes.
+                // Retire only the obsolete Forge numeric binding.
+                if (!BuiltInRegistries.SOUND_EVENT.containsKey(new ResourceLocation("minecraft:music.overworld.jungle"))
+                        || !BuiltInRegistries.SOUND_EVENT.containsKey(new ResourceLocation("minecraft:music.overworld.forest")))
+                    throw new UnsafeRegistryUpgrade(null);
+                mapping.ignore();
+                continue;
+            }
             ResourceLocation replacement=soundReplacement(mapping.getKey());
             if(replacement!=null)mapping.remap(requireMappingTarget(net.minecraftforge.registries.ForgeRegistries.SOUND_EVENTS.containsKey(replacement),()->net.minecraftforge.registries.ForgeRegistries.SOUND_EVENTS.getValue(replacement)));
         }

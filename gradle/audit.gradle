@@ -62,13 +62,13 @@ ext.auditReleaseArchives = { File directory ->
                     if (!names.contains(it)) throw new GradleException("Missing production entry ${it}")
                 }
                 String info=zip.getInputStream(zip.getEntry('META-INF/mods.toml')).getText('UTF-8')
-                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.19.4]"'].each {
+                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.20.1]"'].each {
                     if(!info.contains(it))throw new GradleException("Incorrect production metadata: ${it}")
                 }
                 def pack=new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack
-                if(pack.pack_format!=13 || pack['forge:server_data_pack_format']!=12 ||
+                if(pack.pack_format!=15 || pack.containsKey('forge:server_data_pack_format') ||
                         pack.containsKey('forge:resource_pack_format') || pack.containsKey('forge:data_pack_format'))
-                    throw new GradleException('Native pack formats must be resource13/server-data12')
+                    throw new GradleException('Native pack formats must be resource15/server-data15')
                 def coremods=new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('META-INF/coremods.json')).getText('UTF-8'))
                 if(coremods!=[lootablebodies_preservation:'coremods/early-world-preservation.js'])
                     throw new GradleException('Missing or changed early native save attachment')

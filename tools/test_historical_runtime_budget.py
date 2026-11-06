@@ -10,7 +10,7 @@ from verify_upgrade_abort import run_abort
 
 
 class HistoricalRuntimeBudgetTests(unittest.TestCase):
-    def test_every_historical_phase_keeps_native45_defaults_without_changing_its_gate(self):
+    def test_every_historical_phase_keeps_native47_defaults_without_changing_its_gate(self):
         launches = []
 
         def launch(java, home, phase, **options):
@@ -71,7 +71,7 @@ class HistoricalRuntimeBudgetTests(unittest.TestCase):
         import json
         with tempfile.TemporaryDirectory() as directory:
             policy=Path(directory)/'policy.json'
-            base={'minecraft':'1.19.4','forge':'45.4.5','reloads':200,'jvms':4,'qualified':True,'jvm_args':[]}
+            base={'minecraft':'1.20.1','forge':'47.4.28','reloads':200,'jvms':4,'qualified':True,'jvm_args':[]}
             for fields in ({'jvm_args':['-Dmax.bg.threads=1']},{'controller_sha256':'0'*64}):
                 policy.write_text(json.dumps(dict(base,**fields)))
                 with patch.object(native_runtime,'WORKER_BUDGET_PATH',policy),patch.object(native_runtime,'run_monitored') as launch:

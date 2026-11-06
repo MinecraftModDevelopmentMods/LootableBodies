@@ -212,14 +212,13 @@ public class CorpseContainer extends net.minecraft.world.inventory.AbstractConta
 
     private boolean canStore(Inventory inventory, int slot, ItemStack incoming) {
         ItemStack current = inventory.getItem(slot);
-        return !emptyStack(current) && current.isStackable() && current.getItem() == incoming.getItem()
-                && ItemStack.tagMatches(current,incoming)
+        return !emptyStack(current) && current.isStackable() && ItemStack.isSameItemSameTags(current,incoming)
                 && current.getCount() < Math.min(current.getMaxStackSize(),inventory.getMaxStackSize());
     }
 
 	private boolean tryRelease(Player player, ItemStack stack, boolean includeName) {
 		if(emptyStack(stack) || stack.getCount() <= 0) return false;
-		if(player.level.isClientSide) {
+		if(player.level().isClientSide) {
 			player.drop(stack.copy(),includeName);
 			return true;
 		}
@@ -240,7 +239,7 @@ public class CorpseContainer extends net.minecraft.world.inventory.AbstractConta
 			capturing.add(event.getEntity());
 			return true;
 		}
-		return player.level.addFreshEntity(event.getEntity());
+		return player.level().addFreshEntity(event.getEntity());
 	}
 
 	@Override
@@ -254,7 +253,7 @@ public class CorpseContainer extends net.minecraft.world.inventory.AbstractConta
 				ItemStack current = slot.getItem();
 				int limit = Math.min(slot.getMaxStackSize(stack),stack.getMaxStackSize());
 				if(pass == 0 && stack.isStackable() && !emptyStack(current)
-						&& ItemStack.isSame(stack,current) && ItemStack.tagMatches(stack,current)) {
+						&& ItemStack.isSameItemSameTags(stack,current)) {
 					int amount = Math.min(stack.getCount(),Math.max(0,limit - current.getCount()));
 					if(amount > 0) {
 						current.grow(amount);

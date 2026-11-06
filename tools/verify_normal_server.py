@@ -7,7 +7,7 @@ import subprocess
 import time
 import re
 import shutil
-from native119_logs import audit
+from native120_logs import audit
 from verify_packaged import prepare, digest, FORGE, MAIN
 from native_runtime import seed_loader_defaults,seed_flat_fixture
 from owned_process import native_process
@@ -35,8 +35,7 @@ def main():
         prepare_development_home(home)
         init=root/'ordinary.init.gradle'
         path=home.as_posix().replace("'","\\'")
-        logging=(project/'src/integrationTest/resources/log4j2.xml').as_uri()
-        init.write_text("gradle.projectsEvaluated { def p=gradle.rootProject; p.minecraft.runs.getByName('server').workingDir.set(new File('"+path+"')); p.tasks.named('runServer') { workingDir new File('"+path+"'); systemProperty 'log4j.configurationFile','"+logging+"'; jvmArgs '-Xlog:gc*,safepoint:file=ordinary-game.gc.txt:time,uptime,pid,level,tags' } }\n")
+        init.write_text("gradle.projectsEvaluated { def p=gradle.rootProject; p.minecraft.runs.getByName('server').workingDir.set(new File('"+path+"')); p.tasks.named('runServer') { workingDir new File('"+path+"'); jvmArgs '-Xlog:gc*,safepoint:file=ordinary-game.gc.txt:time,uptime,pid,level,tags' } }\n")
         command=[str(project/('gradlew.bat' if os.name=='nt' else 'gradlew')),'runServer','--init-script',str(init),'-PgameRunDirectory='+str(home),'--no-daemon','--console=plain']
         cwd=project
     else:
@@ -94,9 +93,12 @@ def main():
             raise RuntimeError('Ordinary server failed clean startup/stop: '+str(log))
         if any(name in text for name in ['lootablebodiesbuildtest','forgeplatformcontrol']) or list((home/'crash-reports').glob('*')): raise RuntimeError('Probe leak or crash')
         audit(log,development=args.development,native=True)
-        for name in ('latest.log','debug.log'):
+        log_names = ['latest.log', 'debug.log']
+        if args.development:
+            log_names.append('bootstrap-debug.log')
+        for name in log_names:
             complete=home/'logs'/name
-            if not complete.is_file():raise FileNotFoundError(complete)
+            if not complete.is_file() or not complete.stat().st_size:raise FileNotFoundError(complete)
             audit(complete,development=args.development,native=True)
             if any(name in complete.read_text() for name in ['lootablebodiesbuildtest','forgeplatformcontrol']):raise RuntimeError('Probe in ordinary runtime')
             shutil.copy2(complete,root/(phase+'.'+name))

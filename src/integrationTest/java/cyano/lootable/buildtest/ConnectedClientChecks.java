@@ -126,9 +126,9 @@ final class ConnectedClientChecks {
     private void prepareDeath(Minecraft mc) throws Exception {
         MinecraftServer server=mc.getSingleplayerServer(); ServerPlayer player=player(mc);
         for(int x=21;x<=27;x++) for(int z=5;z<=11;z++)
-            player.level.setBlockAndUpdate(new BlockPos(x,79,z),Blocks.STONE.defaultBlockState());
-        player.level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);
-        player.level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBSPAWNING).set(false,null);
+            player.level().setBlockAndUpdate(new BlockPos(x,79,z),Blocks.STONE.defaultBlockState());
+        player.level().getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);
+        player.level().getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBSPAWNING).set(false,null);
         player.setGameMode(GameType.SURVIVAL); player.getInventory().clearContent();player.getInventory().selected=0;
         for(int slot=0;slot<6;slot++)player.setItemSlot(EntityLootableBody.EQUIPMENT_SLOTS[slot],RuntimeChecks.stack(slot));
         for(int slot=9;slot<=11;slot++)player.getInventory().items.set(slot,RuntimeChecks.stack(slot+10));
@@ -136,7 +136,7 @@ final class ConnectedClientChecks {
         player.containerMenu.broadcastChanges(); player.kill();
         RuntimeChecks.require(!player.isAlive(),"Connected player did not die");
         EntityLootableBody corpse=null;
-        for(Entity entity:FixtureApi.entities(player.level))
+        for(Entity entity:FixtureApi.entities(player.level()))
             if(entity instanceof EntityLootableBody && player.getGameProfile().getName().equals(((EntityLootableBody)entity).getCustomNameTag())) corpse=(EntityLootableBody)entity;
         RuntimeChecks.require(corpse!=null,"Connected death did not create a corpse");
         corpseId=corpse.getUUID();corpse.setNoGravity(true);corpse.setNoAi(true);corpse.setDeltaMovement(0,corpse.getDeltaMovement().y,corpse.getDeltaMovement().z);corpse.setDeltaMovement(corpse.getDeltaMovement().x,0,corpse.getDeltaMovement().z);corpse.setDeltaMovement(corpse.getDeltaMovement().x,corpse.getDeltaMovement().y,0);
@@ -181,7 +181,7 @@ final class ConnectedClientChecks {
         for(int i=0;i<inventory.getContainerSize();i++){
             ItemStack stack=inventory.getItem(i);
             if((stack != null && !stack.isEmpty()) && stack.hasTag() && stack.getTag().equals(expected.getTag())) {
-                RuntimeChecks.require(ItemStack.isSame(stack,expected),"Recovered item type/damage differs");count+=stack.getCount();
+                RuntimeChecks.require(ItemStack.isSameItem(stack,expected),"Recovered item type/damage differs");count+=stack.getCount();
             }
         }
         RuntimeChecks.require(count==expected.getCount(),"Recovered stack lost/duplicated: "+index+" count="+count);

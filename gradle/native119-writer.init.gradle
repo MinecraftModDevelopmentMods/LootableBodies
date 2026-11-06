@@ -1,0 +1,26 @@
+// Isolated writer compiles against public19's API and exact Java17 toolchain.
+gradle.projectsEvaluated {
+    def p=gradle.rootProject
+    File writerRoot=p.file(p.property('historicalWriterSource'))
+    def classes=p.layout.buildDirectory.dir('native119-seed/classes')
+    def compile=p.tasks.register('compileNative119Seed',JavaCompile) {
+        dependsOn 'classes'
+        source p.fileTree(new File(writerRoot,'src/nativeSeed119/java'))
+        classpath=p.files(p.sourceSets.main.output,p.sourceSets.main.compileClasspath)
+        destinationDirectory=classes
+        options.compilerArgs.add('-proc:none')
+    }
+    def jar=p.tasks.register('native119SeedJar',Jar) {
+        dependsOn compile
+        archiveFileName='lootablebodies-native119-world-fixtures.jar'
+        destinationDirectory=p.layout.buildDirectory.dir('native119-seed')
+        from classes
+        from new File(writerRoot,'src/nativeSeed119/resources')
+    }
+    def packaged=p.renamer.classes(jar) {
+        map.from p.minecraft.dependency.toSrgFile
+        libraries.from(p.tasks.named('jar'),p.sourceSets.main.compileClasspath)
+        output=p.layout.buildDirectory.file('native119-seed/lootablebodies-native119-world-fixtures-reobf.jar')
+    }
+    p.tasks.register('prepareNative119WorldFixtures') {dependsOn packaged}
+}

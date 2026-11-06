@@ -81,7 +81,7 @@ final class VisibilityClientChecks {
     }
     @SubscribeEvent public void removed(net.minecraftforge.event.entity.EntityLeaveLevelEvent e) {
         Entity entity=e.getEntity();
-        if(entity instanceof EntityLootableBody && entity.level.isClientSide) {
+        if(entity instanceof EntityLootableBody && entity.level().isClientSide) {
             System.out.println("VISIBILITY_CLIENT_REMOVAL "+role+" phase="+phase+" uuid="+entity.getUUID()+" reason="+entity.getRemovalReason()+" rendered="+rendered.contains(entity.getUUID()));
             StackWalker.getInstance().forEach(frame->System.out.println("VISIBILITY_REMOVAL_FRAME "+frame));
         }

@@ -13,8 +13,8 @@ def load(path,expected,requested):
             result[name]=value
         return result
     record=json.loads(path.read_text(encoding='utf-8'),object_pairs_hook=unique)
-    if record.get('schema')!=1 or record.get('target_data_version')!=3337:
-        raise ValueError('Wrong native19 prepared manifest schema/target')
+    if record.get('schema')!=1 or record.get('target_data_version')!=3465:
+        raise ValueError('Wrong native20 prepared manifest schema/target')
     origins=record.get('origins',{})
     if set(origins)!=set(expected):raise ValueError('Prepared manifest must contain every exact origin')
     paths=[Path(details['world']).resolve() for details in origins.values()]

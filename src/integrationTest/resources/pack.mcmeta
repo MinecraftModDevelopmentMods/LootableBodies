@@ -1,1 +1,6 @@
-{"pack":{"pack_format":13,"forge:server_data_pack_format":12,"description":"Disposable build checks"}}
+{
+  "pack": {
+    "pack_format": 15,
+    "description": "Disposable build checks"
+  }
+}

@@ -67,7 +67,7 @@ tasks.register('isolateEclipseProductionRuns') {
             if (!launch.isFile()) throw new GradleException("Generate ${name} with genEclipseRuns first")
             String contents = launch.getText('UTF-8')
             File nativeRoot=minecraftNatives.asFile
-            if(!nativeRoot.isDirectory())throw new GradleException('Prepare the official native1.19.4 client inputs before generating Eclipse launches')
+            if(!nativeRoot.isDirectory())throw new GradleException('Prepare the official native1.20.1 client inputs before generating Eclipse launches')
             contents=contents.replace('{asset_index}',minecraftAssetIndex)
                 .replace('{assets_root}',minecraftAssets.asFile.absolutePath)
                 .replace('{natives}',nativeRoot.absolutePath)

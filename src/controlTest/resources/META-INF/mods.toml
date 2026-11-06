@@ -1,5 +1,5 @@
 modLoader="javafml"
-loaderVersion="[45,)"
+loaderVersion="[47,)"
 license="LGPL-2.1-only"
 [[mods]]
 modId="forgeplatformcontrol"

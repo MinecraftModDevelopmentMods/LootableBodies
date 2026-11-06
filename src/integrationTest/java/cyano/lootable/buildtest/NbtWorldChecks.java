@@ -22,7 +22,7 @@ final class NbtWorldChecks {
     static final int GRAPHICAL_COORDINATE=8192;
     static int graphicalAdmissions;
     static void verifyGraphicalAdmission(Entity entity){
-        if(!Boolean.getBoolean("lootablebodies.clientCheck") || entity.level.isClientSide
+        if(!Boolean.getBoolean("lootablebodies.clientCheck") || entity.level().isClientSide
                 || entity.getClass()!=EntityLootableBody.class || !entity.getUUID().equals(NEAR))return;
         EntityLootableBody body=(EntityLootableBody)entity;
         PositionMotionChecks.verifyWorldFields(body);
@@ -120,7 +120,7 @@ final class NbtWorldChecks {
         RotationFallChecks.verifyWorldFields(b);
         CompoundTag raw=rawEquipment(),saved=NameLifetimeChecks.saved(b);
         RuntimeChecks.require(b.getCustomNameTag().equals("NbtFixture") && saved.getString("Name").equals("NbtFixture"),"Malformed Name erased vanilla fallback attribution");
-        RuntimeChecks.require(!saved.contains("Vac") && saved.getLong("DeathTime")>=0 && saved.getLong("DeathTime")<=b.level.getGameTime() && saved.getLong("DecayTime")>=0 && saved.getLong("DecayTime")<=b.level.getGameTime(),"Malformed disk timers entered active state");
+        RuntimeChecks.require(!saved.contains("Vac") && saved.getLong("DeathTime")>=0 && saved.getLong("DeathTime")<=b.level().getGameTime() && saved.getLong("DecayTime")>=0 && saved.getLong("DecayTime")<=b.level().getGameTime(),"Malformed disk timers entered active state");
         for(String key:new String[]{"Name","Vac","DeathTime","DecayTime"})NameLifetimeChecks.retained(b,key,raw.get(key));
         RuntimeChecks.require(saved.getList(NameLifetimeChecks.RECOVERY,10).size()==16,"Disk metadata evidence grew or disappeared");
     }

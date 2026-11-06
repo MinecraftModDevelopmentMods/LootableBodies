@@ -22,7 +22,7 @@ final class Native118BiomeChecks {
         level.putInt("xPos",x);level.putInt("zPos",z);level.putString("Status","full");level.put("Sections",new ListTag());
         level.putIntArray("Biomes",HistoricalBiomes.nativeValues(record.getIntArray("Data")));
         ChunkStorage.injectDatafixingContext(root,world.dimension(),Optional.empty());
-        CompoundTag nativeResult=cyano.lootable.upgrade.NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,root,2730,3337);
+        CompoundTag nativeResult=cyano.lootable.upgrade.NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,root,2730,3465);
         Registry<Biome> registry=world.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.BIOME);
         com.mojang.serialization.Codec<PalettedContainer<Holder<Biome>>> codec=PalettedContainer.codecRW(registry.asHolderIdMap(),registry.holderByNameCodec(),PalettedContainer.Strategy.SECTION_BIOMES,registry.getHolderOrThrow(Biomes.PLAINS));
         LevelChunk chunk=world.getChunk(x,z);int samples=0;

@@ -5,7 +5,7 @@ from hosted_policy import gradle_roots,validate_workflow,require_qualified_manif
 
 class HostedPolicyTests(unittest.TestCase):
     def test_raw_jdk_version_is_rejected_before_java_preparation(self):
-        text=(Path(__file__).resolve().parents[1]/'.github/workflows/native119.yml').read_text()
+        text=(Path(__file__).resolve().parents[1]/'.github/workflows/native120.yml').read_text()
         with self.assertRaises(ValueError):validate_workflow(text.replace('17.0.20+101','17.0.20.1+1'))
 
     def test_hosted_roots_allow_archive_builds_and_reject_every_test_or_game_entry(self):
@@ -18,28 +18,28 @@ class HostedPolicyTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[1];check_source(root)
 
     def test_injected_python_games_full_suites_and_sdk_installers_are_rejected(self):
-        text=(Path(__file__).resolve().parents[1]/'.github/workflows/native119.yml').read_text()
+        text=(Path(__file__).resolve().parents[1]/'.github/workflows/native120.yml').read_text()
         for command in ('python3 -m unittest discover -s tools','python3 tools/verify_world_upgrades.py','python3 tools/native_runtime.py','python3 tools/prepare_native117_tools.py','xvfb-run ./gradlew runClient','python3 tools/new_game_runner.py','curl https://example.invalid/server.jar','java -jar server.jar'):
             changed=text.replace('          chmod +x gradlew','          '+command+'\n          chmod +x gradlew')
             with self.subTest(command=command),self.assertRaises(ValueError):validate_workflow(changed)
 
     def test_missing_fork_guard_or_pipe_failure_guard_is_rejected(self):
-        text=(Path(__file__).resolve().parents[1]/'.github/workflows/native119.yml').read_text()
+        text=(Path(__file__).resolve().parents[1]/'.github/workflows/native120.yml').read_text()
         for removed in ("if: github.repository == 'MinecraftModDevelopmentMods/LootableBodies'",'set -euo pipefail','shell: bash'):
             with self.subTest(removed=removed),self.assertRaises(ValueError):validate_workflow(text.replace(removed,''))
 
     def test_manifest_boolean_cannot_override_an_integrity_hold(self):
-        version='2.4.10.119041';base='LootableBodies-'+version
+        version='2.4.11.120011';base='LootableBodies-'+version
         names=['CHANGELOG.txt','SHA256SUMS',base+'.jar',base+'-sources.jar',base+'-javadoc.jar',base+'.pom']
-        good={'version':version,'minecraft':'1.19.4','forge':'45.4.5','local_qualification_complete':True,'qualification_integrity_status':'verified','files':{name:'A'*64 for name in names}}
+        good={'version':version,'minecraft':'1.20.1','forge':'47.4.28','local_qualification_complete':True,'qualification_integrity_status':'verified','files':{name:'A'*64 for name in names}}
         require_qualified_manifest(good)
         for field,value in [('qualification_integrity_status','blocked_receipt_mismatch'),('qualification_integrity_status',None),('local_qualification_complete',False),('minecraft','1.17.1')]:
             changed=dict(good);changed[field]=value
             with self.subTest(field=field,value=value),self.assertRaises(ValueError):require_qualified_manifest(changed)
 
     def test_missing_or_extra_file_declaration_is_fatal(self):
-        version='2.4.10.119041';base='LootableBodies-'+version
-        good={'version':version,'minecraft':'1.19.4','forge':'45.4.5','local_qualification_complete':True,'qualification_integrity_status':'verified','files':{name:'A'*64 for name in ['CHANGELOG.txt','SHA256SUMS',base+'.jar',base+'-sources.jar',base+'-javadoc.jar',base+'.pom']}}
+        version='2.4.11.120011';base='LootableBodies-'+version
+        good={'version':version,'minecraft':'1.20.1','forge':'47.4.28','local_qualification_complete':True,'qualification_integrity_status':'verified','files':{name:'A'*64 for name in ['CHANGELOG.txt','SHA256SUMS',base+'.jar',base+'-sources.jar',base+'-javadoc.jar',base+'.pom']}}
         for extra in (False,True):
             changed=json.loads(json.dumps(good))
             if extra:changed['files']['extra.jar']='B'*64

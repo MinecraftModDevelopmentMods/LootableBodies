@@ -1,0 +1,14 @@
+{
+  "minecraft": "1.20.1",
+  "forge": "47.4.28",
+  "platform": "Windows amd64",
+  "qualified": true,
+  "events": [
+    "minecraft:item.goat_horn.play",
+    "minecraft:entity.goat.screaming.horn_break"
+  ],
+  "control_sha256": "AA34653717824CFA843F1202A1603A4F26205C472C1776D7D56600E961D6A333",
+  "proof_sha256": "3E0D5C747E39D895D6BD4C6A09C28C7234D6D7B02BE0E0D518043EE56A287855",
+  "sound_definition_sha256": "52131D187D88128BDE6DCD808768213543F01503FAB3ED6A51B2002D5A4C279C",
+  "scope": "Two native unbound sound events reproduced on the same Forge 47 client without the mod or a world. Every other warning and error is audited."
+}

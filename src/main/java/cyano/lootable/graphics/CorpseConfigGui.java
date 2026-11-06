@@ -65,18 +65,18 @@ public final class CorpseConfigGui extends Screen {
         }return true;
     }
     @Override public void tick(){for(EditBox field:fields.values())field.tick();}
-    @Override public void render(com.mojang.blaze3d.vertex.PoseStack matrices,int mouseX,int mouseY,float partialTicks){
-        renderBackground(matrices);drawCenteredString(matrices,font,LootableBodies.NAME,width/2,12,0xffffff);
-        drawCenteredString(matrices,font,I18n.get(group==null?"lootablebodies.config.local_file":"lootablebodies.config."+group),width/2,28,0xcccccc);
+    @Override public void render(GuiGraphics graphics,int mouseX,int mouseY,float partialTicks){
+        renderBackground(graphics);graphics.drawCenteredString(font,LootableBodies.NAME,width/2,12,0xffffff);
+        graphics.drawCenteredString(font,I18n.get(group==null?"lootablebodies.config.local_file":"lootablebodies.config."+group),width/2,28,0xcccccc);
         for(Map.Entry<String,Integer> row:rows.entrySet()){
-            String text=I18n.get(property(row.getKey()).getLanguageKey());drawString(matrices,font,font.plainSubstrByWidth(text,205),width/2-155,row.getValue()+6,0xffffff);
+            String text=I18n.get(property(row.getKey()).getLanguageKey());graphics.drawString(font,font.plainSubstrByWidth(text,205),width/2-155,row.getValue()+6,0xffffff);
         }
-        super.render(matrices,mouseX,mouseY,partialTicks);for(EditBox field:fields.values())field.render(matrices,mouseX,mouseY,partialTicks);
+        super.render(graphics,mouseX,mouseY,partialTicks);for(EditBox field:fields.values())field.render(graphics,mouseX,mouseY,partialTicks);
         for(Map.Entry<String,Integer> row:rows.entrySet())if(mouseX>=width/2-155 && mouseX<width/2+155 && mouseY>=row.getValue() && mouseY<row.getValue()+22)
-            renderComponentTooltip(matrices,java.util.Collections.singletonList(net.minecraft.network.chat.Component.translatable(property(row.getKey()).getLanguageKey()+".tooltip")),mouseX,mouseY);
+            graphics.renderComponentTooltip(font,java.util.Collections.singletonList(net.minecraft.network.chat.Component.translatable(property(row.getKey()).getLanguageKey()+".tooltip")),mouseX,mouseY);
         if(group==null && mouseX>=width/2-155 && mouseX<width/2+155 && mouseY>=95 && mouseY<115)
-            renderComponentTooltip(matrices,java.util.Collections.singletonList(net.minecraft.network.chat.Component.translatable("lootablebodies.config.rules.tooltip")),mouseX,mouseY);
-        if(invalid)drawCenteredString(matrices,font,I18n.get("lootablebodies.config.invalid"),width/2,height-72,0xff5555);
+            graphics.renderComponentTooltip(font,java.util.Collections.singletonList(net.minecraft.network.chat.Component.translatable("lootablebodies.config.rules.tooltip")),mouseX,mouseY);
+        if(invalid)graphics.drawCenteredString(font,I18n.get("lootablebodies.config.invalid"),width/2,height-72,0xff5555);
     }
     @Override public void onClose(){capture();minecraft.setScreen(parent);}
     public static boolean isValidDecayTime(String value) {

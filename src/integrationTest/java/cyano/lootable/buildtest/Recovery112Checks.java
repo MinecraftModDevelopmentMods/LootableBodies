@@ -47,7 +47,7 @@ final class Recovery112Checks {
     }
     private static void conserved(EntityLootableBody body) {
         RuntimeChecks.require(RuntimeChecks.sameStack(body.getItem(6),RuntimeChecks.stack(420)),"Recovery option changed complete item NBT");
-        CompoundTag saved=new CompoundTag();body.saveAsPassenger(saved);EntityLootableBody reloaded=new EntityLootableBody(body.level);reloaded.load(saved);
+        CompoundTag saved=new CompoundTag();body.saveAsPassenger(saved);EntityLootableBody reloaded=new EntityLootableBody(body.level());reloaded.load(saved);
         RuntimeChecks.require(RuntimeChecks.sameStack(reloaded.getItem(6),RuntimeChecks.stack(420)),"Recovery option inventory changed on reload");
     }
 }

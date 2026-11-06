@@ -132,13 +132,13 @@ final class NbtRecoveryChecks {
     private static void initializedCaps(){
         CompoundTag raw=entry(120,17,6),caps=new CompoundTag();caps.putString("absentfixture:inventory","opaque capabilities");raw.put("ForgeCaps",caps);
         ItemStack stack=ItemStack.of(raw.copy());
-        stack.getCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY);
+        stack.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.ITEM_HANDLER);
         RuntimeChecks.require(!caps.equals(stack.save(new CompoundTag()).get("ForgeCaps")),"Native control no longer exposes unsupported capability loss");
         RuntimeChecks.require(raw.getCompound("ForgeCaps").equals(caps),"Native control mutated its source record");
     }
     private static void knownCaps(){
         ItemStack stack=new ItemStack(FixtureItems.keepsake,3);
-        stack.getCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY);
+        stack.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.ITEM_HANDLER);
         CompoundTag raw=stack.save(new CompoundTag());raw.putByte("Slot",(byte)6);
         RuntimeChecks.require(raw.contains("ForgeCaps",10),"Registered capability control has no serialized payload");
         EntityLootableBody body=read(root(raw));contains(body,stack);

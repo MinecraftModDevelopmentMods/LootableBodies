@@ -6,6 +6,8 @@ import java.nio.file.*;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.world.level.storage.LevelStorageSource;
+import net.minecraft.world.level.validation.DirectoryValidator;
+import net.minecraft.world.level.validation.PathAllowList;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
@@ -24,7 +26,7 @@ class EarlyWorldPreservationTest {
         Path world=directory.resolve("fixture");CompoundTag root=level(2230);write(world,root);
         Path journal=world.resolve("data/lootablebodies-upgrade");Files.createDirectories(journal);Files.write(journal.resolve("index.nbt"),new byte[]{1,2,3});
         byte[] before=Files.readAllBytes(world.resolve("level.dat"));Native118UnitLifecycle.activate();
-        LevelStorageSource format=new LevelStorageSource(directory,directory.resolve("backups"),NativeVanillaDataFixer.get());
+        LevelStorageSource format=new LevelStorageSource(directory,directory.resolve("backups"),new DirectoryValidator(new PathAllowList(java.util.List.of())),NativeVanillaDataFixer.get());
         try(LevelStorageSource.LevelStorageAccess save=format.createAccess("fixture")) {
             Error failure=assertThrows(Error.class,()->EarlyWorldPreservation.beforeRead(save));
             assertTrue(failure.getMessage().contains("Lootable Bodies could not preserve this world's corpses"));
@@ -34,7 +36,7 @@ class EarlyWorldPreservationTest {
     }
     @Test void startupKeepsItsEarlySourceContextAndUnknownOwnedMetadata()throws Exception {
         Path world=directory.resolve("fixture");CompoundTag root=level(2230);write(world,root);Native118UnitLifecycle.activate();
-        LevelStorageSource format=new LevelStorageSource(directory,directory.resolve("backups"),NativeVanillaDataFixer.get());
+        LevelStorageSource format=new LevelStorageSource(directory,directory.resolve("backups"),new DirectoryValidator(new PathAllowList(java.util.List.of())),NativeVanillaDataFixer.get());
         try(LevelStorageSource.LevelStorageAccess save=format.createAccess("fixture")) {
             EarlyWorldPreservation.beforeRead(save);
             UpgradeJournal early=UpgradePreservation.journal();assertEquals(2230,early.worldVersions().getInt("WorldDataVersion"));

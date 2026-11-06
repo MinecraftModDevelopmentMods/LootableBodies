@@ -75,10 +75,10 @@ def prepareOwnedLoaderConfig = { File root ->
     }
 }
 
-// Use an actual native45 codec header in each newly owned flat fixture world.
+// Use an actual native47 codec header in each newly owned flat fixture world.
 def prepareOwnedFlatWorld = { File root ->
-    File header = file('tools/fixtures/native119-flat-level.dat')
-    if (!header.isFile() || releaseDigest(header) != '9792ED9B0BF8A00ACB6BFFAEB50DC8B9C462CD9B6C96A9E6ED5CA65CFD534A55')
+    File header = file('tools/fixtures/native120-flat-level.dat')
+    if (!header.isFile() || releaseDigest(header) != '81E5056FCE49638B40F532B819FC82B0EBBFC954BCF4A7E20E3D6538E8FC0645')
         throw new GradleException('Missing or changed native flat fixture header')
     File world = new File(root,'world')
     if (world.exists()) throw new GradleException('Refusing to replace an existing fixture world')
@@ -138,7 +138,6 @@ def phaseTask = { String phase, Object prerequisite ->
                 options.workingDir.set(runDirectory)
                 run.workingDir(runDirectory)
                 run.systemProperty('lootablebodies.phase', phase)
-                run.systemProperty('log4j.configurationFile', file('src/integrationTest/resources/log4j2.xml').toURI())
                 run.jvmArgs('-Xlog:gc*,safepoint:file=integration-'+phase+'.gc.txt:time,uptime,pid,level,tags')
                 run.executable = productionLauncher.get().executablePath.asFile.path
                 run.setClasspath(files(developmentOutput, run.classpath.filter { !sourceSets.main.output.files.contains(it) }))
@@ -161,6 +160,9 @@ def phaseTask = { String phase, Object prerequisite ->
             File debug = new File(runDirectory.get().asFile,'logs/debug.log')
             if (!debug.isFile() || !debug.length()) throw new GradleException('Missing complete native debug log')
             copy { from debug; into runDirectory; rename { "${phase}.debug.log" } }
+            File bootstrap = new File(runDirectory.get().asFile,'logs/bootstrap-debug.log')
+            if (!bootstrap.isFile() || !bootstrap.length()) throw new GradleException('Missing complete Forge bootstrap log')
+            copy { from bootstrap; into runDirectory; rename { "${phase}.bootstrap-debug.log" } }
             if (!fileTree(new File(runDirectory.get().asFile,'crash-reports')).isEmpty())
                 throw new GradleException('Runtime crash reports found')
         }
@@ -242,7 +244,6 @@ tasks.register('clientIntegrationTest') {
             options.workingDir.set(root)
             run.workingDir(root)
             run.systemProperty('lootablebodies.clientCheck','true')
-            run.systemProperty('log4j.configurationFile',file('src/integrationTest/resources/log4j2.xml').toURI())
             run.executable = productionLauncher.get().executablePath.asFile.path
             run.setClasspath(files(developmentOutput,run.classpath.filter { !sourceSets.main.output.files.contains(it) }))
             run.exec()
@@ -351,7 +352,6 @@ tasks.register('forgeControlServer') {
         try {
             options.workingDir.set(root)
             run.workingDir(root)
-            run.systemProperty('log4j.configurationFile',file('src/integrationTest/resources/log4j2.xml').toURI())
             run.setClasspath(files(controlOutput,run.classpath.filter { !sourceSets.main.output.files.contains(it) && it != developmentOutput.get().asFile }))
             run.exec()
         } finally {

@@ -3,11 +3,11 @@ name: CodeQL
 on:
   push:
     branches:
-      - master-1.19.4
+      - master-1.20.1
       - 'feature/**'
   pull_request:
     branches:
-      - master-1.19.4
+      - master-1.20.1
   schedule:
     - cron: '43 7 * * 4'
 
@@ -17,7 +17,7 @@ permissions:
   security-events: write
 
 concurrency:
-  group: lootablebodies-1.19-codeql-${{ github.ref }}
+  group: lootablebodies-1.20-codeql-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

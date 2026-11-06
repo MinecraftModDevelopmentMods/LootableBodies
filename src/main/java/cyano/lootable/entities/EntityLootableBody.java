@@ -6,7 +6,6 @@ import cyano.lootable.upgrade.ItemMigration;
 
 import com.mojang.authlib.GameProfile;
 import cyano.lootable.LootableBodies;
-import net.minecraft.world.level.material.Material;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.entity.Mob;
@@ -261,7 +260,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	}
 	
 	private void generateVoidPlatform() {
-		Level level = this.level;
+		Level level = level();
 		BlockPos testPos = new BlockPos((int)this.getX(), 0, (int)this.getZ());
 		
 		BlockState platformBlockstate = getPlatformBlock(level.dimension()==Level.NETHER?-1:level.dimension()==Level.END?1:0);
@@ -362,8 +361,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 			if(amount > 0) this.setItem(slot,stack.split(amount));
 			return stack.getCount() > 0 ? stack : ItemStack.EMPTY;
 		} else if(current.getCount() < inventorySizeLimit
-				&& ItemStack.isSame(stack,current)
-				&& ItemStack.tagMatches(stack,current)){
+				&& ItemStack.isSameItemSameTags(stack,current)){
 			int delta = Math.min(stack.getCount(),inventorySizeLimit - current.getCount());
 			current.grow(delta);
 			stack.shrink(delta);
@@ -481,11 +479,11 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	}
 
 	public void jumpOutOfWall(){
-		if(level.isClientSide) return;
+		if(level().isClientSide) return;
 		AABB bounds = getBoundingBox();
 		// Collision queries omit unloaded chunks. They cannot establish an exit
 		// until the complete local terrain (including tall neighbour shapes) exists.
-		if(!escapeTerrainLoaded(bounds) || level.noCollision(this,bounds)) return;
+		if(!escapeTerrainLoaded(bounds) || level().noCollision(this,bounds)) return;
 		BlockPos currentCoord = blockPosition();
 		double x = currentCoord.getX()+0.5 - getX();
 		double z = currentCoord.getZ()+0.5 - getZ();
@@ -504,15 +502,15 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	}
 
 	private boolean escapeTerrainLoaded(AABB bounds) {
-		return level.hasChunksAt(BlockPos.containing(bounds.minX-1,0,bounds.minZ-1),
+		return level().hasChunksAt(BlockPos.containing(bounds.minX-1,0,bounds.minZ-1),
 				BlockPos.containing(bounds.maxX+1,0,bounds.maxZ+1));
 	}
 
 	private boolean tryWallExit(double x,double y,double z) {
 		AABB bounds = getBoundingBox().move(x-getX(),y-getY(),z-getZ());
-		if(bounds.minY < 0 || bounds.maxY > level.getHeight() ||
-				!level.getWorldBorder().isWithinBounds(bounds) || !escapeTerrainLoaded(bounds) ||
-				!level.noCollision(this,bounds)) return false;
+		if(bounds.minY < 0 || bounds.maxY > level().getHeight() ||
+				!level().getWorldBorder().isWithinBounds(bounds) || !escapeTerrainLoaded(bounds) ||
+				!level().noCollision(this,bounds)) return false;
 		setPos(x,y,z);
 		return true;
 	}
@@ -521,7 +519,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	@Override
 	public void kill() {
 		if(terminate < 0) terminate = DEATH_COUNTDOWN;
-		this.hurt(damageSources().outOfWorld(), this.getMaxHealth());
+		this.hurt(damageSources().fellOutOfWorld(), this.getMaxHealth());
 		this.setChanged();
 	}
 
@@ -675,6 +673,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	 */
 	@Override
 	public void setChanged() {
+		Level level = level();
 		if(level != null && !level.isClientSide && isAddedToWorld() && level.hasChunkAt(blockPosition())) {
 			level.getChunkAt(blockPosition()).setUnsaved(true);
 		}
@@ -1259,7 +1258,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 			// Resolve them before comparing: unsupported payloads must remain raw,
 			// rather than disappearing later during an inventory transaction.
 			if(raw.contains("ForgeCaps"))
-				stack.getCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY);
+				stack.getCapability(net.minecraftforge.common.capabilities.ForgeCapabilities.ITEM_HANDLER);
 			CompoundTag encoded = stack.save(new CompoundTag());
             Tag expectedTag=raw.get("tag");
             // Native16 writes an explicit zero for missing tool durability.

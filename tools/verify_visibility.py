@@ -9,8 +9,8 @@ import shutil
 import os
 from native_runtime import seed_flat_fixture
 from owned_process import native_process
-from native119_logs import audit
-from native119_client_logs import audit_client
+from native120_logs import audit
+from native120_client_logs import audit_client
 from fixture_login import LoginMonitor, start_clients, write_receipts, archive_live_logs
 from verify_multiplayer import client_command
 from verify_packaged import prepare, FORGE, MAIN, digest, run

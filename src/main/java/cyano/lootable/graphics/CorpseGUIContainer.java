@@ -6,8 +6,7 @@ import net.minecraft.world.Container;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
-import com.mojang.blaze3d.systems.RenderSystem;
-import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -36,17 +35,14 @@ public class CorpseGUIContainer extends net.minecraft.client.gui.screens.invento
 	 * @param mouseY       Mouse y coordinate
 	 */
 	@Override
-	protected void renderBg(com.mojang.blaze3d.vertex.PoseStack matrices, float partialTicks, int mouseX, int mouseY) {
-		RenderSystem.setShader(GameRenderer::getPositionTexShader);
-		RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+	protected void renderBg(GuiGraphics graphics, float partialTicks, int mouseX, int mouseY) {
 		int x = (width - imageWidth) / 2;
 		int y = (height - imageHeight) / 2;
-		RenderSystem.setShaderTexture(0,image);
-		this.blit(matrices, x, y, 0, 0, this.imageWidth, this.imageHeight); // x, y, textureOffsetX, textureOffsetY, width, height)
+		graphics.blit(image, x, y, 0, 0, imageWidth, imageHeight);
 	}
 
     @Override
-    protected void renderLabels(com.mojang.blaze3d.vertex.PoseStack matrices,int mouseX,int mouseY) {
+    protected void renderLabels(GuiGraphics graphics,int mouseX,int mouseY) {
         // This seven-row layout has no label strip. Keep the original screen's
         // foreground; the new vanilla labels would overlap corpse item slots.
     }

@@ -94,14 +94,14 @@ tasks.register('nativeBoundaryTest', Test) {
     description = 'Runs native conversion, storage and early-read regressions without launching Minecraft.'
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
-    include '**/Native117*Test.class', '**/Native118*Test.class', '**/Native119*Test.class', '**/EarlyWorldPreservationTest.class', '**/HookRegistrationOrderTest.class'
+    include '**/Native117*Test.class', '**/Native118*Test.class', '**/Native119*Test.class', '**/Native120*Test.class', '**/EarlyWorldPreservationTest.class', '**/HookRegistrationOrderTest.class'
 }
-tasks.register('generateNative119Fixtures', JavaExec) {
+tasks.register('generateNative120Fixtures', JavaExec) {
     group = 'verification'
     dependsOn 'testClasses'
     classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'cyano.lootable.buildtest.Native119FixtureGenerator'
-    args providers.gradleProperty('nativeFixtureOutput').getOrElse('build/native119-fixture-preparation-01')
+    mainClass = 'cyano.lootable.buildtest.Native120FixtureGenerator'
+    args providers.gradleProperty('nativeFixtureOutput').getOrElse('build/native120-fixture-preparation-01')
 }
 tasks.withType(JavaExec).configureEach { javaLauncher = productionLauncher }
 tasks.withType(Javadoc).configureEach {

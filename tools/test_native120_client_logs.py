@@ -1,14 +1,14 @@
-"""Synthetic diagnostic counterexamples; independent native60 is separate proof."""
+"""Synthetic diagnostic counterexamples; independent Forge 47 is separate proof."""
 from pathlib import Path
 import hashlib,json,tempfile,unittest
 from unittest.mock import patch
-import native119_client_logs as logs
-from native119_logs import audit as strict_audit
+import native120_client_logs as logs
+from native120_logs import audit as strict_audit
 
-EVENTS=['minecraft:item.brush.brushing','minecraft:item.brush.brush_sand_completed','minecraft:item.goat_horn.play','minecraft:entity.goat.screaming.horn_break','minecraft:music.overworld.cherry_grove']
+EVENTS=['minecraft:item.goat_horn.play','minecraft:entity.goat.screaming.horn_break']
 def lines(events=EVENTS):return ''.join('[12:00:00] [Render thread/WARN] [net.minecraft.client.sounds.SoundEngine]: Missing sound for event: '+name+'\n' for name in events)
 
-class Native119ClientDiagnosticTests(unittest.TestCase):
+class Native120ClientDiagnosticTests(unittest.TestCase):
     def check(self,text):
         with tempfile.TemporaryDirectory() as directory:
             p=Path(directory)/'client.log';p.write_text(text,encoding='utf-8')
@@ -16,7 +16,7 @@ class Native119ClientDiagnosticTests(unittest.TestCase):
     def test_complete_proved_native_batch_is_explicitly_classified(self):
         for text in [lines(),lines().replace('[12:00:00]','[12:00:00.123]')]:
             report=self.check(text+'[12:00:01] [Render thread/INFO] Completed synthetic fixture\n')
-            self.assertEqual(5,report['classified_native_sound_warnings']);self.assertFalse(report['raw_strict_audit_passed']);self.assertTrue(report['residual_strict_audit_passed'])
+            self.assertEqual(2,report['classified_native_sound_warnings']);self.assertFalse(report['raw_strict_audit_passed']);self.assertTrue(report['residual_strict_audit_passed'])
     def test_missing_or_changed_control_proof_cannot_qualify(self):
         with tempfile.TemporaryDirectory() as directory:
             p=Path(directory)/'client.log';p.write_text(lines(),encoding='utf-8')
@@ -38,10 +38,10 @@ class Native119ClientDiagnosticTests(unittest.TestCase):
             with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as directory:
                 root=Path(directory);definition=root/'sounds.json';definition.write_text('{}');critical=root/'control.fixture';critical.write_text('synthetic independent control input');rawlog=root/'native.log';rawlog.write_text('synthetic native fixture')
                 sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest().upper()
-                proof={'minecraft':'1.19.4','forge':'45.4.5','platform':'Windows amd64','qualified':True,'no_candidate':True,'no_world':True,'native_client_exit':0,'events':EVENTS,'control_sha256':'C'*64,'sound_definition':str(definition),'critical_files':{str(definition):sha(definition),str(critical):sha(critical)},'raw_control_logs':{str(rawlog):sha(rawlog)},'original_strict_audit_passed':False}
+                proof={'minecraft':'1.20.1','forge':'47.4.28','platform':'Windows amd64','qualified':True,'no_candidate':True,'no_world':True,'native_client_exit':0,'events':EVENTS,'control_sha256':'C'*64,'sound_definition':str(definition),'critical_files':{str(definition):sha(definition),str(critical):sha(critical)},'raw_control_logs':{str(rawlog):sha(rawlog)},'original_strict_audit_passed':False}
                 saved=root/'proof.json';saved.write_text(json.dumps(proof))
-                policy={'minecraft':'1.19.4','forge':'45.4.5','platform':'Windows amd64','qualified':True,'proof_sha256':sha(saved),'events':EVENTS,'control_sha256':'C'*64,'sound_definition_sha256':sha(definition)}
-                if mutation=='resource':definition.write_text('{"item.brush.brushing":{}}')
+                policy={'minecraft':'1.20.1','forge':'47.4.28','platform':'Windows amd64','qualified':True,'proof_sha256':sha(saved),'events':EVENTS,'control_sha256':'C'*64,'sound_definition_sha256':sha(definition)}
+                if mutation=='resource':definition.write_text('{"item.goat_horn.play":{}}')
                 elif mutation=='proof':saved.write_text('{}')
                 elif mutation=='missing':critical.unlink()
                 elif mutation=='target':policy['forge']='40.3.12'

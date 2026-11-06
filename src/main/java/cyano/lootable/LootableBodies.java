@@ -27,7 +27,7 @@ import net.minecraftforge.fml.loading.FMLPaths;
 public final class LootableBodies {
     public static final String MODID = "lootablebodies";
     public static final String NAME = "DrCyano's Lootable Bodies";
-    public static final String VERSION = "2.4.10.119041";
+    public static final String VERSION = "2.4.11.120011";
     public static final ResourceLocation CORPSE_ID = new ResourceLocation("lootablebodies:corpse");
     public static EntityType<EntityLootableBody> CORPSE;
     public static Item CORPSE_EGG;
@@ -64,8 +64,8 @@ public final class LootableBodies {
         bus.addListener(this::registerItems);
         bus.addListener(cyano.lootable.upgrade.LegacyRegistryMappings::retiredMemories);
         bus.addListener(this::registerContainers);
-        bus.addListener((net.minecraftforge.event.CreativeModeTabEvent.BuildContents event) -> {
-            if(event.getTab()==CreativeModeTabs.SPAWN_EGGS)event.accept(CORPSE_EGG);
+        bus.addListener((net.minecraftforge.event.BuildCreativeModeTabContentsEvent event) -> {
+            if(CreativeModeTabs.SPAWN_EGGS.equals(event.getTabKey()))event.accept(CORPSE_EGG);
         });
         MinecraftForge.EVENT_BUS.register(new PlayerDeathEventHandler());
         MinecraftForge.EVENT_BUS.register(this);
@@ -93,7 +93,7 @@ public final class LootableBodies {
     private void registerContainers(RegisterEvent event) {
         event.register(Registries.MENU,CORPSE_ID,()-> {
             CORPSE_CONTAINER=net.minecraftforge.common.extensions.IForgeMenuType.create((window,inventory,buffer)-> {
-                net.minecraft.world.entity.Entity body=inventory.player.level.getEntity(buffer.readVarInt());
+                net.minecraft.world.entity.Entity body=inventory.player.level().getEntity(buffer.readVarInt());
                 if(!(body instanceof EntityLootableBody))throw new IllegalStateException("Corpse container has no matching entity");
                 return new cyano.lootable.graphics.CorpseContainer(window,inventory,(EntityLootableBody)body);
             });

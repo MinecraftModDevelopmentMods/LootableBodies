@@ -28,7 +28,7 @@ final class FixtureConnections {
     static void connect(Minecraft mc) {
         String address="127.0.0.1:"+Integer.parseInt(System.getProperty("lootablebodies.multiplayer.port"));
         ServerData destination=new ServerData("Disposable check",address,false);
-        ConnectScreen.startConnecting(new TitleScreen(),mc,net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(address),destination);
+        ConnectScreen.startConnecting(new TitleScreen(),mc,net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(address),destination,false);
     }
     static boolean retry(Minecraft mc,String role) throws Exception {
         if(!(mc.screen instanceof DisconnectedScreen)||mc.level!=null)return false;

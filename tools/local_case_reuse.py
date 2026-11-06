@@ -12,9 +12,9 @@ from native_evidence import audit_phase,audit_case_mods,verify_saved_audit
 DEPENDENCIES=('gradle.properties','src/integrationTest/resources/log4j2.xml',
  'tools/native_runtime.py','tools/runtime_diagnostics.py','tools/command_logs.py',
  'tools/prepared_worlds.py','tools/historical_workers.py','tools/release_identity.py',
- 'tools/nbt_regions.py','tools/native119_persistence.py','tools/audit_runtime_logs.py',
- 'tools/native_evidence.py','tools/native119_server_inputs.json',
- 'tools/native119_worker_budget.json','tools/native119_logs.py')
+ 'tools/nbt_regions.py','tools/native120_persistence.py','tools/audit_runtime_logs.py',
+ 'tools/native_evidence.py','tools/native120_server_inputs.json',
+ 'tools/native120_worker_budget.json','tools/native120_logs.py')
 
 def normal_program(text):
     tree=ast.parse(text)
@@ -35,7 +35,7 @@ def compare_inputs(old,new):
 
 def audit_normal(home,details,identity):
     from verify_world_upgrades import PHASES
-    from native119_logs import audit
+    from native120_logs import audit
     if details['phases']!=PHASES or details['stamp_mutations'] or not details['source_unchanged']:
         raise ValueError('Only one complete unchanged normal case is reusable')
     mods=audit_case_mods(home,identity);receipts=[];logs=[]

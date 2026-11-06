@@ -1,5 +1,5 @@
 modLoader="javafml"
-loaderVersion="[45,)"
+loaderVersion="[47,)"
 license="${mod_license}"
 [[mods]]
 modId="lootablebodies"
@@ -11,12 +11,12 @@ description="Saves your items on a lootable corpse when you die."
 [[dependencies.lootablebodies]]
 modId="forge"
 mandatory=true
-versionRange="[45.4.5,)"
+versionRange="[47.4.28,)"
 ordering="NONE"
 side="BOTH"
 [[dependencies.lootablebodies]]
 modId="minecraft"
 mandatory=true
-versionRange="[1.19.4]"
+versionRange="[1.20.1]"
 ordering="NONE"
 side="BOTH"

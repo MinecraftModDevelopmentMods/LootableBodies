@@ -48,7 +48,7 @@ class Native119RegistrySnapshotTest {
             CompoundTag record=new CompoundTag();record.putString("type",type);record.putIntArray("pos",new int[]{0,80,0});record.putInt("free_tickets",1);records.add(record);
         }
         section.put("Records",records);sections.put("0",section);root.put("Sections",sections);CompoundTag before=root.copy();
-        Tag fixed=net.minecraft.util.datafix.DataFixers.getDataFixer().update(References.POI_CHUNK,new Dynamic<>(NbtOps.INSTANCE,root),2975,3337).getValue();
+        Tag fixed=net.minecraft.util.datafix.DataFixers.getDataFixer().update(References.POI_CHUNK,new Dynamic<>(NbtOps.INSTANCE,root),2975,3465).getValue();
         assertEquals(before,root,"Native conversion must operate on copies");
         ListTag result=((CompoundTag)fixed).getCompound("Sections").getCompound("0").getList("Records",10);
         assertEquals(1,result.size());assertEquals("minecraft:farmer",result.getCompound(0).getString("type"));
