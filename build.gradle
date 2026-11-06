@@ -251,10 +251,11 @@ tasks.named('sourcesJar', Jar) {
     inputs.property('accessTransformerLineEndings', 'lf')
     filesMatching('META-INF/accesstransformer.cfg', normalizeArchiveText)
 }
-// Java 21 writes this extensionless index with the host line separator. Keep
-// the documentation bytes identical on Windows and Linux.
+// Java 21 writes the index and its bundled SVG icons with the host line
+// separator. Keep the documentation bytes identical on Windows and Linux.
 tasks.named('javadocJar', Jar) {
-    filesMatching('element-list') {
+    inputs.property('javadocLineEndings', 'crlf-index-and-icons')
+    filesMatching(['element-list', 'copy.svg', 'link.svg']) {
         filter(FixCrLfFilter, eol: FixCrLfFilter.CrLf.newInstance('crlf'),
                 eof: FixCrLfFilter.AddAsisRemove.newInstance('asis'))
     }
