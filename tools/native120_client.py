@@ -1,4 +1,4 @@
-"""Pinned native47 client preparation and descriptor-driven Java17 launch."""
+"""Pinned Forge 50 client preparation and descriptor-driven Java 21 launch."""
 import hashlib
 import json
 import os
@@ -8,10 +8,10 @@ import re
 import struct
 import zipfile
 
-BASE_VERSION = '1.20.1'
-VERSION = '1.20.1-forge-47.4.28'
-BASE_SHA1 = '72ae93b0934df5541860e3e6b72cf883c74da491'
-FORGE_SHA256 = 'C8E1B6EB02F0D72E5BE8C55ACE50BC10AA2C20F082E41B0D32E7D16CC28B7B56'
+BASE_VERSION = '1.20.6'
+VERSION = '1.20.6-forge-50.2.14'
+BASE_SHA1 = '4dd84bf5b646a75cba5c0c5f7723eb478a2b78af'
+FORGE_SHA256 = '40A8892EAB75917AA96D5D63DD92F9BE8BA86A3D50429B96A12A1F2F206FEB46'
 
 
 def native_for_platform(library,system,architecture):
@@ -43,9 +43,9 @@ def descriptors(runtime):
     base = runtime/'versions'/BASE_VERSION/(BASE_VERSION+'.json')
     forge = runtime/'versions'/VERSION/(VERSION+'.json')
     if not base.is_file() or hashlib.sha1(base.read_bytes()).hexdigest() != BASE_SHA1:
-        raise RuntimeError('Incorrect official native1.20.1 client descriptor')
+        raise RuntimeError('Incorrect official native 1.20.6 client descriptor')
     if not forge.is_file() or hashlib.sha256(forge.read_bytes()).hexdigest().upper() != FORGE_SHA256:
-        raise RuntimeError('Incorrect installed native47 client descriptor')
+        raise RuntimeError('Incorrect installed Forge 50 client descriptor')
     return json.loads(base.read_text()), json.loads(forge.read_text())
 
 
@@ -170,14 +170,12 @@ def expand(arguments, values, *, system, architecture, os_version):
 
 
 def command(java, home, runtime, assets, prepared, *, username, extra=()):
-    java, home, assets = Path(java).resolve(), Path(home).resolve(), Path(assets).resolve()
-    release = dict(line.split('=',1) for line in (java.parent.parent/'release').read_text().splitlines() if '=' in line)
-    if release.get('SEMANTIC_VERSION') != '"17.0.20.1+1"' or release.get('IMPLEMENTOR') != '"Eclipse Adoptium"':
-        raise RuntimeError('Native client requires exact Temurin17.0.20.1+1')
+    from native_runtime import require_runtime_jdk
+    java, home, assets = require_runtime_jdk(java), Path(home).resolve(), Path(assets).resolve()
     base, forge, record = load(runtime,prepared)
     index = assets/'indexes'/(base['assetIndex']['id']+'.json')
     if not index.is_file() or hashlib.sha1(index.read_bytes()).hexdigest() != base['assetIndex']['sha1']:
-        raise RuntimeError('Incorrect official native1.20.1 asset index')
+        raise RuntimeError('Incorrect official native 1.20.6 asset index')
     values = {'version_name':VERSION,'library_directory':record['library_directory'],
               'classpath_separator':os.pathsep,'classpath':os.pathsep.join(record['classpath']),
               'natives_directory':record['natives'],'launcher_name':'LootableBodiesTests','launcher_version':'1',
@@ -189,10 +187,14 @@ def command(java, home, runtime, assets, prepared, *, username, extra=()):
               'clientid':'','auth_xuid':'',
               'resolution_width':'854','resolution_height':'480'}
     options = dict(system=record['system'],architecture=record['architecture'],os_version=platform.version())
-    # The inherited profile's game version differs from the actual vanilla jar
-    # filename. Forge's JVM ignoreList must exclude that precise base jar from
-    # the transforming module layer, which already contains the native SRG jar.
-    jvm_values = dict(values,version_name=BASE_VERSION)
-    jvm = expand(base['arguments']['jvm']+forge['arguments']['jvm'],jvm_values,**options)
+    jvm = expand(base['arguments']['jvm']+forge['arguments']['jvm'],values,**options)
     game = expand(base['arguments']['game']+forge['arguments']['game'],values,**options)
-    return [str(java),'-Dfile.encoding=UTF-8','-Xmx2G',*jvm,*extra,forge['mainClass'],*game]
+    session = os.environ.get('LOOTABLEBODIES_TEST_SESSION_ENDPOINT')
+    auth = []
+    if session is not None:
+        match = re.fullmatch(r'http://127\.0\.0\.1:([1-9][0-9]{0,4})', session)
+        if match is None or int(match[1]) > 65535:
+            raise ValueError('An owned client fixture endpoint must be loopback HTTP')
+        auth = ['-Dminecraft.api.session.host='+session, '-Dminecraft.api.services.host='+session]
+    return [str(java),'-Dfile.encoding=UTF-8','-Dstdout.encoding=UTF-8','-Dstderr.encoding=UTF-8',
+            '-Xmx2G',*jvm,*auth,*extra,forge['mainClass'],*game]

@@ -84,20 +84,20 @@ final class ReportedIssueChecks {
     }
     private static ItemStack shovel() {
         ItemStack stack=new ItemStack(Items.DIAMOND_SHOVEL);
-        stack.setTag(RuntimeChecks.stack(300).getTag().copy());stack.setDamageValue(17);
-        stack.setHoverName(net.minecraft.network.chat.Component.literal("Issue 5 original shovel")); return stack;
+        FixtureStackData.setCustom(stack,FixtureStackData.custom(RuntimeChecks.stack(300)));stack.setDamageValue(17);
+        stack.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,net.minecraft.network.chat.Component.literal("Issue 5 original shovel")); return stack;
     }
     static Map<String,Integer> inventory(EntityLootableBody body) {
         Map<String,Integer> total=new TreeMap<>();
         for(int i=0;i<48;i++) add(total,body.getItem(i));
         CompoundTag n=new CompoundTag();body.addAdditionalSaveData(n);
         ListTag aux=n.getList("Aux",10);
-        for(int i=0;i<aux.size();i++)add(total,ItemStack.of(aux.getCompound(i)));
+        for(int i=0;i<aux.size();i++)add(total,FixtureStackData.load(aux.getCompound(i)));
         return total;
     }
     private static void add(Map<String,Integer> total,ItemStack stack) {
         if((stack == null || stack.isEmpty()) || stack.getCount()<=0)return;
-        CompoundTag n=stack.save(new CompoundTag());n.remove("Count");
+        CompoundTag n=FixtureStackData.save(stack);n.remove("count");
         total.put(n.toString(),total.getOrDefault(n.toString(),0)+stack.getCount());
     }
     private static Map<String,Integer> tagged(EntityLootableBody body) {
@@ -107,7 +107,7 @@ final class ReportedIssueChecks {
         Map<String,Integer> n=new TreeMap<>();
         for(int i=0;i<player.getInventory().getContainerSize();i++) {
             ItemStack stack=player.getInventory().getItem(i);
-            if((stack != null && !stack.isEmpty()) && stack.hasTag() && stack.getTag().contains("fixture"))add(n,stack);
+            if((stack != null && !stack.isEmpty()) && FixtureStackData.hasCustom(stack) && FixtureStackData.custom(stack).contains("fixture"))add(n,stack);
         }
         return n;
     }
@@ -130,9 +130,9 @@ final class ReportedIssueChecks {
         ServerboundContainerClickPacket outgoing=new ServerboundContainerClickPacket(p.containerMenu.containerId,
                 p.containerMenu.getStateId(),slot,button,type,p.containerMenu.getCarried().copy(),
                 new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<ItemStack>());
-        FriendlyByteBuf wire=new FriendlyByteBuf(Unpooled.buffer());
+        var wire=new net.minecraft.network.RegistryFriendlyByteBuf(Unpooled.buffer(),p.registryAccess());
         try {
-            outgoing.write(wire);p.connection.handleContainerClick(new ServerboundContainerClickPacket(wire));
+            ServerboundContainerClickPacket.STREAM_CODEC.encode(wire,outgoing);p.connection.handleContainerClick(ServerboundContainerClickPacket.STREAM_CODEC.decode(wire));
             RuntimeChecks.require(!wire.isReadable(),"Native issue click left undecoded fields");
             RuntimeChecks.require(observed.menuEvents>before && observed.menuState==p.containerMenu.getStateId()
                     && RuntimeChecks.sameStack(observed.carried,p.containerMenu.getCarried()),"Native menu correction did not match its authoritative state/cursor");
@@ -156,7 +156,7 @@ final class ReportedIssueChecks {
     }
     private static void deathSequence() throws Exception {
         world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);RuntimeChecks.awaitChunk(world,2,0);
-        ServerPlayer p=new ServerPlayer(server,world,new GameProfile(UUID.randomUUID(),"IssueFive"));
+        ServerPlayer p=new ServerPlayer(server,world,new GameProfile(UUID.randomUUID(),"IssueFive"),net.minecraft.server.level.ClientInformation.createDefault());
         p.connection=new QuietConnection(p);p.setGameMode(GameType.SURVIVAL);p.setPos(32.5,80,0.5);
         // Vanilla clients need player-list information before a tracked player
         // spawn, including the brief spawn-point visit during real respawn.
@@ -171,12 +171,12 @@ final class ReportedIssueChecks {
         for(int slot=0;slot<48;slot++)if(gui.getSlot(slot).hasItem())click(p,slot,0,ClickType.QUICK_MOVE);
         RuntimeChecks.require(first.isEmpty() && expected.equals(tagged(p)),"First recovery lost or duplicated tagged inventory: remaining="+inventory(first)+" expected="+expected+" player="+tagged(p)+" state="+gui.getStateId());
         FriendlyByteBuf close=new FriendlyByteBuf(Unpooled.buffer());
-        try {new ServerboundContainerClosePacket(gui.containerId).write(close);p.connection.handleContainerClose(new ServerboundContainerClosePacket(close));RuntimeChecks.require(!close.isReadable(),"Native issue close left undecoded fields");}
+        try {ServerboundContainerClosePacket.STREAM_CODEC.encode(close,new ServerboundContainerClosePacket(gui.containerId));p.connection.handleContainerClose(ServerboundContainerClosePacket.STREAM_CODEC.decode(close));RuntimeChecks.require(!close.isReadable(),"Native issue close left undecoded fields");}
         finally {close.release();}
-        int active=-1;for(int slot=1;slot<9;slot++)if(!(p.getInventory().items.get(slot)).isEmpty() && p.getInventory().items.get(slot).hasTag() && p.getInventory().items.get(slot).getTag().contains("fixture"))active=slot;
+        int active=-1;for(int slot=1;slot<9;slot++)if(!(p.getInventory().items.get(slot)).isEmpty() && FixtureStackData.hasCustom(p.getInventory().items.get(slot)) && FixtureStackData.custom(p.getInventory().items.get(slot)).contains("fixture"))active=slot;
         RuntimeChecks.require(active>0,"Shift-click did not leave a different occupied hotbar slot");
         FriendlyByteBuf held=new FriendlyByteBuf(Unpooled.buffer());
-        try {new ServerboundSetCarriedItemPacket(active).write(held);p.connection.handleSetCarriedItem(new ServerboundSetCarriedItemPacket(held));RuntimeChecks.require(!held.isReadable(),"Native held-item packet left undecoded fields");}
+        try {ServerboundSetCarriedItemPacket.STREAM_CODEC.encode(held,new ServerboundSetCarriedItemPacket(active));p.connection.handleSetCarriedItem(ServerboundSetCarriedItemPacket.STREAM_CODEC.decode(held));RuntimeChecks.require(!held.isReadable(),"Native held-item packet left undecoded fields");}
         finally {held.release();}
         // Deliberately do not tick/sync container or reopen inventory here.
         EntityLootableBody second=death(p);
@@ -304,7 +304,7 @@ final class ReportedIssueChecks {
     }
     private static final class QuietConnection extends ServerGamePacketListenerImpl {
         int menuEvents,menuState=-1;ItemStack carried=ItemStack.EMPTY;
-        QuietConnection(ServerPlayer p){super(server,new Connection(PacketFlow.SERVERBOUND),p);}
+        QuietConnection(ServerPlayer p){super(ReportedIssueChecks.server,new Connection(PacketFlow.SERVERBOUND),p,net.minecraft.server.network.CommonListenerCookie.createInitial(p.getGameProfile(),false));}
         @Override public void send(Packet<?> packet) {
             NativeMenuObservation observed=NativeMenuObservation.decode(packet);if(observed==null)return;
             if(observed.containerId==player.containerMenu.containerId){menuEvents++;menuState=observed.stateId;if(observed.content)carried=observed.carried;}

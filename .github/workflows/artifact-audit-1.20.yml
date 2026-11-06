@@ -1,8 +1,8 @@
 name: Audit LootableBodies 1.20 artifacts
-run-name: Audit 1.20.1 artifacts from ${{ github.event.workflow_run.head_sha }}
+run-name: Audit ${{ github.event.workflow_run.head_branch == 'master-1.20.6' && '1.20.6' || '1.20.1' }} artifacts from ${{ github.event.workflow_run.head_sha }}
 on:
   workflow_run:
-    workflows: [LootableBodies 1.20 CI]
+    workflows: [LootableBodies 1.20 CI, LootableBodies 1.20.6 CI]
     types: [completed]
 permissions:
   contents: read
@@ -12,7 +12,8 @@ jobs:
     if: >-
       github.repository == 'MinecraftModDevelopmentMods/LootableBodies' &&
       github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'master-1.20.1'
+      ((github.event.workflow_run.head_branch == 'master-1.20.1' && github.event.workflow_run.name == 'LootableBodies 1.20 CI') ||
+      (github.event.workflow_run.head_branch == 'master-1.20.6' && github.event.workflow_run.name == 'LootableBodies 1.20.6 CI'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -21,7 +22,7 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: LootableBodies-1.20.1-${{ github.event.workflow_run.head_sha }}
+          name: LootableBodies-${{ github.event.workflow_run.head_branch == 'master-1.20.6' && '1.20.6' || '1.20.1' }}-${{ github.event.workflow_run.head_sha }}
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
           path: audited

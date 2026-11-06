@@ -73,10 +73,10 @@ final class NbtWorldChecks {
     private static CompoundTag rawEquipment(){
         CompoundTag n=new CompoundTag();ListTag equipment=new ListTag();
         for(int i=0;i<48;i++) {
-            CompoundTag entry=known(i).save(new CompoundTag());entry.putByte("Slot",(byte)i);
+            CompoundTag entry=FixtureStackData.save(known(i));entry.putByte("Slot",(byte)i);
             if(i==7){entry=NbtRecoveryChecks.entry(123,9,7);entry.putString("id",RETURNING);}
             if(i==8)entry=missing(124,5,8);
-            if(i==9){entry=NbtRecoveryChecks.entry(125,1,9);entry.putByte("Count",(byte)0);}
+            if(i==9){entry=NbtRecoveryChecks.entry(125,1,9);entry.putInt("count",0);}
             if(i==10){entry=NbtRecoveryChecks.entry(129,6,10);CompoundTag caps=new CompoundTag();caps.putString("absentfixture:inventory","opaque capabilities");entry.put("ForgeCaps",caps);}
             equipment.add(entry);
         }
@@ -99,16 +99,16 @@ final class NbtWorldChecks {
     }
     private static void settle(EntityLootableBody b){for(int i=0;i<8;i++)b.baseTick();}
     private static void identity(EntityLootableBody b,UUID id,int coordinate){RuntimeChecks.require(b.isAlive() && b.getUUID().equals(id) && b.getX()==coordinate+8.5 && b.getY()==80 && b.getZ()==coordinate+.5 && b.getYRot()==37 && b.getCustomNameTag().equals("NbtFixture"),"Recovered corpse identity/position/rotation/name/health changed");}
-    private static void add(Map<String,Integer> totals,ItemStack s){CompoundTag n=s.save(new CompoundTag());n.remove("Count");String key=n.toString();totals.put(key,totals.getOrDefault(key,0)+s.getCount());}
+    private static void add(Map<String,Integer> totals,ItemStack s){CompoundTag n=FixtureStackData.save(s);n.remove("count");String key=n.toString();totals.put(key,totals.getOrDefault(key,0)+s.getCount());}
     static void verify(EntityLootableBody b,boolean restored){
         verifyMetadata(b);
         Map<String,Integer> expected=new TreeMap<>();for(int i=0;i<48;i++)if(i<7 || i>10)add(expected,known(i));
         for(int[] spec:new int[][]{{121,11},{122,13},{126,7},{128,2},{130,19},{131,23}})add(expected,NbtRecoveryChecks.item(spec[0],spec[1]));
-        if(restored){CompoundTag raw=NbtRecoveryChecks.entry(123,9,7);raw.putString("id",RETURNING);ItemStack s=ItemStack.of(raw);RuntimeChecks.require((s != null && !s.isEmpty()) && s.getItem()==returning,"Returning fixture item not registered");add(expected,s);}
+        if(restored){CompoundTag raw=NbtRecoveryChecks.entry(123,9,7);raw.putString("id",RETURNING);ItemStack s=FixtureStackData.load(raw);RuntimeChecks.require((s != null && !s.isEmpty()) && s.getItem()==returning,"Returning fixture item not registered");add(expected,s);}
         RuntimeChecks.require(expected.equals(NbtRecoveryChecks.items(b)),"Disk recovery item/count/damage/custom NBT lost or duplicated");
         CompoundTag source=rawEquipment();int rawCount=0;
         for(String list:new String[]{"Equipment","Aux"}){ListTag entries=source.getList(list,10);for(int i=0;i<entries.size();i++){
-            CompoundTag raw=entries.getCompound(i);boolean unresolved=raw.getString("id").equals("absentfixture:missing") || raw.getByte("Count")==0 || raw.contains("ForgeCaps") || (!restored && raw.getString("id").equals(RETURNING));
+            CompoundTag raw=entries.getCompound(i);boolean unresolved=raw.getString("id").equals("absentfixture:missing") || raw.getInt("count")==0 || raw.contains("ForgeCaps") || (!restored && raw.getString("id").equals(RETURNING));
             if(unresolved){NbtRecoveryChecks.retained(b,raw);rawCount++;}
         }}
         RuntimeChecks.require(NbtRecoveryChecks.saved(b).getList(NbtRecoveryChecks.RECOVERY,10).size()==rawCount && rawCount==(restored?4:5),"Raw recovery records lost/duplicated or resolved twice");
@@ -126,7 +126,7 @@ final class NbtWorldChecks {
     }
     private static void snapshot(File folder,String name,EntityLootableBody b) throws Exception {RuntimeChecks.saveExpected(folder,"nbt-"+name,b);}
     private static void verifySnapshot(File folder,String name,EntityLootableBody b) throws Exception {
-        b.baseTick();RuntimeChecks.verifyExpected(folder,"nbt-"+name,b);CompoundTag expected;try(FileInputStream in=new FileInputStream(new File(folder,"nbt-"+name+".nbt"))){expected=NbtIo.readCompressed(in);}
+        b.baseTick();RuntimeChecks.verifyExpected(folder,"nbt-"+name,b);CompoundTag expected;try(FileInputStream in=new FileInputStream(new File(folder,"nbt-"+name+".nbt"))){expected=NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
         RuntimeChecks.require(Objects.equals(expected.get(NbtRecoveryChecks.RECOVERY),NbtRecoveryChecks.saved(b).get(NbtRecoveryChecks.RECOVERY)),"Raw recovery NBT changed on actual disk reload");
         RuntimeChecks.require(NameLifetimeChecks.same(expected.get(NameLifetimeChecks.RECOVERY),NbtRecoveryChecks.saved(b).get(NameLifetimeChecks.RECOVERY)),"Raw scalar data changed on actual disk reload");
     }

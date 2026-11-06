@@ -44,8 +44,8 @@ final class ReportedIssueClientChecks {
     private CompoundTag savedBody,savedPlayer;
     static ItemStack original() {
         ItemStack s=new ItemStack(Items.DIAMOND_SHOVEL);
-        s.setTag(RuntimeChecks.stack(300).getTag().copy());s.setDamageValue(17);
-        s.setHoverName(net.minecraft.network.chat.Component.literal("Issue 5 original shovel"));return s;
+        FixtureStackData.setCustom(s,FixtureStackData.custom(RuntimeChecks.stack(300)));s.setDamageValue(17);
+        s.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,net.minecraft.network.chat.Component.literal("Issue 5 original shovel"));return s;
     }
     void tick(Minecraft mc) throws Exception {
         frames++;
@@ -85,7 +85,7 @@ final class ReportedIssueClientChecks {
             mc.getConnection().send(new ServerboundSetCarriedItemPacket(active));
             // Same ordered connection: held-item change, then a build-only death signal.
             // This uses the vanilla death path without native command permissions.
-            MultiplayerChecks.CHANNEL.sendToServer(new MultiplayerChecks.FixtureDeath());next(8);
+            MultiplayerChecks.CHANNEL.send(new MultiplayerChecks.FixtureDeath(),net.minecraftforge.network.PacketDistributor.SERVER.noArg());next(8);
         } else if(stage==8 && mc.screen instanceof DeathScreen && frames>10) {
             mc.player.respawn();next(9);
         } else if(stage==9 && ready(mc) && mc.player.isAlive() && !(mc.screen instanceof DeathScreen)) {
@@ -118,7 +118,7 @@ final class ReportedIssueClientChecks {
             mc.player.closeContainer();schedule(mc,()->save(mc));next(12);
         } else if(stage==12 && done()) {quit(mc);next(13);
         } else if(stage==13 && FixtureConnections.stopped(mc)) {
-            mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"issue-fixture");next(14);
+            mc.createWorldOpenFlows().openWorld("issue-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(14);
         } else if(stage==14 && ready(mc) && frames>25) {
             schedule(mc,()->{verifyDisk(mc);verifyOriginals(body(mc));mark("first_disk_reload_complete_corpse_inventory");});next(15);
         } else if(stage==15 && done() && open(mc,secondId)) {next(16);
@@ -138,7 +138,7 @@ final class ReportedIssueClientChecks {
             });next(18);
         } else if(stage==18 && done()) {quit(mc);next(19);
         } else if(stage==19 && FixtureConnections.stopped(mc)) {
-            mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"issue-fixture");next(20);
+            mc.createWorldOpenFlows().openWorld("issue-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(20);
         } else if(stage==20 && ready(mc) && frames>25) {
             schedule(mc,()->{verifyDisk(mc);mark("second_disk_reload_complete_player_and_corpse_inventory");});next(21);
         } else if(stage==21 && done()) {
@@ -152,8 +152,8 @@ final class ReportedIssueClientChecks {
         throw new AssertionError("Actual connected death absent");
     }
     private static void addTagged(Map<String,Integer> result,ItemStack stack) {
-        if((stack == null || stack.isEmpty()) || !stack.hasTag() || !stack.getTag().contains("fixture"))return;
-        CompoundTag n=stack.save(new CompoundTag());n.remove("Count");result.put(n.toString(),result.getOrDefault(n.toString(),0)+stack.getCount());
+        if((stack == null || stack.isEmpty()) || !FixtureStackData.hasCustom(stack) || !FixtureStackData.custom(stack).contains("fixture"))return;
+        CompoundTag n=FixtureStackData.save(stack);n.remove("count");result.put(n.toString(),result.getOrDefault(n.toString(),0)+stack.getCount());
     }
     private static Map<String,Integer> originals(){Map<String,Integer> m=new TreeMap<>();addTagged(m,original());addTagged(m,RuntimeChecks.stack(301));return m;}
     private static void verifyOriginals(EntityLootableBody b) {

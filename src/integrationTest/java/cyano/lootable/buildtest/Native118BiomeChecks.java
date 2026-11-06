@@ -29,7 +29,7 @@ final class Native118BiomeChecks {
         for(net.minecraft.nbt.Tag entry:nativeResult.getList("sections",10)) {
             CompoundTag section=(CompoundTag)entry;int sectionY=section.getInt("Y");
             if(sectionY<0 || sectionY>=16)continue; // All 1024 samples from the saved 0..255 range.
-            PalettedContainer<Holder<Biome>> expected=codec.parse(NbtOps.INSTANCE,section.getCompound("biomes")).getOrThrow(false,message->{throw new AssertionError(message);});
+            PalettedContainer<Holder<Biome>> expected=codec.parse(NbtOps.INSTANCE,section.getCompound("biomes")) .getOrThrow(message->{throw new AssertionError(message);});
             for(int y=0;y<4;y++)for(int zz=0;zz<4;zz++)for(int xx=0;xx<4;xx++) {
                 Holder<Biome> actual=chunk.getNoiseBiome(xx,sectionY*4+y,zz);
                 RuntimeChecks.require(expected.get(xx,y,zz).unwrapKey().equals(actual.unwrapKey()),"Historical biome changed in dimension "+record.getInt("Dimension")+" wave "+wave+" section "+sectionY+" sample "+xx+","+y+","+zz);

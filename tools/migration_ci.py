@@ -138,7 +138,7 @@ def run_shard(project, java, shard, commit, total=12):
     manifest = json.loads((project / 'build/migration-ci-inputs/inputs.json').read_text())
     if manifest['head'] != commit:
         raise ValueError('Prepared commit does not match this shard')
-    inputs = ['build/libs/' + MAIN_JAR, 'build/integration-test-mod/lootablebodies-build-tests-reobf.jar']
+    inputs = ['build/libs/' + MAIN_JAR, 'build/integration-test-mod/lootablebodies-build-tests.jar']
     for name in inputs:
         if digest(project / name) != manifest['files'][name]['sha256']:
             raise ValueError('Prepared candidate/probe changed')
@@ -191,7 +191,7 @@ def main():
     actual=subprocess.check_output(['git','rev-parse','HEAD'],cwd=project,text=True).strip()
     if actual != args.commit:raise ValueError('Checkout does not match the declared input commit')
     if args.mode=='seal':
-        paths=['build/libs/'+MAIN_JAR,'build/integration-test-mod/lootablebodies-build-tests-reobf.jar','build/migration-seeds/seed-report.json']
+        paths=['build/libs/'+MAIN_JAR,'build/integration-test-mod/lootablebodies-build-tests.jar','build/migration-seeds/seed-report.json']
         paths += native_input_paths(project)
         report=json.loads((project/'build/migration-seeds/seed-report.json').read_text())['origins']
         if set(report)!=set(ORIGINS):raise ValueError('Missing prepared historical worlds')

@@ -30,12 +30,7 @@ def probeJar = tasks.register('integrationTestModJar', Jar) {
         }
     }
 }
-def packagedProbe = renamer.classes(probeJar) {
-    map.from minecraft.dependency.toSrgFile
-    libraries.from(tasks.named('jar'), sourceSets.main.compileClasspath)
-    output = layout.buildDirectory.file('integration-test-mod/lootablebodies-build-tests-reobf.jar')
-}
-tasks.register('preparePackagedIntegrationProbe') { dependsOn packagedProbe, releaseJar }
+tasks.register('preparePackagedIntegrationProbe') { dependsOn probeJar, releaseJar }
 
 // Old writers must run against the old Forge API, never this native classpath.
 // prepare_legacy_tools.py builds the pinned released source in a disposable
@@ -75,10 +70,10 @@ def prepareOwnedLoaderConfig = { File root ->
     }
 }
 
-// Use an actual native47 codec header in each newly owned flat fixture world.
+// Use an actual Forge 50 codec header in each newly owned flat fixture world.
 def prepareOwnedFlatWorld = { File root ->
-    File header = file('tools/fixtures/native120-flat-level.dat')
-    if (!header.isFile() || releaseDigest(header) != '81E5056FCE49638B40F532B819FC82B0EBBFC954BCF4A7E20E3D6538E8FC0645')
+    File header = file('tools/fixtures/native1206-flat-level.dat')
+    if (!header.isFile() || releaseDigest(header) != '34253D55B2B3A4F1CE4107FACF5AF64ED496264ED53804405F6CDC6D45E56E74')
         throw new GradleException('Missing or changed native flat fixture header')
     File world = new File(root,'world')
     if (world.exists()) throw new GradleException('Refusing to replace an existing fixture world')
@@ -281,33 +276,15 @@ def controlJar=tasks.register('forgeControlJar',Jar) {
     archiveFileName='forge-platform-control.jar'
     destinationDirectory=layout.buildDirectory.dir('control-test-mod')
 }
-def packagedControl=renamer.classes(controlJar) {
-    map.from minecraft.dependency.toSrgFile
-    libraries.from(sourceSets.main.compileClasspath)
-    output=layout.buildDirectory.file('control-test-mod/forge-platform-control-reobf.jar')
-}
-tasks.register('preparePackagedForgeControl') { dependsOn packagedControl }
+tasks.register('preparePackagedForgeControl') { dependsOn controlJar }
 // A separate run model keeps the independent control isolated even after
 // Eclipse generation has finalized the production models' environment.
 minecraft.runs.register('platformControl') {
     client=false
-    // Native37 supplies BootstrapLauncher only inside its named run configs.
-    // This separate model needs the exact pinned server metadata parameters.
-    mainClass.set('cpw.mods.bootstraplauncher.BootstrapLauncher')
-    args '--launchTarget','forgeserveruserdev','--gameDir','.',
-        '--fml.forgeVersion',project.forge_version,'--fml.mcVersion',project.minecraft_version,
-        '--fml.forgeGroup','net.minecraftforge','--fml.mcpVersion','20210706.113038','--nogui'
-    jvmArgs '-p','{modules}','--add-modules','ALL-MODULE-PATH',
-        '--add-opens','java.base/java.util.jar=cpw.mods.securejarhandler',
-        '--add-exports','java.base/sun.security.util=cpw.mods.securejarhandler',
-        '--add-exports','jdk.naming.dns/com.sun.jndi.dns=java.naming'
-    systemProperty 'legacyClassPath.file','{minecraft_classpath_file}'
-    systemProperty 'ignoreList','bootstraplauncher,securejarhandler,asm-commons,asm-util,asm-analysis,asm-tree,asm,client-extra,fmlcore,javafmllanguage,mclanguage,forge-'
-    systemProperty 'mergeModules','jna-5.8.0.jar,jna-platform-58.0.jar,java-objc-bridge-1.0.0.jar'
-    environment 'MCP_MAPPINGS','{mcp_mappings}'
+    mainClass.set('net.minecraftforge.bootstrap.ForgeBootstrap')
+    args '--launchTarget','forge_userdev_server','--gameDir','.','--nogui'
+    jvmArgs '--add-opens','java.base/java.lang.invoke=ALL-UNNAMED'
     workingDir=layout.buildDirectory.dir('forge-control-run')
-    String root=layout.buildDirectory.dir('forge17-development/control').get().asFile.absolutePath
-    environment.put('MOD_CLASSES',"forgeplatformcontrol%%${root}${File.pathSeparator}forgeplatformcontrol%%${root}")
 }
 def prepareForgeControl = tasks.register('prepareForgeControl') {
     dependsOn controlJar

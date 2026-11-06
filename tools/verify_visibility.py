@@ -55,7 +55,7 @@ def main():
     java=args.java.resolve(); distribution=args.forge_home.resolve(); home=args.output.resolve()
     home.mkdir(parents=True,exist_ok=False); shared=home/'sync'; shared.mkdir()
     jar=project/'build/libs'/MAIN; before=digest(jar)
-    probe=(args.probe_jar or project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar').resolve()
+    probe=(args.probe_jar or project/'build/integration-test-mod/lootablebodies-build-tests.jar').resolve()
     prepare(home/'server',distribution,jar,probe)
     source_before=None
     if args.source_server:

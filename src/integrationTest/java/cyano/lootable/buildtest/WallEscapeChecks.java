@@ -212,7 +212,7 @@ final class WallEscapeChecks {
         world = target;
         for (boolean trapped : new boolean[]{false,true}) {
             CompoundTag expected;
-            try (InputStream in = new FileInputStream(new File(folder,"wall-escape-"+trapped+".nbt"))) { expected = NbtIo.readCompressed(in); }
+            try (InputStream in = new FileInputStream(new File(folder,"wall-escape-"+trapped+".nbt"))) { expected = NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024)); }
             ListTag pos = expected.getList("Pos",6);
             BlockPos savedPosition=BlockPos.containing(pos.getDouble(0),pos.getDouble(1),pos.getDouble(2));
             // Terrain admission completes before the native entity-storage inbox.
@@ -247,7 +247,7 @@ final class WallEscapeChecks {
         File file = new File(folder,"wall-historical.nbt");
         if (reload) {
             try (InputStream in = new FileInputStream(file)) {
-                RuntimeChecks.require(TypedNbt.sameEntity(NbtIo.readCompressed(in),expected), "Historical cold reload changed complete corpse NBT");
+                RuntimeChecks.require(TypedNbt.sameEntity(NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024)),expected), "Historical cold reload changed complete corpse NBT");
             }
         }
         for (int i = 0; i < 32; i++) body.jumpOutOfWall();

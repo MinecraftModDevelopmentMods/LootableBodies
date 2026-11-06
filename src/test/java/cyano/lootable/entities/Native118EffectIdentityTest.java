@@ -6,31 +6,55 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class Native118EffectIdentityTest {
-    private CompoundTag nativeEffect(){return new MobEffectInstance(MobEffects.NIGHT_VISION,200,1,false,true,false).save(new CompoundTag());}
+    private CompoundTag legacyEffect() {
+        CompoundTag old=new CompoundTag();
+        old.putByte("Id",(byte)16);
+        old.putString("forge:id","minecraft:night_vision");
+        old.putInt("Duration",200);
+        return old;
+    }
+
     @Test void nativeForgeSaveUsesARecognizedStableNamedIdentity() {
-        CompoundTag raw=nativeEffect(),before=raw.copy();assertEquals("minecraft:night_vision",raw.getString("forge:id"));
-        assertSame(MobEffects.NIGHT_VISION,SavedEffectIdentity.resolve(raw,16L));assertFalse(SavedEffectIdentity.needsLegacyRecovery(raw,16L));
-        CompoundTag accepted=new CompoundTag();SavedEffectIdentity.write(accepted,raw,MobEffects.NIGHT_VISION);
-        assertEquals(raw.get("Id"),accepted.get("Id"));assertEquals(raw.get("forge:id"),accepted.get("forge:id"));assertEquals(before,raw);
+        CompoundTag raw=(CompoundTag)new MobEffectInstance(MobEffects.NIGHT_VISION,200,1,false,true,false).save();
+        CompoundTag before=raw.copy();
+        assertEquals("minecraft:night_vision",raw.getString("id"));
+        assertEquals(MobEffects.NIGHT_VISION,SavedEffectIdentity.resolve(raw,null));
+        assertEquals(MobEffects.NIGHT_VISION,MobEffectInstance.load(raw).getEffect());
+        assertEquals(before,raw);
     }
-    @Test void validatedNameFollowsActualNativePrecedenceWhenLegacyNumbersWereRemapped() {
-        CompoundTag raw=nativeEffect();raw.putByte("Id",(byte)MobEffect.getId(MobEffects.MOVEMENT_SPEED));
-        assertSame(MobEffects.NIGHT_VISION,MobEffectInstance.load(raw).getEffect());
-        assertSame(MobEffects.NIGHT_VISION,SavedEffectIdentity.resolve(raw,1L));assertFalse(SavedEffectIdentity.needsLegacyRecovery(raw,1L));
+
+    @Test void validLegacyNameTakesPrecedenceOverARemappedNumber() {
+        CompoundTag raw=legacyEffect();
+        raw.putByte("Id",(byte)1);
+        CompoundTag before=raw.copy();
+        assertEquals(MobEffects.NIGHT_VISION,SavedEffectIdentity.resolve(raw,1L));
+        assertEquals(before,raw);
     }
-    @Test void knownNameCanRecoverInvalidLegacyNumbersWithoutDiscardingTheRawRecord() {
-        CompoundTag raw=nativeEffect();raw.putString("Id","damaged legacy fallback");
-        assertSame(MobEffects.NIGHT_VISION,SavedEffectIdentity.resolve(raw,null));assertTrue(SavedEffectIdentity.needsLegacyRecovery(raw,null));
+
+    @Test void knownNameCanRecoverInvalidLegacyNumbersWithoutMutatingTheRawRecord() {
+        CompoundTag raw=legacyEffect();
+        raw.putString("Id","damaged legacy fallback");
+        CompoundTag before=raw.copy();
+        assertEquals(MobEffects.NIGHT_VISION,SavedEffectIdentity.resolve(raw,null));
+        assertEquals(before,raw);
     }
+
     @Test void malformedAndUnknownNamedIdentitiesRefuseRatherThanActivateAnUnrelatedFallback() {
         for(Tag bad:new Tag[]{IntTag.valueOf(16),new ListTag(),StringTag.valueOf("bad name?!"),StringTag.valueOf("missing:unavailable_effect")}) {
-            CompoundTag raw=nativeEffect();raw.put("forge:id",bad);CompoundTag before=raw.copy();
-            assertNull(SavedEffectIdentity.resolve(raw,16L));assertEquals(before,raw);
+            CompoundTag raw=legacyEffect();
+            raw.put("forge:id",bad);
+            CompoundTag before=raw.copy();
+            assertNull(SavedEffectIdentity.resolve(raw,16L));
+            assertEquals(before,raw);
         }
     }
+
     @Test void legacyOnlyAndNativeEmptyNameFallbacksRemainBounded() {
-        CompoundTag raw=nativeEffect();raw.remove("forge:id");assertSame(MobEffects.NIGHT_VISION,SavedEffectIdentity.resolve(raw,16L));
-        for(Long bad:new Long[]{null,-1L,256L,4294967312L})assertNull(SavedEffectIdentity.resolve(raw,bad));
-        raw.putString("forge:id","");assertSame(MobEffects.NIGHT_VISION,SavedEffectIdentity.resolve(raw,16L));assertTrue(SavedEffectIdentity.needsLegacyRecovery(raw,16L));
+        CompoundTag raw=legacyEffect();
+        raw.remove("forge:id");
+        assertEquals(MobEffects.NIGHT_VISION,SavedEffectIdentity.resolve(raw,16L));
+        for(Long bad:new Long[]{null,-1L,34L,256L,4294967312L})assertNull(SavedEffectIdentity.resolve(raw,bad));
+        raw.putString("forge:id","");
+        assertEquals(MobEffects.NIGHT_VISION,SavedEffectIdentity.resolve(raw,16L));
     }
 }

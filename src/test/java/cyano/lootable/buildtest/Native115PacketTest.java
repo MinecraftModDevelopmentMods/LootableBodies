@@ -2,7 +2,8 @@ package cyano.lootable.buildtest;
 
 import io.netty.buffer.Unpooled;
 import java.lang.reflect.Field;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.protocol.game.CommonPlayerSpawnInfo;
 import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
@@ -17,21 +18,36 @@ class Native115PacketTest {
     static { net.minecraft.SharedConstants.tryDetectVersion();net.minecraft.server.Bootstrap.bootStrap(); }
     private static final long SEED=0x13572468ABCDEF01L;
     private ClientboundRespawnPacket packet(ResourceKey<Level> dimension,long seed) {
-        return new ClientboundRespawnPacket(net.minecraft.world.level.dimension.BuiltinDimensionTypes.OVERWORLD,
-                dimension,seed,GameType.SURVIVAL,GameType.CREATIVE,false,true,
-                ClientboundRespawnPacket.KEEP_ALL_DATA,java.util.Optional.empty(),0);
+        var registry=dimensions().registryOrThrow(net.minecraft.core.registries.Registries.DIMENSION_TYPE);
+        var type=registry.getHolderOrThrow(net.minecraft.world.level.dimension.BuiltinDimensionTypes.OVERWORLD);
+        return new ClientboundRespawnPacket(new CommonPlayerSpawnInfo(type,dimension,seed,
+                GameType.SURVIVAL,GameType.CREATIVE,false,true,java.util.Optional.empty(),0),
+                ClientboundRespawnPacket.KEEP_ALL_DATA);
+    }
+    private static RegistryAccess dimensions() {
+        return DimensionTypes.ACCESS;
+    }
+    private static class DimensionTypes {
+        static final RegistryAccess ACCESS=build();
+        private static RegistryAccess build() {
+            var key=net.minecraft.core.registries.Registries.DIMENSION_TYPE;
+            var registry=new net.minecraft.core.MappedRegistry<DimensionType>(key,com.mojang.serialization.Lifecycle.stable());
+            Native119Registries.lookup().lookupOrThrow(key).listElements()
+                    .forEach(holder->registry.register(holder.key(),holder.value(),net.minecraft.core.RegistrationInfo.BUILT_IN));
+            return new RegistryAccess.ImmutableRegistryAccess(java.util.List.of(registry.freeze()));
+        }
     }
     @Test void native115HashedSeedSurvivesDecodedPacketObservation() throws Exception {
-        FriendlyByteBuf bytes=new FriendlyByteBuf(Unpooled.buffer());
+        RegistryFriendlyByteBuf bytes=new RegistryFriendlyByteBuf(Unpooled.buffer(),dimensions());
         try {
             ClientboundRespawnPacket outgoing=packet(Level.NETHER,SEED);
-            outgoing.write(bytes);
+            ClientboundRespawnPacket.STREAM_CODEC.encode(bytes,outgoing);
             byte[] before=new byte[bytes.readableBytes()];bytes.getBytes(0,before);
-            ClientboundRespawnPacket incoming=new ClientboundRespawnPacket(bytes);
+            ClientboundRespawnPacket incoming=ClientboundRespawnPacket.STREAM_CODEC.decode(bytes);
             String expected="RESPAWN dimension=minecraft:the_nether hashedSeed="+SEED;
             assertEquals(expected,NativeRespawnDescription.describe(outgoing));
             assertEquals(expected,NativeRespawnDescription.describe(incoming));
-            assertEquals(net.minecraft.world.level.dimension.BuiltinDimensionTypes.OVERWORLD,incoming.getDimensionType(),"Native codec dimension type key was lost");
+            assertEquals(net.minecraft.world.level.dimension.BuiltinDimensionTypes.OVERWORLD,incoming.commonPlayerSpawnInfo().dimensionType().unwrapKey().orElseThrow(),"Native codec dimension type key was lost");
             assertEquals(before.length,bytes.readerIndex());
             byte[] after=new byte[before.length];bytes.getBytes(0,after);assertArrayEquals(before,after);
         } finally {bytes.release();}

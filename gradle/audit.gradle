@@ -33,7 +33,7 @@ ext.auditReleaseArchives = { File directory ->
                     if (!path.startsWith('cyano/lootable/')) throw new GradleException("Foreign production class ${path}")
                     byte[] bytes = zip.getInputStream(entry).bytes
                     int major = ((bytes[6] & 255) << 8) | (bytes[7] & 255)
-                    if (major != 61) throw new GradleException("${path} is class major ${major}")
+                    if (major != 65) throw new GradleException("${path} is class major ${major}")
                 }
                 if (path.endsWith('.lang')) {
                     java.nio.charset.StandardCharsets.UTF_8.newDecoder().decode(
@@ -62,22 +62,20 @@ ext.auditReleaseArchives = { File directory ->
                     if (!names.contains(it)) throw new GradleException("Missing production entry ${it}")
                 }
                 String info=zip.getInputStream(zip.getEntry('META-INF/mods.toml')).getText('UTF-8')
-                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.20.1]"'].each {
+                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.20.6]"'].each {
                     if(!info.contains(it))throw new GradleException("Incorrect production metadata: ${it}")
                 }
                 def pack=new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack
-                if(pack.pack_format!=15 || pack.containsKey('forge:server_data_pack_format') ||
+                if(pack.pack_format!=32 || pack.supported_formats!=[min_inclusive:32,max_inclusive:41] || pack.containsKey('forge:server_data_pack_format') ||
                         pack.containsKey('forge:resource_pack_format') || pack.containsKey('forge:data_pack_format'))
-                    throw new GradleException('Native pack formats must be resource15/server-data15')
+                    throw new GradleException('Native pack formats must be resource32/server-data41')
                 def coremods=new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('META-INF/coremods.json')).getText('UTF-8'))
                 if(coremods!=[lootablebodies_preservation:'coremods/early-world-preservation.js'])
                     throw new GradleException('Missing or changed early native save attachment')
                 def atEntry=zip.getEntry('META-INF/accesstransformer.cfg')
                 def atRules=atEntry?zip.getInputStream(atEntry).getText('UTF-8').readLines()
                         .collect {it.split('#',2)[0].trim()}.findAll {!it.isEmpty()}:[]
-                if(atRules!=['public-f net.minecraft.util.datafix.DataFixers f_216514_',
-                        'public net.minecraft.world.level.block.entity.SkullBlockEntity f_59755_',
-                        'public net.minecraft.world.level.block.entity.SkullBlockEntity f_59756_'] ||
+                if(atRules!=['public-f net.minecraft.util.datafix.DataFixers dataFixer'] ||
                         manifest.getValue('FMLAT')!='accesstransformer.cfg')
                     throw new GradleException('Missing or changed native world-reader access boundary')
                 def languages=names.findAll {it.startsWith('assets/lootablebodies/lang/') && !it.endsWith('/')}
@@ -87,8 +85,16 @@ ext.auditReleaseArchives = { File directory ->
                     throw new GradleException('Bundled sources or dependencies in main jar')
                 String entity = new String(zip.getInputStream(zip.getEntry(
                         'cyano/lootable/entities/EntityLootableBody.class')).bytes, 'ISO-8859-1')
-                if (!entity.contains('m_7378_') || !entity.contains('m_7380_'))
-                    throw new GradleException('Production jar does not have runtime SRG mappings')
+                if (!entity.contains('readAdditionalSaveData') || !entity.contains('addAdditionalSaveData')
+                        || entity.contains('m_7378_') || entity.contains('m_7380_'))
+                    throw new GradleException('Production jar does not use the official Forge runtime names')
+                ['can_breathe_under_water', 'undead', 'ignores_poison_and_regen',
+                        'inverted_healing_and_harm', 'sensitive_to_smite'].each { tagName ->
+                    def entry=zip.getEntry("data/minecraft/tags/entity_types/${tagName}.json")
+                    if(!entry || new JsonSlurper().parseText(zip.getInputStream(entry).getText('UTF-8'))!=
+                            [replace:false,values:['lootablebodies:corpse']])
+                        throw new GradleException("Missing corpse entity tag: ${tagName}")
+                }
             } else if (index == 1) {
                 if (!names.contains('cyano/lootable/LootableBodies.java'))
                     throw new GradleException('Sources jar does not contain production sources')
@@ -119,11 +125,10 @@ tasks.register('verifyReleaseArtifacts') {
         if (actual != releaseNames as Set) throw new GradleException('Release output must contain exactly the three declared jars')
         auditReleaseArchives(libs)
         new ZipFile(new File(libs, releaseNames[0])).withCloseable { zip ->
-            new ZipFile(tasks.jar.archiveFile.get().asFile).withCloseable { dev ->
-                String cls = 'cyano/lootable/entities/EntityLootableBody.class'
-                if (Arrays.equals(zip.getInputStream(zip.getEntry(cls)).bytes, dev.getInputStream(dev.getEntry(cls)).bytes))
-                    throw new GradleException('Production jar was not reobfuscated')
-            }
+            String cls = 'cyano/lootable/entities/EntityLootableBody.class'
+            File compiled=layout.buildDirectory.file("classes/java/main/${cls}").get().asFile
+            if(!Arrays.equals(zip.getInputStream(zip.getEntry(cls)).bytes,compiled.bytes))
+                throw new GradleException('Production classes must retain the official runtime names')
         }
     }
 }

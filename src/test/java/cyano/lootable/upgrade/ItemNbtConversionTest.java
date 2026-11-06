@@ -27,7 +27,7 @@ class ItemNbtConversionTest {
         CompoundTag result=ItemMigration.convertNbt(raw,context(922));assertNotNull(result);assertArrayEquals(bytes(caps),bytes(result.getCompound("ForgeCaps")));CompoundTag recovered=result.getCompound("tag").getCompound("BlockEntityTag").getList("Items",10).getCompound(0);assertEquals("minecraft:granite",recovered.getString("id"));assertEquals(29,recovered.getByte("Count"));assertEquals(3,recovered.getByte("Slot"));
     }
     @Test void currentNativeItemsAreNotFlattenedAgain()throws Exception {
-        CompoundTag raw=item("minecraft:granite",0);raw.remove("Damage");assertArrayEquals(bytes(raw),bytes(ItemMigration.convertNbt(raw,context(UpgradePreservation.MINECRAFT_VERSION))));
+        CompoundTag raw=item("minecraft:granite",0);raw.remove("Damage");assertArrayEquals(bytes(raw),bytes(ItemMigration.convertNbt(raw,context(3465))));
     }
     @Test void bedColoursStillUseTheCorrectHistoricalContext() {
         CompoundTag old=ItemMigration.convertNbt(item("minecraft:bed",0),context(922)),native112=ItemMigration.convertNbt(item("minecraft:bed",0),context(1343));assertNotNull(old);assertNotNull(native112);assertEquals("minecraft:red_bed",old.getString("id"));assertEquals("minecraft:white_bed",native112.getString("id"));
@@ -36,7 +36,7 @@ class ItemNbtConversionTest {
         CompoundTag versions=context(922);versions.putBoolean("Ambiguous",true);versions.putIntArray("CandidateDataVersions",new int[]{922,1343});assertNull(ItemMigration.convertNbt(item("minecraft:bed",0),versions));assertNotNull(ItemMigration.convertNbt(item("minecraft:stone",1),versions));
     }
     @Test void malformedCountsAndUnknownFutureVersionsAreNotGuessed() {
-        CompoundTag raw=item("minecraft:stone",1);raw.putString("Count","bad");assertNull(ItemMigration.convertNbt(raw,context(512)));assertNull(ItemMigration.convertNbt(item("minecraft:stone",1),context(3466)));
+        CompoundTag raw=item("minecraft:stone",1);raw.putString("Count","bad");assertNull(ItemMigration.convertNbt(raw,context(512)));assertNull(ItemMigration.convertNbt(item("minecraft:stone",1),context(3840)));
     }
     @Test void unrecognisedMetadataAndEnchantmentsRemainRecoverable() {
         assertNull(ItemMigration.convertNbt(item("minecraft:stone",99),context(1343)));
@@ -48,19 +48,19 @@ class ItemNbtConversionTest {
     }
     private CompoundTag original110(int slot)throws Exception {
         try(InputStream in=getClass().getResourceAsStream("/legacy-items/original-110.nbt")) {
-            ListTag list=NbtIo.readCompressed(in).getList("Items",10);
+            ListTag list=NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024)).getList("Items",10);
             for(Tag value:list){CompoundTag item=(CompoundTag)value;if(item.getByte("Slot")==slot)return item;}
         }throw new AssertionError("Missing sealed historical item");
     }
     @Test void actualOriginalPigEggKeepsItsTypeAndSavedEntityName()throws Exception {
         CompoundTag raw=original110(6);byte[] before=bytes(raw);CompoundTag fixed=ItemMigration.convertNbt(raw,context(512));assertNotNull(fixed);
         assertEquals("minecraft:pig_spawn_egg",fixed.getString("id"));assertEquals(raw.getByte("Count"),fixed.getByte("Count"));assertEquals("minecraft:pig",fixed.getCompound("tag").getCompound("EntityTag").getString("id"));
-        assertEquals("Saved pig egg",net.minecraft.network.chat.Component.Serializer.fromJson(fixed.getCompound("tag").getCompound("EntityTag").getString("CustomName")).getString());assertArrayEquals(before,bytes(raw));
+        assertEquals("Saved pig egg",net.minecraft.network.chat.Component.Serializer.fromJson(fixed.getCompound("tag").getCompound("EntityTag").getString("CustomName"),cyano.lootable.buildtest.Native119Registries.lookup()).getString());assertArrayEquals(before,bytes(raw));
     }
     @Test void actualOriginalChestKeepsItsNestedInventoryInNativeFormat()throws Exception {
         CompoundTag raw=original110(7),fixed=ItemMigration.convertNbt(raw,context(512));assertNotNull(fixed);
         CompoundTag nested=fixed.getCompound("tag").getCompound("BlockEntityTag");assertEquals("minecraft:chest",nested.getString("id"));assertEquals("minecraft:emerald",nested.getList("Items",10).getCompound(0).getString("id"));assertEquals(17,nested.getList("Items",10).getCompound(0).getByte("Count"));assertFalse(fixed.contains("Damage"));
-        assertEquals("Original keepsake 7",net.minecraft.network.chat.Component.Serializer.fromJson(fixed.getCompound("tag").getCompound("display").getString("Name")).getString());
+        assertEquals("Original keepsake 7",net.minecraft.network.chat.Component.Serializer.fromJson(fixed.getCompound("tag").getCompound("display").getString("Name"),cyano.lootable.buildtest.Native119Registries.lookup()).getString());
     }
     @Test void actualOriginalBannerKeepsItsBaseColour()throws Exception {
         CompoundTag raw=original110(8),fixed=ItemMigration.convertNbt(raw,context(512));assertNotNull(fixed);assertEquals("minecraft:purple_banner",fixed.getString("id"));assertEquals(raw.getByte("Count"),fixed.getByte("Count"));// Vanilla 1.13 leaves its inverted, redundant Base field behind.

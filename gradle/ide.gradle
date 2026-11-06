@@ -1,5 +1,5 @@
 eclipse {
-    jdt.javaRuntimeName = 'JavaSE-17'
+    jdt.javaRuntimeName = 'JavaSE-21'
     classpath {
         downloadSources = true
         downloadJavadoc = true
@@ -36,7 +36,7 @@ tasks.register('configureEclipseBuildship') {
         File localJavaSetup = file('gradle-local.properties')
         Properties toolchains = new Properties()
         if (localJavaSetup.isFile()) localJavaSetup.withInputStream { toolchains.load(it) }
-        toolchains.setProperty('lootablebodies.java17.home',
+        toolchains.setProperty('lootablebodies.java21.home',
                 productionLauncher.get().metadata.installationPath.asFile.canonicalPath)
         toolchains.setProperty('lootablebodies.mavenizer.java.home',
                 mavenizerLauncher.get().metadata.installationPath.asFile.canonicalPath)
@@ -67,14 +67,11 @@ tasks.register('isolateEclipseProductionRuns') {
             if (!launch.isFile()) throw new GradleException("Generate ${name} with genEclipseRuns first")
             String contents = launch.getText('UTF-8')
             File nativeRoot=minecraftNatives.asFile
-            if(!nativeRoot.isDirectory())throw new GradleException('Prepare the official native1.20.1 client inputs before generating Eclipse launches')
+            if(!nativeRoot.isDirectory())throw new GradleException('Prepare the official native1.20.6 client inputs before generating Eclipse launches')
             contents=contents.replace('{asset_index}',minecraftAssetIndex)
                 .replace('{assets_root}',minecraftAssets.asFile.absolutePath)
                 .replace('{natives}',nativeRoot.absolutePath)
-            String eclipseRoot=file('bin/main').absolutePath
-            String eclipseMods="${mod_id}%%${eclipseRoot}${File.pathSeparator}${mod_id}%%${eclipseRoot}"
-            contents=contents.replaceAll(/(<mapEntry key="MOD_CLASSES" value=")[^"]*("\/>)/) {whole,start,end -> start+eclipseMods+end}
-            contents = contents.replace('/JavaSE-8', '/JavaSE-17')
+            contents = contents.replace('/JavaSE-8', '/JavaSE-21')
             contents = contents.replaceAll(/<booleanAttribute key="org.eclipse.jdt.launching.ATTR_EXCLUDE_TEST_CODE" value="[^"]*"\/>/, '')
             contents = contents.replace('</launchConfiguration>',
                     '  <booleanAttribute key="org.eclipse.jdt.launching.ATTR_EXCLUDE_TEST_CODE" value="true"/>\n</launchConfiguration>')
@@ -113,8 +110,10 @@ tasks.register('verifyEclipseProductionClasspath') {
         if (!classpathXml.contains('path="build/resources/main"') || classpathXml.contains('path="src/main/resources"'))
             throw new GradleException('Eclipse must use Gradle-processed resources')
         def classpathModel = new groovy.xml.XmlSlurper().parseText(classpathXml)
-        if (classpathModel.classpathentry.findAll { it.@path.text() == 'build/resources/main' }.size() != 1)
-            throw new GradleException('Duplicate Eclipse production resource roots')
+        def outputRoots = classpathModel.classpathentry.findAll { it.@output.text() == 'bin/main' }
+        if (outputRoots.collect { it.@path.text() }.toSet() != ['build/resources/main', 'src/main/java'] as Set ||
+                outputRoots.size() != 2)
+            throw new GradleException('Eclipse production classes and processed resources must share bin/main')
         classpathModel.classpathentry.findAll { it.@path.text() =~ /(?i)(junit|opentest4j|apiguardian)/ }.each { entry ->
             if (!entry.attributes.attribute.any { it.@name.text() == 'test' && it.@value.text() == 'true' })
                 throw new GradleException('Eclipse testing library is not marked test-only')
@@ -128,15 +127,26 @@ tasks.register('verifyEclipseProductionClasspath') {
                     xml =~ /(?i)(src\/test|bin\/test|junit-|integration-test|mockito|byte-buddy)/ ||
                     !xml.contains('PROJECT_ATTR" value="LootableBodies"'))
                 throw new GradleException("${name} has the wrong project or exposes tests")
-            if (!xml.contains("--fml.mcVersion ${minecraft_version}") || xml.contains('{asset_index}') ||
-                    xml.contains('{assets_root}') || xml.contains('{natives}'))
-                throw new GradleException('Eclipse Minecraft version is unresolved')
             def launchModel = new groovy.xml.XmlSlurper().parseText(xml)
-            String classes = launchModel.mapAttribute.mapEntry.find { it.@key.text() == 'MOD_CLASSES' }.@value.text()
-            String expectedRoot = file('bin/main').absolutePath.replace('\\', '/')
-            String expectedClasses = "${mod_id}%%${expectedRoot}${File.pathSeparator}${mod_id}%%${expectedRoot}"
-            if (classes != expectedClasses)
-                throw new GradleException("${name} must launch Eclipse's production output")
+            String arguments = launchModel.stringAttribute.find {
+                it.@key.text() == 'org.eclipse.jdt.launching.PROGRAM_ARGUMENTS'
+            }.@value.text()
+            String side = name == 'runClient.launch' ? 'client' : 'server'
+            String metadataJar = "forge-${minecraft_version}-${forge_version}-metadata.zip"
+            if (!arguments.contains("--launchTarget forge_userdev_${side}") ||
+                    !arguments.contains('--main net.minecraftforge.bootstrap.ForgeBootstrap') ||
+                    !arguments.contains(metadataJar) || (side == 'client' && !arguments.contains("--assetIndex ${minecraftAssetIndex}")) ||
+                    xml.contains('{asset_index}') || xml.contains('{assets_root}') || xml.contains('{natives}'))
+                throw new GradleException("Eclipse Forge metadata, target or client assets are unresolved for ${name}")
+            // Forge 50 discovers the processed mods.toml directly on the
+            // project classpath. The launcher no longer reads MOD_CLASSES.
+            def entries = launchModel.listAttribute.find {
+                it.@key.text() == 'org.eclipse.jdt.launching.CLASSPATH'
+            }.listEntry.collect { new groovy.xml.XmlSlurper().parseText(it.@value.text()) }
+            if (entries.count { it.@projectName.text() == rootProject.name } != 1 ||
+                    !entries.any { it.@containerPath.text().endsWith('/JavaSE-21') } ||
+                    launchModel.mapAttribute.mapEntry.any { it.@key.text() == 'MOD_CLASSES' })
+                throw new GradleException("${name} must launch the production Eclipse project on Java 21")
             String directory = launchModel.stringAttribute.find {
                 it.@key.text() == 'org.eclipse.jdt.launching.WORKING_DIRECTORY'
             }.@value.text()

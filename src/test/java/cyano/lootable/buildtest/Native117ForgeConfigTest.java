@@ -27,9 +27,9 @@ class Native117ForgeConfigTest {
         Set<String> removed=new HashSet<>(previous);removed.removeAll(keys(config));
         assertEquals(new HashSet<>(Arrays.asList("removeErroringTileEntities",
             "logCascadingWorldGeneration","fixVanillaCascading","dimensionUnloadQueueDelay",
-            "fixAdvancementLoading","treatEmptyTagsAsAir")),removed);
+            "fixAdvancementLoading","treatEmptyTagsAsAir","zombieBaseSummonChance","zombieBabyChance")),removed);
         assertEquals(new HashSet<>(Arrays.asList("removeErroringBlockEntities","fullBoundingBoxLadders",
-            "zombieBaseSummonChance","zombieBabyChance","advertiseDedicatedServerToLan",
+            "advertiseDedicatedServerToLan",
             "removeErroringEntities","permissionHandler","useItemWithDurationZero")),keys(config));
         assertEquals(false,config.get("server.removeErroringBlockEntities"));
         assertEquals(0,spec().correct(config),"Native correction must be stable");
@@ -42,15 +42,15 @@ class Native117ForgeConfigTest {
         config.set("server.removeErroringEntities",true);config.set("server.useItemWithDurationZero",true);
         config.set("server.advertiseDedicatedServerToLan",false);config.set("server.skipEmptyShapelessCheck",false);
         spec().correct(config);
-        assertEquals(true,config.get("server.fullBoundingBoxLadders"));assertEquals(0.37D,(Double)config.get("server.zombieBaseSummonChance"));
-        assertEquals(0.29D,(Double)config.get("server.zombieBabyChance"));assertNull(config.get("server.treatEmptyTagsAsAir"));
+        assertEquals(true,config.get("server.fullBoundingBoxLadders"));assertNull(config.get("server.zombieBaseSummonChance"));
+        assertNull(config.get("server.zombieBabyChance"));assertNull(config.get("server.treatEmptyTagsAsAir"));
         assertNull(config.get("server.fixAdvancementLoading"));assertEquals(true,config.get("server.removeErroringBlockEntities"));
         assertEquals(true,config.get("server.removeErroringEntities"));assertEquals(true,config.get("server.useItemWithDurationZero"));
         assertEquals(false,config.get("server.advertiseDedicatedServerToLan"));assertNull(config.get("server.skipEmptyShapelessCheck"));
     }
     @Test void actualNativeDefaultMatchesTheTargetSpecBaseline() throws Exception {
         CommentedConfig config=CommentedConfig.inMemory();spec().correct(config);
-        CommentedConfig expected=new TomlParser().parse(Files.readString(Paths.get("tools/fixtures/forge45-server-default.toml")));
+        CommentedConfig expected=new TomlParser().parse(Files.readString(Paths.get("tools/fixtures/forge50-server-default.toml")));
         assertEquals(expected,config);
     }
 }

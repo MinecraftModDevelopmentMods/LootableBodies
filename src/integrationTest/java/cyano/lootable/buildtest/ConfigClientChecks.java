@@ -96,16 +96,34 @@ final class ConfigClientChecks {
     private static void text(CorpseConfigGui screen,String key,String value)throws Exception {field(screen,key).setValue(value);}
     private void check(boolean condition,String label)throws Exception {RuntimeChecks.require(condition,label);try(FileWriter out=new FileWriter(report,true)){out.write("PASS "+label+"\n");}System.out.println("CONFIG_CHECK_PASS "+label);}
     @SuppressWarnings("unchecked") private static void screenshot(Minecraft mc,String name)throws Exception {
+        // Capture the completed native frame before the tooltip exercise
+        // redraws the same render target several times in a single tick.
+        Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),message->System.out.println(message.getString()));
         if(mc.screen instanceof CorpseConfigGui) {
             Screen screen=mc.screen;Map<String,Integer> rows=(Map<String,Integer>)get(screen,"rows");
             Collection<Integer> positions=rows.isEmpty()?java.util.Collections.singletonList(100):rows.values();
             var graphics=new net.minecraft.client.gui.GuiGraphics(mc,mc.renderBuffers().bufferSource());
-            for(int y:positions)for(int x:new int[]{screen.width/2-150,screen.width/2,screen.width/2+150}) {
-                screen.render(graphics,x,y+5,0);
-                graphics.flush();
-            }
+            BackgroundObserver observer=new BackgroundObserver(screen);
+            var bus=net.minecraftforge.common.MinecraftForge.EVENT_BUS;
+            bus.register(observer);
+            try {
+                for(int y:positions)for(int x:new int[]{screen.width/2-150,screen.width/2,screen.width/2+150}) {
+                    int before=observer.count;
+                    screen.render(graphics,x,y+5,0);
+                    graphics.flush();
+                    RuntimeChecks.require(observer.count==before+1,"Config background rendered twice, blurring its text");
+                }
+            } finally {bus.unregister(observer);}
         }
-        Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),message->System.out.println(message.getString()));
+    }
+    public static final class BackgroundObserver {
+        private final Screen screen;
+        private int count;
+        BackgroundObserver(Screen screen){this.screen=screen;}
+        @net.minecraftforge.eventbus.api.SubscribeEvent
+        public void rendered(net.minecraftforge.client.event.ScreenEvent.BackgroundRendered event) {
+            if(event.getScreen()==screen)count++;
+        }
     }
     private static void finish(Minecraft mc)throws Exception {new File(mc.gameDirectory,"client.pass").createNewFile();System.out.println("LOOTABLE_BODIES_CONFIG_CLIENT_PASS");mc.stop();}
 }

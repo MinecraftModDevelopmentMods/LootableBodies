@@ -50,7 +50,7 @@ final class NbtClientChecks {
             NbtWorldChecks.seed(p.serverLevel(),bodyId,COORDINATE,folder(mc),"graphical");
         });next(1);}
         else if(stage==1 && done() && frames>20){quit(mc);next(2);}
-        else if(stage==2 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"build-fixture");next(3);}
+        else if(stage==2 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(3);}
         else if(stage==3 && ready(mc) && frames>20){schedule(mc,()->player(mc).connection.teleport(COORDINATE+8.5,80,COORDINATE-.5,0,0));next(30);}
         else if(stage==30 && done() && frames>20){schedule(mc,()->{
             RuntimeChecks.require(NbtWorldChecks.graphicalAdmissions==1,"Missing exact first native graphical disk admission");
@@ -68,7 +68,7 @@ final class NbtClientChecks {
             mc.getSingleplayerServer().getPlayerList().saveAll();mc.getSingleplayerServer().saveAllChunks(false,true,false);mark(mc,"malformed_network_recovery_preserves_raw_records");
         });next(7);}
         else if(stage==7 && done()){checkPlayer(mc.player.getInventory());quit(mc);next(8);}
-        else if(stage==8 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"build-fixture");next(9);}
+        else if(stage==8 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(9);}
         else if(stage==9 && ready(mc) && frames>20){schedule(mc,()->player(mc).connection.teleport(COORDINATE+8.5,80,COORDINATE-.5,0,0));next(90);}
         else if(stage==90 && done() && frames>20){schedule(mc,()->{
             RuntimeChecks.require(NbtWorldChecks.graphicalAdmissions==2,"Missing exact second native graphical disk admission");
@@ -89,9 +89,9 @@ final class NbtClientChecks {
         }
         return false;
     }
-    private void verifyGui(Minecraft mc){ItemStack[] expected=new ItemStack[48];ListTag list=visible.getList("Equipment",10);for(int i=0;i<list.size();i++){CompoundTag n=list.getCompound(i);expected[n.getByte("Slot")]=ItemStack.of(n);}for(int i=0;i<48;i++)equal(mc.player.containerMenu.getSlot(i).getItem(),expected[i],"Malformed corpse GUI slot "+i);}
+    private void verifyGui(Minecraft mc){ItemStack[] expected=new ItemStack[48];ListTag list=visible.getList("Equipment",10);for(int i=0;i<list.size();i++){CompoundTag n=list.getCompound(i);expected[n.getByte("Slot")]=FixtureStackData.load(n);}for(int i=0;i<48;i++)equal(mc.player.containerMenu.getSlot(i).getItem(),expected[i],"Malformed corpse GUI slot "+i);}
     private static void checkPlayer(net.minecraft.world.entity.player.Inventory p){Map<String,Integer> actual=new TreeMap<>();for(int i=0;i<p.getContainerSize();i++)add(actual,p.getItem(i));Map<String,Integer> expected=new TreeMap<>();add(expected,NbtRecoveryChecks.item(120,17));RuntimeChecks.require(actual.equals(expected),"Malformed GUI recovered player stack changed");}
-    private static void add(Map<String,Integer> map,ItemStack s){if((s == null || s.isEmpty()) || s.getCount()<=0)return;CompoundTag n=s.save(new CompoundTag());n.remove("Count");String key=n.toString();map.put(key,map.getOrDefault(key,0)+s.getCount());}
+    private static void add(Map<String,Integer> map,ItemStack s){if((s == null || s.isEmpty()) || s.getCount()<=0)return;CompoundTag n=FixtureStackData.save(s);n.remove("count");String key=n.toString();map.put(key,map.getOrDefault(key,0)+s.getCount());}
     private static void equal(ItemStack a,ItemStack b,String why){RuntimeChecks.require(RuntimeChecks.sameStack(a == null ? ItemStack.EMPTY : a,b == null ? ItemStack.EMPTY : b),why);}
     private static CompoundTag full(EntityLootableBody b){CompoundTag n=new CompoundTag();b.saveAsPassenger(n);return n;}
     private ServerPlayer player(Minecraft mc){return mc.getSingleplayerServer().getPlayerList().getPlayer(playerId);}

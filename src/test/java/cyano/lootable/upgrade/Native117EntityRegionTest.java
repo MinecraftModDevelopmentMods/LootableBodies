@@ -33,7 +33,7 @@ class Native117EntityRegionTest {
     private Path write(String dimension,String storage,int x,int z,CompoundTag root) throws Exception {
         Path directory=world.resolve(dimension).resolve(storage);Files.createDirectories(directory);
         Path path=directory.resolve("r."+(x>>5)+"."+(z>>5)+".mca");
-        try(RegionFile region=new RegionFile(path,directory,false)) {
+        try(RegionFile region=new RegionFile(new net.minecraft.world.level.chunk.storage.RegionStorageInfo("fixture",net.minecraft.world.level.Level.OVERWORLD,"region"),path,directory,false)) {
             try(DataOutputStream out=region.getChunkDataOutputStream(new ChunkPos(x,z))) {NbtIo.write(root,out);}
         }
         return path;
@@ -64,7 +64,7 @@ class Native117EntityRegionTest {
         byte[] original=Arrays.copyOfRange(before,base+5,base+4+size);
         assertArrayEquals(original,Files.readAllBytes(world.resolve("data/lootablebodies-upgrade/chunks/"+saved.getString("OriginalChunk")+".bin")));
         try(DataInputStream input=new DataInputStream(new InflaterInputStream(new ByteArrayInputStream(original)))) {
-            assertEquals(root,NbtIo.read(input,new NbtAccounter(64L*1024*1024)));
+            assertEquals(root,NbtIo.read(input,NbtAccounter.create(64L*1024*1024)));
         }
         assertArrayEquals(before,Files.readAllBytes(file));
     }
@@ -109,7 +109,7 @@ class Native117EntityRegionTest {
     }
     @Test void nativeEmptyEntityRegionPlaceholderStaysEmpty() throws Exception {
         Path directory=world.resolve("entities");Files.createDirectories(directory);Path file=directory.resolve("r.0.0.mca");
-        try(RegionFile region=new RegionFile(file,directory,false)) {assertNull(region.getChunkDataInputStream(new ChunkPos(0,0)));}
+        try(RegionFile region=new RegionFile(new net.minecraft.world.level.chunk.storage.RegionStorageInfo("fixture",net.minecraft.world.level.Level.OVERWORLD,"region"),file,directory,false)) {assertNull(region.getChunkDataInputStream(new ChunkPos(0,0)));}
         byte[] before=Files.readAllBytes(file);assertEquals(0,UpgradeJournal.scan(world).size());assertArrayEquals(before,Files.readAllBytes(file));
     }
 }

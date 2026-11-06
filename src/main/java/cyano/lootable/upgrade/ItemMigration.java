@@ -12,13 +12,42 @@ public final class ItemMigration {
     private static DataFixer pipeline;
     private ItemMigration() { }
     static void register(DataFixer fixer){pipeline=fixer;}
-    /** Null means that conversion is ambiguous; retain the original raw record. */
+    // The native componentization fix is in schema 3818.5. Validate the
+    // legacy item format through the last complete schema before that change.
+    private static final int LAST_LEGACY_ITEM_VERSION=3817;
+
+    /** Null means the caller retains the original raw record for recovery. */
     public static CompoundTag convert(CompoundTag raw,CompoundTag versions) {
         if(versions==null || versions.isEmpty())return raw.copy();
-        CompoundTag fixed=convertNbt(raw,versions);
-        return fixed!=null && knownNestedItems(fixed)?fixed:null;
+        if(versions.getBoolean("Ambiguous")) {
+            CompoundTag agreed=null;
+            for(int candidate:versions.getIntArray("CandidateDataVersions")) {
+                CompoundTag context=new CompoundTag();
+                context.putInt("DataVersion",candidate);
+                CompoundTag fixed=convert(raw,context);
+                if(fixed==null || (agreed!=null && !agreed.equals(fixed)))return null;
+                agreed=fixed;
+            }
+            return agreed;
+        }
+        if(!versions.contains("DataVersion",3))return null;
+        int source=versions.getInt("DataVersion");
+        if(source==UpgradePreservation.MINECRAFT_VERSION)return raw.copy();
+        if(source<512 || source>LAST_LEGACY_ITEM_VERSION || pipeline==null)return null;
+        CompoundTag legacy=convertNbt(raw,versions);
+        if(legacy==null || !supportedLegacyStack(legacy))return null;
+        try {
+            CompoundTag input=legacy.copy();
+            input.remove("Damage");
+            CompoundTag fixed=NativeNbt.update(pipeline,net.minecraft.util.datafix.fixes.References.ITEM_STACK,
+                    input,LAST_LEGACY_ITEM_VERSION,UpgradePreservation.MINECRAFT_VERSION);
+            return componentsSurvive(legacy,fixed,true)?fixed:null;
+        } catch(RuntimeException invalid) {
+            return null;
+        }
     }
-    /** NBT conversion is independent of live registry resolution. */
+
+    /** Validate legacy flattening without running the later component schema. */
     static CompoundTag convertNbt(CompoundTag raw,CompoundTag versions) {
         if(versions==null || versions.isEmpty()) return raw.copy();
         if(versions.getBoolean("Ambiguous")) {
@@ -33,9 +62,9 @@ public final class ItemMigration {
         }
         if(pipeline==null || !versions.contains("DataVersion",3))return null;
         int source=versions.getInt("DataVersion");
-        if(source<512 || source>UpgradePreservation.MINECRAFT_VERSION || integral(raw.get("Count"))==null)return null;
+        if(source<512 || source>LAST_LEGACY_ITEM_VERSION || integral(raw.get("Count"))==null)return null;
         try {
-            CompoundTag item=cyano.lootable.upgrade.NativeNbt.update(pipeline,net.minecraft.util.datafix.fixes.References.ITEM_STACK,raw.copy(),source,UpgradePreservation.MINECRAFT_VERSION);
+            CompoundTag item=cyano.lootable.upgrade.NativeNbt.update(pipeline,net.minecraft.util.datafix.fixes.References.ITEM_STACK,raw.copy(),source,LAST_LEGACY_ITEM_VERSION);
             if(!Objects.equals(integral(raw.get("Count")),integral(item.get("Count"))) || !Objects.equals(raw.get("Slot"),item.get("Slot")) || !Objects.equals(raw.get("ForgeCaps"),item.get("ForgeCaps")))return null;
             if(!flatteningSurvives(raw,item,source))return null;
             for(String key:raw.getAllKeys())if(!Arrays.asList("id","Count","Damage","Slot","tag").contains(key) && !Objects.equals(raw.get(key),item.get(key)))return null;
@@ -85,20 +114,164 @@ public final class ItemMigration {
     private static Long integral(Tag nbt) {
         return nbt instanceof NumericTag && nbt.getId()>=1 && nbt.getId()<=4 ? ((NumericTag)nbt).getAsLong() : null;
     }
-    private static boolean knownNestedItems(Tag tag) {
-        if(tag instanceof CompoundTag) {
-            CompoundTag compound=(CompoundTag)tag;
-            if(compound.contains("id") && compound.contains("Count")) {
-                if(!compound.contains("id",8)) return false;
-                ResourceLocation id=new ResourceLocation(compound.getString("id"));
-                if(!net.minecraftforge.registries.ForgeRegistries.ITEMS.containsKey(id) || Item.getId(net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(id))==0) return false;
-            }
-            for(String key:compound.getAllKeys()) if(!key.equals("ForgeCaps") && !knownNestedItems(compound.get(key))) return false;
-        } else if(tag instanceof ListTag) {
-            ListTag list=(ListTag)tag;for(int i=0;i<list.size();i++) if(!knownNestedItems(list.get(i))) return false;
+    private static boolean supportedLegacyStack(CompoundTag item) {
+        if(!Set.of("id","Count","Damage","Slot","tag").containsAll(item.getAllKeys())
+                || !item.contains("id",8) || (item.contains("tag") && !item.contains("tag",10)))return false;
+        Long count=integral(item.get("Count"));
+        if(count==null || count<=0 || count>127)return false;
+        if(item.contains("Damage")) {
+            Long old=integral(item.get("Damage"));
+            CompoundTag tag=item.getCompound("tag");
+            Long damage=tag.contains("Damage")?integral(tag.get("Damage")):Long.valueOf(0);
+            if(!Objects.equals(old,damage))return false;
         }
         return true;
     }
+
+    private static boolean componentsSurvive(CompoundTag legacy,CompoundTag fixed,boolean outerSlot) {
+        if(!supportedLegacyStack(legacy)
+                || !Objects.equals(integral(legacy.get("Count")),integral(fixed.get("count")))
+                || !Objects.equals(ResourceLocation.tryParse(legacy.getString("id")),ResourceLocation.tryParse(fixed.getString("id")))
+                || (outerSlot && !Objects.equals(legacy.get("Slot"),fixed.get("Slot"))))return false;
+        CompoundTag tag=legacy.getCompound("tag"), components=fixed.getCompound("components");
+        CompoundTag custom=components.getCompound("minecraft:custom_data");
+        for(String key:tag.getAllKeys()) {
+            Tag value=tag.get(key);
+            if(value.equals(custom.get(key)))continue;
+            boolean kept=switch(key) {
+                case "Damage" -> sameDamage(value,components.get("minecraft:damage"));
+                case "Enchantments" -> enchantmentLevelsSurvive(value,components.get("minecraft:enchantments"),components);
+                case "StoredEnchantments" -> enchantmentLevelsSurvive(value,components.get("minecraft:stored_enchantments"),components);
+                case "display" -> displaySurvives(value,components,custom.getCompound("display"));
+                case "BlockEntityTag" -> blockEntitySurvives(value,components);
+                case "EntityTag" -> value.equals(components.get("minecraft:entity_data"));
+                case "Potion" -> potionSurvives(value,components.getCompound("minecraft:potion_contents"));
+                case "RepairCost" -> sameDamage(value,components.get("minecraft:repair_cost"));
+                case "CustomModelData" -> value.equals(components.get("minecraft:custom_model_data"));
+                default -> false;
+            };
+            if(!kept)return false;
+        }
+        return true;
+    }
+
+    public static boolean sameSavedComponents(CompoundTag expected,CompoundTag encoded) {
+        if(expected.equals(encoded))return true;
+        if(!expected.getAllKeys().equals(encoded.getAllKeys()))return false;
+        for(String key:expected.getAllKeys()) {
+            Tag before=expected.get(key), after=encoded.get(key);
+            if(before.equals(after))continue;
+            boolean same=switch(key) {
+                case "minecraft:custom_name","minecraft:item_name" -> sameText(before,after);
+                case "minecraft:lore" -> sameLore(before,after);
+                default -> false;
+            };
+            if(!same)return false;
+        }
+        return true;
+    }
+
+    private static boolean sameLore(Tag before,Tag after) {
+        if(!(before instanceof ListTag a) || !(after instanceof ListTag b) || a.size()!=b.size())return false;
+        for(int i=0;i<a.size();i++)if(!sameText(a.get(i),b.get(i)))return false;
+        return true;
+    }
+
+    private static boolean sameText(Tag before,Tag after) {
+        if(before.equals(after))return true;
+        if(!(before instanceof net.minecraft.nbt.StringTag a) || !(after instanceof net.minecraft.nbt.StringTag b))return false;
+        try {
+            return textShape(a.getAsString()).equals(textShape(b.getAsString()));
+        } catch(com.google.gson.JsonParseException malformed) {
+            return false;
+        }
+    }
+
+    private static com.google.gson.JsonElement textShape(String json) {
+        // The native codec writes a plain {"text":"..."} as a JSON string.
+        // Compare JSON structurally, retaining all styling and unknown fields.
+        var value=com.google.gson.JsonParser.parseString(json);
+        if(value instanceof com.google.gson.JsonObject object && object.size()==1
+                && object.get("text") instanceof com.google.gson.JsonPrimitive literal && literal.isString())return literal;
+        return value;
+    }
+
+    private static boolean potionSurvives(Tag raw,CompoundTag contents) {
+        if(!(raw instanceof net.minecraft.nbt.StringTag name))return false;
+        if(name.getAsString().equals("minecraft:empty"))return !contents.contains("potion");
+        return raw.equals(contents.get("potion"));
+    }
+
+    private static boolean sameDamage(Tag input,Tag output) {
+        Long value=integral(input);
+        return value!=null && value>=0 && value<=32767
+                && (output==null?value==0:Objects.equals(value,integral(output)));
+    }
+
+    private static boolean enchantmentLevelsSurvive(Tag raw,Tag fixed,CompoundTag components) {
+        if(!(raw instanceof ListTag list))return false;
+        if(list.isEmpty())return components.getBoolean("minecraft:enchantment_glint_override");
+        if(!(fixed instanceof CompoundTag compound))return false;
+        CompoundTag levels=compound.getCompound("levels");
+        if(levels.size()!=list.size())return false;
+        Set<String> seen=new HashSet<>();
+        for(Tag element:list) {
+            if(!(element instanceof CompoundTag enchantment)
+                    || !Set.of("id","lvl").containsAll(enchantment.getAllKeys())
+                    || !enchantment.contains("id",8))return false;
+            String name=enchantment.getString("id");
+            Long level=integral(enchantment.get("lvl"));
+            if(!seen.add(name) || level==null || level<0 || level>255
+                    || !Objects.equals(level,integral(levels.get(name))))return false;
+        }
+        return true;
+    }
+
+    private static boolean displaySurvives(Tag raw,CompoundTag components,CompoundTag custom) {
+        if(!(raw instanceof CompoundTag display))return false;
+        for(String key:display.getAllKeys()) {
+            Tag value=display.get(key);
+            if(value.equals(custom.get(key)))continue;
+            String component=switch(key) {
+                case "Name" -> "minecraft:custom_name";
+                case "Lore" -> "minecraft:lore";
+                default -> null;
+            };
+            if(component==null || !value.equals(components.get(component)))return false;
+        }
+        return true;
+    }
+
+    private static boolean blockEntitySurvives(Tag raw,CompoundTag components) {
+        if(!(raw instanceof CompoundTag block))return false;
+        CompoundTag remainder=components.getCompound("minecraft:block_entity_data");
+        ListTag container=components.getList("minecraft:container",10);
+        for(String key:block.getAllKeys()) {
+            Tag value=block.get(key);
+            if(value.equals(remainder.get(key)))continue;
+            if(key.equals("Base")) {
+                Long colour=integral(value);
+                if(colour==null || colour<0 || colour>15
+                        || !components.getString("minecraft:base_color").equals(net.minecraft.world.item.DyeColor.byId(colour.intValue()).getName()))
+                    return false;
+                continue;
+            }
+            if(key.equals("Items") && value instanceof ListTag items) {
+                if(items.size()!=container.size())return false;
+                Set<Long> slots=new HashSet<>();
+                for(int i=0;i<items.size();i++) {
+                    CompoundTag legacy=items.getCompound(i), fixed=container.getCompound(i);
+                    Long slot=integral(legacy.get("Slot"));
+                    if(slot==null || slot<0 || slot>255 || !slots.add(slot)
+                            || !Objects.equals(slot,integral(fixed.get("slot")))
+                            || !componentsSurvive(legacy,fixed.getCompound("item"),false))return false;
+                }
+            } else if(!key.equals("id") || !remainder.isEmpty()
+                    || (!block.getString("id").startsWith("minecraft:") && !block.getString("id").equals("Chest")))return false;
+        }
+        return true;
+    }
+
     private static boolean nestedInventoriesSurvive(Tag before,Tag after) {
         if(before instanceof CompoundTag) {
             if(!(after instanceof CompoundTag)) return false;

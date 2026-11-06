@@ -212,7 +212,7 @@ public class CorpseContainer extends net.minecraft.world.inventory.AbstractConta
 
     private boolean canStore(Inventory inventory, int slot, ItemStack incoming) {
         ItemStack current = inventory.getItem(slot);
-        return !emptyStack(current) && current.isStackable() && ItemStack.isSameItemSameTags(current,incoming)
+        return !emptyStack(current) && current.isStackable() && cyano.lootable.ItemStacks.canMerge(current,incoming)
                 && current.getCount() < Math.min(current.getMaxStackSize(),inventory.getMaxStackSize());
     }
 
@@ -253,7 +253,7 @@ public class CorpseContainer extends net.minecraft.world.inventory.AbstractConta
 				ItemStack current = slot.getItem();
 				int limit = Math.min(slot.getMaxStackSize(stack),stack.getMaxStackSize());
 				if(pass == 0 && stack.isStackable() && !emptyStack(current)
-						&& ItemStack.isSameItemSameTags(stack,current)) {
+						&& cyano.lootable.ItemStacks.canMerge(stack,current)) {
 					int amount = Math.min(stack.getCount(),Math.max(0,limit - current.getCount()));
 					if(amount > 0) {
 						current.grow(amount);

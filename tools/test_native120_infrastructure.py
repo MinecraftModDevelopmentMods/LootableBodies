@@ -5,18 +5,18 @@ import native_runtime as runtime
 
 class Native120InfrastructureTest(unittest.TestCase):
     def test_native_distribution_and_every_server_input_use_the_target(self):
-        self.assertEqual('forge-1.20.1-47.4.28',runtime.FORGE)
-        self.assertEqual('D615397A6B2F1E99D4B454E2DB2B4CA2E94BE91D5E0243C8C7E023D965DB39E7',runtime.INSTALLER_SHA256)
-        self.assertEqual(107,len(runtime.SERVER_INPUTS))
-        self.assertEqual('993C0EE3F6C3A4E6CF47119A929F490C5B59A8E8CA0A4F3624E1FDB80508F26C',
-            runtime.SERVER_INPUTS['libraries/net/minecraftforge/forge/1.20.1-47.4.28/forge-1.20.1-47.4.28-server.jar'])
-        self.assertEqual('292607A1120C035382974FE03D00126942E5B2C8DB2762553FAB9137751B83E1',
-            runtime.SERVER_INPUTS['libraries/net/minecraftforge/forge/1.20.1-47.4.28/win_args.txt'])
+        self.assertEqual('forge-1.20.6-50.2.14',runtime.FORGE)
+        self.assertEqual('CF5ACACF52F694732732BB98D72B2871CFE16321990053DC4F3DDF5C20044F68',runtime.INSTALLER_SHA256)
+        self.assertEqual(94,len(runtime.SERVER_INPUTS))
+        self.assertEqual('609A3BEF499E84E93069A1BE7A7E6E38662952B13B0063495AD5804C1829FB35',
+            runtime.SERVER_INPUTS['libraries/net/minecraftforge/forge/1.20.6-50.2.14/forge-1.20.6-50.2.14-server.jar'])
+        self.assertEqual('085772DF00FF7D2C0E184F99B3F11FA659CB8AB26DBD20EEB0697F7941F6F0E2',
+            runtime.SERVER_INPUTS['libraries/net/minecraftforge/forge/1.20.6-50.2.14/win_args.txt'])
         self.assertFalse(any('1.16.5' in path for path in runtime.SERVER_INPUTS))
     def test_development_assets_use_the_native_index(self):
         text=(Path(__file__).resolve().parents[1]/'gradle/assets.gradle').read_text()
-        self.assertIn("minecraftAssetIndex = '5'",text)
-        self.assertIn("1.20.1.json",text)
+        self.assertIn("minecraftAssetIndex = '16'",text)
+        self.assertIn("1.20.6.json",text)
         self.assertNotIn('e9d0adb8f642abe422909ede50f651b2b58a3573',text)
     def test_every_released115_history_extends_the_complete_earlier_matrix(self):
         from verify_world_upgrades import ORIGINS,PHASES

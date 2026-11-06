@@ -16,14 +16,14 @@ class Native117ProbeIsolationTest {
                 java.util.zip.ZipEntry entry=entries.nextElement();String path=entry.getName();
                 if(!path.endsWith(".class"))continue;
                 byte[] code=zip.getInputStream(entry).readAllBytes();
-                assertEquals(61,((code[6]&255)<<8)|(code[7]&255),path);
+                assertEquals(65,((code[6]&255)<<8)|(code[7]&255),path);
                 result.add(path.substring(0,path.lastIndexOf('/')));
             }
         }
         assertFalse(result.isEmpty(),archive);return result;
     }
     @Test void integrationModuleHasNoProductionPackageDefinitions() throws Exception {
-        Set<String> main=packages("build/libs-dev/LootableBodies-"+LootableBodies.VERSION+"-deobf.jar");
+        Set<String> main=packages("build/libs/LootableBodies-"+LootableBodies.VERSION+".jar");
         Set<String> probe=packages("build/integration-test-mod/lootablebodies-build-tests.jar");
         probe.retainAll(main);assertTrue(probe.isEmpty(),"Native47 module split packages: "+probe);
     }

@@ -1,4 +1,4 @@
-"""Run the exact production jar and isolated verifier in official Forge 45."""
+"""Run the exact production jar and isolated verifier in official Forge 50."""
 import argparse
 import hashlib
 import json
@@ -83,7 +83,7 @@ def main():
     if args.rejected_displaced_viewer and args.mode!='issues':
         raise ValueError('Rejected/displaced viewer control requires issues mode')
     root=args.output.resolve();main=project/'build/libs'/MAIN_JAR
-    probe=project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar'
+    probe=project/'build/integration-test-mod/lootablebodies-build-tests.jar'
     candidate_hash=hashlib.sha256(main.read_bytes()).hexdigest().upper()
     prepare_client(root,main,probe);(root/'config').mkdir(exist_ok=True)
     # Inventory/death fixtures exercise gameplay, independent of live skin HTTP.

@@ -93,16 +93,14 @@ final class VisibilityClientChecks {
                 profileWorld=mc.level;
                 // These two offline fixture accounts use explicit empty native
                 // texture properties. Visibility does not depend on Mojang HTTP.
-                net.minecraft.server.players.GameProfileCache cache=new net.minecraft.server.players.GameProfileCache(null,new File(mc.gameDirectory,"visibility-usercache.json"));
-                cache.setExecutor(mc::execute);
-                for(String name:new String[]{"ContainerA","ContainerB"}) {
+                FixtureProfileCache.install(name->{
+                    RuntimeChecks.require(name.matches("Container[AB]"),"Unexpected offline fixture profile");
                     UUID id=UUID.nameUUIDFromBytes(("OfflinePlayer:"+name).getBytes(StandardCharsets.UTF_8));
-                    com.mojang.authlib.GameProfile profile=new com.mojang.authlib.GameProfile(id,name);
+                    var profile=new com.mojang.authlib.GameProfile(id,name);
                     String texture="{\"timestamp\":0,\"profileId\":\""+id.toString().replace("-","")+"\",\"profileName\":\""+name+"\",\"textures\":{}}";
                     profile.getProperties().put("textures",new com.mojang.authlib.properties.Property("textures",Base64.getEncoder().encodeToString(texture.getBytes(StandardCharsets.UTF_8))));
-                    cache.add(profile);
-                }
-                net.minecraft.world.level.block.entity.SkullBlockEntity.profileCache=cache;
+                    return java.util.concurrent.CompletableFuture.completedFuture(java.util.Optional.of(profile));
+                });
             }
             return;
         }
@@ -155,7 +153,7 @@ final class VisibilityClientChecks {
             } else if(phase==7 || phase==9 || phase==11) {
                 EntityLootableBody b=body(mc,"first");if(b!=null&&!b.isRemoved()&&!b.isInvisible()&&rendered.contains(b.getUUID())){shot(mc,"tracked-"+phase+".png");ack();}
             } else if(phase==8 || phase==10) {
-                if(role.equals(phase==8?"A":"B")){mc.level.disconnect();mc.clearLevel();mc.setScreen(new TitleScreen());connecting=false;}
+                if(role.equals(phase==8?"A":"B")){mc.level.disconnect();mc.disconnect();mc.setScreen(new TitleScreen());connecting=false;}
                 ack();
             } else if(phase==12 || phase==120) {
                 EntityLootableBody b=body(mc,"first");if(b!=null&&!b.isRemoved()&&rendered.contains(b.getUUID()))ack();

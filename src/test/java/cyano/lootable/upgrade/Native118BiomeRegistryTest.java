@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class Native118BiomeRegistryTest {
     private String nativeName(String name,int source){
         return net.minecraft.util.datafix.DataFixers.getDataFixer().update(References.BIOME,
-                new Dynamic<>(NbtOps.INSTANCE,StringTag.valueOf(name)),source,2975).asString().getOrThrow(false,error->{throw new AssertionError(error);});
+                new Dynamic<>(NbtOps.INSTANCE,StringTag.valueOf(name)),source,2975).asString().getOrThrow(AssertionError::new);
     }
     @Test void everyCavesAndCliffsAliasMatchesTheActualNativeFixAndRegisteredTarget(){
         CavesAndCliffsRenames.RENAMES.forEach((old,current)->{

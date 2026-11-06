@@ -57,6 +57,21 @@ class Native120RegistryRenameTest {
         assertEquals(MissingMappingsEvent.Action.DEFAULT, soundAction(new ResourceLocation("minecraft:music.overworld.unknown")));
     }
 
+    @Test void retiredParrotImitationsOnlyResolveTheFiveObsoleteVanillaSoundBindings() throws Exception {
+        for (String mob : List.of("enderman", "panda", "polar_bear", "wolf", "zombie_pigman")) {
+            String path = "entity.parrot.imitate." + mob;
+            ResourceLocation retired = ResourceLocation.withDefaultNamespace(path);
+            assertFalse(BuiltInRegistries.SOUND_EVENT.containsKey(retired), path);
+            assertEquals(MissingMappingsEvent.Action.IGNORE, soundAction(retired), path);
+            assertEquals(MissingMappingsEvent.Action.DEFAULT, soundAction(new ResourceLocation("othermod", path)), path);
+        }
+        ResourceLocation piglin = ResourceLocation.withDefaultNamespace("entity.parrot.imitate.piglin");
+        assertTrue(BuiltInRegistries.SOUND_EVENT.containsKey(piglin));
+        assertEquals(MissingMappingsEvent.Action.DEFAULT, soundAction(piglin));
+        assertEquals(MissingMappingsEvent.Action.DEFAULT,
+                soundAction(ResourceLocation.withDefaultNamespace("entity.parrot.imitate.unknown")));
+    }
+
     private static MissingMappingsEvent.Action soundAction(ResourceLocation key) throws Exception {
         MissingMappingsEvent.Mapping<SoundEvent> mapping = new MissingMappingsEvent.Mapping<>(null, null, key, 17);
         LegacyRegistryMappings.sounds(new MissingMappingsEvent(Registries.SOUND_EVENT, null, List.of(mapping)));

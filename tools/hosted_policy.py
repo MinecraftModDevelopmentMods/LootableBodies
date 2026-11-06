@@ -19,7 +19,7 @@ def gradle_roots(command):
     return roots
 
 def validate_workflow(text):
-    if "java-version: '17.0.20+101'" not in text or any('java-version:' in line and '17.0.20.1+1' in line for line in text.splitlines()):
+    if "java-version: '21.0.7+6.0.LTS'" not in text:
         raise ValueError('Use the setup-java SemVer identifier for the exact qualified JDK')
     commands='\n'.join(line.strip() for line in text.splitlines() if line.startswith('          ') and not line.strip().startswith('#'))
     for forbidden in ('unittest discover','-m unittest','native_runtime.py','native117_ci.py','verify_world_upgrades.py','verify_packaged','prepare_native','xvfb-run','--seed-only'):
@@ -64,7 +64,7 @@ def require_qualified_manifest(record):
     if record.get('local_qualification_complete') is not True or record.get('qualification_integrity_status')!='verified':
         raise ValueError('Local qualification evidence is incomplete or on an integrity hold')
     version=record.get('version','')
-    if not re.fullmatch(r'\d+\.\d+\.\d+\.120011',version) or record.get('minecraft')!='1.20.1' or record.get('forge')!='47.4.28':raise ValueError('Wrong target qualification')
+    if not re.fullmatch(r'\d+\.\d+\.\d+\.120061',version) or record.get('minecraft')!='1.20.6' or record.get('forge')!='50.2.14':raise ValueError('Wrong target qualification')
     base='LootableBodies-'+version
     names={'CHANGELOG.txt','SHA256SUMS',base+'.jar',base+'-sources.jar',base+'-javadoc.jar',base+'.pom'}
     if set(record.get('files',{}))!=names or any(not re.fullmatch('[A-F0-9]{64}',value or '') for value in record['files'].values()):raise ValueError('Incomplete six-file declaration')
@@ -74,18 +74,18 @@ def require_qualified_manifest(record):
 def check_source(root):
     validate_workflow((root/'.github/workflows/native120.yml').read_text(encoding='utf-8'))
     for workflow in ('codeql-analysis.yml','deploy-release.yml'):
-        if any('java-version:' in line and '17.0.20.1+1' in line for line in (root/'.github/workflows'/workflow).read_text(encoding='utf-8').splitlines()):
-            raise ValueError('Non-SemVer JDK input in '+workflow)
+        if "'21.0.7+6.0.LTS'" not in (root/'.github/workflows'/workflow).read_text(encoding='utf-8'):
+            raise ValueError('Missing qualified Java 21 version in '+workflow)
     if 'feature/**' in(root/'.github/workflows/build.yml').read_text():raise ValueError('Copied legacy CI still catches modern feature branches')
     if 'workflow_dispatch:' in(root/'.github/workflows/migration-matrix.yml').read_text():raise ValueError('Copied legacy migration workflow can still dispatch on a modern ref')
     guard=(root/'settings.gradle').read_text()
+    policy=json.loads((root/'tools/qualification-policy.json').read_text())
     if any(rule not in guard for rule in ("System.getenv('GITHUB_ACTIONS') == 'true'",
             'org.gradle.api.tasks.testing.Test', 'org.gradle.api.tasks.JavaExec',
             'Run expensive verification locally before publishing')):
         raise ValueError('Missing hosted test and game task guard')
     runtime=(root/'gradle/runtime.gradle').read_text()
     if "tasks.named('check') { dependsOn 'integrationTest' }" in runtime or "tasks.register('localRuntimeVerification')" not in runtime:raise ValueError('Game checks must remain explicit local gates')
-    policy=json.loads((root/'tools/qualification-policy.json').read_text())
     if policy['hosted']['full_java_suite'] or policy['hosted']['full_python_suite'] or policy['hosted']['gameplay_or_migration'] or policy['phase_consolidation']['enabled']:raise ValueError('Unvalidated expensive-test policy')
 
 if __name__=='__main__':

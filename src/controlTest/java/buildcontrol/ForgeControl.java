@@ -61,7 +61,7 @@ public final class ForgeControl {
                 }catch(java.io.IOException failure){throw new IllegalStateException(failure);}
                 stage=4;
             }else if(stage==4 && ++ticks>=80) {
-                mc.level.disconnect();mc.clearLevel();stage=2;
+                mc.level.disconnect();mc.disconnect();stage=2;
             }else if(stage==2 && mc.level==null && !mc.hasSingleplayerServer())finish(mc);
         }
         private int connections,wait,deathTicks,respawns;
@@ -100,23 +100,23 @@ public final class ForgeControl {
                         if(field.getType()==net.minecraft.network.Connection.class) {
                             field.setAccessible(true);net.minecraft.network.Connection manager=(net.minecraft.network.Connection)field.get(mc.screen);
                             if(manager!=null && manager.channel()!=null) {
-                                System.out.println("NATIVE_FORGE_TCP_STATE autoRead="+manager.channel().config().isAutoRead()+" active="+manager.channel().isActive()+" protocol="+manager.channel().attr(net.minecraft.network.Connection.ATTRIBUTE_PROTOCOL).get());
+                                System.out.println("NATIVE_FORGE_TCP_STATE autoRead="+manager.channel().config().isAutoRead()+" active="+manager.channel().isActive()+" protocol="+manager.getInboundProtocolInfo());
                             }
                         }
                 }catch(ReflectiveOperationException failure){throw new IllegalStateException(failure);}
             }
             if(stage==0 && mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen) {
                 if(connections>=10){finish(mc);return;}
-                destination=new net.minecraft.client.multiplayer.ServerData("Owned native control","127.0.0.1:"+Integer.getInteger("lootablebodies.control.port"),false);
+                destination=new net.minecraft.client.multiplayer.ServerData("Owned native control","127.0.0.1:"+Integer.getInteger("lootablebodies.control.port"),net.minecraft.client.multiplayer.ServerData.Type.OTHER);
                 if(Boolean.getBoolean("lootablebodies.control.ping")) {
                     pinger=new net.minecraft.client.multiplayer.ServerStatusPinger();
-                    try{pinger.pingServer(destination,()->{});}catch(java.net.UnknownHostException failure){throw new IllegalStateException(failure);}
+                    try{pinger.pingServer(destination,()->{},()->{});}catch(java.net.UnknownHostException failure){throw new IllegalStateException(failure);}
                     stage=5;
-                }else {net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new net.minecraft.client.gui.screens.TitleScreen(),mc,net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(destination.ip),destination,false);stage=1;}
+                }else {net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new net.minecraft.client.gui.screens.TitleScreen(),mc,net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(destination.ip),destination,false,null);stage=1;}
                 wait=0;
             }else if(stage==5) {
                 pinger.tick();
-                if(destination.ping>=0){pinger.removeAll();net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new net.minecraft.client.gui.screens.TitleScreen(),mc,net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(destination.ip),destination,false);stage=1;wait=0;}
+                if(destination.ping>=0){pinger.removeAll();net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new net.minecraft.client.gui.screens.TitleScreen(),mc,net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(destination.ip),destination,false,null);stage=1;wait=0;}
             }else if(stage==1 && mc.level!=null && mc.player!=null) {
                 if(Boolean.getBoolean("lootablebodies.control.deaths")) {
                     delayNativePackets(mc);
@@ -127,7 +127,7 @@ public final class ForgeControl {
                     wait=0;return;
                 }
                 System.out.println("NATIVE_FORGE_TCP_JOIN "+(++connections));
-                mc.level.disconnect();mc.clearLevel();mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen());stage=0;wait=0;
+                mc.level.disconnect();mc.disconnect();mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen());stage=0;wait=0;
             }else if(stage==1 && mc.screen instanceof net.minecraft.client.gui.screens.DisconnectedScreen) {
                 throw new AssertionError("NATIVE_FORGE_TCP_LOGIN_FAILURE joins="+connections);
             }
@@ -141,7 +141,7 @@ public final class ForgeControl {
                     net.minecraft.world.Difficulty.NORMAL,false,new net.minecraft.world.level.GameRules(),net.minecraft.world.level.WorldDataConfiguration.DEFAULT),
                 new net.minecraft.world.level.levelgen.WorldOptions(4267321L,false,false),
                 access->access.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET)
-                    .getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions());
+                    .getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions(),new net.minecraft.client.gui.screens.TitleScreen());
         }
     }
 }

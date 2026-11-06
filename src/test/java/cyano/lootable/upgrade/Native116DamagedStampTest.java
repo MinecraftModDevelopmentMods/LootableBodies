@@ -25,7 +25,7 @@ class Native116DamagedStampTest {
         Path fixture=Paths.get("src/test/resources/native115-release-chunk.nbt");
         byte[] hash=java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(fixture));StringBuilder text=new StringBuilder();for(byte value:hash)text.append(String.format("%02X",value));
         assertEquals("B6D03C7E0962715745FCD93A31EA27C01B4601020A51F542898BCE09F14C10C2",text.toString());
-        try(InputStream input=Files.newInputStream(fixture)){return NbtIo.readCompressed(input);}
+        try(InputStream input=Files.newInputStream(fixture)){return NbtIo.readCompressed(input,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
     }
     private void preserve(CompoundTag chunk)throws Exception {
         CompoundTag header=new CompoundTag(),data=new CompoundTag(),fml=new CompoundTag();
@@ -51,10 +51,10 @@ class Native116DamagedStampTest {
     @Test void bothNativeAnvilPassesRetainNestedChestDataWithMissingChunkStamps()throws Exception {
         CompoundTag source=original();assertEquals(2230,source.getInt("DataVersion"));
         CompoundTag nativeInput=source.copy();ChunkStorage.injectDatafixingContext(nativeInput,Level.OVERWORLD,java.util.Optional.empty());
-        CompoundTag expected=NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,nativeInput,2230,2975);
+        CompoundTag expected=NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,nativeInput,2230,3839);
         CompoundTag damaged=source.copy();damaged.remove("DataVersion");preserve(damaged);
         byte[] originalRegion=Files.readAllBytes(world.resolve("region/r.0.0.mca"));
-        try(ChunkStorage loader=new ChunkStorage(world.resolve("reader"),UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),false)) {
+        try(ChunkStorage loader=new ChunkStorage(new net.minecraft.world.level.chunk.storage.RegionStorageInfo("fixture",net.minecraft.world.level.Level.OVERWORLD,"chunk"),world.resolve("reader"),UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),false)) {
             CompoundTag actual=loader.upgradeChunkTag(Level.OVERWORLD,()->{throw new AssertionError("Current source must not replay legacy structure conversion");},damaged.copy(),java.util.Optional.empty());
             assertNotNull(expected.get("block_entities"));assertFalse(actual.contains("Level"));
             assertEquals(expected.get("block_entities"),actual.get("block_entities"));

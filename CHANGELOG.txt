@@ -1,6 +1,6 @@
-2.4.11.120011 - Minecraft 1.20.1, Forge
+2.4.12.120061 - Minecraft 1.20.6, Forge
 
-Updated for Minecraft 1.20.1.
+Updated for Minecraft 1.20.6.
 
 Preserves bodies and their contents when upgrading older worlds.
 Back up the whole world before upgrading.

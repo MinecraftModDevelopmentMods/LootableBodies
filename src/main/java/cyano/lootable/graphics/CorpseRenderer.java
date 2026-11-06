@@ -1,11 +1,9 @@
 package cyano.lootable.graphics;
 
 import com.mojang.authlib.GameProfile;
-import com.mojang.authlib.minecraft.MinecraftProfileTexture;
 import com.mojang.blaze3d.vertex.PoseStack;
 import cyano.lootable.LootableBodies;
 import cyano.lootable.entities.EntityLootableBody;
-import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import com.mojang.math.Axis;
@@ -20,6 +18,7 @@ import net.minecraft.client.renderer.entity.layers.ItemInHandLayer;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.resources.DefaultPlayerSkin;
+import net.minecraft.client.resources.PlayerSkin;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -49,28 +48,27 @@ public class CorpseRenderer extends LivingEntityRenderer<EntityLootableBody, Pla
 
     @Override public ResourceLocation getTextureLocation(EntityLootableBody entity) {
         if (LootableBodies.useLocalSkin) return localSkin;
-        GameProfile profile = entity.getGameProfile();
-        return profile != null && profile.getId() != null ? getSkin(profile) : DefaultPlayerSkin.getDefaultSkin();
+        return getSkin(entity.getGameProfile());
     }
 
     public static ResourceLocation getSkin(GameProfile profile) {
-        ResourceLocation fallback = profile == null || profile.getId() == null
-                ? DefaultPlayerSkin.getDefaultSkin() : DefaultPlayerSkin.getDefaultSkin(profile.getId());
-        if (profile == null || profile.getId() == null) return fallback;
+        PlayerSkin skin=playerSkin(profile);
+        return skin==null?DefaultPlayerSkin.getDefaultTexture():skin.texture();
+    }
+
+    private static PlayerSkin playerSkin(GameProfile profile) {
+        if (!cyano.lootable.network.CorpseProfiles.isResolved(profile)) return null;
         try {
-            Minecraft minecraft = Minecraft.getInstance();
-            Map<MinecraftProfileTexture.Type, MinecraftProfileTexture> textures = minecraft.getSkinManager().getInsecureSkinInformation(profile);
-            return textures.containsKey(MinecraftProfileTexture.Type.SKIN)
-                    ? minecraft.getSkinManager().registerTexture(textures.get(MinecraftProfileTexture.Type.SKIN), MinecraftProfileTexture.Type.SKIN)
-                    : fallback;
+            return Minecraft.getInstance().getSkinManager().getInsecureSkin(profile);
         } catch (RuntimeException unavailable) {
-            return fallback;
+            return DefaultPlayerSkin.get(profile);
         }
     }
 
     @Override public void render(EntityLootableBody entity, float yaw, float partialTicks,
             PoseStack matrices, MultiBufferSource buffers, int light) {
-        setModel(entity.useThinArms());
+        PlayerSkin skin=LootableBodies.useLocalSkin?null:playerSkin(entity.getGameProfile());
+        setModel(skin!=null && skin.model()==PlayerSkin.Model.SLIM);
         try {
             super.render(entity, 0F, partialTicks, matrices, buffers, light);
         } finally {
@@ -79,11 +77,11 @@ public class CorpseRenderer extends LivingEntityRenderer<EntityLootableBody, Pla
     }
 
     @Override protected void setupRotations(EntityLootableBody entity, PoseStack matrices,
-            float age, float yaw, float partialTicks) {
+            float age, float yaw, float partialTicks, float scale) {
         matrices.mulPose(Axis.XP.rotationDegrees(90F));
         matrices.mulPose(Axis.ZP.rotationDegrees(entity.getRotation()));
         matrices.translate(0D, -0.85D, -0.125D);
-        super.setupRotations(entity, matrices, 0F, 0F, partialTicks);
+        super.setupRotations(entity, matrices, 0F, 0F, partialTicks, scale);
     }
 
     @Override protected float getAttackAnim(EntityLootableBody entity, float partialTicks) { return 0F; }
@@ -92,8 +90,8 @@ public class CorpseRenderer extends LivingEntityRenderer<EntityLootableBody, Pla
         return LootableBodies.displayNameTag && super.shouldShowName(entity);
     }
     @Override protected void renderNameTag(EntityLootableBody entity, net.minecraft.network.chat.Component name, PoseStack matrices,
-            MultiBufferSource buffers, int light) {
-        if (LootableBodies.displayNameTag) super.renderNameTag(entity, name, matrices, buffers, light);
+            MultiBufferSource buffers, int light, float partialTicks) {
+        if (LootableBodies.displayNameTag) super.renderNameTag(entity, name, matrices, buffers, light, partialTicks);
     }
 
     private static final class FrozenPlayerModel extends PlayerModel<EntityLootableBody> {

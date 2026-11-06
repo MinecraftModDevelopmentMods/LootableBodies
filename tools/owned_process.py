@@ -82,10 +82,8 @@ def native_process(command,*,cwd,log,timeout,console_input=False):
     if encodings and encodings!=['-Dfile.encoding=UTF-8']:raise ValueError('Owned runtime requires one explicit UTF-8 encoding')
     if not encodings:command.insert(1,'-Dfile.encoding=UTF-8')
     validate_logging_inputs(command)
-    java=Path(command[0]).resolve();metadata=java.parent.parent/'release'
-    values=dict(line.split('=',1) for line in metadata.read_text().splitlines() if '=' in line)
-    if values.get('SEMANTIC_VERSION')!='"17.0.20.1+1"' or values.get('IMPLEMENTOR')!='"Eclipse Adoptium"':
-        raise RuntimeError('Group runtime requires exact Temurin17.0.20.1+1')
+    from native_runtime import require_runtime_jdk
+    java=require_runtime_jdk(command[0])
     suffix='.exe' if java.suffix=='.exe' else ''
     stack=java.with_name('jstack'+suffix);metric=java.with_name('jstat'+suffix)
     if not stack.is_file() or not metric.is_file():raise FileNotFoundError('Missing pinned native JDK diagnostics')

@@ -11,7 +11,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /** Controlled packaged pre-world conversion/refusal; separate from old writers. */
 public final class NativePreflightChecks {
-    static final String INJECTED="NATIVE120_INJECTED_ENTITY_CHUNK_REFUSAL";
+    static final String INJECTED="NATIVE1206_INJECTED_ENTITY_CHUNK_REFUSAL";
     private static final AtomicInteger early=new AtomicInteger(),worlds=new AtomicInteger(),starts=new AtomicInteger();
     private static String mode;
     static void install(net.minecraftforge.eventbus.api.IEventBus bus) {
@@ -32,14 +32,14 @@ public final class NativePreflightChecks {
                         boolean preflight=java.util.Arrays.stream(Thread.currentThread().getStackTrace()).anyMatch(
                                 frame->frame.getClassName().equals("cyano.lootable.upgrade.UpgradeJournal") && frame.getMethodName().equals("validateEntityChunks"));
                         if(!preflight || worlds.get()!=0 || starts.get()!=0)throw new AssertionError("Entity conversion missed the pre-world boundary");
-                        early.incrementAndGet();System.out.println("NATIVE120_PREWORLD_ENTITY_CONVERSION from="+from+" to="+to+" mode="+mode);
+                        early.incrementAndGet();System.out.println("NATIVE1206_PREWORLD_ENTITY_CONVERSION from="+from+" to="+to+" mode="+mode);
                         if(mode.equals("refuse"))throw new IllegalStateException(INJECTED+": controlled negative fixture, not a native Minecraft error");
                     }
                     return nativeFixer.update(type,input,from,to);
                 }
             };
             cyano.lootable.upgrade.UpgradePreservation.register(observer);
-            System.out.println("NATIVE120_PREFLIGHT_CONTROL_INSTALLED mode="+mode);
+            System.out.println("NATIVE1206_PREFLIGHT_CONTROL_INSTALLED mode="+mode);
         }));
     }
     @SubscribeEvent public void loaded(net.minecraftforge.event.level.LevelEvent.Load event){worlds.incrementAndGet();}
@@ -56,15 +56,15 @@ public final class NativePreflightChecks {
             // Existing placement rules preserve those invalid records in Aux.
             if(slot<4){RuntimeChecks.require(item.isEmpty(),"Invalid diamond entered an armour slot");continue;}
             RuntimeChecks.require(item.getItem()==net.minecraft.world.item.Items.DIAMOND && item.getCount()==slot+1
-                    && item.hasTag() && item.getTag().getString("keep").equals("slot-"+slot),"Preflight inventory changed at slot"+slot);
+                    && FixtureStackData.hasCustom(item) && FixtureStackData.custom(item).getString("keep").equals("slot-"+slot),"Preflight inventory changed at slot"+slot);
         }
         CompoundTag saved=new CompoundTag();body.saveAsPassenger(saved);
         RuntimeChecks.require(saved.getInt("LootableBodiesDataVersion")==cyano.lootable.upgrade.UpgradePreservation.DATA_VERSION,"Preflight corpse marker was not advanced");
         ListTag aux=saved.getList("Aux",10);RuntimeChecks.require(aux.size()==5,"Preflight Aux record count changed");
         for(int index=0;index<5;index++) {
             int sourceSlot=index<4?index:47;CompoundTag item=aux.getCompound(index);
-            RuntimeChecks.require(item.getString("id").equals("minecraft:diamond") && item.getByte("Count")==sourceSlot+1
-                    && item.getCompound("tag").getString("keep").equals("slot-"+sourceSlot),"Preflight Aux changed at record"+index);
+            RuntimeChecks.require(item.getString("id").equals("minecraft:diamond") && item.getInt("count")==sourceSlot+1
+                    && item.getCompound("components").getCompound("minecraft:custom_data").getString("keep").equals("slot-"+sourceSlot),"Preflight Aux changed at record"+index);
         }
         RuntimeChecks.require(saved.getList("LootableBodiesUnresolved",10).stream().anyMatch(value->value instanceof CompoundTag
                 && ((CompoundTag)value).getString("Source").equals("FixtureUnknown")
@@ -73,6 +73,6 @@ public final class NativePreflightChecks {
                 && ((CompoundTag)value).getCompound("Data").getByte("Slot")==46
                 && ((CompoundTag)value).getCompound("Data").getCompound("tag").getString("keep").equals("slot-46")),"Raw Source/Data recovery evidence changed");
         Files.writeString(Path.of("preflight-conversion.pass"),"48inputEquipmentRecords/Aux/Source/Data/entityStorage conserved\n",StandardOpenOption.CREATE_NEW);
-        System.out.println("NATIVE120_PACKAGED_PREFLIGHT_CONVERSION_PASS");
+        System.out.println("NATIVE1206_PACKAGED_PREFLIGHT_CONVERSION_PASS");
     }
 }

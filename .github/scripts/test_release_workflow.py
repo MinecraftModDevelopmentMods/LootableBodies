@@ -71,13 +71,14 @@ class ReleaseWorkflowTests(unittest.TestCase):
             '1.17.1': ('117011', 'master-1.17.1', '37.1.1'),
             '1.18.2': ('118021', 'master-1.18.2', '40.3.12'),
             '1.19.4': ('119041', 'master-1.19.4', '45.4.5'),
-            '1.20.1': ('120011', 'master-1.20.1', '47.4.28')}[minecraft]
+            '1.20.1': ('120011', 'master-1.20.1', '47.4.28'),
+            '1.20.6': ('120061', 'master-1.20.6', '50.2.14')}[minecraft]
         version = '2.4.2.' + suffix
         files={name:'C'*64 for name in ['main.jar','sources.jar','javadoc.jar','release.pom','CHANGELOG.txt','SHA256SUMS']}
         receipt={'schema':1,'source':SHA,'version':version,'files':files,'evidence_sha256':'F'*64,'qualified_locally':True,'manual_accepted':True}
         if local_receipt is not None:receipt=local_receipt
         values = dict(minecraft_version=minecraft, forge_version=forge, loader_name='forge', loader_code='1',
-            java_version='17' if minecraft in ('1.18.2','1.19.4','1.20.1') else '16' if minecraft=='1.17.1' else '8', java_toolchain_version='17.0.20.1+1' if minecraft in ('1.18.2','1.19.4','1.20.1') else '16.0.2+7' if minecraft=='1.17.1' else '8.0.502+7', gradle_java_version='17', mod_id='lootablebodies',
+            java_version='21' if minecraft=='1.20.6' else '17' if minecraft in ('1.18.2','1.19.4','1.20.1') else '16' if minecraft=='1.17.1' else '8', java_toolchain_version='21.0.7+6' if minecraft=='1.20.6' else '17.0.20.1+1' if minecraft in ('1.18.2','1.19.4','1.20.1') else '16.0.2+7' if minecraft=='1.17.1' else '8.0.502+7', gradle_java_version='21' if minecraft=='1.20.6' else '17', mod_id='lootablebodies',
             mod_artifact='LootableBodies', mod_group='zone.moddev.mc.lootablebodies', mod_license='LGPL-2.1-only',
             curseforge_project_id='240968', mod_version=version)
         if mutation:
@@ -87,13 +88,13 @@ class ReleaseWorkflowTests(unittest.TestCase):
                          '1.14.4': MATRIX114 + ['Validate release workflow'],
                          '1.15.2': MATRIX115, '1.16.5': MATRIX116}.get(minecraft, []) if names is None else names
         if minecraft=='1.17.1' and names is None:checks=CORE117+MATRIX117
-        if minecraft in ('1.18.2','1.19.4','1.20.1') and names is None:checks=CORE118
+        if minecraft in ('1.18.2','1.19.4','1.20.1','1.20.6') and names is None:checks=CORE118
 
         def command(args, **options):
             if args[0] == 'git':
                 return SHA + '\n'
             if any('/actions/workflows/native'+code+'.yml/' in args[-1] for code in ['117','118','119','120']):
-                code={'1.17.1':'117','1.18.2':'118','1.19.4':'119','1.20.1':'120'}[minecraft]
+                code={'1.17.1':'117','1.18.2':'118','1.19.4':'119','1.20.1':'120','1.20.6':'120'}[minecraft]
                 row=dict(id=int(code),head_sha=SHA,head_branch=branch,event='push',path='.github/workflows/native'+code+'.yml',conclusion='success')
                 if qualification:row.update(qualification)
                 return json.dumps({'workflow_runs':[row]})
@@ -117,10 +118,21 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 patch('subprocess.check_output', side_effect=command), patch('subprocess.run', side_effect=existing):
             exec(compile(code, 'release-preflight', 'exec'), {})
 
-    def test_future_1206_candidate_cannot_dispatch_publication(self):
+    def test_1206_requires_exact_archives_and_java_21(self):
         code, values = self.select('2.4.12.120061')
-        self.assertNotEqual(0, code)
-        self.assertEqual({}, values)
+        self.assertEqual(0, code)
+        self.assertEqual({'minecraft_version': '1.20.6', 'source_branch': 'master-1.20.6'}, values)
+        self.validate('1.20.6')
+        for options in ({'mutation': {'java_version': '17'}}, {'audit_success': False},
+                        {'qualification': {'head_branch': 'master-1.20.1'}},
+                        {'local_receipt': {'manual_accepted': False}}):
+            with self.subTest(options=options), self.assertRaises(SystemExit):
+                self.validate('1.20.6', **options)
+        self.assertIn("minecraft_version == '1.20.6' && 'Java 21'", WORKFLOW.read_text())
+        self.assertEqual(2, WORKFLOW.read_text().count("minecraft_version == '1.20.6' && '21.0.7+6.0.LTS'"))
+
+    def test_future_1211_candidate_cannot_dispatch_publication(self):
+        self.assertNotEqual(0, self.select('2.4.13.121011')[0])
 
     def test_routes_all_supported_versions(self):
         for suffix, minecraft, branch in [('110021', '1.10.2', '1.10.2'), ('111021', '1.11.2', '1.11.2-dev'), ('112021', '1.12.2', 'master-1.12'), ('113021', '1.13.2', 'master-1.13.2'), ('114041', '1.14.4', 'master-1.14.4')]:

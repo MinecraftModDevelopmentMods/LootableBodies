@@ -1,7 +1,7 @@
 import tempfile,unittest
 from pathlib import Path
 from native_runtime import fingerprint
-from verify_upgrade_abort import allowed_native47_platform_additions
+from verify_upgrade_abort import allowed_forge_platform_additions
 
 class Native47ConfigTest(unittest.TestCase):
     def target(self,root,text=None):
@@ -11,12 +11,12 @@ class Native47ConfigTest(unittest.TestCase):
     def test_exact_actual_native_default_addition(self):
         with tempfile.TemporaryDirectory() as directory:
             world=Path(directory);self.target(world);after=fingerprint(world)
-            self.assertEqual(['serverconfig/forge-server.toml'],allowed_native47_platform_additions({},after,world))
+            self.assertEqual(['serverconfig/forge-server.toml'],allowed_forge_platform_additions({},after,world,forge=47))
     def test_exact_actual_native_spec_retirement_preserves_supported_choices(self):
         with tempfile.TemporaryDirectory() as directory:
             world=Path(directory);path=self.target(world,self.old().replace(b'fullBoundingBoxLadders = false',b'fullBoundingBoxLadders = true'));original=path.read_bytes();before=fingerprint(world)
             path.write_bytes((Path(__file__).parent/'fixtures/forge47-server-default.toml').read_bytes().replace(b'fullBoundingBoxLadders = false',b'fullBoundingBoxLadders = true'))
-            self.assertEqual(['serverconfig/forge-server.toml'],allowed_native47_platform_additions(before,fingerprint(world),world,original))
+            self.assertEqual(['serverconfig/forge-server.toml'],allowed_forge_platform_additions(before,fingerprint(world),world,original,forge=47))
     def test_supported_mutation_unknown_retirement_or_wrong_type_cannot_pass(self):
         for change in ['value','unknown','type']:
             with self.subTest(change=change),tempfile.TemporaryDirectory() as directory:
@@ -26,6 +26,19 @@ class Native47ConfigTest(unittest.TestCase):
                 path=self.target(world,original);before=fingerprint(world);target=(Path(__file__).parent/'fixtures/forge47-server-default.toml').read_bytes()
                 if change=='value':target=target.replace(b'fullBoundingBoxLadders = false',b'fullBoundingBoxLadders = true')
                 path.write_bytes(target)
-                self.assertEqual([],allowed_native47_platform_additions(before,fingerprint(world),world,original))
+                self.assertEqual([],allowed_forge_platform_additions(before,fingerprint(world),world,original,forge=47))
+
+    def test_forge50_retires_only_proved_native_options_and_keeps_supported_settings(self):
+        fixture=Path(__file__).parent/'fixtures'
+        for unknown in (False,True):
+            with self.subTest(unknown=unknown),tempfile.TemporaryDirectory() as directory:
+                world=Path(directory)
+                original=(fixture/'forge47-server-default.toml').read_bytes().replace(b'fullBoundingBoxLadders = false',b'fullBoundingBoxLadders = true')
+                if unknown:original+=b'unknownFlag = true\n'
+                path=self.target(world,original)
+                before=fingerprint(world)
+                path.write_bytes((fixture/'forge50-server-default.toml').read_bytes().replace(b'fullBoundingBoxLadders = false',b'fullBoundingBoxLadders = true'))
+                expected=[] if unknown else ['serverconfig/forge-server.toml']
+                self.assertEqual(expected,allowed_forge_platform_additions(before,fingerprint(world),world,original,forge=50))
 
 if __name__=='__main__':unittest.main()

@@ -69,7 +69,7 @@ public final class VisibilityChecks {
                 // The corpse chunk must be eligible to unload when both clients
                 // leave; keeping it inside the spawn area would test no unload.
                 world().setDefaultSpawnPos(new BlockPos(8192,PLAYER_Y,8192),0F);
-                CompoundTag n;try(FileInputStream in=new FileInputStream(new File(world().getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile(),"visibility-state.nbt"))){n=NbtIo.readCompressed(in);}
+                CompoundTag n;try(FileInputStream in=new FileInputStream(new File(world().getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile(),"visibility-state.nbt"))){n=NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
                 first=loadExpected(world(),"first");second=loadExpected(world(),"second");
                 saveId("first",first);saveId("second",second);verifyInventories();
                 a.connection.teleport(first.getX(),first.getY(),first.getZ()-2.5,0,25);b.connection.teleport(first.getX()+1.5,first.getY(),first.getZ()-2.5,0,25);phase(19);
@@ -173,18 +173,18 @@ public final class VisibilityChecks {
     }
     static void reload(MinecraftServer server) throws Exception {
         ServerLevel w=server.getLevel(FixtureApi.dimensionKey(0));File folder=w.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();CompoundTag n;
-        try(FileInputStream in=new FileInputStream(new File(folder,"visibility-state.nbt"))){n=NbtIo.readCompressed(in);}
+        try(FileInputStream in=new FileInputStream(new File(folder,"visibility-state.nbt"))){n=NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
         for(String key:new String[]{"First","Second"}) {EntityLootableBody b=loadExpected(w,key.toLowerCase(Locale.ROOT));RuntimeChecks.require(b.getUUID().equals(n.getUUID(key)),"Saved identity differs");verifySnapshot(w,key.toLowerCase(Locale.ROOT),b);}
-        CompoundTag p;try(FileInputStream in=new FileInputStream(new File(folder,"playerdata/"+n.getUUID("Player")+".dat"))){p=NbtIo.readCompressed(in);}
+        CompoundTag p;try(FileInputStream in=new FileInputStream(new File(folder,"playerdata/"+n.getUUID("Player")+".dat"))){p=NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
         RuntimeChecks.require(n.get("Inventory").equals(p.get("Inventory")),"Recovered inventory changed on cold restart");
     }
     private static EntityLootableBody loadExpected(ServerLevel w,String name) throws Exception {
-        CompoundTag n;try(FileInputStream in=new FileInputStream(new File(w.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile(),"visibility-"+name+".nbt"))){n=NbtIo.readCompressed(in);}
+        CompoundTag n;try(FileInputStream in=new FileInputStream(new File(w.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile(),"visibility-"+name+".nbt"))){n=NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
         ListTag pos=n.getList("Pos",6);RuntimeChecks.awaitChunk(w,(int)Math.floor(pos.getDouble(0)/16),(int)Math.floor(pos.getDouble(2)/16));
         return RuntimeChecks.find(w,n.getUUID("UUID"));
     }
     private static void verifySnapshot(ServerLevel w,String name,EntityLootableBody body) throws Exception {
-        CompoundTag expected;try(FileInputStream in=new FileInputStream(new File(w.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile(),"visibility-"+name+".nbt"))){expected=NbtIo.readCompressed(in);}
+        CompoundTag expected;try(FileInputStream in=new FileInputStream(new File(w.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile(),"visibility-"+name+".nbt"))){expected=NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
         CompoundTag actual=new CompoundTag();body.saveAsPassenger(actual);
         for(String key:new String[]{"id","UUIDMost","UUIDLeast","Equipment","Aux","Name","CustomName","LootableBodiesUnresolved","LootableBodiesInvalidFields"})RuntimeChecks.require(Objects.equals(expected.get(key),actual.get(key)),"Reloaded corpse differs: "+name+" "+key);
         // These live-default fixtures keep ticking between the snapshot and logout.

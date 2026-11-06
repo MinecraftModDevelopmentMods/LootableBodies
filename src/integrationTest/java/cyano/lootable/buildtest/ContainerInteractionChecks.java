@@ -151,7 +151,7 @@ final class ContainerInteractionChecks {
         if(rejection!=0)RuntimeChecks.require(connection.resyncs>initialSyncs,"Rejected predicted drop did not resync initiating client");
         if(capture)RuntimeChecks.require(p.captureDrops().size()==2,"Toss discarded pre-existing captured item");
         if(rejection==0 && !capture){
-            int dropped=0;for(Entity e:FixtureApi.entities(world))if(e instanceof ItemEntity && !e.isRemoved()){equal(((ItemEntity)e).getItem(),item(120,amount),"Accepted drop NBT differs");dropped++;}
+            int dropped=0;for(Entity e:FixtureApi.entities(world,6,6))if(e instanceof ItemEntity && !e.isRemoved()){equal(((ItemEntity)e).getItem(),item(120,amount),"Accepted drop NBT differs");dropped++;}
             RuntimeChecks.require(dropped==1,"Accepted toss did not create exactly one entity");
         }
     }
@@ -199,26 +199,26 @@ final class ContainerInteractionChecks {
     }
     private static void creativePacket(boolean creative,boolean cancelled) throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();p.setGameMode(creative?GameType.CREATIVE:GameType.SURVIVAL);open(p,b);b.setItem(6,item(120,17));CompoundTag unchanged=data(b);
-        RejectedDrops reject=new RejectedDrops();reject.toss=cancelled;MinecraftForge.EVENT_BUS.register(reject);FriendlyByteBuf wire=new FriendlyByteBuf(Unpooled.buffer());
+        RejectedDrops reject=new RejectedDrops();reject.toss=cancelled;MinecraftForge.EVENT_BUS.register(reject);var wire=new net.minecraft.network.RegistryFriendlyByteBuf(Unpooled.buffer(),p.registryAccess());
         try {
-            new ServerboundSetCreativeModeSlotPacket(cancelled?-1:9,item(121,23)).write(wire);
-            p.connection.handleSetCreativeModeSlot(new ServerboundSetCreativeModeSlotPacket(wire));
+            ServerboundSetCreativeModeSlotPacket.STREAM_CODEC.encode(wire,new ServerboundSetCreativeModeSlotPacket(cancelled?-1:9,item(121,23)));
+            p.connection.handleSetCreativeModeSlot(ServerboundSetCreativeModeSlotPacket.STREAM_CODEC.decode(wire));
             RuntimeChecks.require(!wire.isReadable(),"Native creative packet left undecoded fields");
         }
         finally{wire.release();MinecraftForge.EVENT_BUS.unregister(reject);}
         RuntimeChecks.require(unchanged.equals(data(b)),"Creative inventory packet changed corpse instead of player");equal(p.getInventory().items.get(9),creative&&!cancelled?item(121,23):null,"Creative player packet permission/target differs");
-        if(cancelled)RuntimeChecks.require(FixtureApi.entities(world).stream().noneMatch(e->e instanceof ItemEntity && !e.isRemoved()),"Cancelled creative minted drop spawned anyway");
+        if(cancelled)RuntimeChecks.require(FixtureApi.entities(world,6,6).stream().noneMatch(e->e instanceof ItemEntity && !e.isRemoved()),"Cancelled creative minted drop spawned anyway");
     }
 
     private static void check(String name,Check test) {
-        Set<Entity> before=new HashSet<>(FixtureApi.entities(world));
+        Set<Entity> before=new HashSet<>(FixtureApi.entities(world,6,6));
         try {test.run();results.add("PASS "+name);System.out.println("CONTAINER_CHECK_PASS "+name);}
         catch(Throwable error){failures++;results.add("FAIL "+name+": "+error);System.out.println("CONTAINER_CHECK_FAIL "+name+": "+error);error.printStackTrace();}
-        finally{for(Entity entity:new ArrayList<Entity>(FixtureApi.entities(world)))if(!before.contains(entity))entity.discard();}
+        finally{for(Entity entity:new ArrayList<Entity>(FixtureApi.entities(world,6,6)))if(!before.contains(entity))entity.discard();}
     }
     private static ServerPlayer player() {
         ServerPlayer p=new ServerPlayer(server,world,
-                new GameProfile(UUID.nameUUIDFromBytes(("container-player-"+sequence++).getBytes(java.nio.charset.StandardCharsets.UTF_8)),"ContainerFixture"));
+                new GameProfile(UUID.nameUUIDFromBytes(("container-player-"+sequence++).getBytes(java.nio.charset.StandardCharsets.UTF_8)),"ContainerFixture"),net.minecraft.server.level.ClientInformation.createDefault());
         p.connection=new RecordingConnection(p);p.setGameMode(GameType.SURVIVAL);
         p.setPos(96.5,80,96.5);world.getChunk(6,6);return p;
     }
@@ -230,7 +230,7 @@ final class ContainerInteractionChecks {
         CorpseContainer c=new CorpseContainer(7,p.getInventory(),b);p.containerMenu=c;p.initMenu(c);return c;
     }
     private static ItemStack item(int id,int count){ItemStack s=RuntimeChecks.stack(id);s.setCount(count);return s;}
-    private static ItemStack pumpkins(int count){ItemStack s=new ItemStack(Blocks.CARVED_PUMPKIN,count);s.setTag(item(120,1).getTag().copy());return s;}
+    private static ItemStack pumpkins(int count){ItemStack s=new ItemStack(Blocks.CARVED_PUMPKIN,count);FixtureStackData.setCustom(s,FixtureStackData.custom(item(120,1)));return s;}
     private static void fill(ServerPlayer p){for(int i=0;i<36;i++)p.getInventory().items.set(i,item(100+i,64));}
     private static void fill(EntityLootableBody b){for(int i=0;i<48;i++)b.setItem(i,item(i,i<6?1:64));b.addItem(item(70,31));}
     private static void packet(ServerPlayer p,int slot,int button,ClickType type,ItemStack predicted) throws Exception {
@@ -243,9 +243,9 @@ final class ContainerInteractionChecks {
         // native broadcasts must repair them. Real clients cover normal prediction.
         ServerboundContainerClickPacket outgoing=new ServerboundContainerClickPacket(
                 p.containerMenu.containerId,stateId,slot,button,type,p.containerMenu.getCarried().copy(),changed);
-        FriendlyByteBuf wire=new FriendlyByteBuf(Unpooled.buffer());
+        var wire=new net.minecraft.network.RegistryFriendlyByteBuf(Unpooled.buffer(),p.registryAccess());
         try {
-            outgoing.write(wire);ServerboundContainerClickPacket decoded=new ServerboundContainerClickPacket(wire);
+            ServerboundContainerClickPacket.STREAM_CODEC.encode(wire,outgoing);ServerboundContainerClickPacket decoded=ServerboundContainerClickPacket.STREAM_CODEC.decode(wire);
             RuntimeChecks.require(!wire.isReadable(),"Native menu packet left undecoded fields");
             p.connection.handleContainerClick(decoded);
         } finally {wire.release();}
@@ -260,8 +260,8 @@ final class ContainerInteractionChecks {
     private static void close(ServerPlayer p) throws Exception {
         FriendlyByteBuf wire=new FriendlyByteBuf(Unpooled.buffer());
         try {
-            new ServerboundContainerClosePacket(p.containerMenu.containerId).write(wire);
-            p.connection.handleContainerClose(new ServerboundContainerClosePacket(wire));
+            ServerboundContainerClosePacket.STREAM_CODEC.encode(wire,new ServerboundContainerClosePacket(p.containerMenu.containerId));
+            p.connection.handleContainerClose(ServerboundContainerClosePacket.STREAM_CODEC.decode(wire));
             RuntimeChecks.require(!wire.isReadable(),"Native close packet left undecoded fields");
         } finally {wire.release();}
     }
@@ -273,19 +273,25 @@ final class ContainerInteractionChecks {
     private static void equal(ItemStack actual,ItemStack expected,String reason){RuntimeChecks.require(RuntimeChecks.sameStack(actual == null ? ItemStack.EMPTY : actual,expected == null ? ItemStack.EMPTY : expected),reason);}
     private static CompoundTag data(EntityLootableBody b){CompoundTag n=new CompoundTag();b.addAdditionalSaveData(n);return n;}
     private static void add(Map<String,Integer> all,ItemStack s){
-        if((s == null || s.isEmpty()) || s.getCount()<=0)return;CompoundTag n=s.save(new CompoundTag());n.remove("Count");
+        if((s == null || s.isEmpty()) || s.getCount()<=0)return;CompoundTag n=FixtureStackData.save(s);n.remove("count");
         String key=n.toString();all.put(key,all.getOrDefault(key,0)+s.getCount());
     }
     private static Map<String,Integer> total(EntityLootableBody b,ServerPlayer... players){
         Map<String,Integer> all=new TreeMap<>();
         for(int i=0;i<48;i++)add(all,b.getItem(i));ListTag aux=data(b).getList("Aux",10);
-        for(int i=0;i<aux.size();i++)add(all,ItemStack.of(aux.getCompound(i)));
+        for(int i=0;i<aux.size();i++)add(all,FixtureStackData.load(aux.getCompound(i)));
         for(ServerPlayer p:players){for(int i=0;i<p.getInventory().getContainerSize();i++)add(all,p.getInventory().getItem(i));add(all,p.containerMenu.getCarried());for(ItemEntity e:p.captureDrops()==null?java.util.Collections.<ItemEntity>emptyList():p.captureDrops())add(all,e.getItem());}
-        for(Entity e:FixtureApi.entities(world))if(e instanceof ItemEntity && !e.isRemoved())add(all,((ItemEntity)e).getItem());
+        for(Entity e:FixtureApi.entities(world,6,6))if(e instanceof ItemEntity && !e.isRemoved())add(all,((ItemEntity)e).getItem());
         return all;
     }
     private static void conserved(Map<String,Integer> expected,EntityLootableBody b,ServerPlayer... players){
-        RuntimeChecks.require(expected.equals(total(b,players)),"Item count/type/damage/custom NBT lost or duplicated");
+        Map<String,Integer> actual=total(b,players);
+        if(!expected.equals(actual)) {
+            Map<String,Integer> delta=new TreeMap<>(actual);
+            expected.forEach((item,count)->delta.merge(item,-count,Integer::sum));
+            delta.values().removeIf(count->count==0);
+            throw new AssertionError("Item count/type/damage/custom NBT lost or duplicated: "+delta);
+        }
         CompoundTag before=data(b),immutable=before.copy();EntityLootableBody copy=new EntityLootableBody(world);copy.readAdditionalSaveData(before);
         RuntimeChecks.require(Objects.equals(before.get("Equipment"),data(copy).get("Equipment")) && Objects.equals(before.get("Aux"),data(copy).get("Aux")),"Post-interaction NBT round trip changed inventory");
         RuntimeChecks.require(before.equals(immutable),"Post-interaction reader mutated saved input");
@@ -358,14 +364,14 @@ final class ContainerInteractionChecks {
         RejectedDrops reject=new RejectedDrops();reject.join=rejectJoin;reject.toss=rejectToss;MinecraftForge.EVENT_BUS.register(reject);
         try{click(p,0,0,ClickType.SWAP);}finally{MinecraftForge.EVENT_BUS.unregister(reject);}
         equal(b.getItem(0),pumpkins(1),"Displacement changed normal incoming swap");equal(p.getInventory().items.get(0),pumpkins(63),"Displacement changed hotbar remainder");conserved(before,b,p);
-        if(!rejectJoin && !rejectToss)RuntimeChecks.require(FixtureApi.entities(world).stream().anyMatch(e->e instanceof ItemEntity && !e.isRemoved()),"Successful displacement no longer drops normally");
+        if(!rejectJoin && !rejectToss)RuntimeChecks.require(FixtureApi.entities(world,6,6).stream().anyMatch(e->e instanceof ItemEntity && !e.isRemoved()),"Successful displacement no longer drops normally");
     }
     private static void closeCursor(boolean rejected,boolean full) throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();if(full){fill(b);fill(p);}open(p,b);p.containerMenu.setCarried(item(120,17));Map<String,Integer> before=total(b,p);
         RejectedDrops reject=new RejectedDrops();reject.join=rejected;MinecraftForge.EVENT_BUS.register(reject);
         try{close(p);}finally{MinecraftForge.EVENT_BUS.unregister(reject);}
         equal(p.containerMenu.getCarried(),null,"Closing left a nonsaved cursor stack");conserved(before,b,p);
-        if(!rejected)RuntimeChecks.require(FixtureApi.entities(world).stream().anyMatch(e->e instanceof ItemEntity && !e.isRemoved()),"Cursor close no longer performs normal accepted drop");
+        if(!rejected)RuntimeChecks.require(FixtureApi.entities(world,6,6).stream().anyMatch(e->e instanceof ItemEntity && !e.isRemoved()),"Cursor close no longer performs normal accepted drop");
     }
     private static void capturedCursor() throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();open(p,b);p.containerMenu.setCarried(item(120,17));
@@ -425,7 +431,7 @@ final class ContainerInteractionChecks {
     private static final class RecordingConnection extends ServerGamePacketListenerImpl {
         final Map<Integer,ItemStack> slots=new HashMap<>();int resyncs,lastContentStateId=-1;
         ItemStack carried=ItemStack.EMPTY;
-        RecordingConnection(ServerPlayer p){super(server,new Connection(PacketFlow.SERVERBOUND),p);}
+        RecordingConnection(ServerPlayer p){super(ContainerInteractionChecks.server,new Connection(PacketFlow.SERVERBOUND),p,net.minecraft.server.network.CommonListenerCookie.createInitial(p.getGameProfile(),false));}
         @Override public void send(Packet<?> packet){
             NativeMenuObservation observed=NativeMenuObservation.decode(packet);if(observed==null)return;
             if(observed.content) {

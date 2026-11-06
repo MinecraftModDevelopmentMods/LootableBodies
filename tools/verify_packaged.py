@@ -1,4 +1,4 @@
-"""Verify the exact production jar in disposable native Forge 45 servers."""
+"""Verify the exact production jar in disposable native Forge 50 servers."""
 import argparse
 import json
 from pathlib import Path
@@ -22,7 +22,7 @@ def main():
     parser.add_argument('--flat-header-sha256',required=True)
     args=parser.parse_args();project=Path(__file__).resolve().parents[1]
     main_jar=project/'build/libs'/MAIN
-    probe=project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar'
+    probe=project/'build/integration-test-mod/lootablebodies-build-tests.jar'
     output=args.output.resolve();output.mkdir(parents=True,exist_ok=False)
     distribution=args.forge_home.resolve()
     fresh = output / "candidate-fresh"

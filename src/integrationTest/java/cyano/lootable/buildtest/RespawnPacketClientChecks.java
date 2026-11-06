@@ -73,16 +73,14 @@ final class RespawnPacketClientChecks {
                 profileWorld=mc.level;
                 // IPacket tests use cached synthetic profiles, never real accounts or
                 // live profile-service availability. The local_texture default stays false.
-                GameProfileCache fixtureCache=new GameProfileCache(null,new File(mc.gameDirectory,"fixture-usercache.json")) {
-                    @Override public Optional<GameProfile> get(String name) {
-                        RuntimeChecks.require(name.matches("Container[AB]"),"Unexpected packet fixture profile");
-                        UUID id=UUID.nameUUIDFromBytes(("OfflinePlayer:"+name).getBytes(StandardCharsets.UTF_8));
-                        GameProfile p=new GameProfile(id,name);
-                        String texture="{\"timestamp\":0,\"profileId\":\""+id.toString().replace("-","")+"\",\"profileName\":\""+name+"\",\"textures\":{}}";
-                        p.getProperties().put("textures",new Property("textures",Base64.getEncoder().encodeToString(texture.getBytes(StandardCharsets.UTF_8))));return Optional.of(p);
-                    }
-                };
-                fixtureCache.setExecutor(mc::execute);SkullBlockEntity.profileCache=fixtureCache;
+                FixtureProfileCache.install(name->{
+                    RuntimeChecks.require(name.matches("Container[AB]"),"Unexpected offline fixture profile");
+                    UUID id=UUID.nameUUIDFromBytes(("OfflinePlayer:"+name).getBytes(StandardCharsets.UTF_8));
+                    var profile=new com.mojang.authlib.GameProfile(id,name);
+                    String texture="{\"timestamp\":0,\"profileId\":\""+id.toString().replace("-","")+"\",\"profileName\":\""+name+"\",\"textures\":{}}";
+                    profile.getProperties().put("textures",new com.mojang.authlib.properties.Property("textures",Base64.getEncoder().encodeToString(texture.getBytes(StandardCharsets.UTF_8))));
+                    return java.util.concurrent.CompletableFuture.completedFuture(java.util.Optional.of(profile));
+                });
             }
             return;
         }

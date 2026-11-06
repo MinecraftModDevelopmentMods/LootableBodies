@@ -1,9 +1,10 @@
 package cyano.lootable.buildtest;
 
 import java.util.List;
-import java.util.ArrayList;
 import io.netty.buffer.Unpooled;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundContainerSetContentPacket;
 import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
@@ -19,24 +20,29 @@ public final class NativeMenuObservation {
         this.content=content;this.containerId=containerId;this.stateId=stateId;this.slot=slot;this.items=items;this.carried=carried;this.item=item;
     }
     public static NativeMenuObservation decode(Packet<?> packet) {
-        boolean content=packet instanceof ClientboundContainerSetContentPacket;
-        if(!content && !(packet instanceof ClientboundContainerSetSlotPacket))return null;
-        FriendlyByteBuf wire=new FriendlyByteBuf(Unpooled.buffer());
+        if(!(packet instanceof ClientboundContainerSetContentPacket)
+                && !(packet instanceof ClientboundContainerSetSlotPacket))return null;
+        var registries=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        var wire=new RegistryFriendlyByteBuf(Unpooled.buffer(),registries);
         try {
-            // Receiving-side getters can be stripped from a dedicated build.
-            // Serialize independently instead of touching live packet state.
-            packet.write(wire);
-            int window=content?wire.readUnsignedByte():wire.readByte();int state=wire.readVarInt();
             NativeMenuObservation result;
-            if(content) {
-                int count=wire.readVarInt();List<ItemStack> items=new ArrayList<>();
-                if(count<0 || count>4096)throw new IllegalStateException("Unexpected native menu slot count");
-                for(int index=0;index<count;index++)items.add(wire.readItem());
-                result=new NativeMenuObservation(true,window,state,-1,items,wire.readItem(),ItemStack.EMPTY);
-            } else result=new NativeMenuObservation(false,window,state,wire.readShort(),java.util.Collections.emptyList(),ItemStack.EMPTY,wire.readItem());
+            if(packet instanceof ClientboundContainerSetContentPacket content) {
+                ClientboundContainerSetContentPacket.STREAM_CODEC.encode(wire,content);
+                var decoded=ClientboundContainerSetContentPacket.STREAM_CODEC.decode(wire);
+                result=new NativeMenuObservation(true,decoded.getContainerId(),decoded.getStateId(),-1,
+                        List.copyOf(decoded.getItems()),decoded.getCarriedItem(),ItemStack.EMPTY);
+            } else {
+                ClientboundContainerSetSlotPacket.STREAM_CODEC.encode(wire,(ClientboundContainerSetSlotPacket)packet);
+                var decoded=ClientboundContainerSetSlotPacket.STREAM_CODEC.decode(wire);
+                result=new NativeMenuObservation(false,decoded.getContainerId(),decoded.getStateId(),
+                        decoded.getSlot(),List.of(),ItemStack.EMPTY,decoded.getItem());
+            }
             if(wire.isReadable())throw new IllegalStateException("Unexpected trailing native menu fields");
             return result;
-        } catch(RuntimeException invalid) {throw new AssertionError("Native menu packet serialization failed",invalid);}
-        finally {wire.release();}
+        } catch(RuntimeException invalid) {
+            throw new AssertionError("Native menu packet serialization failed",invalid);
+        } finally {
+            wire.release();
+        }
     }
 }

@@ -173,7 +173,7 @@ class UpgradeJournalTest {
     @Test void corruptIndexAbortsPreservation() throws Exception {region("",body(ID));scan();Files.write(world.resolve("data/lootablebodies-upgrade/index.nbt"),new byte[]{0,1,2});assertThrows(IOException.class,()->scan());}
     @Test void readableIndexDamageCannotSilentlyOmitPreservedCorpses() throws Exception {
         region("",body(ID));scan();Path path=world.resolve("data/lootablebodies-upgrade/index.nbt");
-        CompoundTag index=NbtIo.readCompressed(Files.newInputStream(path));
+        CompoundTag index=NbtIo.readCompressed(path,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));
         if(index.contains("Payload",7)) {byte[] payload=index.getByteArray("Payload");payload[payload.length/2]^=1;index.putByteArray("Payload",payload);}
         else index.getList("Regions",10).getCompound(0).put("Snapshots",new ListTag());
         try(OutputStream output=Files.newOutputStream(path)){NbtIo.writeCompressed(index,output);}
@@ -182,7 +182,7 @@ class UpgradeJournalTest {
     @Test void truncatedRegionAbortsBeforeLoading() throws Exception {Path region=region("",body(ID));Files.write(region,new byte[8193]);assertThrows(IOException.class,()->scan());}
     @Test void nativeEmptyRegionPlaceholdersRemainReadOnlyAndAreScannedWhenPopulated()throws Exception {
         Path folder=world.resolve("region");Files.createDirectories(folder);Path file=folder.resolve("r.0.0.mca");
-        try(net.minecraft.world.level.chunk.storage.RegionFile nativeRegion=new net.minecraft.world.level.chunk.storage.RegionFile(file,folder,false)) {
+        try(net.minecraft.world.level.chunk.storage.RegionFile nativeRegion=new net.minecraft.world.level.chunk.storage.RegionFile(new net.minecraft.world.level.chunk.storage.RegionStorageInfo("fixture",net.minecraft.world.level.Level.OVERWORLD,"region"),file,folder,false)) {
             assertNull(nativeRegion.getChunkDataInputStream(new net.minecraft.world.level.ChunkPos(0,0)));
         }
         assertEquals(0,Files.size(file));assertNull(original(scan(),ID,0,0));assertEquals(0,Files.size(file));

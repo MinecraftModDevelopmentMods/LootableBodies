@@ -10,7 +10,7 @@ def main():
     p.add_argument('--flat-header',type=Path,required=True);p.add_argument('--flat-header-sha256',required=True)
     p.add_argument('--baseline-jar',type=Path);p.add_argument('--output',type=Path,required=True);a=p.parse_args()
     project=Path(__file__).resolve().parents[1];root=a.output.resolve();root.mkdir(parents=True,exist_ok=False)
-    java=a.java.resolve();distribution=a.forge_home.resolve();main=project/'build/libs'/MAIN;baseline=a.baseline_jar.resolve() if a.baseline_jar else main;probe=project/'build/integration-test-mod/lootablebodies-build-tests-reobf.jar'
+    java=a.java.resolve();distribution=a.forge_home.resolve();main=project/'build/libs'/MAIN;baseline=a.baseline_jar.resolve() if a.baseline_jar else main;probe=project/'build/integration-test-mod/lootablebodies-build-tests.jar'
     original=digest(baseline);candidate=digest(main)
     seed=root/'sealed-seed';prepare(seed,distribution,baseline,probe)
     seed_flat_fixture(seed,a.flat_header,a.flat_header_sha256)

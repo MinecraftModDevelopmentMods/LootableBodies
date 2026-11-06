@@ -17,8 +17,8 @@ class LoginReadGuardTest {
     public static final class TestChannel extends NioSocketChannel {
         public int readInterest() { return selectionKey().interestOps() & java.nio.channels.SelectionKey.OP_READ; }
     }
-    private static void guard(Channel channel) throws Exception {
-        try {Class.forName("cyano.lootable.network.ClientLoginReadGuard").getMethod("resumeReads",Channel.class).invoke(null,channel);}
+    private static void guard(Channel channel,java.util.function.Supplier<ConnectionProtocol> state) throws Exception {
+        try {Class.forName("cyano.lootable.network.ClientLoginReadGuard").getMethod("resumeReads",Channel.class,java.util.function.Supplier.class).invoke(null,channel,state);}
         catch(ClassNotFoundException beforeImplementation) { }
     }
     private static final class Connection implements AutoCloseable {
@@ -28,6 +28,7 @@ class LoginReadGuardTest {
         final CompletableFuture<byte[]> received=new CompletableFuture<>();
         final Socket peer;
         final TestChannel channel;
+        final java.util.concurrent.atomic.AtomicReference<ConnectionProtocol> protocol=new java.util.concurrent.atomic.AtomicReference<>(ConnectionProtocol.LOGIN);
         Connection()throws Exception {
             Future<Socket> accepted=acceptor.submit(server::accept);
             channel=(TestChannel)new Bootstrap().group(loop).channel(TestChannel.class)
@@ -43,7 +44,6 @@ class LoginReadGuardTest {
                     }
                 }).connect(server.getLocalSocketAddress()).sync().channel();
             peer=accepted.get(5,TimeUnit.SECONDS);
-            channel.attr(net.minecraft.network.Connection.ATTRIBUTE_PROTOCOL).set(ConnectionProtocol.LOGIN);
             drain();
         }
         void drain()throws Exception {channel.eventLoop().submit(()->{}).get(5,TimeUnit.SECONDS);}
@@ -71,7 +71,7 @@ class LoginReadGuardTest {
     }
     @Test void stalledLoginRestoresReadInterestAndReceivesTheOriginalBytes()throws Exception {
         try(Connection c=new Connection()) {
-            c.stall();guard(c.channel);c.drain();
+            c.stall();guard(c.channel,c.protocol::get);c.drain();
             assertNotEquals(0,c.channel.readInterest(),"Auto-read login channel has no selector read interest");
             byte[] message={1,2,3,4,5,6,7,8};c.peer.getOutputStream().write(message);c.peer.getOutputStream().flush();
             assertArrayEquals(message,c.received.get(5,TimeUnit.SECONDS));
@@ -79,21 +79,21 @@ class LoginReadGuardTest {
     }
     @Test void deliberateReadPauseIsPreserved()throws Exception {
         try(Connection c=new Connection()) {
-            c.channel.config().setAutoRead(false);c.drain();guard(c.channel);c.drain();
+            c.channel.config().setAutoRead(false);c.drain();guard(c.channel,c.protocol::get);c.drain();
             assertFalse(c.channel.config().isAutoRead());assertEquals(0,c.channel.readInterest());
         }
     }
     @Test void otherProtocolStatesAreNotChanged()throws Exception {
         for(ConnectionProtocol state:new ConnectionProtocol[]{ConnectionProtocol.HANDSHAKING,ConnectionProtocol.STATUS,ConnectionProtocol.PLAY}) {
             try(Connection c=new Connection()) {
-                c.stall();c.channel.attr(net.minecraft.network.Connection.ATTRIBUTE_PROTOCOL).set(state);guard(c.channel);c.drain();
-                assertEquals(0,c.channel.readInterest());assertEquals(state,c.channel.attr(net.minecraft.network.Connection.ATTRIBUTE_PROTOCOL).get());
+                c.stall();c.protocol.set(state);guard(c.channel,c.protocol::get);c.drain();
+                assertEquals(0,c.channel.readInterest());assertEquals(state,c.protocol.get());
             }
         }
     }
-    @Test void noConnectionIsHarmless()throws Exception {guard(null);}
+    @Test void noConnectionIsHarmless()throws Exception {guard(null,()->ConnectionProtocol.LOGIN);}
     @Test void closedConnectionIsHarmless()throws Exception {
-        try(Connection c=new Connection()) {c.channel.close().sync();guard(c.channel);assertFalse(c.channel.isActive());}
+        try(Connection c=new Connection()) {c.channel.close().sync();guard(c.channel,c.protocol::get);assertFalse(c.channel.isActive());}
     }
     @Test void aPauseQueuedBeforeTheRepairExecutesIsPreserved()throws Exception {
         try(Connection c=new Connection()) {
@@ -103,7 +103,7 @@ class LoginReadGuardTest {
                 try {if(!resume.await(5,TimeUnit.SECONDS))throw new AssertionError("Fixture synchronization timed out");}
                 catch(InterruptedException failure){throw new AssertionError(failure);}
             });
-            try {assertTrue(entered.await(5,TimeUnit.SECONDS));guard(c.channel);c.channel.config().setAutoRead(false);}
+            try {assertTrue(entered.await(5,TimeUnit.SECONDS));guard(c.channel,c.protocol::get);c.channel.config().setAutoRead(false);}
             finally {resume.countDown();}
             c.drain();assertFalse(c.channel.config().isAutoRead());assertEquals(0,c.channel.readInterest());
         }
@@ -116,9 +116,9 @@ class LoginReadGuardTest {
                 try {if(!resume.await(5,TimeUnit.SECONDS))throw new AssertionError("Fixture synchronization timed out");}
                 catch(InterruptedException failure){throw new AssertionError(failure);}
             });
-            try {assertTrue(entered.await(5,TimeUnit.SECONDS));guard(c.channel);c.channel.attr(net.minecraft.network.Connection.ATTRIBUTE_PROTOCOL).set(ConnectionProtocol.PLAY);}
+            try {assertTrue(entered.await(5,TimeUnit.SECONDS));guard(c.channel,c.protocol::get);c.protocol.set(ConnectionProtocol.PLAY);}
             finally {resume.countDown();}
-            c.drain();assertEquals(0,c.channel.readInterest());assertEquals(ConnectionProtocol.PLAY,c.channel.attr(net.minecraft.network.Connection.ATTRIBUTE_PROTOCOL).get());
+            c.drain();assertEquals(0,c.channel.readInterest());assertEquals(ConnectionProtocol.PLAY,c.protocol.get());
         }
     }
 }

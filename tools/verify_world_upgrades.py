@@ -2,11 +2,13 @@
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 import shutil
 import subprocess
 import gzip
 import struct
+from uuid import UUID
 from audit_runtime_logs import audit, FORGE_UPGRADE_RENAME
 from release_identity import MAIN_JAR
 from nbt_regions import Tag, decode, encode, read_region, write_disposable_region
@@ -490,10 +492,11 @@ PHASES = ['upgrade-near', 'upgrade-near-reload', 'upgrade-near-recover', 'upgrad
           'upgrade-far', 'upgrade-far-reload', 'upgrade-late', 'upgrade-return', 'upgrade-final', 'upgrade-final-reload']
 
 
-def run_upgrade(java, home, phase):
+def run_upgrade(java, home, phase, writer_inventory=None):
     from native_runtime import run_server, HISTORICAL_JVM_ARGS
     logging=Path(__file__).resolve().parents[1]/'src/integrationTest/resources/log4j2.xml'
-    run_server(java,home,phase,extra=[*HISTORICAL_JVM_ARGS,'-Dlog4j.configurationFile='+logging.as_uri()],
+    oracle = ['-Dlootablebodies.testWriterInventory='+writer_inventory] if writer_inventory else []
+    run_server(java,home,phase,extra=[*HISTORICAL_JVM_ARGS,*oracle,'-Dlog4j.configurationFile='+logging.as_uri()],
                message='LOOTABLE_BODIES_WORLD_UPGRADE_PASS phase='+phase)
 
 
@@ -574,6 +577,63 @@ def preserve_historical_markers(home):
     return [marker.name for marker in markers]
 
 
+def saved_uuid(body):
+    uid = body.get('UUID')
+    if uid is not None:
+        if uid.kind != 11 or len(uid.value) != 16:
+            raise ValueError('Invalid fixture UUID array')
+        return UUID(bytes=uid.value)
+    most, least = body['UUIDMost'], body['UUIDLeast']
+    if most.kind != 4 or least.kind != 4:
+        raise ValueError('Invalid legacy fixture UUID')
+    return UUID(bytes=struct.pack('>qq', most.value, least.value))
+
+
+def bridge_writer_inventory(source):
+    """Read each fixture corpse from the sealed source before stamp mutations."""
+    _, manifest = decode(gzip.decompress((source/'upgrade-fixtures.nbt').read_bytes()))
+    regions = {}
+    rows = {}
+    for row in manifest.value['Bodies'].value[1]:
+        fixture = row.value['Body'].value
+        uid = saved_uuid(fixture)
+        dimension = {0:'', -1:'DIM-1', 1:'DIM1'}[row.value['Dimension'].value]
+        pos = fixture['Pos'].value[1]
+        x, z = (math.floor(struct.unpack('>d', pos[i].value)[0]) >> 4 for i in (0, 2))
+        index = (x & 31) + (z & 31)*32
+        matches = []
+        for directory in ('region', 'entities'):
+            path = source/dimension/directory/f'r.{x >> 5}.{z >> 5}.mca'
+            if not path.is_file():
+                continue
+            if path not in regions:
+                regions[path] = read_region(path)
+            chunk = regions[path].get(index)
+            if chunk is None:
+                continue
+            raw = chunk['root'].value
+            payload = raw.get('Level', chunk['root']).value
+            entities = payload.get('Entities', payload.get('entities', Tag(9, (10, []))))
+            if entities.kind != 9 or entities.value[0] not in (0, 10):
+                raise ValueError('Malformed sealed bridge entity list: '+str(path))
+            for entity in entities.value[1]:
+                body = entity.value
+                if body.get('id') not in (Tag(8, 'lootablebodies:corpse'), Tag(8, 'lootablebodies.Corpse')):
+                    continue
+                if saved_uuid(body) == uid:
+                    matches.append((body, raw.get('DataVersion')))
+        if len(matches) != 1 or str(uid) in rows:
+            raise ValueError('Missing or ambiguous sealed bridge corpse: '+str(uid))
+        body, version = matches[0]
+        if version is None or version.kind != 3 or version.value not in (512,922,1343,1631,1976,2230,2586,2730,2975,3337):
+            raise ValueError('Missing authentic bridge writer version: '+str(uid))
+        inventory = {key:body[key] for key in ('Equipment','Aux','LootableBodiesUnresolved') if key in body}
+        rows[str(uid)] = Tag(10, {'DataVersion':version,'Inventory':Tag(10,inventory)})
+    if len(rows) != 9:
+        raise ValueError('Expected all nine sealed bridge corpse inventories')
+    return gzip.compress(encode('',Tag(10,rows)),mtime=0)
+
+
 def verify(args, project):
     prepared=getattr(args,'prepared_sources',None)
     if not args.seeds and not prepared:
@@ -584,7 +644,7 @@ def verify(args, project):
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     candidate = project / 'build/libs' / MAIN_JAR
-    probe = project / 'build/integration-test-mod/lootablebodies-build-tests-reobf.jar'
+    probe = project / 'build/integration-test-mod/lootablebodies-build-tests.jar'
     candidate_hash = digest(candidate)
     probe_hash = digest(probe)
     sources = {};prepared_proof=None
@@ -611,6 +671,7 @@ def verify(args, project):
     report_lock=Lock()
     def run_origin(origin):
         source,details=sources[origin]
+        writer_inventory = bridge_writer_inventory(source) if origin.startswith('via') else None
         for variant in args.variants:
             name = origin + '-' + variant
             home = root / name
@@ -618,6 +679,12 @@ def verify(args, project):
             prepare_server(home,args.forge_home.resolve(),candidate,probe)
             shutil.copytree(source, home / 'world')
             world = home / 'world'
+            inventory_file = world/'upgrade-writer-inventory.nbt'
+            inventory_hash = None
+            if writer_inventory is not None:
+                with inventory_file.open('xb') as stream:
+                    stream.write(writer_inventory)
+                inventory_hash = digest(inventory_file)
             historical_markers=preserve_historical_markers(home)
             player_files = list((world / 'playerdata').glob('*.dat'))
             if len(player_files) != 1:
@@ -630,7 +697,12 @@ def verify(args, project):
                 raise RuntimeError('Missing distant region fixtures')
             phases = []
             for phase in PHASES:
-                run_upgrade(args.java.resolve(), home, phase)
+                if inventory_hash is None:
+                    run_upgrade(args.java.resolve(), home, phase)
+                else:
+                    run_upgrade(args.java.resolve(), home, phase, inventory_hash)
+                    if digest(inventory_file) != inventory_hash:
+                        raise RuntimeError('Sealed bridge inventory oracle changed')
                 wave = 0 if phase.startswith('upgrade-near') else 1 if phase.startswith('upgrade-far') else 2 if phase == 'upgrade-late' else -1
                 from native120_persistence import count_persisted
                 persisted = count_persisted(world,wave)
@@ -648,6 +720,8 @@ def verify(args, project):
                     report['cases'][name] = {'phases': list(phases), 'distant_regions': distant, 'stamp_mutations': changes,
                                             'source_unchanged': True, 'origin_jar_sha256': details['jar_sha256'],
                                             'preserved_historical_markers':historical_markers}
+                    if inventory_hash is not None:
+                        report['cases'][name]['writer_inventory_sha256'] = inventory_hash
                     (root / 'result.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
                 print('WORLD_UPGRADE_PASS', name, phase, flush=True)
     run_origins(args.origins,run_origin,workers=getattr(args,'workers',1))

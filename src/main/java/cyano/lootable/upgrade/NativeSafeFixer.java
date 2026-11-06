@@ -10,7 +10,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.util.datafix.fixes.References;
-import net.minecraft.network.chat.Component;
+import com.google.gson.JsonPrimitive;
 
 /** Shields owned payloads while vanilla converts its own chunk and item schemas. */
 final class NativeSafeFixer implements DataFixer {
@@ -252,7 +252,7 @@ final class NativeSafeFixer implements DataFixer {
             }catch(IOException damaged){throw new IllegalStateException("Corpse preservation could not be verified",damaged);}
         }
         CompoundTag context=new CompoundTag();int marker=entity.getInt(UpgradePreservation.VERSION);
-        context.putInt("DataVersion",entity.getString("id").equals("lootablebodies.Corpse")?512:marker==1?922:marker==2?1343:marker==3?1631:marker==4?1976:marker==5?2230:marker==6?2586:marker==7?2730:marker==8?2975:marker==9?3337:version);return context;
+        context.putInt("DataVersion",entity.getString("id").equals("lootablebodies.Corpse")?512:marker==1?922:marker==2?1343:marker==3?1631:marker==4?1976:marker==5?2230:marker==6?2586:marker==7?2730:marker==8?2975:marker==9?3337:marker==10?3465:version);return context;
     }
     static CompoundTag stageCorpse(CompoundTag raw,CompoundTag context) {
         if(raw.contains(UpgradePreservation.VERSION,3) && raw.getInt(UpgradePreservation.VERSION)>UpgradePreservation.DATA_VERSION)throw new IllegalStateException("This corpse was saved by a newer Lootable Bodies format");
@@ -282,7 +282,7 @@ final class NativeSafeFixer implements DataFixer {
         // Anvil may save this compound before an entity reader runs.
         safe.remove("LootableBodiesUpgradePayload");safe.remove("LootableBodiesInventorySource");
         if(safe.contains("CustomName",8) && context.getInt("DataVersion")<1514)
-            safe.putString("CustomName",Component.Serializer.toJson(Component.literal(safe.getString("CustomName"))));
+            safe.putString("CustomName",new JsonPrimitive(safe.getString("CustomName")).toString());
         return safe;
     }
     private static boolean list(Tag nbt){return nbt instanceof ListTag && (((ListTag)nbt).isEmpty() || ((ListTag)nbt).getElementType()==10);}
@@ -316,7 +316,16 @@ final class NativeSafeFixer implements DataFixer {
                 String id=nbt.getString(tokens.key);Protected original=tokens.values.get(id);if(original==null)throw new IllegalStateException("Unknown preservation token");
                 tokens.restored.merge(id,1,Integer::sum);
                 if(!original.egg)return original.data.copy();
-                nbt.remove(tokens.key);CompoundTag tag=nbt.getCompound("tag");tag.put("EntityTag",original.data.copy());nbt.put("tag",tag);
+                nbt.remove(tokens.key);
+                if(nbt.contains("count",99)) {
+                    CompoundTag components=nbt.getCompound("components");
+                    components.put("minecraft:entity_data",original.data.copy());
+                    nbt.put("components",components);
+                } else {
+                    CompoundTag tag=nbt.getCompound("tag");
+                    tag.put("EntityTag",original.data.copy());
+                    nbt.put("tag",tag);
+                }
             }
             for(String key:new ArrayList<>(nbt.getAllKeys()))nbt.put(key,restore(nbt.get(key),tokens));return nbt;
         }

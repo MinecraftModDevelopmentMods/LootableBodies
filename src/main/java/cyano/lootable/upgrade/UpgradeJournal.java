@@ -27,8 +27,11 @@ public final class UpgradeJournal {
     private final Map<UUID,Path> active=new HashMap<>();
     private CompoundTag worldContext=new CompoundTag();
 
-    private UpgradeJournal(Path world) throws IOException {
+    private final Path levelHeader;
+
+    private UpgradeJournal(Path world,Path levelHeader) throws IOException {
         this.world=world.toRealPath();
+        this.levelHeader=levelHeader;
         directory=this.world.resolve("data/lootablebodies-upgrade");
         snapshots=directory.resolve("snapshots");
         chunks=directory.resolve("chunks");
@@ -36,8 +39,13 @@ public final class UpgradeJournal {
 
     /** Complete preservation before Minecraft opens any existing chunk. */
     public static UpgradeJournal scan(Path world) throws IOException {
+        Path header=world.resolve("level.dat");
+        return scan(world,Files.isRegularFile(header)?header:world.resolve("level.dat_old"));
+    }
+
+    static UpgradeJournal scan(Path world,Path levelHeader)throws IOException {
         Files.createDirectories(world);
-        UpgradeJournal journal=new UpgradeJournal(world);
+        UpgradeJournal journal=new UpgradeJournal(world,levelHeader);
         journal.inspect();
         for(Path original:journal.active.values()) {
             CompoundTag corpse=journal.readSnapshot(original).getCompound("Entity");
@@ -68,7 +76,7 @@ public final class UpgradeJournal {
             InputStream stream=snapshot.getByte("OriginalCompression")==1?new GZIPInputStream(new ByteArrayInputStream(bytes)):
                     new InflaterInputStream(new ByteArrayInputStream(bytes));
             CompoundTag root;
-            try(DataInputStream input=new DataInputStream(stream)){root=NbtIo.read(input,new NbtAccounter(MAX_NBT));}
+            try(DataInputStream input=new DataInputStream(stream)){root=NbtIo.read(input,NbtAccounter.create(MAX_NBT));}
             try {
                 NativeNbt.update(fixer,net.minecraft.util.datafix.fixes.References.ENTITY_CHUNK,root,
                         root.contains("DataVersion",3)?root.getInt("DataVersion"):-1,UpgradePreservation.MINECRAFT_VERSION);
@@ -179,7 +187,7 @@ public final class UpgradeJournal {
             throw new IOException("Lootable Bodies upgrade index checksum mismatch");
         CompoundTag nbt;
         try(DataInputStream input=new DataInputStream(new GZIPInputStream(new ByteArrayInputStream(payload)))) {
-            nbt=NbtIo.read(input,new NbtAccounter(MAX_NBT));
+            nbt=NbtIo.read(input,NbtAccounter.create(MAX_NBT));
         }
         if(!nbt.contains("Format",3) || nbt.getInt("Format")!=FORMAT || !compoundList(nbt.get("Regions")))
             throw new IOException("Invalid Lootable Bodies upgrade index");
@@ -237,7 +245,7 @@ public final class UpgradeJournal {
                         compression==2 ? new InflaterInputStream(new ByteArrayInputStream(payload)) : null;
                 if(stream==null) throw new IOException("Unknown chunk compression: "+relative);
                 CompoundTag chunk;
-                try(DataInputStream nbt=new DataInputStream(stream)) { chunk=NbtIo.read(nbt,new NbtAccounter(MAX_NBT)); }
+                try(DataInputStream nbt=new DataInputStream(stream)) { chunk=NbtIo.read(nbt,NbtAccounter.create(MAX_NBT)); }
                 catch(RuntimeException damaged) { throw new IOException("Unreadable chunk in "+relative,damaged); }
                 int x=(int)rx*32+(i%32),z=(int)rz*32+(i/32);
                 CompoundTag level;
@@ -275,7 +283,7 @@ public final class UpgradeJournal {
                         if(oldLevel==null) {
                             byte[] originalBytes=Files.readAllBytes(chunks.resolve(savedChunk+".bin"));
                             InputStream originalStream=priorSnapshot.getByte("OriginalCompression")==1?new GZIPInputStream(new ByteArrayInputStream(originalBytes)):new InflaterInputStream(new ByteArrayInputStream(originalBytes));
-                            try(DataInputStream originalInput=new DataInputStream(originalStream)){oldLevel=comparisonPayload(NbtIo.read(originalInput,new NbtAccounter(MAX_NBT)),entityRegion);}
+                            try(DataInputStream originalInput=new DataInputStream(originalStream)){oldLevel=comparisonPayload(NbtIo.read(originalInput,NbtAccounter.create(MAX_NBT)),entityRegion);}
                             priorLevels.put(savedChunk,oldLevel);
                         }
                         // Only the outer version stamp may differ for entity chunks.
@@ -309,9 +317,8 @@ public final class UpgradeJournal {
 
     private CompoundTag readWorldVersions() throws IOException {
         CompoundTag context=new CompoundTag();
-        Path level=world.resolve("level.dat");
-        if(Files.isRegularFile(level)) {
-            CompoundTag root=readCompressed(level),data=root.getCompound("Data");
+        if(Files.isRegularFile(levelHeader)) {
+            CompoundTag root=readCompressed(levelHeader),data=root.getCompound("Data");
             if(data.contains("DataVersion")) context.put("WorldDataVersion",data.get("DataVersion").copy());
             if(data.contains("Version"))context.put("WorldVersion",data.get("Version").copy());
             if(root.contains("FML")) context.put("WorldFML",root.get("FML").copy());
@@ -341,7 +348,8 @@ public final class UpgradeJournal {
         else if(marker==7)version=2730;
         else if(marker==8)version=2975;
         else if(marker==9)version=3337;
-        else if(marker==10)version=UpgradePreservation.MINECRAFT_VERSION;
+        else if(marker==10)version=3465;
+        else if(marker==11)version=UpgradePreservation.MINECRAFT_VERSION;
         if(legacy) {if(version!=512)context.putBoolean("Inferred",true);version=512;}
         if(legacy || (marker>=1 && marker<=UpgradePreservation.DATA_VERSION))
             context.putInt("CorpseWriterDataVersion",version);
@@ -350,7 +358,8 @@ public final class UpgradeJournal {
         for(int i=0;i<mods.size();i++) {
             CompoundTag mod=mods.getCompound(i);if(!mod.getString("ModId").equals("lootablebodies"))continue;
             String release=mod.getString("ModVersion");
-            if(release.endsWith(".120011"))family=UpgradePreservation.MINECRAFT_VERSION;
+            if(release.endsWith(".120061"))family=UpgradePreservation.MINECRAFT_VERSION;
+            else if(release.endsWith(".120011"))family=3465;
             else if(release.endsWith(".119041"))family=3337;
             else if(release.endsWith(".118021"))family=2975;
             else if(release.endsWith(".117011"))family=2730;
@@ -358,7 +367,8 @@ public final class UpgradeJournal {
             else if(release.endsWith(".115021"))family=2230;
             else if(release.endsWith(".114041"))family=1976;
             else if(release.endsWith(".113021"))family=1631;
-            else if(release.endsWith(".112021") || release.equals("2.4.0"))family=1139;
+            else if(release.endsWith(".112021"))family=1139;
+            else if(release.equals("2.4.0"))family=hasOriginal1122Writer(world,mods)?1343:1139;
             else if(release.endsWith(".111021") || release.equals("2.3.0"))family=922;
             else if(release.endsWith(".110021") || release.equals("2.2.0"))family=512;
         }
@@ -423,7 +433,7 @@ public final class UpgradeJournal {
     }
     private static boolean compoundList(Tag value) {return value instanceof ListTag && (((ListTag)value).size()==0 || ((ListTag)value).getElementType()==10);}
     private static CompoundTag readCompressed(Path path) throws IOException {
-        try(DataInputStream input=new DataInputStream(new GZIPInputStream(Files.newInputStream(path)))) {return NbtIo.read(input,new NbtAccounter(MAX_NBT));}
+        try(DataInputStream input=new DataInputStream(new GZIPInputStream(Files.newInputStream(path)))) {return NbtIo.read(input,NbtAccounter.create(MAX_NBT));}
         catch(RuntimeException damaged) {throw new IOException("Unreadable preservation data: "+path.getFileName(),damaged);}
     }
     private static byte[] compressed(CompoundTag nbt) throws IOException {
@@ -448,5 +458,20 @@ public final class UpgradeJournal {
         // A filesystem without atomic moves cannot satisfy the preservation gate.
         if(replace) Files.move(temporary,destination,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
         else Files.move(temporary,destination,StandardCopyOption.ATOMIC_MOVE);
+    }
+
+    private static boolean hasOriginal1122Writer(CompoundTag world,ListTag mods) {
+        // The original 2.4.0 mod version alone cannot identify the native writer.
+        CompoundTag saved=world.getCompound("WorldVersion");
+        if(!saved.contains("Id",3) || saved.getInt("Id")!=1343 || !saved.getString("Name").equals("1.12.2")
+                || !saved.contains("Snapshot",1) || saved.getBoolean("Snapshot"))return false;
+        String minecraft=null;
+        for(int i=0;i<mods.size();i++) {
+            CompoundTag mod=mods.getCompound(i);
+            if(!mod.getString("ModId").equals("minecraft"))continue;
+            if(minecraft!=null)return false;
+            minecraft=mod.getString("ModVersion");
+        }
+        return "1.12.2".equals(minecraft);
     }
 }

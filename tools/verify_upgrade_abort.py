@@ -101,14 +101,15 @@ def allowed_native40_platform_additions(before,after,world,original_config=None)
 
 
 
-def allowed_native47_platform_additions(before,after,world,original_config=None):
-    """Exact Forge47 corrections; no unknown keys or supported choices dropped."""
+def allowed_forge_platform_additions(before,after,world,original_config=None,*,forge):
+    """Exact Forge config corrections; retain all supported choices."""
+    if forge not in (47,50):raise ValueError('Unsupported Forge config target')
     name='serverconfig/forge-server.toml'
     if name not in after:return []
     actual=(world/name).read_bytes()
     if digest(world/name)!=after[name]:return []
     try:
-        defaults=tomllib.loads((Path(__file__).parent/'fixtures/forge47-server-default.toml').read_text())
+        defaults=tomllib.loads((Path(__file__).parent/f'fixtures/forge{forge}-server-default.toml').read_text())
         upgraded=tomllib.loads(actual.decode('utf-8'))
         if name not in before:return [name] if same_typed_values(defaults,upgraded) else []
         if original_config is None or before[name]!=__import__('hashlib').sha256(original_config).hexdigest().upper():return []
@@ -116,12 +117,14 @@ def allowed_native47_platform_additions(before,after,world,original_config=None)
         retired={'removeErroringTileEntities':bool,'logCascadingWorldGeneration':bool,
                  'fixVanillaCascading':bool,'dimensionUnloadQueueDelay':int,'clumpingThreshold':int,
                  'fixAdvancementLoading':bool,'treatEmptyTagsAsAir':bool,'skipEmptyShapelessCheck':bool}
+        if forge==50:retired.update(zombieBaseSummonChance=float,zombieBabyChance=float)
         for key,kind in retired.items():
             if key not in server:continue
             value=server.pop(key)
             if type(value) is not kind:return []
             if key=='dimensionUnloadQueueDelay' and value<0:return []
             if key=='clumpingThreshold' and not 64<=value<=1024:return []
+            if key in ('zombieBaseSummonChance','zombieBabyChance') and not 0<=value<=1:return []
         for key,value in defaults['server'].items():server.setdefault(key,value)
         return [name] if same_typed_values(previous,upgraded) else []
     except (ValueError,KeyError,UnicodeError):return []
@@ -169,9 +172,9 @@ def inject_future_entity_version(world):
     before=digest(path);original=world.parent/'future-entity-original.mca'
     if original.exists():raise ValueError('Future fixture original already exists')
     shutil.copy2(path,original)
-    root['DataVersion']=Tag(3,3466);write_disposable_region(path,chunks)
+    root['DataVersion']=Tag(3,3840);write_disposable_region(path,chunks)
     return {'region':path.relative_to(world).as_posix(),'chunk_index':index,'source_version':2975,
-            'injected_version':3466,'nbt_type':'Int','original_sha256':before,'mutated_sha256':digest(path),
+            'injected_version':3840,'nbt_type':'Int','original_sha256':before,'mutated_sha256':digest(path),
             'original_copy':str(original),'corpse_marker':8}
 
 
@@ -194,7 +197,7 @@ def main():
     args = parser.parse_args()
     project = Path(__file__).resolve().parents[1]
     candidate = project / 'build/libs' / MAIN_JAR
-    probe = project / 'build/integration-test-mod/lootablebodies-build-tests-reobf.jar'
+    probe = project / 'build/integration-test-mod/lootablebodies-build-tests.jar'
     source = args.source_world.resolve()
     sealed = fingerprint(source)
     root = args.output.resolve()
@@ -224,7 +227,7 @@ def main():
             raise RuntimeError('World loading continued after unsafe preservation')
         after = source_files(world)
         raw_after = dict(after)
-        platform_additions = allowed_native47_platform_additions(before, after, world, original_config)
+        platform_additions = allowed_forge_platform_additions(before, after, world, original_config,forge=50)
         lock_updates=allowed_native_session_lock(before,after,world,original_lock)
         for name in platform_additions+lock_updates:
             if name in before: after[name] = before[name]
