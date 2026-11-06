@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "minecraft": "1.20.1",
+  "forge": "47.4.28",
+  "data_version": 3465,
+  "generator": "minecraft:flat",
+  "sha256": "81E5056FCE49638B40F532B819FC82B0EBBFC954BCF4A7E20E3D6538E8FC0645",
+  "source": "Native120FixtureGenerator via the target native codec",
+  "synthetic": true,
+  "historical_writer_proof": false
+}

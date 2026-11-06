@@ -79,34 +79,34 @@ public final class RespawnPacketChecks {
             RuntimeChecks.require(phaseTicks<500,"Corpse missing after accepted respawn case="+index+" phase="+phase);
             if(phase==0 && a!=null&&b!=null&&ack("A",0)&&ack("B",0)) {
                 int kind=index%8;net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> dim=kind==7?net.minecraft.world.level.Level.NETHER:net.minecraft.world.level.Level.OVERWORLD;ServerLevel w=server.getLevel(dim);
-                if(a.level.dimension()!=dim)transfer(a,dim);
-                if(b.level.dimension()!=dim)transfer(b,dim);
+                if(a.level().dimension()!=dim)transfer(a,dim);
+                if(b.level().dimension()!=dim)transfer(b,dim);
                 double x=kind==6?-.4:96.5,z=kind==6?-.4:96.5;
                 FixtureArena.prepare(BlockPos.containing(x,79,z),w::setBlockAndUpdate);
                 FixtureArena.prepare(new BlockPos(160,79,96),w::setBlockAndUpdate);
                 w.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBSPAWNING).set(false,null);w.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);
                 a.setGameMode(GameType.SURVIVAL);b.setGameMode(GameType.SURVIVAL);a.getInventory().clearContent();b.getInventory().clearContent();
-                FixtureApi.spawn(a,new BlockPos(kind==5?160:(int)Math.floor(x),80,(int)Math.floor(z)-3),true,false,a.level.dimension());
-                FixtureApi.spawn(b,new BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),true,false,b.level.dimension());
-                if(kind==7)FixtureApi.spawn(a,new BlockPos(96,80,93),true,false,a.level.dimension());
+                FixtureApi.spawn(a,new BlockPos(kind==5?160:(int)Math.floor(x),80,(int)Math.floor(z)-3),true,false,a.level().dimension());
+                FixtureApi.spawn(b,new BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),true,false,b.level().dimension());
+                if(kind==7)FixtureApi.spawn(a,new BlockPos(96,80,93),true,false,a.level().dimension());
                 a.getInventory().items.set(9,RuntimeChecks.stack(520+index));a.containerMenu.broadcastChanges();
                 if(simultaneous){b.getInventory().items.set(9,RuntimeChecks.stack(620+index));b.containerMenu.broadcastChanges();}
                 a.connection.teleport(x,80,z,0,0);b.connection.teleport(kind==4?160.5:x+2,80,z-2.5,0,25);
                 state(1);
             } else if(phase==1&&ack("A",1)&&ack("B",1)&&phaseTicks>10) {
-                dead=a;Set<Entity> before=new HashSet<>(FixtureApi.entities(a.level));a.kill();body=null;
-                for(Entity ent:FixtureApi.entities(a.level))if(ent instanceof EntityLootableBody&&!before.contains(ent))body=(EntityLootableBody)ent;
+                dead=a;Set<Entity> before=new HashSet<>(FixtureApi.entities(a.level()));a.kill();body=null;
+                for(Entity ent:FixtureApi.entities(a.level()))if(ent instanceof EntityLootableBody&&!before.contains(ent))body=(EntityLootableBody)ent;
                 RuntimeChecks.require(body!=null,"No server death corpse");state(2);
                 if(simultaneous) {
-                    observerDead=b;before=new HashSet<>(FixtureApi.entities(b.level));b.kill();observerBody=null;
-                    for(Entity ent:FixtureApi.entities(b.level))if(ent instanceof EntityLootableBody&&!before.contains(ent))observerBody=(EntityLootableBody)ent;
+                    observerDead=b;before=new HashSet<>(FixtureApi.entities(b.level()));b.kill();observerBody=null;
+                    for(Entity ent:FixtureApi.entities(b.level()))if(ent instanceof EntityLootableBody&&!before.contains(ent))observerBody=(EntityLootableBody)ent;
                     RuntimeChecks.require(observerBody!=null,"No observer death corpse");
                 }
             } else if(phase==2&&a!=null&&a!=dead&&a.isAlive()&&(!simultaneous||(b!=null&&b!=observerDead&&b.isAlive()))) {
                 RuntimeChecks.require(body.isAlive()&&VisibilityChecks.has(body,520+index),"Server corpse/inventory lost during respawn");
-                if(a.level.dimension()!=body.level.dimension())transfer(a,body.level.dimension());
+                if(a.level().dimension()!=body.level().dimension())transfer(a,body.level().dimension());
                 a.connection.teleport(body.getX(),body.getY(),body.getZ()-2.5,0,25);
-                if(b.level.dimension()!=body.level.dimension())transfer(b,body.level.dimension());
+                if(b.level().dimension()!=body.level().dimension())transfer(b,body.level().dimension());
                 b.connection.teleport(body.getX()+1.5,body.getY(),body.getZ()-2.5,0,25);
                 // With no players left, Forge may unload/reload the Nether between
                 // death and return. Saved UUIDs survive; runtime entity IDs do not.
@@ -146,12 +146,12 @@ public final class RespawnPacketChecks {
 
     }
     private void writeTracked(ServerPlayer player,String role) throws Exception {
-        List<String> expected=new ArrayList<>();ServerLevel w=player.getLevel();
+        List<String> expected=new ArrayList<>();ServerLevel w=player.serverLevel();
         for(Entity e:FixtureApi.entities(w))if(e instanceof EntityLootableBody&&e.isAlive()&&FixtureApi.tracked(e).contains(player))expected.add(e.getId()+" "+e.getUUID());
         Collections.sort(expected);Files.write(file("expected-"+index+"-"+role+".txt").toPath(),expected,StandardCharsets.UTF_8);
     }
     private EntityLootableBody live(EntityLootableBody previous) {
-        ServerLevel w=server.getLevel(previous.level.dimension());
+        ServerLevel w=server.getLevel(previous.level().dimension());
         w.getChunk((int)Math.floor(previous.getX()/16),(int)Math.floor(previous.getZ()/16));
         return RuntimeChecks.find(w,previous.getUUID());
     }

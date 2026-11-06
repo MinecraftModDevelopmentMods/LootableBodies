@@ -1,0 +1,22 @@
+{
+  "minecraft": "1.20.1",
+  "forge": "47.4.28",
+  "qualified": true,
+  "jvm_args": [],
+  "reloads": 200,
+  "jvms": 4,
+  "max_concurrent_workers": 2,
+  "no_candidate": true,
+  "no_worlds": true,
+  "source_and_sdk_seals_unchanged": true,
+  "controller_sha256": "A6A78C3762981344E8BF70E22EFFF19C72769B4FEEB06E18ECA8CC4940037C58",
+  "server_input_manifest_sha256": "6BE4C7C38DF5341F16EEC19FBADC42867468E948D2D6B61E0F861B2D7713A9F1",
+  "qualification_evidence_sha256": "0A9730A7A7F362FF4E8B0DACEABD4365871D3E37CDFBB899FDCDFA57EFCD9275",
+  "preparation_workers_observed": [
+    23
+  ],
+  "visible_cpus_observed": [
+    24
+  ],
+  "scope": "Actual native47 default preparation workers plus Main owner-thread apply executor,200reloads/four independent JVMs before any world/candidate. No native40 override or baseline reused."
+}

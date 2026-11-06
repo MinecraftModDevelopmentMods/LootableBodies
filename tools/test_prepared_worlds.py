@@ -11,7 +11,7 @@ class PreparedWorldTest(unittest.TestCase):
         records={name:{'world':str(world.resolve()),'files':fingerprint(world),'minecraft':mc,'mod_version':version,'jar_sha256':sha} for name,(mc,version,sha) in expected.items()}
         second=root/'second';second.mkdir();(second/'level.dat').write_bytes(b'separate synthetic source')
         records['two'].update(world=str(second.resolve()),files=fingerprint(second))
-        path=root/'inputs.json';record={'schema':1,'target_data_version':3337,'origins':records};path.write_text(json.dumps(record))
+        path=root/'inputs.json';record={'schema':1,'target_data_version':3465,'origins':records};path.write_text(json.dumps(record))
         return path,record,expected,world
     def test_exact_subset_reuses_original_paths_and_seals(self):
         with tempfile.TemporaryDirectory() as directory:

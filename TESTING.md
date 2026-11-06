@@ -1,11 +1,7 @@
 # Testing
 
-Run functional qualification locally before publishing. Hosted jobs run small
-workflow/wrapper contracts, production builds, archive checks and CodeQL security
-analysis. They do not run the full Java/Python suites, Minecraft, graphical
-clients, migration worlds, runtime SDK installers or IDE consumers. Fork pushes
-get the cheap policy check; the MMD build independently checks the six release
-files. Compiler dependencies needed by ForgeGradle are still build inputs.
+Run qualification for Forge 1.20.1 locally. Hosted checks cover workflow and wrapper contracts, compilation, archive checks
+and security analysis.
 
 During development, reproduce the changed behaviour first, then batch the cheap
 Java and Python checks. Reserve the full runtime suite for a frozen candidate.
@@ -24,7 +20,7 @@ For a frozen candidate:
 3. Prepare and seal genuine historical writers/worlds once. Run the known
    recovery/terrain/entity-region failure origins first and count these runs in
    the full matrix. Stop later work after a genuine failure; do not hunt green.
-4. Complete the current 47-origin, 94-case, ten-phase history contract, all
+4. Complete the current 68-origin, 136-case, ten-phase history contract, all
    refusals, packaged/development launches, five graphical modes, configuration
    restart, rejected viewer, actual two-client inventory packets, 13 visibility
    checks and 64 respawns. Keep both 6,200 ticks and 310 seconds and the connected

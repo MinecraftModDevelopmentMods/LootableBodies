@@ -98,9 +98,9 @@ public final class RuntimeChecks {
     public static void run(MinecraftServer server, String phase) throws Exception {
         ServerLevel world = server.getLevel(FixtureApi.dimensionKey(0));
         File folder = world.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();
-        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.10.119041"), "identity/version");
+        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.11.120011"), "identity/version");
         require(net.minecraftforge.fml.ModList.get().getModContainerById("lootablebodies").get().getModInfo().getVersion().toString().equals(phase.equals("seed") ? "2.4.0" : phase.equals("issues") ?
-                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.10.119041") : "2.4.10.119041"), "loaded release version");
+                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.11.120011") : "2.4.11.120011"), "loaded release version");
         if (!defaultsChecked) require(LootableBodies.addBonesToCorpse && LootableBodies.displayNameTag && !LootableBodies.hurtByEnvironment &&
                 !LootableBodies.hurtByAttacks && !LootableBodies.hurtByMisc && LootableBodies.corpseHP == 20 &&
                 LootableBodies.ticksPerItemDecay == 6000 && LootableBodies.corpseDecayTime == 72000 &&
@@ -266,7 +266,7 @@ public final class RuntimeChecks {
         // Assign the fixture ID before the native entity-section manager indexes
         // the real death-created body, never by mutating an admitted UUID.
         pendingDeathId=DEATH;
-        try {player.die(player.damageSources().outOfWorld());}finally{pendingDeathId=null;}
+        try {player.die(player.damageSources().fellOutOfWorld());}finally{pendingDeathId=null;}
         EntityLootableBody corpse = null;
         for (Entity entity : new ArrayList<Entity>(FixtureApi.entities(world)))
             if (entity instanceof EntityLootableBody && "BuildDeath".equals(((EntityLootableBody)entity).getCustomNameTag())) corpse=(EntityLootableBody)entity;

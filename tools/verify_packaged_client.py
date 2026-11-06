@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
-from native119_client_logs import audit_client as audit
+from native120_client_logs import audit_client as audit
 from native_runtime import project_assets,prepare_client,client_command,fingerprint
 from release_identity import MAIN_JAR
 from runtime_diagnostics import run_monitored,validate_logging_inputs

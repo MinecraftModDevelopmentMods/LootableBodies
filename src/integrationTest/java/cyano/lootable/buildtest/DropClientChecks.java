@@ -88,7 +88,7 @@ final class DropClientChecks {
         } else if(stage==20 && done()){quit(mc);next(21);}
         else if(stage==21 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"build-fixture");next(22);}
         else if(stage==22 && ready(mc) && frames>20){schedule(mc,()->{
-            RuntimeChecks.awaitChunk(player(mc).getLevel(),2,0);body(mc).baseTick();RuntimeChecks.verifyExpected(folder(mc),"drop-creative-final",body(mc));
+            RuntimeChecks.awaitChunk(player(mc).serverLevel(),2,0);body(mc).baseTick();RuntimeChecks.verifyExpected(folder(mc),"drop-creative-final",body(mc));
             RuntimeChecks.require(savedPlayer.equals(player(mc).getInventory().save(new ListTag())),"Creative player inventory changed on disk reload");player(mc).connection.teleport(40.5,80,7.5,0,0);
             mark(mc,"creative_cancelled_close_full_inventory_disk_reload");});next(23);
         } else if(stage==23 && done()){if(open(mc))next(24);}
@@ -99,17 +99,17 @@ final class DropClientChecks {
         return false;
     }
     private void prepare(Minecraft mc){
-        for(Entity entity:FixtureApi.entities(player(mc).getLevel()))
+        for(Entity entity:FixtureApi.entities(player(mc).serverLevel()))
             if(entity instanceof ItemEntity && !entity.isRemoved())preexistingDrops.add(entity.getUUID());
         System.out.println("DROP_PREEXISTING_ITEMS_RETAINED count="+preexistingDrops.size());
-        ServerPlayer p=player(mc);for(int x=37;x<=43;x++)for(int z=5;z<=11;z++)p.level.setBlockAndUpdate(new BlockPos(x,79,z),Blocks.STONE.defaultBlockState());
+        ServerPlayer p=player(mc);for(int x=37;x<=43;x++)for(int z=5;z<=11;z++)p.level().setBlockAndUpdate(new BlockPos(x,79,z),Blocks.STONE.defaultBlockState());
         p.setGameMode(GameType.SURVIVAL);p.getInventory().clearContent();p.containerMenu.setCarried(ItemStack.EMPTY);p.connection.teleport(40.5,80,7.5,0,0);
-        EntityLootableBody b=new EntityLootableBody(p.level);b.setUUID(bodyId);b.setPos(40.5,80,8.5);b.setNoGravity(true);RuntimeChecks.disableVacuum(b);
-        b.setItem(6,item(120,17));b.setItem(7,item(120,20));b.setItem(8,item(121,10));RuntimeChecks.require(p.getLevel().addFreshEntity(b),"Graphical drop corpse spawn");refresh(mc);
+        EntityLootableBody b=new EntityLootableBody(p.level());b.setUUID(bodyId);b.setPos(40.5,80,8.5);b.setNoGravity(true);RuntimeChecks.disableVacuum(b);
+        b.setItem(6,item(120,17));b.setItem(7,item(120,20));b.setItem(8,item(121,10));RuntimeChecks.require(p.serverLevel().addFreshEntity(b),"Graphical drop corpse spawn");refresh(mc);
     }
     private static ItemStack item(int id,int count){ItemStack s=RuntimeChecks.stack(id);s.setCount(count);return s;}
     private static void equal(ItemStack a,ItemStack b,String message){RuntimeChecks.require(RuntimeChecks.sameStack(a == null ? ItemStack.EMPTY : a,b == null ? ItemStack.EMPTY : b),message+" expected="+b+" actual="+a);}
-    private void drop(Minecraft mc,ItemStack expected){int count=0;for(Entity e:new ArrayList<Entity>(FixtureApi.entities(player(mc).getLevel())))if(e instanceof ItemEntity && !e.isRemoved() && !preexistingDrops.contains(e.getUUID())){equal(((ItemEntity)e).getItem(),expected,"Accepted new world drop NBT/count");count++;e.discard();}RuntimeChecks.require(count==1,"Expected exactly one new accepted drop, actual="+count);}
+    private void drop(Minecraft mc,ItemStack expected){int count=0;for(Entity e:new ArrayList<Entity>(FixtureApi.entities(player(mc).serverLevel())))if(e instanceof ItemEntity && !e.isRemoved() && !preexistingDrops.contains(e.getUUID())){equal(((ItemEntity)e).getItem(),expected,"Accepted new world drop NBT/count");count++;e.discard();}RuntimeChecks.require(count==1,"Expected exactly one new accepted drop, actual="+count);}
     private static ItemStack slot(Minecraft mc,int index){return mc.player.containerMenu.getSlot(index).getItem();}
     private static void click(Minecraft mc,int slot,int button,ClickType type){mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,slot,button,type,mc.player);}
     private static boolean gui(Minecraft mc){return mc.screen instanceof CorpseGUIContainer;}

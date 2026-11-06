@@ -31,16 +31,16 @@ public final class ForgeControl {
         if(++checkTicks==1) {
             p.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
             double x=checkDeaths%2==0?96.5:-.4,z=checkDeaths%2==0?96.5:-.4;
-            for(int a=-6;a<=6;a++)for(int b=-6;b<=6;b++)p.level.setBlockAndUpdate(net.minecraft.core.BlockPos.containing(x+a,80,z+b),net.minecraft.world.level.block.Blocks.OBSIDIAN.defaultBlockState());
-            p.setRespawnPosition(p.level.dimension(),new net.minecraft.core.BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),0F,true,false);
+            for(int a=-6;a<=6;a++)for(int b=-6;b<=6;b++)p.level().setBlockAndUpdate(net.minecraft.core.BlockPos.containing(x+a,80,z+b),net.minecraft.world.level.block.Blocks.OBSIDIAN.defaultBlockState());
+            p.setRespawnPosition(p.level().dimension(),new net.minecraft.core.BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),0F,true,false);
             p.connection.teleport(x,81,z,0,0);
         }
         if(checkTicks==50){
             int px=(int)Math.floor(p.getX()),pz=(int)Math.floor(p.getZ());
             for(int ax=-6;ax<=6;ax++)for(int az=-6;az<=6;az++){
-                p.level.setBlockAndUpdate(new net.minecraft.core.BlockPos(px+ax,77,pz+az),net.minecraft.world.level.block.Blocks.OBSIDIAN.defaultBlockState());
-                p.level.removeBlock(new net.minecraft.core.BlockPos(px+ax,79,pz+az),false);
-                p.level.removeBlock(new net.minecraft.core.BlockPos(px+ax,80,pz+az),false);
+                p.level().setBlockAndUpdate(new net.minecraft.core.BlockPos(px+ax,77,pz+az),net.minecraft.world.level.block.Blocks.OBSIDIAN.defaultBlockState());
+                p.level().removeBlock(new net.minecraft.core.BlockPos(px+ax,79,pz+az),false);
+                p.level().removeBlock(new net.minecraft.core.BlockPos(px+ax,80,pz+az),false);
             }
             p.kill();checkTicks=0;System.out.println("NATIVE_DEATH "+(++checkDeaths));}
     }
@@ -112,11 +112,11 @@ public final class ForgeControl {
                     pinger=new net.minecraft.client.multiplayer.ServerStatusPinger();
                     try{pinger.pingServer(destination,()->{});}catch(java.net.UnknownHostException failure){throw new IllegalStateException(failure);}
                     stage=5;
-                }else {net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new net.minecraft.client.gui.screens.TitleScreen(),mc,net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(destination.ip),destination);stage=1;}
+                }else {net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new net.minecraft.client.gui.screens.TitleScreen(),mc,net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(destination.ip),destination,false);stage=1;}
                 wait=0;
             }else if(stage==5) {
                 pinger.tick();
-                if(destination.ping>=0){pinger.removeAll();net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new net.minecraft.client.gui.screens.TitleScreen(),mc,net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(destination.ip),destination);stage=1;wait=0;}
+                if(destination.ping>=0){pinger.removeAll();net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new net.minecraft.client.gui.screens.TitleScreen(),mc,net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(destination.ip),destination,false);stage=1;wait=0;}
             }else if(stage==1 && mc.level!=null && mc.player!=null) {
                 if(Boolean.getBoolean("lootablebodies.control.deaths")) {
                     delayNativePackets(mc);

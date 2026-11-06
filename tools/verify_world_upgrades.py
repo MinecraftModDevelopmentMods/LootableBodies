@@ -78,7 +78,13 @@ ORIGINS.update({
     'via118-116': ORIGINS['released-116'],
     'via118-117': ORIGINS['released-117'],
 })
-FORGE = {'1.12.2': 'forge-1.12.2-14.23.5.2859','1.10.2': 'forge-1.10.2-12.18.3.2511', '1.11.2': 'forge-1.11.2-13.20.1.2588'}
+ORIGINS.update({
+    'released-119': ('1.19.4','2.4.10.119041','6341FD1976BC195269F61C58885530CCDA0557873FB300E01EEAD657B5975014'),
+    'recovery-119': ('1.19.4','2.4.10.119041','6341FD1976BC195269F61C58885530CCDA0557873FB300E01EEAD657B5975014'),
+    'via119-110': ORIGINS['original-110'],
+    **{f'via119-{version}': ORIGINS[f'released-{version}'] for version in range(111,119)},
+})
+FORGE = {'1.12.2' : 'forge-1.12.2-14.23.5.2859','1.10.2': 'forge-1.10.2-12.18.3.2511', '1.11.2': 'forge-1.11.2-13.20.1.2588'}
 FORGE_SHA = {'1.12.2': 'BD8314729D787E35164476D75AFB337AFB9783917E4F6FA1F77F049ADBA22F2D','1.10.2': '809C2EA5B4D4F3E5A294D3A326744F20FEC412A1263E708297D00F512E377542',
              '1.11.2': 'B6DFF35B5CCB0E6353FB89B5330FE930DB8FBE8B63787C9FC2F70196BD108998'}
 
@@ -626,7 +632,7 @@ def verify(args, project):
             for phase in PHASES:
                 run_upgrade(args.java.resolve(), home, phase)
                 wave = 0 if phase.startswith('upgrade-near') else 1 if phase.startswith('upgrade-far') else 2 if phase == 'upgrade-late' else -1
-                from native119_persistence import count_persisted
+                from native120_persistence import count_persisted
                 persisted = count_persisted(world,wave)
                 if persisted < (3 if wave >= 0 else 8):
                     raise RuntimeError('Missing persisted corpses after world save')

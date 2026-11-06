@@ -99,7 +99,7 @@ public final class MultiplayerChecks {
     private void mark(String name) throws Exception{try(FileWriter out=new FileWriter(new File(sync,"checks.txt"),true)){out.write("PASS "+name+"\n");}System.out.println("MULTIPLAYER_CHECK_PASS "+name);}
     public static ItemStack stack(int i,int n){ItemStack s=RuntimeChecks.stack(i);s.setCount(n);return s;}
     public static void equal(ItemStack a,ItemStack b,String reason){RuntimeChecks.require(RuntimeChecks.sameStack(a == null ? ItemStack.EMPTY : a,b == null ? ItemStack.EMPTY : b),reason);}
-    private static int count(ServerPlayer p,int index){int n=0;ItemStack expected=RuntimeChecks.stack(index);for(int i=0;i<p.getInventory().getContainerSize();i++){ItemStack s=p.getInventory().getItem(i);if((s != null && !s.isEmpty()) && ItemStack.isSame(s,expected) && ItemStack.tagMatches(s,expected))n+=s.getCount();}return n;}
+    private static int count(ServerPlayer p,int index){int n=0;ItemStack expected=RuntimeChecks.stack(index);for(int i=0;i<p.getInventory().getContainerSize();i++){ItemStack s=p.getInventory().getItem(i);if((s != null && !s.isEmpty()) && ItemStack.isSameItemSameTags(s,expected))n+=s.getCount();}return n;}
     private static void refresh(ServerPlayer p){p.containerMenu.broadcastChanges();p.containerMenu.broadcastFullState();}
     private static void savePlayer(File folder,ServerPlayer p,String role) throws Exception {
         CompoundTag n=new CompoundTag();n.putString("UUID",p.getUUID().toString());n.put("Inventory",p.getInventory().save(new ListTag()));

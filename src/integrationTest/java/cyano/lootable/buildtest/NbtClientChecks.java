@@ -44,10 +44,10 @@ final class NbtClientChecks {
         frames++;RuntimeChecks.require(frames<300,"NBT graphical stage timeout "+stage);
         if(stage==0){schedule(mc,()->{
             ServerPlayer p=player(mc);p.getInventory().clearContent();p.containerMenu.setCarried(ItemStack.EMPTY);p.setGameMode(GameType.SURVIVAL);
-            RuntimeChecks.awaitChunk(p.getLevel(),COORDINATE>>4,COORDINATE>>4);
-            for(int x=COORDINATE-3;x<=COORDINATE+11;x++)for(int z=COORDINATE-3;z<=COORDINATE+3;z++)p.level.setBlockAndUpdate(new BlockPos(x,79,z),Blocks.STONE.defaultBlockState());
-            RuntimeChecks.require(p.getLevel().getEntities(null,new net.minecraft.world.phys.AABB(COORDINATE,79,COORDINATE-2,COORDINATE+16,83,COORDINATE+4)).isEmpty(),"Graphical malformed fixture chunk is not isolated");
-            NbtWorldChecks.seed(p.getLevel(),bodyId,COORDINATE,folder(mc),"graphical");
+            RuntimeChecks.awaitChunk(p.serverLevel(),COORDINATE>>4,COORDINATE>>4);
+            for(int x=COORDINATE-3;x<=COORDINATE+11;x++)for(int z=COORDINATE-3;z<=COORDINATE+3;z++)p.level().setBlockAndUpdate(new BlockPos(x,79,z),Blocks.STONE.defaultBlockState());
+            RuntimeChecks.require(p.serverLevel().getEntities(null,new net.minecraft.world.phys.AABB(COORDINATE,79,COORDINATE-2,COORDINATE+16,83,COORDINATE+4)).isEmpty(),"Graphical malformed fixture chunk is not isolated");
+            NbtWorldChecks.seed(p.serverLevel(),bodyId,COORDINATE,folder(mc),"graphical");
         });next(1);}
         else if(stage==1 && done() && frames>20){quit(mc);next(2);}
         else if(stage==2 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().loadLevel(new net.minecraft.client.gui.screens.TitleScreen(),"build-fixture");next(3);}

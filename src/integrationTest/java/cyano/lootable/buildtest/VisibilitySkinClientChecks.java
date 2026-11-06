@@ -43,13 +43,13 @@ final class VisibilitySkinClientChecks {
     private static final class Panel extends Screen {
         private final EntityLootableBody[] bodies=new EntityLootableBody[3];
         Panel(Minecraft mc){super(net.minecraft.network.chat.Component.literal("Skin visibility fixture"));for(int i=0;i<3;i++){bodies[i]=new EntityLootableBody(mc.level);bodies[i].setGameProfile(new GameProfile(new UUID(0,512+i),"VisibilityModel"));}}
-        @Override public void render(com.mojang.blaze3d.vertex.PoseStack matrices,int mouseX,int mouseY,float partial) {
-            fill(matrices,0,0,width,height,0xff304050);
+        @Override public void render(net.minecraft.client.gui.GuiGraphics graphics,int mouseX,int mouseY,float partial) {
+            graphics.fill(0,0,width,height,0xff304050);
             String[] names={"Failed skin: wide arms","Failed skin: slim arms","Local texture"};boolean local=LootableBodies.useLocalSkin;
             try {for(int i=0;i<3;i++) {
                 LootableBodies.useLocalSkin=i==2;int x=(2*i+1)*width/6;
-                drawCenteredString(matrices,font,names[i],x,35,0xffffff);
-                InventoryScreen.renderEntityInInventoryFollowsMouse(matrices,x,height*2/3,65,20,-20,bodies[i]);
+                graphics.drawCenteredString(font,names[i],x,35,0xffffff);
+                InventoryScreen.renderEntityInInventoryFollowsMouse(graphics,x,height*2/3,65,20,-20,bodies[i]);
             }} finally {LootableBodies.useLocalSkin=local;}
         }
         @Override public boolean isPauseScreen(){return false;}

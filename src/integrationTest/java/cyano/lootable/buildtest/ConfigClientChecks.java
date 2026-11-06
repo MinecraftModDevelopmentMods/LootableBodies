@@ -99,8 +99,11 @@ final class ConfigClientChecks {
         if(mc.screen instanceof CorpseConfigGui) {
             Screen screen=mc.screen;Map<String,Integer> rows=(Map<String,Integer>)get(screen,"rows");
             Collection<Integer> positions=rows.isEmpty()?java.util.Collections.singletonList(100):rows.values();
-            for(int y:positions)for(int x:new int[]{screen.width/2-150,screen.width/2,screen.width/2+150})
-                screen.render(new com.mojang.blaze3d.vertex.PoseStack(),x,y+5,0);
+            var graphics=new net.minecraft.client.gui.GuiGraphics(mc,mc.renderBuffers().bufferSource());
+            for(int y:positions)for(int x:new int[]{screen.width/2-150,screen.width/2,screen.width/2+150}) {
+                screen.render(graphics,x,y+5,0);
+                graphics.flush();
+            }
         }
         Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),message->System.out.println(message.getString()));
     }

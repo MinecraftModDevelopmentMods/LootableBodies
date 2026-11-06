@@ -19,7 +19,7 @@ class Native115PacketTest {
     private ClientboundRespawnPacket packet(ResourceKey<Level> dimension,long seed) {
         return new ClientboundRespawnPacket(net.minecraft.world.level.dimension.BuiltinDimensionTypes.OVERWORLD,
                 dimension,seed,GameType.SURVIVAL,GameType.CREATIVE,false,true,
-                ClientboundRespawnPacket.KEEP_ALL_DATA,java.util.Optional.empty());
+                ClientboundRespawnPacket.KEEP_ALL_DATA,java.util.Optional.empty(),0);
     }
     @Test void native115HashedSeedSurvivesDecodedPacketObservation() throws Exception {
         FriendlyByteBuf bytes=new FriendlyByteBuf(Unpooled.buffer());

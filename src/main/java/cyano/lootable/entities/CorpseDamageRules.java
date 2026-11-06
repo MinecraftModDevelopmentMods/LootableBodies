@@ -9,7 +9,7 @@ final class CorpseDamageRules {
     private CorpseDamageRules(){ }
     static Kind kind(DamageSource source) {
         if(source==null)return Kind.MISC;
-        if(source.is(DamageTypes.OUT_OF_WORLD) || "outOfWorld".equals(source.getMsgId()))return Kind.VOID;
+        if(source.is(DamageTypes.FELL_OUT_OF_WORLD) || "outOfWorld".equals(source.getMsgId()))return Kind.VOID;
         // These two native sources gained a causing entity in1.19.4. They
         // retain the environmental setting used by their former static sources.
         if(source.is(DamageTypes.FALLING_ANVIL) || source.is(DamageTypes.FALLING_BLOCK))return Kind.ENVIRONMENT;

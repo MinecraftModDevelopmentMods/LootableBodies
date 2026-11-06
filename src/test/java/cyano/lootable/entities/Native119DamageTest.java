@@ -91,8 +91,8 @@ class Native119DamageTest {
         assertFalse(CorpseDamageRules.isWall(null));
     }
     @Test void voidBypassesEveryDamageToggleAndCompleteInvulnerability() {
-        assertEquals(CorpseDamageRules.Kind.VOID,CorpseDamageRules.kind(sources.outOfWorld()));
-        assertTrue(CorpseDamageRules.allows(sources.outOfWorld(),true,false,false,false));
+        assertEquals(CorpseDamageRules.Kind.VOID,CorpseDamageRules.kind(sources.fellOutOfWorld()));
+        assertTrue(CorpseDamageRules.allows(sources.fellOutOfWorld(),true,false,false,false));
     }
     @Test void allConfigurationCombinationsSelectOnlyTheirCategory() {
         for(int bits=0;bits<8;bits++) {

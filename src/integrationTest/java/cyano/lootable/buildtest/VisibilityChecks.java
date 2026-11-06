@@ -80,7 +80,7 @@ public final class VisibilityChecks {
                 w.setDefaultSpawnPos(new BlockPos(96,PLAYER_Y,93),0F);server.getCommands().performPrefixedCommand(server.createCommandSourceStack(),"gamerule spawnRadius 0");
                 w.setDayTime(6000);
                 for(int x=88;x<=170;x++)for(int z=89;z<=103;z++)w.setBlockAndUpdate(new BlockPos(x,GROUND_Y,z),Blocks.OBSIDIAN.defaultBlockState());
-                for(ServerPlayer p:new ServerPlayer[]{a,b}) {p.setGameMode(GameType.SURVIVAL);p.getInventory().clearContent();FixtureApi.spawn(p,new BlockPos(96,PLAYER_Y,93),true,false,p.level.dimension());}
+                for(ServerPlayer p:new ServerPlayer[]{a,b}) {p.setGameMode(GameType.SURVIVAL);p.getInventory().clearContent();FixtureApi.spawn(p,new BlockPos(96,PLAYER_Y,93),true,false,p.level().dimension());}
                 a.connection.teleport(96.5,PLAYER_Y,96.5,0,65);b.connection.teleport(98.5,PLAYER_Y,93.5,0,25);
                 a.getInventory().items.set(9,RuntimeChecks.stack(410));a.containerMenu.broadcastChanges();phase(1);
             } else if(phase==1 && both(1)) {

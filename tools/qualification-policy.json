@@ -1,18 +1,14 @@
 {
   "schema": 1,
-  "target": "1.18.2",
-  "status": "Full functional qualification local; hosted compilation, archive/security audits and small workflow contracts only. Unvalidated phase consolidation remains disabled.",
+  "target": "1.20.1",
+  "status": "Gameplay and migration qualify locally. Hosted checks validate policy, production archives and security.",
   "hosted": {
     "allowed": [
-      "workflow/wrapper contracts",
-      "production compilation",
-      "archive/metadata/byte audits",
-      "CodeQL security analysis"
-    ],
-    "native118_gradle_roots": [
-      "assemble",
-      "verifyProductionRuntimeClasspath",
-      "prepareReleaseBundle"
+      "policy",
+      "production_archive",
+      "security",
+      "release_contracts",
+      "wrapper_validation"
     ],
     "fork_gradle_build": false,
     "full_java_suite": false,
@@ -34,16 +30,17 @@
       "original prepared-world manifest"
     ],
     "historical_priority": [
+      "recovery-119",
       "recovery-116",
       "recovery-115",
       "recovery-117",
       "original-110",
       "released-117"
     ],
-    "historical_origins": 47,
-    "historical_cases": 94,
+    "historical_origins": 68,
+    "historical_cases": 136,
     "historical_phases_per_case": 10,
-    "historical_receipts_including_future_refusals": 1130,
+    "historical_receipts_including_future_refusals": 1634,
     "max_historical_workers": 2,
     "shared_cache_gradle_writers": 1,
     "visibility": "Keep both6200ticks and310seconds and connected restart; no shorter acceptance substitute.",
@@ -59,11 +56,11 @@
     ],
     "requires": "Native disk-equivalence and deliberate loss/duplication/resurrection/deferred-chunk negative controls on next authorised run, then explicit new coverage/receipt schema",
     "origins_and_cases_unchanged_if_validated": [
-      47,
-      94
+      68,
+      136
     ],
-    "positive_jvms_if_validated": 752,
-    "total_receipts_if_validated": 942,
+    "positive_jvms_if_validated": 1088,
+    "total_receipts_if_validated": 1362,
     "current_10_phase_contract_remains_authoritative": true
   }
 }

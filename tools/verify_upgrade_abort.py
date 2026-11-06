@@ -101,14 +101,14 @@ def allowed_native40_platform_additions(before,after,world,original_config=None)
 
 
 
-def allowed_native45_platform_additions(before,after,world,original_config=None):
-    """Exact Forge45 corrections; no unknown keys or supported choices dropped."""
+def allowed_native47_platform_additions(before,after,world,original_config=None):
+    """Exact Forge47 corrections; no unknown keys or supported choices dropped."""
     name='serverconfig/forge-server.toml'
     if name not in after:return []
     actual=(world/name).read_bytes()
     if digest(world/name)!=after[name]:return []
     try:
-        defaults=tomllib.loads((Path(__file__).parent/'fixtures/forge45-server-default.toml').read_text())
+        defaults=tomllib.loads((Path(__file__).parent/'fixtures/forge47-server-default.toml').read_text())
         upgraded=tomllib.loads(actual.decode('utf-8'))
         if name not in before:return [name] if same_typed_values(defaults,upgraded) else []
         if original_config is None or before[name]!=__import__('hashlib').sha256(original_config).hexdigest().upper():return []
@@ -169,9 +169,9 @@ def inject_future_entity_version(world):
     before=digest(path);original=world.parent/'future-entity-original.mca'
     if original.exists():raise ValueError('Future fixture original already exists')
     shutil.copy2(path,original)
-    root['DataVersion']=Tag(3,3338);write_disposable_region(path,chunks)
+    root['DataVersion']=Tag(3,3466);write_disposable_region(path,chunks)
     return {'region':path.relative_to(world).as_posix(),'chunk_index':index,'source_version':2975,
-            'injected_version':3338,'nbt_type':'Int','original_sha256':before,'mutated_sha256':digest(path),
+            'injected_version':3466,'nbt_type':'Int','original_sha256':before,'mutated_sha256':digest(path),
             'original_copy':str(original),'corpse_marker':8}
 
 
@@ -224,7 +224,7 @@ def main():
             raise RuntimeError('World loading continued after unsafe preservation')
         after = source_files(world)
         raw_after = dict(after)
-        platform_additions = allowed_native45_platform_additions(before, after, world, original_config)
+        platform_additions = allowed_native47_platform_additions(before, after, world, original_config)
         lock_updates=allowed_native_session_lock(before,after,world,original_lock)
         for name in platform_additions+lock_updates:
             if name in before: after[name] = before[name]

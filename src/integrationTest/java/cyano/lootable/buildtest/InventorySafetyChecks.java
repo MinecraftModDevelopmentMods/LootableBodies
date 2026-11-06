@@ -90,8 +90,8 @@ public final class InventorySafetyChecks {
                 if(!before.contains(entity)) entity.discard();
         }
     }
-    private static ServerPlayer player() {
-        ServerPlayer player=new ServerPlayer(server,world,
+    private static InventoryTestPlayer player() {
+        InventoryTestPlayer player=new InventoryTestPlayer(server,world,
                 new GameProfile(UUID.nameUUIDFromBytes(("inventory-fixture-"+(sequence++)).getBytes(java.nio.charset.StandardCharsets.UTF_8)),"InventoryFixture"));
         player.connection=new net.minecraft.server.network.ServerGamePacketListenerImpl(server,
                 new net.minecraft.network.Connection(net.minecraft.network.protocol.PacketFlow.SERVERBOUND),player);
@@ -113,7 +113,7 @@ public final class InventorySafetyChecks {
         return result;
     }
     private static void handle(PlayerDeathEventHandler handler,ServerPlayer player,List<ItemEntity> drops) {
-        handler.entityDropEvent(new LivingDropsEvent(player,player.damageSources().outOfWorld(),drops,0,false));
+        handler.entityDropEvent(new LivingDropsEvent(player,player.damageSources().fellOutOfWorld(),drops,0,false));
     }
     private static CompoundTag data(EntityLootableBody body) {
         CompoundTag result=new CompoundTag(); body.addAdditionalSaveData(result); return result;
@@ -141,13 +141,13 @@ public final class InventorySafetyChecks {
         throw new AssertionError("No corpse spawned");
     }
     private static void failedSpawn() {
-        ServerPlayer player=player(); RejectingWorld rejected=new RejectingWorld(world);
-        player.level=rejected;
+        InventoryTestPlayer player=player(); RejectingWorld rejected=new RejectingWorld(world);
+        player.setFixtureLevel(rejected);
         ItemStack bones=new ItemStack(Items.BONE,9); bones.setHoverName(net.minecraft.network.chat.Component.literal("Saved bones"));
         List<ItemEntity> drops=drops(player,bones,item(19,23));
         List<CompoundTag> before=new ArrayList<>(); for(ItemEntity e:drops) before.add(encoded(e.getItem()));
         PlayerDeathEventHandler handler=new PlayerDeathEventHandler();
-        handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().outOfWorld()));
+        handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().fellOutOfWorld()));
         handle(handler,player,drops);
         RuntimeChecks.require(rejected.attempts==1,"Failed spawn branch was not reached");
         RuntimeChecks.require(drops.size()==before.size(),"Rejected corpse consumed vanilla death drops");
@@ -164,7 +164,7 @@ public final class InventorySafetyChecks {
         Map<String,Integer> expected=new TreeMap<>(); add(expected,player.getInventory().items.get(0));add(expected,player.getInventory().items.get(9));
         Set<Entity> before=new HashSet<>(FixtureApi.entities(world));
         RejectCorpse reject=new RejectCorpse(); MinecraftForge.EVENT_BUS.register(reject);
-        try { player.die(player.damageSources().outOfWorld()); } finally { MinecraftForge.EVENT_BUS.unregister(reject); }
+        try { player.die(player.damageSources().fellOutOfWorld()); } finally { MinecraftForge.EVENT_BUS.unregister(reject); }
         RuntimeChecks.require(reject.attempts==1,"Corpse cancellation not exercised");
         for(Entity entity:FixtureApi.entities(world)) RuntimeChecks.require(before.contains(entity) || !(entity instanceof EntityLootableBody),"Cancelled corpse spawn bypassed Forge cancellation");
         RuntimeChecks.require(expected.equals(dropped()),"Cancelled corpse did not fall back to exact vanilla drops");
@@ -172,10 +172,10 @@ public final class InventorySafetyChecks {
     private static void staleEquipment() {
         ServerPlayer player=player(); PlayerDeathEventHandler handler=new PlayerDeathEventHandler();
         ItemStack previous=item(0,1); player.setItemSlot(EquipmentSlot.HEAD,previous);
-        handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().outOfWorld()));
+        handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().fellOutOfWorld()));
         handle(handler,player,drops(player,previous));
         ItemStack current=item(1,1); player.setItemSlot(EquipmentSlot.HEAD,current);
-        handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().outOfWorld()));
+        handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().fellOutOfWorld()));
         Map<String,Integer> expected=new TreeMap<>(); add(expected,current);add(expected,previous);
         Set<Entity> before=new HashSet<>(FixtureApi.entities(world));
         handle(handler,player,drops(player,current,previous));
@@ -192,19 +192,19 @@ public final class InventorySafetyChecks {
     private static void cacheLifecycle() throws Exception {
         ServerPlayer player=player(); PlayerDeathEventHandler handler=new PlayerDeathEventHandler();
         player.setItemSlot(EquipmentSlot.HEAD,item(0,1));
-        handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().outOfWorld()));
+        handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().fellOutOfWorld()));
         handle(handler,player,drops(player,player.getItemBySlot(EquipmentSlot.HEAD)));
         RuntimeChecks.require(!cache(handler).containsKey(player),"Equipment cache retains completed death");
         world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(true,null);
-        handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().outOfWorld()));
+        handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().fellOutOfWorld()));
         RuntimeChecks.require(!cache(handler).containsKey(player),"keepInventory death cached equipment");
         world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);
-        LivingDeathEvent canceled=new LivingDeathEvent(player,player.damageSources().outOfWorld()); canceled.setCanceled(true);
+        LivingDeathEvent canceled=new LivingDeathEvent(player,player.damageSources().fellOutOfWorld()); canceled.setCanceled(true);
         handler.entityDeathEvent(canceled);
         RuntimeChecks.require(!cache(handler).containsKey(player),"Cancelled death cached equipment");
-        handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().outOfWorld()));
+        handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().fellOutOfWorld()));
         List<ItemEntity> original=drops(player,item(19,23));
-        LivingDropsEvent canceledDrops=new LivingDropsEvent(player,player.damageSources().outOfWorld(),original,0,false);
+        LivingDropsEvent canceledDrops=new LivingDropsEvent(player,player.damageSources().fellOutOfWorld(),original,0,false);
         canceledDrops.setCanceled(true);handler.entityDropEvent(canceledDrops);
         RuntimeChecks.require(!cache(handler).containsKey(player) && original.size()==1
                 && RuntimeChecks.sameStack(original.get(0).getItem(),item(19,23)),"Cancelled drops retained stale cache or changed inventory");
@@ -284,13 +284,13 @@ public final class InventorySafetyChecks {
         RuntimeChecks.require(immutable.equals(input),"Reader mutated source NBT");
     }
     private static void staleAccess() {
-        ServerPlayer player=player();EntityLootableBody corpse=body();CorpseContainer container=new CorpseContainer(player.getInventory(),corpse);
+        InventoryTestPlayer player=player();EntityLootableBody corpse=body();CorpseContainer container=new CorpseContainer(player.getInventory(),corpse);
         RuntimeChecks.require(container.stillValid(player),"Near living access failed");
         player.setPos(100,80,100);RuntimeChecks.require(!container.stillValid(player),"Distant container remained accessible");
         player.setPos(64.5,80,64.5);corpse.discard();RuntimeChecks.require(!container.stillValid(player),"Removed corpse remained accessible");
-        corpse=body();container=new CorpseContainer(player.getInventory(),corpse);player.level=new RejectingWorld(world);
+        corpse=body();container=new CorpseContainer(player.getInventory(),corpse);player.setFixtureLevel(new RejectingWorld(world));
         RuntimeChecks.require(!container.stillValid(player),"Cross-world container remained accessible");
-        player.level=world;player.setHealth(0);
+        player.setFixtureLevel(world);player.setHealth(0);
         RuntimeChecks.require(!container.stillValid(player),"Dead player retained container access");
         player.setHealth(player.getMaxHealth());corpse.kill();corpse.baseTick();
         RuntimeChecks.require(!container.stillValid(player),"Dying corpse remained accessible");
@@ -362,6 +362,16 @@ public final class InventorySafetyChecks {
         RuntimeChecks.saveExpected(folder,"rejected-release",corpse);
     }
     /** Controlled false-return seam; no dimension registration, disk writes or chunks of its own. */
+    private static final class InventoryTestPlayer extends ServerPlayer {
+        InventoryTestPlayer(MinecraftServer server, ServerLevel world, GameProfile profile) {
+            super(server,world,profile);
+        }
+
+        void setFixtureLevel(Level world) {
+            setLevel(world);
+        }
+    }
+
     private static final class RejectingWorld extends Level {
         private final ServerLevel delegate; int attempts;
         RejectingWorld(ServerLevel target) {

@@ -95,7 +95,7 @@ def audit_case_mods(home,report):
 def audit_shard(folder,report,*,relocated=False):
     positive=folder/'migration-results';aborts=folder/'migration-abort'
     records=[];logs=[]
-    from native119_logs import audit
+    from native120_logs import audit
     for case,details in report['cases'].items():
         home=positive/case
         mods=audit_case_mods(home,report)

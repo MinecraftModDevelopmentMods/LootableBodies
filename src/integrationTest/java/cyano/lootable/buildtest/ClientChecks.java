@@ -147,7 +147,7 @@ public final class ClientChecks {
         } catch(Throwable error) { fail(error); }
     }
     private static void positionViewer(net.minecraft.server.level.ServerPlayer player) {
-        ServerLevel world=player.getLevel();
+        ServerLevel world=player.serverLevel();
         RuntimeChecks.awaitChunk(world,0,0);
         for(int x=7;x<=9;x++)for(int z=6;z<=8;z++)
             world.setBlockAndUpdate(new net.minecraft.core.BlockPos(x,79,z),net.minecraft.world.level.block.Blocks.STONE.defaultBlockState());

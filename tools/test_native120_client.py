@@ -1,10 +1,10 @@
 import hashlib,json,shutil,struct,tempfile,unittest,zipfile
 from pathlib import Path
 from unittest.mock import patch
-import native119_client as client
+import native120_client as client
 
 
-class Native119ArchitectureTests(unittest.TestCase):
+class Native120ArchitectureTests(unittest.TestCase):
     def test_os_only_rules_cannot_select_other_windows_architectures(self):
         libraries=json.loads((Path(__file__).parent/'fixtures/native119-native-library-excerpt.json').read_text())['libraries']
         for architecture,expected in [('amd64','natives-windows'),('x86','natives-windows-x86'),('arm64','natives-windows-arm64')]:
@@ -37,9 +37,9 @@ class Native119ArchitectureTests(unittest.TestCase):
                 record['sha1']=hashlib.sha1(path.read_bytes()).hexdigest()
             base={'libraries':libraries,'downloads':{'client':{'sha1':hashlib.sha1(b'unit-client').hexdigest()}}}
             forge={'libraries':[]}
-            version=root/'sdk/versions/1.19.4';version.mkdir(parents=True);(version/'1.19.4.jar').write_bytes(b'unit-client');(version/'1.19.4.json').write_text('{}')
-            profile=root/'sdk/versions/1.19.4-forge-45.4.5';profile.mkdir();(profile/'1.19.4-forge-45.4.5.json').write_text('{}')
-            with patch.object(client,'descriptors',return_value=(base,forge)),patch.object(client,'BASE_VERSION','1.19.4'),patch.object(client,'VERSION','1.19.4-forge-45.4.5'),patch.object(client.platform,'system',return_value='Windows'),patch.object(client.platform,'architecture',return_value=('64bit','')):
+            version=root/'sdk/versions/1.20.1';version.mkdir(parents=True);(version/'1.20.1.jar').write_bytes(b'unit-client');(version/'1.20.1.json').write_text('{}')
+            profile=root/'sdk/versions/1.20.1-forge-47.4.28';profile.mkdir();(profile/'1.20.1-forge-47.4.28.json').write_text('{}')
+            with patch.object(client,'descriptors',return_value=(base,forge)),patch.object(client,'BASE_VERSION','1.20.1'),patch.object(client,'VERSION','1.20.1-forge-47.4.28'),patch.object(client.platform,'system',return_value='Windows'),patch.object(client.platform,'architecture',return_value=('64bit','')):
                 prepared=client.prepare(root/'sdk',root/'prepared')
             print('NATIVE_CLIENT_UNIT_FIXTURE='+str(root))
             native=Path(prepared['natives'])/'glfw.dll'
