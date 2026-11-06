@@ -129,6 +129,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             with self.subTest(options=options), self.assertRaises(SystemExit):
                 self.validate('1.20.6', **options)
         self.assertIn("minecraft_version == '1.20.6' && 'Java 21'", WORKFLOW.read_text())
+        self.assertEqual(2, WORKFLOW.read_text().count("minecraft_version == '1.20.6' && '21.0.7+6.0.LTS'"))
 
     def test_future_1211_candidate_cannot_dispatch_publication(self):
         self.assertNotEqual(0, self.select('2.4.13.121011')[0])
