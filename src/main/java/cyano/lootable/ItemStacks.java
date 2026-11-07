@@ -4,7 +4,7 @@ import net.minecraft.world.item.ItemStack;
 public final class ItemStacks {
     private ItemStacks() { }
     public static boolean canMerge(ItemStack first, ItemStack second) {
-        return ItemStack.isSameItemSameComponents(first,second) && first.areCapsCompatible(second);
+        return ItemStack.isSameItemSameComponents(first,second);
     }
     public static boolean emptyStack(ItemStack stack) { return stack == null || stack.isEmpty(); }
 }

@@ -28,10 +28,10 @@ final class ResourceControl {
                 throw new AssertionError("Resource control has already constructed a server");
             Executor prepare=Util.backgroundExecutor();
             int cpus=Runtime.getRuntime().availableProcessors();
-            if(!(prepare instanceof ForkJoinPool))throw new AssertionError("Forge 50 preparation executor changed");
+            if(!(prepare instanceof ForkJoinPool))throw new AssertionError("Forge 52 preparation executor changed");
             int workers=((ForkJoinPool)prepare).getParallelism(),limit=Integer.getInteger("max.bg.threads",255);
-            if(limit<1 || limit>255 || workers!=Math.max(1,Math.min(cpus-1,limit)))throw new AssertionError("Forge 50 worker configuration differs from its actual Util executor");
-            System.out.println("NATIVE50_RESOURCE_CONTROL_BEGIN cpus="+cpus+" preparationWorkers="+workers+" rounds="+rounds);
+            if(limit<1 || limit>255 || workers!=Math.max(1,Math.min(cpus-1,limit)))throw new AssertionError("Forge 52 worker configuration differs from its actual Util executor");
+            System.out.println("NATIVE52_RESOURCE_CONTROL_BEGIN cpus="+cpus+" preparationWorkers="+workers+" rounds="+rounds);
             PackRepository packs=new PackRepository(new ServerPacksSource(new net.minecraft.world.level.validation.DirectoryValidator(path->false)));
             WorldLoader.InitConfig config=new WorldLoader.InitConfig(
                     new WorldLoader.PackConfig(packs,WorldDataConfiguration.DEFAULT,false,false),Commands.CommandSelection.DEDICATED,2);
@@ -46,13 +46,13 @@ final class ResourceControl {
                             .get(12,TimeUnit.SECONDS)) {
                         if(resources.reloaded().getRecipeManager().getRecipes().isEmpty())throw new AssertionError("No native recipes loaded");
                     }
-                    if(round%10==0)System.out.println("NATIVE50_RESOURCE_RELOAD_COMPLETE="+round);
+                    if(round%10==0)System.out.println("NATIVE52_RESOURCE_RELOAD_COMPLETE="+round);
                 }
             }
             if(net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer()!=null)
                 throw new AssertionError("Resource control unexpectedly constructed a server");
             Files.writeString(Path.of("resource-control.pass"),"rounds="+rounds+" cpus="+cpus+" preparationWorkers="+workers+" noWorld=true noLootableBodies=true\n",StandardOpenOption.CREATE_NEW);
-            System.out.println("NATIVE50_RESOURCE_CONTROL_PASS rounds="+rounds);
+            System.out.println("NATIVE52_RESOURCE_CONTROL_PASS rounds="+rounds);
             System.out.flush();System.exit(0);
         } catch(Throwable failure) {
             failure.printStackTrace();System.out.flush();System.exit(2);

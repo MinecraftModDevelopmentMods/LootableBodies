@@ -5,8 +5,8 @@ def expectedIdentity = [
         mod_id: 'lootablebodies', mod_artifact: 'LootableBodies',
         mod_group: 'zone.moddev.mc.lootablebodies', mod_vendor: 'Cyanobacterium',
         mod_name: "DrCyano's Lootable Bodies", mod_authors: 'Cyanobacterium,SkyBlade1978',
-        minecraft_version: '1.20.6', forge_version: '50.2.14',
-        mapping_channel: 'official', mapping_version: '1.20.6',
+        minecraft_version: '1.21.1', forge_version: '52.1.20',
+        mapping_channel: 'official', mapping_version: '1.21.1',
         loader_name: 'forge', loader_code: '1', curseforge_project_id: '240968',
         java_version: '21', java_toolchain_version: '21.0.7+6', gradle_java_version: '21',
         mod_license: 'LGPL-2.1-only', mod_license_name: 'GNU Lesser General Public License, Version 2.1',
@@ -37,7 +37,7 @@ tasks.register('verifyReleaseConfiguration') {
     doLast {
         String source = file('src/main/java/cyano/lootable/LootableBodies.java').getText('UTF-8')
         if (!source.contains("VERSION = \"${project.version}\"") || !source.contains('MODID = "lootablebodies"') ||
-                !source.contains('@Mod(LootableBodies.MODID)') || !source.contains('new ResourceLocation("lootablebodies:corpse")'))
+                !source.contains('@Mod(LootableBodies.MODID)') || !source.contains('ResourceLocation.fromNamespaceAndPath(MODID,"corpse")'))
             throw new GradleException('Java release version or persistent identity differs from release metadata')
         if (!file('README.md').getText('UTF-8').contains(releaseNames[0]) ||
                 !file('CHANGELOG.txt').getText('UTF-8').contains(project.version.toString()))

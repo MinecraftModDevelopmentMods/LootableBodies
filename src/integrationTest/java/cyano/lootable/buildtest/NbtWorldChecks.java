@@ -37,7 +37,7 @@ final class NbtWorldChecks {
     static void registerItem(){
         String phase=System.getProperty("lootablebodies.phase","");
         if(phase.startsWith("nbt-return") || phase.startsWith("upgrade-return") || phase.startsWith("upgrade-final")) {
-            returning=new Item(new Item.Properties());net.minecraftforge.registries.ForgeRegistries.ITEMS.register(new ResourceLocation(RETURNING),returning);
+            returning=new Item(new Item.Properties());net.minecraftforge.registries.ForgeRegistries.ITEMS.register(ResourceLocation.parse(RETURNING),returning);
         }
     }
     static void run(MinecraftServer server,String phase) throws Exception {
@@ -95,7 +95,16 @@ final class NbtWorldChecks {
     private static final class RawBody extends EntityLootableBody {
         RawBody(Level w){super(w);}
         @Override public boolean saveAsPassenger(CompoundTag n){if(isRemoved())return false;n.putString("id","lootablebodies:corpse");saveWithoutId(n);return true;}
-        @Override public void addAdditionalSaveData(CompoundTag n){super.addAdditionalSaveData(n);CompoundTag raw=rawEquipment();for(String key:raw.getAllKeys())n.put(key,raw.get(key).copy());n.put("Pos",PositionMotionChecks.vector(Double.NaN,80,getZ()));n.put("Motion",PositionMotionChecks.vector(Double.NaN,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY));}
+        @Override public void addAdditionalSaveData(CompoundTag n){
+            super.addAdditionalSaveData(n);
+            // Replace the native fields so the synthetic legacy records are the records read from disk.
+            n.remove("attributes");
+            n.remove("active_effects");
+            CompoundTag raw=rawEquipment();
+            for(String key:raw.getAllKeys())n.put(key,raw.get(key).copy());
+            n.put("Pos",PositionMotionChecks.vector(Double.NaN,80,getZ()));
+            n.put("Motion",PositionMotionChecks.vector(Double.NaN,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY));
+        }
     }
     private static void settle(EntityLootableBody b){for(int i=0;i<8;i++)b.baseTick();}
     private static void identity(EntityLootableBody b,UUID id,int coordinate){RuntimeChecks.require(b.isAlive() && b.getUUID().equals(id) && b.getX()==coordinate+8.5 && b.getY()==80 && b.getZ()==coordinate+.5 && b.getYRot()==37 && b.getCustomNameTag().equals("NbtFixture"),"Recovered corpse identity/position/rotation/name/health changed");}

@@ -20,12 +20,12 @@ class Native120TargetTest {
     }
     @Test void targetMatchesTheActualNativeWorldVersion() {
         net.minecraft.SharedConstants.tryDetectVersion();
-        assertEquals("1.20.6",net.minecraft.SharedConstants.getCurrentVersion().getName());
-        assertEquals(32,net.minecraft.SharedConstants.getCurrentVersion().getPackVersion(net.minecraft.server.packs.PackType.CLIENT_RESOURCES));
-        assertEquals(41,net.minecraft.SharedConstants.getCurrentVersion().getPackVersion(net.minecraft.server.packs.PackType.SERVER_DATA));
-        assertEquals(3839,targetDataVersion());
+        assertEquals("1.21.1",net.minecraft.SharedConstants.getCurrentVersion().getName());
+        assertEquals(34,net.minecraft.SharedConstants.getCurrentVersion().getPackVersion(net.minecraft.server.packs.PackType.CLIENT_RESOURCES));
+        assertEquals(48,net.minecraft.SharedConstants.getCurrentVersion().getPackVersion(net.minecraft.server.packs.PackType.SERVER_DATA));
+        assertEquals(3955,targetDataVersion());
         assertEquals(targetDataVersion(),UpgradePreservation.MINECRAFT_VERSION);
-        assertEquals(11,UpgradePreservation.DATA_VERSION);
+        assertEquals(12,UpgradePreservation.DATA_VERSION);
     }
     @Test void released16MarkerIsMigratedWithAllSlotsAndOriginalsRetained() {
         assertEquals(2586,cyano.lootable.buildtest.HistoricalVersions.dataVersion("1.16.5"));
@@ -39,7 +39,7 @@ class Native120TargetTest {
         body.put("Equipment",items);CompoundTag before=body.copy();
         CompoundTag source=new CompoundTag();source.putInt("DataVersion",2586);
         CompoundTag staged=NativeSafeFixer.stageCorpse(body,source);
-        assertEquals(11,staged.getInt(UpgradePreservation.VERSION));
+        assertEquals(12,staged.getInt(UpgradePreservation.VERSION));
         assertEquals(48,staged.getList("LootableBodiesUnresolved",10).size());
         for(int slot=0;slot<48;slot++) {
             CompoundTag record=staged.getList("LootableBodiesUnresolved",10).getCompound(slot);
@@ -70,7 +70,7 @@ class Native120TargetTest {
         CompoundTag body=Native117RegionFixtures.body(java.util.UUID.randomUUID(),7),before=body.copy();
         CompoundTag source=new CompoundTag();source.putInt("DataVersion",2730);
         CompoundTag staged=NativeSafeFixer.stageCorpse(body,source);
-        assertEquals(11,staged.getInt(UpgradePreservation.VERSION));
+        assertEquals(12,staged.getInt(UpgradePreservation.VERSION));
         assertEquals(2730,staged.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
         ListTag records=staged.getList("LootableBodiesUnresolved",10);assertEquals(50,records.size());
         for(int slot=0;slot<48;slot++) {
@@ -94,7 +94,7 @@ class Native120TargetTest {
         CompoundTag body=Native117RegionFixtures.body(java.util.UUID.randomUUID(),8),before=body.copy();
         CompoundTag source=new CompoundTag();source.putInt("DataVersion",2975);
         CompoundTag staged=NativeSafeFixer.stageCorpse(body,source);
-        assertEquals(11,staged.getInt(UpgradePreservation.VERSION));
+        assertEquals(12,staged.getInt(UpgradePreservation.VERSION));
         assertEquals(2975,staged.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
         ListTag records=staged.getList("LootableBodiesUnresolved",10);assertEquals(50,records.size());
         for(int slot=0;slot<48;slot++) {
@@ -124,7 +124,7 @@ class Native120TargetTest {
         CompoundTag fixed=NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),
                 net.minecraft.util.datafix.fixes.References.ENTITY_CHUNK,root,512,targetDataVersion());
         CompoundTag staged=fixed.getList("Entities",10).getCompound(0);
-        assertEquals(11,staged.getInt(UpgradePreservation.VERSION));
+        assertEquals(12,staged.getInt(UpgradePreservation.VERSION));
         assertEquals(3337,staged.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
         CompoundTag detached=NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),
                 net.minecraft.util.datafix.fixes.References.ENTITY_TREE,body,512,targetDataVersion());

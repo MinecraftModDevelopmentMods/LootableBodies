@@ -1,5 +1,7 @@
 package cyano.lootable.upgrade;
 
+import com.mojang.serialization.Dynamic;
+import cyano.lootable.ModLog;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -14,6 +16,8 @@ import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.level.storage.LevelStorageSource;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
 
 /** Preserve old chunks before Forge rewrites the level header on startup. */
 public final class EarlyWorldPreservation {
@@ -23,6 +27,8 @@ public final class EarlyWorldPreservation {
     public static synchronized void install() {
         if(installed)return;
         verifyAttachment(LevelStorageSource.LevelStorageAccess.class);
+        if(!(net.minecraft.util.datafix.DataFixers.getDataFixer() instanceof NativeSafeFixer))
+            throw new IllegalStateException("Native data fixer preservation could not be attached. World loading has been stopped.");
         installed=true;
     }
     private static void verifyAttachment(Class<?> reader) {
@@ -56,6 +62,23 @@ public final class EarlyWorldPreservation {
             if(original!=null)metadata.put(save,original.copy());else metadata.remove(save);
             UpgradePreservation.prepareEarly(world,header);
         } catch(IOException | RuntimeException unsafe){throw new UnsafeWorldUpgrade(unsafe);}
+    }
+    /** The dedicated startup entry point has no shutdown hook before world construction. */
+    public static Dynamic<?> readDedicatedWorld(LevelStorageSource.LevelStorageAccess save,boolean fallback) throws IOException {
+        try {
+            return fallback ? save.getDataTagFallback() : save.getDataTag();
+        } catch(UnsafeWorldUpgrade unsafe) {
+            metadata.remove(save);
+            try {
+                save.close();
+            } catch(IOException closeFailure) {
+                unsafe.addSuppressed(closeFailure);
+            }
+            ModLog.log(Level.ERROR,unsafe,unsafe.getMessage());
+            LogManager.shutdown();
+            System.exit(1);
+            throw unsafe;
+        }
     }
     /** Restore only this mod's original field on the same native save access. */
     public static void beforeWrite(LevelStorageSource.LevelStorageAccess save,CompoundTag root) {

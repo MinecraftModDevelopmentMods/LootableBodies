@@ -34,7 +34,7 @@ class Native119BundleTraceTest {
         return RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY);
     }
     private ProtocolInfo<ClientGamePacketListener> protocol() {
-        return GameProtocols.CLIENTBOUND.bind(RegistryFriendlyByteBuf.decorator(registries()));
+        return GameProtocols.CLIENTBOUND_TEMPLATE.bind(RegistryFriendlyByteBuf.decorator(registries()));
     }
     private List<Packet<?>> wire(ClientboundBundlePacket bundle) {
         List<Packet<?>> wire=new ArrayList<>();

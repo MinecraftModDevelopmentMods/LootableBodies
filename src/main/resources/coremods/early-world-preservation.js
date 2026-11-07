@@ -11,10 +11,80 @@ function initializeCoreMod() {
     var save = 'net/minecraft/world/level/storage/LevelStorageSource$LevelStorageAccess';
     var hook = 'cyano/lootable/upgrade/EarlyWorldPreservation';
     var readDesc = '(L' + save + ';Z)V';
+    var nativeReadDesc = '()Lcom/mojang/serialization/Dynamic;';
+    var dedicatedReadDesc = '(L' + save + ';Z)Lcom/mojang/serialization/Dynamic;';
     var writeDesc = '(L' + save + ';Lnet/minecraft/nbt/CompoundTag;)V';
     var attachedName = 'lootablebodies$preservationAttached';
     var attachedFlags = Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC;
+    var fixer = 'net/minecraft/util/datafix/DataFixers';
+    var fixerType = 'Lcom/mojang/datafixers/DataFixer;';
+    var wrapper = 'cyano/lootable/upgrade/UpgradePreservation';
+    var wrapperDesc = '(' + fixerType + ')' + fixerType;
     return {
+        lootablebodies_dedicated_read: {
+            target: {type: 'CLASS', name: 'net.minecraft.server.Main'},
+            transformer: function(node) {
+                if (String(node.name) !== 'net/minecraft/server/Main') throw new Error('Unexpected dedicated server class');
+                var main = null;
+                for (var m = 0; m < node.methods.size(); m++) {
+                    var method = node.methods.get(m);
+                    if (String(method.name) !== 'main' || String(method.desc) !== '([Ljava/lang/String;)V' ||
+                            (method.access & Opcodes.ACC_STATIC) === 0) continue;
+                    if (main !== null) throw new Error('Ambiguous dedicated server entry point');
+                    main = method;
+                }
+                if (main === null) throw new Error('Missing dedicated server entry point');
+                var first = null, fallback = null, guarded = 0;
+                for (var insn = main.instructions.getFirst(); insn !== null; insn = insn.getNext()) {
+                    if (!(insn instanceof MethodInsnNode)) continue;
+                    if (String(insn.owner) === hook && String(insn.name) === 'readDedicatedWorld' &&
+                            String(insn.desc) === dedicatedReadDesc && insn.getOpcode() === Opcodes.INVOKESTATIC) guarded++;
+                    if (String(insn.owner) !== save || String(insn.desc) !== nativeReadDesc ||
+                            insn.getOpcode() !== Opcodes.INVOKEVIRTUAL) continue;
+                    if (String(insn.name) === 'getDataTag' && first === null) first = insn;
+                    else if (String(insn.name) === 'getDataTagFallback' && fallback === null) fallback = insn;
+                    else throw new Error('Unexpected or duplicate dedicated world reader');
+                }
+                if (guarded === 2 && first === null && fallback === null) return node;
+                if (guarded !== 0 || first === null || fallback === null) throw new Error('Dedicated world readers are missing or ambiguous');
+                [first, fallback].forEach(function(reader, index) {
+                    main.instructions.insertBefore(reader, new InsnNode(index === 0 ? Opcodes.ICONST_0 : Opcodes.ICONST_1));
+                    main.instructions.set(reader, new MethodInsnNode(
+                        Opcodes.INVOKESTATIC, hook, 'readDedicatedWorld', dedicatedReadDesc, false));
+                });
+                main.maxStack += 1;
+                return node;
+            }
+        },
+        lootablebodies_fixer: {
+            target: {type: 'CLASS', name: fixer.replace(/\//g, '.')},
+            transformer: function(node) {
+                if (String(node.name) !== fixer) throw new Error('Unexpected native data fixer class');
+                var accessor = null;
+                for (var m = 0; m < node.methods.size(); m++) {
+                    var method = node.methods.get(m);
+                    if (String(method.name) !== 'getDataFixer' || String(method.desc) !== '()' + fixerType ||
+                            (method.access & Opcodes.ACC_STATIC) === 0) continue;
+                    if (accessor !== null) throw new Error('Ambiguous native data fixer accessor');
+                    accessor = method;
+                }
+                if (accessor === null) throw new Error('Missing native data fixer accessor');
+                var returns = [], wraps = 0;
+                for (var insn = accessor.instructions.getFirst(); insn !== null; insn = insn.getNext()) {
+                    if (insn.getOpcode() === Opcodes.ARETURN) returns.push(insn);
+                    if (insn instanceof MethodInsnNode && String(insn.owner) === wrapper) {
+                        if (String(insn.name) !== 'wrapper' || String(insn.desc) !== wrapperDesc)
+                            throw new Error('Unexpected data fixer wrapper signature');
+                        wraps++;
+                    }
+                }
+                if (returns.length !== 1 || wraps > 1) throw new Error('Ambiguous native data fixer return');
+                if (wraps === 0)
+                    accessor.instructions.insertBefore(returns[0], new MethodInsnNode(
+                        Opcodes.INVOKESTATIC, wrapper, 'wrapper', wrapperDesc, false));
+                return node;
+            }
+        },
         lootablebodies_preservation: {
             target: {type: 'CLASS', name: save.replace(/\//g, '.')},
             transformer: function(node) {

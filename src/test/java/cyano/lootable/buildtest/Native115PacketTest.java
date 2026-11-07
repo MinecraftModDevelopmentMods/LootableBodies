@@ -66,7 +66,7 @@ class Native115PacketTest {
                         NativeRespawnDescription.describe(packet(Level.NETHER,SEED)));
     }
     @Test void observationKeepsUnknownDimensionKeysAndEveryDecodedField() throws Exception {
-        ResourceKey<Level> key=ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION,new net.minecraft.resources.ResourceLocation("fixture:unhandled"));
+        ResourceKey<Level> key=ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION,net.minecraft.resources.ResourceLocation.parse("fixture:unhandled"));
         ClientboundRespawnPacket packet=packet(key,SEED);
         java.util.Map<Field,Object> before=new java.util.HashMap<>();
         for(Field field:ClientboundRespawnPacket.class.getDeclaredFields()){field.setAccessible(true);before.put(field,field.get(packet));}

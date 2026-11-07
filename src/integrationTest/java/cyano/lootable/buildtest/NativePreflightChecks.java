@@ -11,9 +11,10 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /** Controlled packaged pre-world conversion/refusal; separate from old writers. */
 public final class NativePreflightChecks {
-    static final String INJECTED="NATIVE1206_INJECTED_ENTITY_CHUNK_REFUSAL";
+    static final String INJECTED="NATIVE121_INJECTED_ENTITY_CHUNK_REFUSAL";
     private static final AtomicInteger early=new AtomicInteger(),worlds=new AtomicInteger(),starts=new AtomicInteger();
     private static String mode;
+    private static boolean installed;
     static void install(net.minecraftforge.eventbus.api.IEventBus bus) {
         mode=System.getProperty("lootablebodies.nativePreflight","");
         if(mode.isEmpty())return;
@@ -24,23 +25,28 @@ public final class NativePreflightChecks {
             catch(Exception failure){failure.printStackTrace();}
         },"PreflightControlReceipt"));
         bus.addListener((net.minecraftforge.fml.event.lifecycle.FMLLoadCompleteEvent event)->event.enqueueWork(()->{
-            DataFixer nativeFixer=NativeVanillaDataFixer.get();
-            DataFixer observer=new DataFixer() {
+            installed=true;
+            System.out.println("NATIVE121_PREFLIGHT_CONTROL_INSTALLED mode="+mode);
+        }));
+    }
+    /** Called only from the disposable probe's transformer on the early-reader path. */
+    public static DataFixer observe(DataFixer delegate) {
+        if(mode==null || mode.isEmpty())return delegate;
+        RuntimeChecks.require(installed,"Preflight observation was not installed before reading the world");
+        DataFixer nativeFixer=NativeVanillaDataFixer.unwrap(delegate);
+        return new DataFixer() {
                 public Schema getSchema(int version){return nativeFixer.getSchema(version);}
                 public <T> Dynamic<T> update(DSL.TypeReference type,Dynamic<T> input,int from,int to) {
                     if(type.typeName().equals("entity_chunk") && net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer()==null) {
                         boolean preflight=java.util.Arrays.stream(Thread.currentThread().getStackTrace()).anyMatch(
                                 frame->frame.getClassName().equals("cyano.lootable.upgrade.UpgradeJournal") && frame.getMethodName().equals("validateEntityChunks"));
                         if(!preflight || worlds.get()!=0 || starts.get()!=0)throw new AssertionError("Entity conversion missed the pre-world boundary");
-                        early.incrementAndGet();System.out.println("NATIVE1206_PREWORLD_ENTITY_CONVERSION from="+from+" to="+to+" mode="+mode);
+                        early.incrementAndGet();System.out.println("NATIVE121_PREWORLD_ENTITY_CONVERSION from="+from+" to="+to+" mode="+mode);
                         if(mode.equals("refuse"))throw new IllegalStateException(INJECTED+": controlled negative fixture, not a native Minecraft error");
                     }
                     return nativeFixer.update(type,input,from,to);
                 }
-            };
-            cyano.lootable.upgrade.UpgradePreservation.register(observer);
-            System.out.println("NATIVE1206_PREFLIGHT_CONTROL_INSTALLED mode="+mode);
-        }));
+        };
     }
     @SubscribeEvent public void loaded(net.minecraftforge.event.level.LevelEvent.Load event){worlds.incrementAndGet();}
     @SubscribeEvent public void starting(net.minecraftforge.event.server.ServerAboutToStartEvent event){starts.incrementAndGet();}
@@ -73,6 +79,6 @@ public final class NativePreflightChecks {
                 && ((CompoundTag)value).getCompound("Data").getByte("Slot")==46
                 && ((CompoundTag)value).getCompound("Data").getCompound("tag").getString("keep").equals("slot-46")),"Raw Source/Data recovery evidence changed");
         Files.writeString(Path.of("preflight-conversion.pass"),"48inputEquipmentRecords/Aux/Source/Data/entityStorage conserved\n",StandardOpenOption.CREATE_NEW);
-        System.out.println("NATIVE1206_PACKAGED_PREFLIGHT_CONVERSION_PASS");
+        System.out.println("NATIVE121_PACKAGED_PREFLIGHT_CONVERSION_PASS");
     }
 }

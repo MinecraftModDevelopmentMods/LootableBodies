@@ -17,7 +17,7 @@ archive checks, security scans and small workflow/wrapper contracts. It does not
    and security checks pass. Recheck the exact merged source and all six file hashes. The independent
    artifact audit checks the uploaded files without rebuilding them.
 4. Rehash the retained local evidence and supply its receipt to the guarded
-   release workflow. For 1.17.1, 1.18.2, 1.19.4, 1.20.1 and 1.20.6 the receipt binds the exact source commit, version,
+   release workflow. For 1.17.1, 1.18.2, 1.19.4, 1.20.1, 1.20.6 and 1.21.1 the receipt binds the exact source commit, version,
    six file hashes, evidence hash and manual acceptance. Publish the files already
    checked by CI, then independently download and compare the public GitHub files
    and CurseForge jar. An accepted upload alone does not complete the release.

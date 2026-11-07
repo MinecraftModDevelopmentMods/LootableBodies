@@ -24,7 +24,7 @@ public final class FixtureItems {
             keepsake=new Item(new Item.Properties()) {
                 @Override public ICapabilityProvider getCapabilityProvider(ItemStack stack){return new Stored();}
             };
-            event.register(net.minecraft.core.registries.Registries.ITEM,new ResourceLocation("lootablebodiesbuildtest:keepsake"),()->keepsake);
+            event.register(net.minecraft.core.registries.Registries.ITEM,ResourceLocation.parse("lootablebodiesbuildtest:keepsake"),()->keepsake);
         }
     }
     private static final class Stored implements ICapabilitySerializable<CompoundTag> {
@@ -32,7 +32,7 @@ public final class FixtureItems {
         Stored(){data.putString("owner","Disposable fixture");data.putLong("number",9876543210123L);data.putByteArray("opaque",new byte[]{0,1,-1,17});}
         public boolean hasCapability(Capability<?> capability,Direction side){return false;}
         public <T>net.minecraftforge.common.util.LazyOptional<T> getCapability(Capability<T> capability,Direction side){return net.minecraftforge.common.util.LazyOptional.empty();}
-        public CompoundTag serializeNBT(){return data.copy();}
-        public void deserializeNBT(CompoundTag nbt){data=nbt.copy();}
+        public CompoundTag serializeNBT(net.minecraft.core.HolderLookup.Provider registries){return data.copy();}
+        public void deserializeNBT(net.minecraft.core.HolderLookup.Provider registries,CompoundTag nbt){data=nbt.copy();}
     }
 }

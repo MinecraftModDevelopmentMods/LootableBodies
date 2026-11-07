@@ -41,8 +41,7 @@ class BuildContractTest {
         Properties release = new Properties();
         try (java.io.InputStream input = Files.newInputStream(Paths.get("gradle.properties"))) { release.load(input); }
         assertTrue(source.contains("VERSION = \"" + release.getProperty("mod_version") + "\""));
-        assertTrue(source.contains("new ResourceLocation(\"lootablebodies:corpse\")"));
-        assertTrue(source.contains("new ResourceLocation(\"lootablebodies:corpse\")"));
+        assertTrue(source.contains("ResourceLocation.fromNamespaceAndPath(MODID,\"corpse\")"));
         assertTrue(text("LICENSE-CC0").startsWith("CC0 1.0 Universal"));
     }
     @Test void processedResourcesHaveNoTemplatesOrLegacyMetadata() throws Exception {
@@ -50,11 +49,11 @@ class BuildContractTest {
         assertTrue(info.contains("modId=\"lootablebodies\""));
         Properties release=new Properties();try(java.io.InputStream input=Files.newInputStream(Paths.get("gradle.properties"))){release.load(input);}
         assertTrue(info.contains("version=\""+release.getProperty("mod_version")+"\""));
-        assertTrue(info.contains("versionRange=\"[1.20.6]\""));assertTrue(info.contains("Cyanobacterium"));assertFalse(info.contains("${"));
+        assertTrue(info.contains("versionRange=\"[1.21.1]\""));assertTrue(info.contains("Cyanobacterium"));assertFalse(info.contains("${"));
         assertFalse(Files.exists(Paths.get("build/resources/main/mcmod.info")));
         com.google.gson.JsonObject pack=new com.google.gson.JsonParser().parse(text("build/resources/main/pack.mcmeta")).getAsJsonObject().getAsJsonObject("pack");
-        assertEquals(32,pack.get("pack_format").getAsInt());
-        assertEquals(41,pack.getAsJsonObject("supported_formats").get("max_inclusive").getAsInt());assertFalse(pack.has("forge:server_data_pack_format"));
+        assertEquals(34,pack.get("pack_format").getAsInt());
+        assertEquals(48,pack.getAsJsonObject("supported_formats").get("max_inclusive").getAsInt());assertFalse(pack.has("forge:server_data_pack_format"));
     }
     @Test void everyOriginalTranslationSurvivesTheNativeJsonFormat() throws Exception {
         try(DirectoryStream<Path> locales=Files.newDirectoryStream(Paths.get("src/test/resources/legacy-translations"),"*.lang")){

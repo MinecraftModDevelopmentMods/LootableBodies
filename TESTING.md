@@ -1,7 +1,7 @@
 # Testing
 
-Run qualification for Forge 1.20.6 locally with Forge 50.2.14 and Java 21.
-GitHub Actions checks production archives and release contracts.
+Run qualification for Forge 1.21.1 locally with Forge 52.1.20 and Java 21.
+Qualification runs locally on this branch.
 
 During development, reproduce the changed behaviour first, then batch the cheap
 Java and Python checks. Reserve the full runtime suite for a frozen candidate.

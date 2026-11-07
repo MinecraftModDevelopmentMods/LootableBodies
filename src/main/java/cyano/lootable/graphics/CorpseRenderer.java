@@ -26,7 +26,7 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 /** Corpse renderer, originally created by Chris on 4/10/2016. */
 @OnlyIn(Dist.CLIENT)
 public class CorpseRenderer extends LivingEntityRenderer<EntityLootableBody, PlayerModel<EntityLootableBody>> {
-    private static final ResourceLocation localSkin = new ResourceLocation(LootableBodies.MODID,
+    private static final ResourceLocation localSkin = ResourceLocation.fromNamespaceAndPath(LootableBodies.MODID,
             "textures/entity/corpse/corpse.png");
     protected final PlayerModel<EntityLootableBody> thickArmsModel;
     protected final PlayerModel<EntityLootableBody> thinArmsModel;

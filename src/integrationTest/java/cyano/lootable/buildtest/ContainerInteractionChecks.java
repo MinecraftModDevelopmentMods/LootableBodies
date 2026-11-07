@@ -433,7 +433,7 @@ final class ContainerInteractionChecks {
         ItemStack carried=ItemStack.EMPTY;
         RecordingConnection(ServerPlayer p){super(ContainerInteractionChecks.server,new Connection(PacketFlow.SERVERBOUND),p,net.minecraft.server.network.CommonListenerCookie.createInitial(p.getGameProfile(),false));}
         @Override public void send(Packet<?> packet){
-            NativeMenuObservation observed=NativeMenuObservation.decode(packet);if(observed==null)return;
+            NativeMenuObservation observed=NativeMenuObservation.decode(packet,player.registryAccess());if(observed==null)return;
             if(observed.content) {
                 slots.clear();for(int index=0;index<observed.items.size();index++)slots.put(index,observed.items.get(index));
                 carried=observed.carried;lastContentStateId=observed.stateId;resyncs++;

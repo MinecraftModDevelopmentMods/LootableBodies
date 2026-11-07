@@ -1,4 +1,4 @@
-"""Disposable official Forge 50 launches, separate from the development bootstrap."""
+"""Disposable official Forge 52 launches, separate from the development bootstrap."""
 import hashlib
 import json
 import os
@@ -13,33 +13,33 @@ import zipfile
 from command_logs import run_logged
 from runtime_diagnostics import run_monitored,validate_logging_inputs
 
-FORGE = 'forge-1.20.6-50.2.14'
-INSTALLER_SHA256 = 'CF5ACACF52F694732732BB98D72B2871CFE16321990053DC4F3DDF5C20044F68'
-SERVER_INPUTS = json.loads(Path(__file__).with_name('native1206_server_inputs.json').read_text(encoding='utf-8'))
-WORKER_BUDGET_PATH = Path(__file__).with_name('native1206_worker_budget.json')
+FORGE = 'forge-1.21.1-52.1.20'
+INSTALLER_SHA256 = '6B83521A70AAF5371AF8C4C9F97D930D51EC4266AC6EC3BC975182FBA2EF9F62'
+SERVER_INPUTS = json.loads(Path(__file__).with_name('native121_server_inputs.json').read_text(encoding='utf-8'))
+WORKER_BUDGET_PATH = Path(__file__).with_name('native121_worker_budget.json')
 WORKER_BUDGET_PROOF = json.loads(WORKER_BUDGET_PATH.read_text(encoding='utf-8')) if WORKER_BUDGET_PATH.is_file() else {}
-# Forge 50 uses its actual default CPU/worker/GC configuration. A new target's
+# Forge 52 uses its actual default CPU/worker/GC configuration. A new target's
 # history cannot borrow an older engine's resource qualification.
 HISTORICAL_JVM_ARGS = ()
 
 
 def require_historical_budget():
     if not WORKER_BUDGET_PATH.is_file():
-        raise RuntimeError('Forge 50 historical runtime policy has not been qualified')
+        raise RuntimeError('Forge 52 historical runtime policy has not been qualified')
     proof=json.loads(WORKER_BUDGET_PATH.read_text(encoding='utf-8'))
-    if tuple(proof.get(key) for key in ('minecraft','forge','reloads','jvms','qualified'))!=('1.20.6','50.2.14',200,4,True):
-        raise RuntimeError('Forge 50 historical runtime policy has not been qualified')
+    if tuple(proof.get(key) for key in ('minecraft','forge','reloads','jvms','qualified'))!=('1.21.1','52.1.20',200,4,True):
+        raise RuntimeError('Forge 52 historical runtime policy has not been qualified')
     if proof.get('jvm_args')!=[]:
-        raise RuntimeError('Unqualified Forge 50 worker or GC override')
+        raise RuntimeError('Unqualified Forge 52 worker or GC override')
     source=Path(__file__).resolve().parents[1]/'src/controlTest/java/buildcontrol/ResourceControl.java'
-    manifest=Path(__file__).with_name('native1206_server_inputs.json')
+    manifest=Path(__file__).with_name('native121_server_inputs.json')
     if proof.get('controller_sha256')!=digest(source) or proof.get('server_input_manifest_sha256')!=digest(manifest):
-        raise RuntimeError('Forge 50 resource qualification source or SDK binding changed')
+        raise RuntimeError('Forge 52 resource qualification source or SDK binding changed')
     if not __import__('re').fullmatch('[A-F0-9]{64}',proof.get('qualification_evidence_sha256','')):
-        raise RuntimeError('Missing Forge 50 resource qualification identity')
-    evidence=Path(__file__).resolve().parents[1]/'.gradle/native1206-resource-qualification/proof.json'
+        raise RuntimeError('Missing Forge 52 resource qualification identity')
+    evidence=Path(__file__).resolve().parents[1]/'.gradle/native121-resource-qualification/proof.json'
     if not evidence.is_file() or digest(evidence)!=proof['qualification_evidence_sha256']:
-        raise RuntimeError('Missing or changed actual local Forge 50 resource qualification evidence')
+        raise RuntimeError('Missing or changed actual local Forge 52 resource qualification evidence')
     return HISTORICAL_JVM_ARGS
 
 
@@ -60,15 +60,15 @@ def fingerprint(directory):
 def verify_server_inputs(distribution):
     """Pin the exact completed SDK after both official installer sides.
 
-    Forge 50 generated archives match the installer's declared expected hashes.
+    Forge 52 generated archives match the installer's declared expected hashes.
     No changed/truncated class, intermediate, resource or extra byte is accepted.
     """
     actual={}
     for name,expected in SERVER_INPUTS.items():
         artifact=Path(distribution)/name
-        if artifact.is_symlink() or not artifact.is_file():raise FileNotFoundError('Missing Forge 50 SDK input: '+name)
+        if artifact.is_symlink() or not artifact.is_file():raise FileNotFoundError('Missing Forge 52 SDK input: '+name)
         value=digest(artifact)
-        if value!=expected:raise RuntimeError('Incorrect official Forge 50 server input: '+name)
+        if value!=expected:raise RuntimeError('Incorrect official Forge 52 server input: '+name)
         actual[name]=value
     return actual
 
@@ -90,7 +90,7 @@ def prepare_server(home, distribution, candidate=None, probe=None):
     distribution = distribution.resolve()
     libraries = distribution / 'libraries'
     if not libraries.is_dir():
-        raise FileNotFoundError('Incomplete official Forge 50 server installation')
+        raise FileNotFoundError('Incomplete official Forge 52 server installation')
     verify_server_inputs(distribution)
     home.mkdir(parents=True, exist_ok=False)
     (home / 'mods').mkdir()
@@ -156,7 +156,7 @@ def run_java(java, home, phase, *, timeout=240, jvm_args=()):
     gc = diagnostics.relative_to(home) / 'gc.txt'
     arguments = 'win_args.txt' if os.name == 'nt' else 'unix_args.txt'
     command = [str(java), '-Dfile.encoding=UTF-8', '-Xms256m', '-Xmx2G', '-Xlog:gc*,safepoint:file=' + gc.as_posix() + ':time,uptime,level,tags',
-               *jvm_args, '@libraries/net/minecraftforge/forge/1.20.6-50.2.14/' + arguments, '--nogui']
+               *jvm_args, '@libraries/net/minecraftforge/forge/1.21.1-52.1.20/' + arguments, '--nogui']
     validate_logging_inputs(command)
     def initial_diagnostics(process):
         # Short refusals and successful phases must retain real thread/heap
@@ -206,14 +206,14 @@ def seed_flat_fixture(home, header, expected_sha256):
         version = data.value['DataVersion']
         generator = data.value['WorldGenSettings'].value['dimensions'].value[
             'minecraft:overworld'].value['generator'].value['type']
-        if version.kind != 3 or version.value != 3839 or generator.kind != 8 or generator.value != 'minecraft:flat':
+        if version.kind != 3 or version.value != 3955 or generator.kind != 8 or generator.value != 'minecraft:flat':
             raise ValueError('Wrong native version or generator')
     except (AttributeError, KeyError, ValueError) as error:
-        raise RuntimeError('Expected an explicit native3839 flat codec header') from error
+        raise RuntimeError('Expected an explicit native3955 flat codec header') from error
     world.mkdir()
     shutil.copy2(header, world/'level.dat')
     (home/'native-flat-header-input.json').write_text(json.dumps({
-        'sha256':expected_sha256, 'native_data_version':3839, 'generator':'minecraft:flat',
+        'sha256':expected_sha256, 'native_data_version':3955, 'generator':'minecraft:flat',
         'only_header_copied':True}, indent=2)+'\n', encoding='utf-8')
 
 
@@ -249,7 +249,7 @@ def _download(artifact, destination):
     destination.parent.mkdir(parents=True, exist_ok=True)
     for address in (artifact['url'], artifact['url'] + '?source=lootablebodies-runtime'):
         try:
-            request = urllib.request.Request(address, headers={'User-Agent': 'LootableBodiesRuntimeTests/2.4.12.120061'})
+            request = urllib.request.Request(address, headers={'User-Agent': 'LootableBodiesRuntimeTests/2.4.13.121011'})
             with urllib.request.urlopen(request, timeout=60) as response:
                 content = response.read()
             if hashlib.sha1(content).hexdigest() != expected:
@@ -281,7 +281,7 @@ def validate_client_paths(paths):
     import re
     for path in paths:
         value=str(path).replace('\\','/').lower();name=path.name.lower()
-        # Forge 50's exact descriptor requires this dist-marker API archive.
+        # Forge 52's exact descriptor requires this dist-marker API archive.
         if (value.endswith('/net/minecraftforge/mergetool-api/1.0/mergetool-api-1.0.jar')
                 and not path.is_symlink() and path.is_file()
                 and digest(path) == '100F0C4D658B9DD73600CE4BB9C75657E0651F0F0F5E0B2F977F85D8F495350B'):
@@ -297,7 +297,7 @@ def client_inputs(runtime, prepared):
 
 
 def prepare_assets(runtime, cache=None):
-    raise RuntimeError('Use pinned native 1.20.6 assets; inherited cache-copy hydration is disabled')
+    raise RuntimeError('Use pinned native 1.21.1 assets; inherited cache-copy hydration is disabled')
 
 
 def prepare_client(home, candidate=None, probe=None):
@@ -316,20 +316,20 @@ def prepare_client(home, candidate=None, probe=None):
 def client_command(java, home, runtime, assets, *, username='LootableTest', extra=(), prepared=None):
     from native120_client import command
     if prepared is None:
-        prepared=Path(__file__).resolve().parents[1]/'.gradle/native1206-client-inputs'
+        prepared=Path(__file__).resolve().parents[1]/'.gradle/native121-client-inputs'
     return command(java,home,runtime,assets,prepared,username=username,extra=extra)
 
 
 def install(java, home, client=False):
-    """Install Forge 50 locally; its installer owns the server downloads."""
+    """Install Forge 52 locally; its installer owns the server downloads."""
     from prepare_migration_inputs import fetch
     home=home.resolve();home.mkdir(parents=True,exist_ok=False)
     installer=home/(FORGE+'-installer.jar')
-    fetch('https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.6-50.2.14/'+installer.name,installer,INSTALLER_SHA256)
+    fetch('https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.1-52.1.20/'+installer.name,installer,INSTALLER_SHA256)
     if client:
         from native120_client import BASE_VERSION,BASE_SHA1
         base=home/'versions'/BASE_VERSION/(BASE_VERSION+'.json')
-        _download({'sha1':BASE_SHA1,'url':'https://piston-meta.mojang.com/v1/packages/'+BASE_SHA1+'/1.20.6.json'},base)
+        _download({'sha1':BASE_SHA1,'url':'https://piston-meta.mojang.com/v1/packages/'+BASE_SHA1+'/1.21.1.json'},base)
         metadata=json.loads(base.read_text());_download(metadata['downloads']['client'],base.with_suffix('.jar'))
         (home/'launcher_profiles.json').write_text('{"profiles":{}}\n')
     run_logged([str(java),'-Djava.awt.headless=true','-jar',installer.name,

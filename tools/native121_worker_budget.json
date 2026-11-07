@@ -1,0 +1,11 @@
+{
+  "minecraft": "1.21.1",
+  "forge": "52.1.20",
+  "reloads": 200,
+  "jvms": 4,
+  "qualified": true,
+  "jvm_args": [],
+  "controller_sha256": "EDA2C8CB7983A3986274809265CA1DCD131ED1A78967FD2E4B392CFF5D05C842",
+  "server_input_manifest_sha256": "1FE3E789952A0B43B178A7B51178F331117035870103596C62F144E97AECDD0B",
+  "qualification_evidence_sha256": "3264929DA220F9E21840DE9D43C3C04E3827C27F4372C6D7076D9B54F16F61B7"
+}

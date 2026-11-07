@@ -50,7 +50,7 @@ public final class RespawnPacketChecks {
             fixture=new RespawnPacketChecks(server);
             // Cold software-rendered clients may need more than 500 server ticks
             // to reach their first login. Exercise the actual fixture tick path.
-            for(int tick=0;tick<1000;tick++)fixture.tick(new TickEvent.ServerTickEvent(TickEvent.Phase.END,()->true,server));
+            for(int tick=0;tick<1000;tick++)fixture.tick(new TickEvent.ServerTickEvent.Post(()->true,server));
             RuntimeChecks.require(!fixture.finished&&fixture.index==0&&fixture.phase==0&&fixture.phaseTicks==0,
                 "Client startup consumed the death/respawn case deadline");
             System.out.println("RESPAWN_STARTUP_CLOCK_PASS waiting_ticks=1000 case_ticks=0");
@@ -103,14 +103,20 @@ public final class RespawnPacketChecks {
                     RuntimeChecks.require(observerBody!=null,"No observer death corpse");
                 }
             } else if(phase==2&&a!=null&&a!=dead&&a.isAlive()&&(!simultaneous||(b!=null&&b!=observerDead&&b.isAlive()))) {
-                RuntimeChecks.require(body.isAlive()&&VisibilityChecks.has(body,520+index),"Server corpse/inventory lost during respawn");
                 if(a.level().dimension()!=body.level().dimension())transfer(a,body.level().dimension());
                 a.connection.teleport(body.getX(),body.getY(),body.getZ()-2.5,0,25);
                 if(b.level().dimension()!=body.level().dimension())transfer(b,body.level().dimension());
                 b.connection.teleport(body.getX()+1.5,body.getY(),body.getZ()-2.5,0,25);
-                // With no players left, Forge may unload/reload the Nether between
-                // death and return. Saved UUIDs survive; runtime entity IDs do not.
-                body=live(body);if(simultaneous)observerBody=live(observerBody);state(3);
+                // Forge may unload the death chunk while both clients respawn.
+                // Resolve its entity inbox before checking the live UUID and inventory.
+                body=live(body);
+                RuntimeChecks.require(body.isAlive()&&VisibilityChecks.has(body,520+index),"Server corpse/inventory lost during respawn");
+                if(simultaneous) {
+                    observerBody=live(observerBody);
+                    RuntimeChecks.require(observerBody.isAlive()&&VisibilityChecks.has(observerBody,620+index),
+                            "Observer corpse/inventory lost during respawn");
+                }
+                state(3);
             } else if(phase==3) {
                 RuntimeChecks.require(a!=null&&b!=null&&a.isAlive()&&b.isAlive(),"Unexpected extra player death during the accepted respawn observation");
                 // In a cold restart, many ordinary saved bodies can collide and
@@ -152,7 +158,7 @@ public final class RespawnPacketChecks {
     }
     private EntityLootableBody live(EntityLootableBody previous) {
         ServerLevel w=server.getLevel(previous.level().dimension());
-        w.getChunk((int)Math.floor(previous.getX()/16),(int)Math.floor(previous.getZ()/16));
+        RuntimeChecks.awaitChunk(w,previous.blockPosition().getX()>>4,previous.blockPosition().getZ()>>4);
         return RuntimeChecks.find(w,previous.getUUID());
     }
 }

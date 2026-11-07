@@ -1,0 +1,11 @@
+{
+  "minecraft": "1.21.1",
+  "forge": "52.1.20",
+  "java": "21.0.7+6",
+  "data_version": 3955,
+  "generator": "minecraft:flat",
+  "sha256": "C85D57B04D1309304A2B28992E5B45B4E695039BE162682255A0CCCCB3EE30CD",
+  "candidate_sha256": "995425C67D6CD62C5BE6C70937BD6F8E1EDA05EC931810EE087A44CCCF09D310",
+  "generated_by_native_server": true,
+  "stdout_sha256": "E83C11EEFDE3DBCAB3CFEC7E881270FE0F59F0990F25C3B90B9B7DB3B79C7590"
+}

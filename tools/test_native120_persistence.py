@@ -6,8 +6,8 @@ from native120_persistence import count_persisted
 from verify_world_upgrades import patch_stamps
 
 class Native120PersistenceTest(unittest.TestCase):
-    def body(self,number=1,marker=11):return Tag(10,{'id':Tag(8,'lootablebodies:corpse'),'LootableBodiesDataVersion':Tag(3,marker),'UUID':Tag(11,struct.pack('>iiii',0,0,0,number))})
-    def chunk(self,bodies,version=3839,position=(8,8)):
+    def body(self,number=1,marker=12):return Tag(10,{'id':Tag(8,'lootablebodies:corpse'),'LootableBodiesDataVersion':Tag(3,marker),'UUID':Tag(11,struct.pack('>iiii',0,0,0,number))})
+    def chunk(self,bodies,version=3955,position=(8,8)):
         return {'name':'','root':Tag(10,{'DataVersion':Tag(3,version),'Position':Tag(11,struct.pack('>ii',*position)),'Entities':Tag(9,(10,bodies))}),'compression':2,'timestamp':bytes(4)}
     def write(self,world,chunk,dimension=''):
         path=world/dimension/'entities/r.0.0.mca';path.parent.mkdir(parents=True,exist_ok=True);write_disposable_region(path,{264:chunk});return path
@@ -16,7 +16,7 @@ class Native120PersistenceTest(unittest.TestCase):
             world=Path(directory);paths=[self.write(world,self.chunk([self.body(i+1)]),dim) for i,dim in enumerate(['','DIM-1','DIM1'])]
             before=[p.read_bytes() for p in paths];self.assertEqual(3,count_persisted(world,0));self.assertEqual(before,[p.read_bytes() for p in paths])
     def test_previous_marker_native_version_or_wrong_entity_chunk_position_is_fatal(self):
-        for marker,version,position in [(10,3839,(8,8)),(11,3465,(8,8)),(11,3839,(9,8))]:
+        for marker,version,position in [(11,3955,(8,8)),(12,3839,(8,8)),(12,3955,(9,8))]:
             with self.subTest(marker=marker,version=version,position=position),tempfile.TemporaryDirectory() as directory:
                 world=Path(directory);self.write(world,self.chunk([self.body(marker=marker)],version,position))
                 with self.assertRaises(ValueError):count_persisted(world,0)
@@ -60,7 +60,7 @@ class Native120PersistenceTest(unittest.TestCase):
                 else:
                     mutation=inject_future_entity_version(world)
                     self.assertEqual(original,(home/'future-entity-original.mca').read_bytes())
-                    self.assertEqual(Tag(3,3840),read_region(path)[264]['root'].value['DataVersion'])
+                    self.assertEqual(Tag(3,3956),read_region(path)[264]['root'].value['DataVersion'])
                     self.assertEqual(8,mutation['corpse_marker'])
 
 if __name__=='__main__':unittest.main()

@@ -14,7 +14,7 @@ class NativeEvidenceTest(unittest.TestCase):
         record={'timed_out':False,'returncode':0,'pid':123,'timeout':240,'cwd':str(home),
                 'command':['fixture-java','-Dlootablebodies.phase='+phase,
                     '-Xlog:gc*,safepoint:file=upgrade-near.diagnostics/gc.txt:time,uptime,level,tags',
-                    '@libraries/net/minecraftforge/forge/1.20.6-50.2.14/'+('win_args.txt' if os.name=='nt' else 'unix_args.txt'),'--nogui'],
+                    '@libraries/net/minecraftforge/forge/1.21.1-52.1.20/'+('win_args.txt' if os.name=='nt' else 'unix_args.txt'),'--nogui'],
                 'evidence':{name:digest(directory/name) for name in ['gc.txt','initial-threads.txt','initial-heap-gc.txt']},'captures':[],'metrics':[]}
         (directory/'result.json').write_text(json.dumps(record));return directory,record
     def test_complete_receipt_retains_all_logs_and_rehashes_every_native_file(self):
@@ -64,7 +64,7 @@ class NativeEvidenceTest(unittest.TestCase):
             record['cwd']='/original/runner/build/migration-results/case'
             record['command']=[part.replace('/win_args.txt','/unix_args.txt') for part in record['command']]
             (folder/'result.json').write_text(json.dumps(record));audit_phase(home,'upgrade-near',relocated=True)
-            record['command'].append('@libraries/net/minecraftforge/forge/1.20.6-50.2.14/win_args.txt')
+            record['command'].append('@libraries/net/minecraftforge/forge/1.21.1-52.1.20/win_args.txt')
             (folder/'result.json').write_text(json.dumps(record))
             with self.assertRaises(ValueError):audit_phase(home,'upgrade-near',relocated=True)
 

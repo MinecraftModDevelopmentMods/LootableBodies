@@ -65,6 +65,25 @@ class TypedNbtTest {
         assertFalse(TypedNbt.same(before,other));assertTrue(TypedNbt.sameEntity(before,other));
         assertTrue(TypedNbt.same(before,copy));assertTrue(TypedNbt.same(other,entity(true)));
     }
+    @Test void native121AttributeOrderMayChangeButTypedValuesMayNot() {
+        CompoundTag left=entity(false),right=entity(true);
+        for(CompoundTag body : new CompoundTag[]{left,right}) {
+            ListTag attributes=body.getList("Attributes",10);
+            for(int i=0;i<attributes.size();i++) {
+                CompoundTag entry=attributes.getCompound(i);
+                entry.put("id",entry.get("Name"));
+                entry.put("base",entry.get("Base"));
+                entry.remove("Name");
+                entry.remove("Base");
+            }
+            body.put("attributes",attributes);
+            body.remove("Attributes");
+        }
+        assertFalse(TypedNbt.same(left,right));
+        assertTrue(TypedNbt.sameEntity(left,right));
+        right.getList("attributes",10).getCompound(0).putFloat("base",.7F);
+        assertFalse(TypedNbt.sameEntity(left,right));
+    }
     @Test void entityComparisonStillRequiresEveryTypedAttributeAndDuplicate() {
         CompoundTag left=entity(false),right=entity(true);right.getList("Attributes",10).getCompound(0).putFloat("Base",.7F);
         assertFalse(TypedNbt.sameEntity(left,right));right=entity(true);right.getList("Attributes",10).add(right.getList("Attributes",10).getCompound(0).copy());

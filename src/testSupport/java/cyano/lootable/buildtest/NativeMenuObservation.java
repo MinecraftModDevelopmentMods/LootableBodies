@@ -4,7 +4,6 @@ import java.util.List;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.core.RegistryAccess;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundContainerSetContentPacket;
 import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
@@ -19,10 +18,9 @@ public final class NativeMenuObservation {
     NativeMenuObservation(boolean content,int containerId,int stateId,int slot,List<ItemStack> items,ItemStack carried,ItemStack item) {
         this.content=content;this.containerId=containerId;this.stateId=stateId;this.slot=slot;this.items=items;this.carried=carried;this.item=item;
     }
-    public static NativeMenuObservation decode(Packet<?> packet) {
+    public static NativeMenuObservation decode(Packet<?> packet,RegistryAccess registries) {
         if(!(packet instanceof ClientboundContainerSetContentPacket)
                 && !(packet instanceof ClientboundContainerSetSlotPacket))return null;
-        var registries=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
         var wire=new RegistryFriendlyByteBuf(Unpooled.buffer(),registries);
         try {
             NativeMenuObservation result;

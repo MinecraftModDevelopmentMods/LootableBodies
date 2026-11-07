@@ -1,4 +1,4 @@
-"""Synthetic diagnostic counterexamples; independent Forge 50 is separate proof."""
+"""Synthetic diagnostic counterexamples; independent Forge 52 is separate proof."""
 from pathlib import Path
 import hashlib,json,tempfile,unittest
 from unittest.mock import patch
@@ -38,9 +38,9 @@ class Native120ClientDiagnosticTests(unittest.TestCase):
             with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as directory:
                 root=Path(directory);definition=root/'sounds.json';definition.write_text('{}');critical=root/'control.fixture';critical.write_text('synthetic independent control input');rawlog=root/'native.log';rawlog.write_text('synthetic native fixture')
                 sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest().upper()
-                proof={'minecraft':'1.20.6','forge':'50.2.14','platform':'Windows amd64','qualified':True,'no_candidate':True,'no_world':True,'native_client_exit':0,'events':EVENTS,'control_sha256':'C'*64,'sound_definition':str(definition),'critical_files':{str(definition):sha(definition),str(critical):sha(critical)},'raw_control_logs':{str(rawlog):sha(rawlog)},'original_strict_audit_passed':False}
+                proof={'minecraft':'1.21.1','forge':'52.1.20','platform':'Windows amd64','qualified':True,'no_candidate':True,'no_world':True,'native_client_exit':0,'events':EVENTS,'control_sha256':'C'*64,'sound_definition':str(definition),'critical_files':{str(definition):sha(definition),str(critical):sha(critical)},'raw_control_logs':{str(rawlog):sha(rawlog)},'original_strict_audit_passed':False}
                 saved=root/'proof.json';saved.write_text(json.dumps(proof))
-                policy={'minecraft':'1.20.6','forge':'50.2.14','platform':'Windows amd64','qualified':True,'proof_sha256':sha(saved),'events':EVENTS,'control_sha256':'C'*64,'sound_definition_sha256':sha(definition)}
+                policy={'minecraft':'1.21.1','forge':'52.1.20','platform':'Windows amd64','qualified':True,'proof_sha256':sha(saved),'events':EVENTS,'control_sha256':'C'*64,'sound_definition_sha256':sha(definition)}
                 if mutation=='resource':definition.write_text('{"item.goat_horn.play":{}}')
                 elif mutation=='proof':saved.write_text('{}')
                 elif mutation=='missing':critical.unlink()

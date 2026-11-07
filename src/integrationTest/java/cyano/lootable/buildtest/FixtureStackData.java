@@ -1,8 +1,6 @@
 package cyano.lootable.buildtest;
 
-import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
@@ -11,8 +9,14 @@ import net.minecraft.world.item.component.CustomData;
 final class FixtureStackData {
     private FixtureStackData() { }
 
-    static RegistryAccess registries() {
-        return RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+    static net.minecraft.core.HolderLookup.Provider registries() {
+        var server=net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+        if(server!=null && server.isSameThread())return server.registryAccess();
+        var client=net.minecraftforge.fml.DistExecutor.unsafeCallWhenOn(
+                net.minecraftforge.api.distmarker.Dist.CLIENT,()->ClientChecks::fixtureRegistries);
+        if(client!=null)return client;
+        if(server!=null)return server.registryAccess();
+        return net.minecraft.data.registries.VanillaRegistries.createLookup();
     }
 
     static CompoundTag save(ItemStack stack) {

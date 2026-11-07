@@ -21,6 +21,11 @@ import net.minecraftforge.event.TickEvent;
 
 /** Automated real-client world, packet interaction, GUI render and reload check. */
 public final class ClientChecks {
+    static net.minecraft.core.HolderLookup.Provider fixtureRegistries() {
+        var level=net.minecraft.client.Minecraft.getInstance().level;
+        return level==null?null:level.registryAccess();
+    }
+
     private int stage, ticks, frames;
     private int reportedStage=-1;
     private Future<?> pending;

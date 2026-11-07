@@ -17,10 +17,10 @@ class Native118SavedPositionTest {
     }
     private CompoundTag fixed(CompoundTag raw,boolean separate) {
         return NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),
-                separate?References.ENTITY_CHUNK:References.CHUNK,raw,3839,3839);
+                separate?References.ENTITY_CHUNK:References.CHUNK,raw,3955,3955);
     }
     private CompoundTag root(CompoundTag body,boolean separate,int x,int z) {
-        CompoundTag root=chunk(3839,body);
+        CompoundTag root=chunk(3955,body);
         if(separate)root.putIntArray("Position",new int[]{x,z});
         else {
             root.putInt("xPos",x);root.putInt("zPos",z);root.put("sections",new ListTag());root.put("entities",root.get("Entities"));

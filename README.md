@@ -1,8 +1,8 @@
-# Lootable Bodies for Minecraft 1.20.6
+# Lootable Bodies for Minecraft 1.21.1
 
 Your items stay on a corpse when you die. Right-click the body to recover them.
 
-Use Forge 50.2.14 and Java 21. Install `LootableBodies-2.4.12.120061.jar`
+Use Forge 52.1.20 and Java 21. Install `LootableBodies-2.4.13.121011.jar`
 in the client and server mods folders. Back up your world before upgrading.
 
 Created by Cyanobacterium (DrCyano), maintained by SkyBlade1978.
@@ -12,7 +12,7 @@ Open Mods, select Lootable Bodies and click Config to change its settings.
 Appearance changes apply straight away on your client. World and server rules
 take effect after restarting Minecraft or the server.
 
-Existing 1.10.2, 1.11.2, 1.12.2, 1.13.2, 1.14.4, 1.15.2, 1.16.5, 1.17.1, 1.18.2, 1.19.4 and 1.20.1 corpses are preserved when upgrading,
+Existing 1.10.2, 1.11.2, 1.12.2, 1.13.2, 1.14.4, 1.15.2, 1.16.5, 1.17.1, 1.18.2, 1.19.4, 1.20.1 and 1.20.6 corpses are preserved when upgrading,
 including bodies in chunks you visit later. Keep the whole world backup,
 including its `data` folder. If preservation cannot finish safely, world loading
 stops with an explanation in the log. Items from missing mods are retained for

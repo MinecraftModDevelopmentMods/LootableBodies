@@ -40,7 +40,7 @@ class EarlyWorldPreservationTest {
         try(LevelStorageSource.LevelStorageAccess save=format.createAccess("fixture")) {
             EarlyWorldPreservation.beforeRead(save,false);
             UpgradeJournal early=UpgradePreservation.journal();assertEquals(2230,early.worldVersions().getInt("WorldDataVersion"));
-            write(world,level(2586));assertSame(early,UpgradePreservation.prepareForStart(world));
+            write(world,level(2586));assertSame(early,UpgradePreservation.prepareForStart(world,net.minecraft.util.datafix.DataFixers.getDataFixer()));
             assertEquals(2230,early.worldVersions().getInt("WorldDataVersion"));
             CompoundTag output=new CompoundTag();EarlyWorldPreservation.beforeWrite(save,output);
             assertEquals(root.get("lootablebodies"),output.get("lootablebodies"));

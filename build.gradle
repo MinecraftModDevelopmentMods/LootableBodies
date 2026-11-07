@@ -6,7 +6,6 @@ plugins {
     id 'idea'
     id 'maven-publish'
     id 'net.minecraftforge.renamer' version '1.1.5'
-    id 'net.minecraftforge.accesstransformers' version '2.0.0'
     id 'net.minecraftforge.gradle' version '7.0.34'
 }
 
@@ -101,8 +100,8 @@ tasks.register('generateNative120Fixtures', JavaExec) {
     dependsOn 'testClasses'
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'cyano.lootable.buildtest.Native120FixtureGenerator'
-    args providers.gradleProperty('nativeFixtureOutput').getOrElse('build/native1206-fixture-preparation-01'),
-        file('tools/fixtures/native1206-flat-level.dat').absolutePath
+    args providers.gradleProperty('nativeFixtureOutput').getOrElse('build/native121-fixture-preparation-01'),
+        file('tools/fixtures/native121-flat-level.dat').absolutePath
 }
 tasks.withType(JavaExec).configureEach { javaLauncher = productionLauncher }
 tasks.withType(Javadoc).configureEach {
@@ -145,7 +144,6 @@ apply from: 'gradle/assets.gradle'
 
 minecraft {
     mappings channel: project.mapping_channel, version: project.mapping_version
-    accessTransformer = 'META-INF/accesstransformer.cfg'
     runs {
         configureEach {
             workingDir.convention layout.projectDirectory.dir(
@@ -231,11 +229,10 @@ tasks.named('jar', Jar) {
             'Implementation-Version': project.version, 'Implementation-Vendor': project.mod_vendor,
             'Maven-Artifact': "${project.group}:${base.archivesName.get()}:${project.version}",
             'Implementation-License': project.mod_license,
-            'Built-On-Java': '21', 'Built-On': "${minecraft_version}-${forge_version}",
-            'FMLAT': 'accesstransformer.cfg')
+            'Built-On-Java': '21', 'Built-On': "${minecraft_version}-${forge_version}")
     filesMatching(archiveTextPatterns, normalizeArchiveText)
 }
-// Forge 50.2.14 ships its runtime with official names.
+// Forge 52.1.20 ships its runtime with official names.
 ext.releaseJar = tasks.named('jar', Jar)
 ['sourcesJar', 'javadocJar'].each { name ->
     tasks.named(name, Jar) {
@@ -246,10 +243,6 @@ ext.releaseJar = tasks.named('jar', Jar)
                 'Maven-Artifact': "${project.group}:${base.archivesName.get()}:${project.version}:${name == 'sourcesJar' ? 'sources' : 'javadoc'}")
         filesMatching(archiveTextPatterns, normalizeArchiveText)
     }
-}
-tasks.named('sourcesJar', Jar) {
-    inputs.property('accessTransformerLineEndings', 'lf')
-    filesMatching('META-INF/accesstransformer.cfg', normalizeArchiveText)
 }
 // Java 21 writes the index and its bundled SVG icons with the host line
 // separator. Keep the documentation bytes identical on Windows and Linux.
@@ -286,7 +279,7 @@ tasks.register('verifyProductionRuntimeClasspath') {
 }
 tasks.named('check') { dependsOn 'verifyProductionRuntimeClasspath' }
 
-// Publication is restricted to the confirmed MMD release workflow.
+// Publication is disabled during local qualification.
 
 // Renamer registers every auxiliary probe with assemble. Production archives
 // have their own explicit inputs; probes are built by their verification gates.

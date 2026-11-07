@@ -1,10 +1,10 @@
-name: LootableBodies 1.20.6 CI
+name: LootableBodies 1.21.1 CI
 
 on:
   push:
-    branches: [master-1.20.6]
+    branches: [master-1.21.1]
   pull_request:
-    branches: [master-1.20.6]
+    branches: [master-1.21.1]
 
 permissions:
   contents: read
@@ -63,7 +63,7 @@ jobs:
       - name: Retain the exact six release files
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: LootableBodies-1.20.6-${{ github.sha }}
+          name: LootableBodies-1.21.1-${{ github.sha }}
           if-no-files-found: error
           path: build/release/bundle/*
       - name: Retain build evidence

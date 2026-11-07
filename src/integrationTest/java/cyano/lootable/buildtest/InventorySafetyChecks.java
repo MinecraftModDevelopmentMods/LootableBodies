@@ -113,7 +113,7 @@ public final class InventorySafetyChecks {
         return result;
     }
     private static void handle(PlayerDeathEventHandler handler,ServerPlayer player,List<ItemEntity> drops) {
-        handler.entityDropEvent(new LivingDropsEvent(player,player.damageSources().fellOutOfWorld(),drops,0,false));
+        handler.entityDropEvent(new LivingDropsEvent(player,player.damageSources().fellOutOfWorld(),drops,false));
     }
     private static CompoundTag data(EntityLootableBody body) {
         CompoundTag result=new CompoundTag(); body.addAdditionalSaveData(result); return result;
@@ -128,7 +128,7 @@ public final class InventorySafetyChecks {
     }
     private static void add(Map<String,Integer> result,ItemStack stack) {
         if((stack == null || stack.isEmpty()) || stack.getCount()<=0) return;
-        CompoundTag tag=encoded(stack); tag.remove("count");
+        CompoundTag tag=encoded(stack.copyWithCount(1)); tag.remove("count");
         String key=tag.toString(); result.put(key,result.getOrDefault(key,0)+stack.getCount());
     }
     private static Map<String,Integer> dropped() {
@@ -204,7 +204,7 @@ public final class InventorySafetyChecks {
         RuntimeChecks.require(!cache(handler).containsKey(player),"Cancelled death cached equipment");
         handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().fellOutOfWorld()));
         List<ItemEntity> original=drops(player,item(19,23));
-        LivingDropsEvent canceledDrops=new LivingDropsEvent(player,player.damageSources().fellOutOfWorld(),original,0,false);
+        LivingDropsEvent canceledDrops=new LivingDropsEvent(player,player.damageSources().fellOutOfWorld(),original,false);
         canceledDrops.setCanceled(true);handler.entityDropEvent(canceledDrops);
         RuntimeChecks.require(!cache(handler).containsKey(player) && original.size()==1
                 && RuntimeChecks.sameStack(original.get(0).getItem(),item(19,23)),"Cancelled drops retained stale cache or changed inventory");

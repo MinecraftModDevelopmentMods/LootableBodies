@@ -40,7 +40,7 @@ class Native119CoremodEngineTest {
         Method create=factory.getDeclaredMethod("createEngine");create.setAccessible(true);
         return (ScriptEngine)create.invoke(null);
     }
-    private Object actualTransformer()throws Exception {
+    private Object actualTransformer(String className)throws Exception {
         blackboardFixture();Class<?> type=Class.forName("net.minecraftforge.coremod.CoreModEngine");Object engine=type.getConstructor().newInstance();
         Method load=java.util.Arrays.stream(type.getDeclaredMethods()).filter(m->m.getName().equals("loadCoreMod")).findFirst().orElseThrow();load.setAccessible(true);
         Class<?> api=load.getParameterTypes()[0];java.util.List<java.io.Reader> readers=new java.util.ArrayList<>();
@@ -56,12 +56,22 @@ class Native119CoremodEngineTest {
         });
         try {
             load.invoke(engine,file);List<?> transforms=(List<?>)type.getMethod("initializeCoreMods").invoke(engine);
-            assertEquals(1,transforms.size(),"Actual native engine must install the shipped transformer");return transforms.get(0);
+            assertEquals(3,transforms.size(),"Actual native engine must install the three shipped transformers");
+            return transforms.stream().map(item->(cpw.mods.modlauncher.api.ITransformer<?>)item)
+                    .filter(item->item.targets().stream().anyMatch(target->target.getClassName().replace('/','.').equals(className)))
+                    .findFirst().orElseThrow();
         } finally {for(var reader:readers)reader.close();}
     }
-    private ClassNode nativeReader()throws Exception {
+    private static final String READER="net.minecraft.world.level.storage.LevelStorageSource$LevelStorageAccess";
+    private static final String FIXER="net.minecraft.util.datafix.DataFixers";
+    private static final String DEDICATED_MAIN="net.minecraft.server.Main";
+
+    private ClassNode nativeClass(String name)throws Exception {
         ClassNode node=new ClassNode(Opcodes.ASM9);
-        try(var input=getClass().getClassLoader().getResourceAsStream("net/minecraft/world/level/storage/LevelStorageSource$LevelStorageAccess.class")) {assertNotNull(input);new ClassReader(input).accept(node,0);}
+        try(var input=getClass().getClassLoader().getResourceAsStream(name.replace('.','/')+".class")) {
+            assertNotNull(input);
+            new ClassReader(input).accept(node,0);
+        }
         return node;
     }
     private ClassNode transform(Object transformer,ClassNode node)throws Exception {
@@ -84,8 +94,42 @@ class Native119CoremodEngineTest {
         assertNotNull(((Invocable)engine).invokeFunction("initializeCoreMod"));
     }
     @Test void nativeEngineTransformsActualReaderAndItsAttachmentIsVerifiable()throws Exception {
-        ClassNode transformed=transform(actualTransformer(),nativeReader());
+        ClassNode transformed=transform(actualTransformer(READER),nativeClass(READER));
         verify(define(transformed));
+    }
+    @Test void nativeEngineWrapsTheDataFixerAccessorExactlyOnce()throws Exception {
+        Object transformer=actualTransformer(FIXER);
+        ClassNode result=transform(transformer,nativeClass(FIXER));
+        result=transform(transformer,result);
+        MethodNode accessor=result.methods.stream().filter(method->method.name.equals("getDataFixer")
+                && method.desc.equals("()Lcom/mojang/datafixers/DataFixer;")).findFirst().orElseThrow();
+        int calls=0;
+        for(AbstractInsnNode instruction:accessor.instructions) {
+            if(instruction instanceof MethodInsnNode invoke && invoke.owner.equals("cyano/lootable/upgrade/UpgradePreservation")) {
+                assertEquals("wrapper",invoke.name);
+                assertEquals("(Lcom/mojang/datafixers/DataFixer;)Lcom/mojang/datafixers/DataFixer;",invoke.desc);
+                assertEquals(Opcodes.ARETURN,invoke.getNext().getOpcode());
+                calls++;
+            }
+        }
+        assertEquals(1,calls);
+    }
+    @Test void nativeDedicatedReaderGuardsBothHeaderReads()throws Exception {
+        Object transformer=actualTransformer(DEDICATED_MAIN);
+        ClassNode result=transform(transformer,nativeClass(DEDICATED_MAIN));
+        result=transform(transformer,result);
+        MethodNode main=result.methods.stream().filter(method->method.name.equals("main")
+                && method.desc.equals("([Ljava/lang/String;)V")).findFirst().orElseThrow();
+        java.util.ArrayList<Integer> guardedReads=new java.util.ArrayList<>();
+        for(AbstractInsnNode instruction:main.instructions) {
+            if(instruction instanceof MethodInsnNode invoke && invoke.owner.equals("cyano/lootable/upgrade/EarlyWorldPreservation")) {
+                assertEquals("readDedicatedWorld",invoke.name);
+                assertEquals(Opcodes.INVOKESTATIC,invoke.getOpcode());
+                guardedReads.add(invoke.getPrevious().getOpcode());
+            }
+        }
+        assertEquals(List.of(Opcodes.ICONST_0,Opcodes.ICONST_1),guardedReads);
+        define(result);
     }
     @Test void serialSetupRefusesAnUntransformedReaderBeforeAnyWorldCanOpen()throws Exception {
         Field installed=EarlyWorldPreservation.class.getDeclaredField("installed");installed.setAccessible(true);boolean before=installed.getBoolean(null);
@@ -93,7 +137,7 @@ class Native119CoremodEngineTest {
         finally {installed.setBoolean(null,before);}
     }
     @Test void nativeWrapperCannotTurnAFailedTransformIntoAnAcceptedAttachment()throws Exception {
-        ClassNode node=nativeReader();Object transformer=actualTransformer();
+        ClassNode node=nativeClass(READER);Object transformer=actualTransformer(READER);
         for(MethodNode method:node.methods)for(AbstractInsnNode i=method.instructions.getFirst();i!=null;){AbstractInsnNode next=i.getNext();if(i instanceof MethodInsnNode&&((MethodInsnNode)i).owner.equals("net/minecraftforge/common/ForgeHooks")&&((MethodInsnNode)i).name.equals("writeAdditionalLevelSaveData")){method.instructions.insertBefore(i,new InsnNode(Opcodes.POP2));method.instructions.remove(i);}i=next;}
         ClassNode returned=transform(transformer,node);
         InvocationTargetException refused=assertThrows(InvocationTargetException.class,()->verify(define(returned)));

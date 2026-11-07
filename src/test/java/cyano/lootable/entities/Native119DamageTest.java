@@ -37,7 +37,7 @@ class Native119DamageTest {
             }
         });
         // Deliberately shares the vanilla anvil message, but has its own mod identity.
-        custom=registry.register(ResourceKey.create(Registries.DAMAGE_TYPE,new ResourceLocation("example:custom")),
+        custom=registry.register(ResourceKey.create(Registries.DAMAGE_TYPE,ResourceLocation.parse("example:custom")),
                 new DamageType("anvil",0),net.minecraft.core.RegistrationInfo.BUILT_IN);
         registry.freeze();
         sources=new DamageSources(new RegistryAccess.ImmutableRegistryAccess(java.util.List.of(registry)));

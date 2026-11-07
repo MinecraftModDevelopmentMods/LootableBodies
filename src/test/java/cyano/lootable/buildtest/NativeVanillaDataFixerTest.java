@@ -10,14 +10,14 @@ class NativeVanillaDataFixerTest {
         assertSame(vanilla,NativeVanillaDataFixer.unwrap(UpgradePreservation.wrapper(vanilla)));
         assertSame(vanilla,NativeVanillaDataFixer.unwrap(vanilla));
     }
-    @Test void capturedVanillaOracleStaysIndependentWhenASyntheticCounterWrapsTheGlobalReader(){
+    @Test void capturedVanillaOracleStaysIndependentWhenASyntheticCounterIsRegisteredForConversion(){
         DataFixer nativeOracle=NativeVanillaDataFixer.get();DataFixer previous=net.minecraft.util.datafix.DataFixers.getDataFixer();
         try {
-            net.minecraft.util.datafix.DataFixers.dataFixer=new DataFixer(){
+            UpgradePreservation.register(new DataFixer(){
                 public com.mojang.datafixers.schemas.Schema getSchema(int key){throw new AssertionError("Counter is not an oracle");}
                 public <T>com.mojang.serialization.Dynamic<T> update(com.mojang.datafixers.DSL.TypeReference type,com.mojang.serialization.Dynamic<T> input,int source,int target){throw new AssertionError("Counter is not an oracle");}
-            };
+            });
             assertSame(nativeOracle,NativeVanillaDataFixer.get());
-        }finally{net.minecraft.util.datafix.DataFixers.dataFixer=previous;}
+        }finally{UpgradePreservation.register(previous);}
     }
 }

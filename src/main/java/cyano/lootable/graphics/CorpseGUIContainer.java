@@ -15,7 +15,7 @@ import net.minecraft.network.chat.Component;
 @OnlyIn(Dist.CLIENT)
 public class CorpseGUIContainer extends net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<CorpseContainer>{
 
-	private final ResourceLocation image = new ResourceLocation(LootableBodies.MODID+":textures/gui/corpse.png");
+	private final ResourceLocation image = ResourceLocation.parse(LootableBodies.MODID+":textures/gui/corpse.png");
 
 	public CorpseGUIContainer(Inventory playerItems, Container entity) {
 		this(new CorpseContainer(playerItems,entity),playerItems,entity instanceof net.minecraft.world.entity.Entity?((net.minecraft.world.entity.Entity)entity).getDisplayName():Component.literal(LootableBodies.NAME));

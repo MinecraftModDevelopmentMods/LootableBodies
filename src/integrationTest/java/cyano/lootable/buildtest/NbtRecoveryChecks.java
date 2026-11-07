@@ -89,13 +89,13 @@ final class NbtRecoveryChecks {
         finally{for(Entity e:new ArrayList<Entity>(FixtureApi.entities(world,10,10)))if(!before.contains(e))e.discard();}
     }
     static ItemStack item(int index,int count){ItemStack s=RuntimeChecks.stack(index);s.setCount(count);return s;}
-    static CompoundTag entry(int index,int count,int slot){CompoundTag n=FixtureStackData.save(item(index,count));n.putByte("Slot",(byte)slot);return n;}
+    static CompoundTag entry(int index,int count,int slot){CompoundTag n=FixtureStackData.save(item(index,1));n.putInt("count",count);n.putByte("Slot",(byte)slot);return n;}
     static ListTag list(CompoundTag... entries){ListTag l=new ListTag();for(CompoundTag n:entries)l.add(n.copy());return l;}
     static CompoundTag root(CompoundTag... entries){CompoundTag n=new CompoundTag();n.put("Equipment",list(entries));n.putByte("Vac",(byte)20);return n;}
     static CompoundTag saved(EntityLootableBody b){CompoundTag n=new CompoundTag();b.addAdditionalSaveData(n);return n;}
     static EntityLootableBody read(CompoundTag n){CompoundTag copy=n.copy();EntityLootableBody b=new EntityLootableBody(world);b.readAdditionalSaveData(n);RuntimeChecks.require(n.equals(copy),"Reader modified source NBT");return b;}
     private static void equal(ItemStack a,ItemStack b,String why){RuntimeChecks.require(RuntimeChecks.sameStack(a == null ? ItemStack.EMPTY : a,b == null ? ItemStack.EMPTY : b),why);}
-    private static void add(Map<String,Integer> sums,ItemStack s){if((s == null || s.isEmpty()) || s.getCount()<=0)return;CompoundTag n=FixtureStackData.save(s);n.remove("count");String k=n.toString();sums.put(k,sums.getOrDefault(k,0)+s.getCount());}
+    private static void add(Map<String,Integer> sums,ItemStack s){if((s == null || s.isEmpty()) || s.getCount()<=0)return;CompoundTag n=FixtureStackData.save(s.copyWithCount(1));n.remove("count");String k=n.toString();sums.put(k,sums.getOrDefault(k,0)+s.getCount());}
     static Map<String,Integer> items(EntityLootableBody b){Map<String,Integer> sums=new TreeMap<>();for(int i=0;i<48;i++)add(sums,b.getItem(i));ListTag aux=saved(b).getList("Aux",10);for(int i=0;i<aux.size();i++)add(sums,FixtureStackData.load(aux.getCompound(i)));return sums;}
     private static void contains(EntityLootableBody b,ItemStack... expected){Map<String,Integer> sums=new TreeMap<>();for(ItemStack s:expected)add(sums,s);RuntimeChecks.require(items(b).equals(sums),"Recoverable item/count/damage/full NBT changed: expected="+sums+" actual="+items(b)+" retained="+saved(b).get(RECOVERY));}
     static void retained(EntityLootableBody b,Tag raw){ListTag records=saved(b).getList(RECOVERY,10);boolean found=false;for(int i=0;i<records.size();i++)if(raw.equals(records.getCompound(i).get("Data")))found=true;RuntimeChecks.require(found,"Unresolved raw data was erased or changed");}

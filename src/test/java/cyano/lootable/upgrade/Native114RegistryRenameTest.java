@@ -11,8 +11,8 @@ class Native114RegistryRenameTest {
     @Test void itemRegistryBridgesAgreeWithVanillasActualItemConversion() {
         for (String[] names : new String[][]{{"sign","oak_sign"},{"rose_red","red_dye"},
                 {"cactus_green","green_dye"},{"dandelion_yellow","yellow_dye"}}) {
-            ResourceLocation old = new ResourceLocation("minecraft", names[0]);
-            ResourceLocation current = new ResourceLocation("minecraft", names[1]);
+            ResourceLocation old = ResourceLocation.fromNamespaceAndPath("minecraft", names[0]);
+            ResourceLocation current = ResourceLocation.fromNamespaceAndPath("minecraft", names[1]);
             assertEquals(current, LegacyRegistryMappings.itemReplacement(old));
             CompoundTag input = new CompoundTag(); input.putString("id", old.toString()); input.putByte("Count", (byte)11);
             CompoundTag converted = NativeNbt.update(DataFixers.getDataFixer(), References.ITEM_STACK, input, 1631, 1976);
@@ -20,11 +20,11 @@ class Native114RegistryRenameTest {
         }
     }
     @Test void onlyTheTwoRetiredVanillaSignBlocksAreBridged() {
-        assertEquals(new ResourceLocation("minecraft:oak_sign"), LegacyRegistryMappings.blockReplacement(new ResourceLocation("minecraft:sign")));
-        assertEquals(new ResourceLocation("minecraft:oak_wall_sign"), LegacyRegistryMappings.blockReplacement(new ResourceLocation("minecraft:wall_sign")));
+        assertEquals(ResourceLocation.parse("minecraft:oak_sign"), LegacyRegistryMappings.blockReplacement(ResourceLocation.parse("minecraft:sign")));
+        assertEquals(ResourceLocation.parse("minecraft:oak_wall_sign"), LegacyRegistryMappings.blockReplacement(ResourceLocation.parse("minecraft:wall_sign")));
         for (String name : new String[]{"othermod:sign", "minecraft:unknown", "minecraft:oak_sign"}) {
-            assertNull(LegacyRegistryMappings.itemReplacement(new ResourceLocation(name)));
-            assertNull(LegacyRegistryMappings.blockReplacement(new ResourceLocation(name)));
+            assertNull(LegacyRegistryMappings.itemReplacement(ResourceLocation.parse(name)));
+            assertNull(LegacyRegistryMappings.blockReplacement(ResourceLocation.parse(name)));
         }
     }
 }
