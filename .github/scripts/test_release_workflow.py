@@ -59,7 +59,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             values = dict(line.split('=', 1) for line in output.read_text().splitlines()) if output.exists() else {}
             return result.returncode, values
 
-    def validate(self, minecraft, names=None, mutation=None, release_exists=False, wrong_tag=False, audit_success=True, qualification=None, local_receipt=None):
+    def validate(self, minecraft, names=None, mutation=None, release_exists=False, wrong_tag=False, audit_success=True, qualification=None, local_receipt=None, audit_run=None):
         suffix, branch, forge = {
             '1.10.2': ('110021', '1.10.2', '12.18.3.2511'),
             '1.11.2': ('111021', '1.11.2-dev', '13.20.1.2588'),
@@ -100,8 +100,13 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 if qualification:row.update(qualification)
                 return json.dumps({'workflow_runs':[row]})
             if '/actions/workflows/' in args[-1]:
-                return json.dumps({'workflow_runs': [{'id': 1, 'display_title': 'Audit ' + minecraft + ' artifacts from ' + SHA,
-                    'conclusion': 'success' if audit_success else 'failure'}]})
+                audit = {'id': 1, 'display_title': 'Audit ' + minecraft + ' artifacts from ' + SHA,
+                         'conclusion': 'success' if audit_success else 'failure', 'event': 'workflow_run',
+                         'head_sha': 'c' * 40, 'head_branch': 'master-1.12',
+                         'path': '.github/workflows/artifact-audit-1.21.yml'}
+                if audit_run is not None:
+                    audit.update(audit_run)
+                return json.dumps({'workflow_runs': [audit]})
             return json.dumps({'check_runs': [dict(name=name, id=i, conclusion='success') for i, name in enumerate(checks)]})
         def existing(args, **options):
             if '/releases/tags/' in args[-1] and release_exists:
@@ -112,7 +117,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         code = script('Validate identity, exact commit and successful checks').split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {
                 'RELEASE_VERSION': version, 'GITHUB_REPOSITORY': REPOSITORY,
-                'MINECRAFT_VERSION': minecraft, 'SOURCE_BRANCH': branch,
+                'MINECRAFT_VERSION': minecraft, 'SOURCE_BRANCH': branch, 'GITHUB_SHA': 'c' * 40,
                 'GITHUB_OUTPUT': str(Path(directory) / 'output'),
                 'LOCAL_QUALIFICATION':json.dumps(receipt) if receipt else ''}), \
                 patch('pathlib.Path.read_text', side_effect=['\n'.join(k+'='+v for k,v in values.items()),json.dumps({'files':files,'local_qualification_complete':True,'qualification_integrity_status':'verified','manual_accepted':True})]), \
@@ -142,6 +147,51 @@ class ReleaseWorkflowTests(unittest.TestCase):
                         {'local_receipt': {'manual_accepted': False}}):
             with self.subTest(options=options), self.assertRaises(SystemExit):
                 self.validate('1.21.1', **options)
+
+    def test_1211_audit_receives_registered_archive_workflow_completion(self):
+        audit = WORKFLOW.with_name('artifact-audit-1.21.yml').read_text(encoding='utf-8')
+        event_names = audit.split('workflows: [', 1)[1].split(']', 1)[0].split(',')
+        self.assertIn('LootableBodies 1.20 CI', [name.strip() for name in event_names])
+
+    def test_1211_only_accepts_an_audit_from_the_active_dispatcher(self):
+        self.validate('1.21.1', audit_run={'event': 'workflow_dispatch'})
+        for changes in ({'event': 'push'}, {'head_branch': 'master-1.21.1'},
+                        {'head_sha': 'd' * 40}, {'path': '.github/workflows/artifact-audit-1.20.yml'}):
+            with self.subTest(changes=changes), self.assertRaises(SystemExit):
+                self.validate('1.21.1', audit_run=changes)
+
+    def test_1211_audit_requires_the_successful_current_source_push(self):
+        path = WORKFLOW.with_name('artifact-audit-1.21.yml')
+        text = path.read_text(encoding='utf-8')
+        code = text.split("python3 - <<'PY'\n", 1)[1].split('\n          PY', 1)[0]
+        code = textwrap.dedent(code)
+        good = {'id': 25, 'head_repository': {'full_name': REPOSITORY}, 'event': 'push',
+                'head_branch': 'master-1.21.1', 'head_sha': SHA, 'path': '.github/workflows/native120.yml',
+                'status': 'completed', 'conclusion': 'success'}
+
+        def resolve(run, branch=SHA, run_id='25', source=SHA):
+            def api(args):
+                if args[-1].endswith('/actions/runs/25'):
+                    return json.dumps(run)
+                if args[-1].endswith('/git/ref/heads/master-1.21.1'):
+                    return json.dumps({'object': {'sha': branch}})
+                raise AssertionError(args)
+            with tempfile.TemporaryDirectory() as folder, patch('subprocess.check_output', side_effect=api):
+                output = Path(folder) / 'output'
+                with patch.dict(os.environ, SOURCE_RUN=run_id, SOURCE_SHA=source, GITHUB_OUTPUT=str(output)):
+                    exec(compile(code, 'audit-source', 'exec'), {})
+                return output.read_text()
+
+        self.assertEqual('run=25\nsha=' + SHA + '\n', resolve(good))
+        for changes in ({'event': 'pull_request'}, {'head_sha': 'b' * 40}, {'head_branch': 'master-1.20.6'},
+                        {'head_repository': {'full_name': 'SkyBlade1978/LootableBodies'}},
+                        {'path': '.github/workflows/native119.yml'}, {'conclusion': 'failure'}, {'id': 26}):
+            with self.subTest(changes=changes), self.assertRaises(SystemExit):
+                resolve(dict(good, **changes))
+        with self.assertRaises(SystemExit):
+            resolve(good, branch='b' * 40)
+        with self.assertRaises(SystemExit):
+            resolve(good, run_id='25;false')
 
     def test_future_12111_candidate_cannot_dispatch_publication(self):
         self.assertNotEqual(0, self.select('2.4.14.121111')[0])

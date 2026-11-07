@@ -181,9 +181,13 @@ jobs:
                   raise SystemExit(f'The selected commit has no successful {name} check')
           if minecraft in ('1.11.2', '1.12.2', '1.13.2', '1.14.4', '1.15.2', '1.16.5', '1.17.1', '1.18.2', '1.19.4', '1.20.1', '1.20.6', '1.21.1'):
               target = minecraft.rsplit('.', 1)[0]
+              event_query = '' if minecraft == '1.21.1' else '&event=workflow_run'
               audits = json.loads(subprocess.check_output(['gh', 'api',
-                  f'repos/{repo}/actions/workflows/artifact-audit-{target}.yml/runs?event=workflow_run&per_page=100'], text=True))['workflow_runs']
-              matching = [run for run in audits if run['display_title'] == f'Audit {minecraft} artifacts from {sha}']
+                  f'repos/{repo}/actions/workflows/artifact-audit-{target}.yml/runs?per_page=100{event_query}'], text=True))['workflow_runs']
+              matching = [run for run in audits if run['display_title'] == f'Audit {minecraft} artifacts from {sha}'
+                          and (minecraft != '1.21.1' or (run['event'] in ('workflow_run', 'workflow_dispatch')
+                               and run['head_branch'] == 'master-1.12' and run['head_sha'] == os.environ['GITHUB_SHA']
+                               and run['path'] == '.github/workflows/artifact-audit-1.21.yml'))]
               if not matching or max(matching, key=lambda run: run['id'])['conclusion'] != 'success':
                   raise SystemExit('The selected commit has no successful independent artifact audit')
           release = subprocess.run(['gh', 'api', f'repos/{repo}/releases/tags/{version}'], capture_output=True, text=True)
@@ -213,25 +217,25 @@ jobs:
         with:
           ref: ${{ needs.preflight.outputs.release_sha }}
       - name: Install Mavenizer Java
-        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4' && needs.preflight.outputs.minecraft_version != '1.20.1' && needs.preflight.outputs.minecraft_version != '1.20.6' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1'
+        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4' && needs.preflight.outputs.minecraft_version != '1.20.1' && needs.preflight.outputs.minecraft_version != '1.20.6' && needs.preflight.outputs.minecraft_version != '1.21.1'
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: '25.0.3+9.0.LTS'
       - name: Install production Java
-        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4' && needs.preflight.outputs.minecraft_version != '1.20.1' && needs.preflight.outputs.minecraft_version != '1.20.6' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1'
+        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4' && needs.preflight.outputs.minecraft_version != '1.20.1' && needs.preflight.outputs.minecraft_version != '1.20.6' && needs.preflight.outputs.minecraft_version != '1.21.1'
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.19.4' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.20.1' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.17.1' && '16.0.2+7' || '8.0.502+7' }}
       - name: Install Gradle Java
-        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4' && needs.preflight.outputs.minecraft_version != '1.20.1' && needs.preflight.outputs.minecraft_version != '1.20.6' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1'
+        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4' && needs.preflight.outputs.minecraft_version != '1.20.1' && needs.preflight.outputs.minecraft_version != '1.20.6' && needs.preflight.outputs.minecraft_version != '1.21.1'
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: ${{ needs.preflight.outputs.minecraft_version == '1.18.2' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.19.4' && '17.0.20+101' || needs.preflight.outputs.minecraft_version == '1.20.1' && '17.0.20+101' || '17.0.1+12' }}
       - name: Pin the production toolchain
-        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4' && needs.preflight.outputs.minecraft_version != '1.20.1' && needs.preflight.outputs.minecraft_version != '1.20.6' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1'
+        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4' && needs.preflight.outputs.minecraft_version != '1.20.1' && needs.preflight.outputs.minecraft_version != '1.20.6' && needs.preflight.outputs.minecraft_version != '1.21.1'
         run: |
           if [[ '${{ needs.preflight.outputs.minecraft_version }}' == '1.18.2' || '${{ needs.preflight.outputs.minecraft_version }}' == '1.19.4' || '${{ needs.preflight.outputs.minecraft_version }}' == '1.20.1' ]]; then
             echo "LOOTABLEBODIES_JAVA17_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
@@ -242,7 +246,7 @@ jobs:
           fi
           echo "LOOTABLEBODIES_MAVENIZER_JAVA_HOME=$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
       - name: Set up Gradle
-        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4' && needs.preflight.outputs.minecraft_version != '1.20.1' && needs.preflight.outputs.minecraft_version != '1.20.6' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1' && needs.preflight.outputs.minecraft_version != '1.21.1'
+        if: needs.preflight.outputs.minecraft_version != '1.18.2' && needs.preflight.outputs.minecraft_version != '1.19.4' && needs.preflight.outputs.minecraft_version != '1.20.1' && needs.preflight.outputs.minecraft_version != '1.20.6' && needs.preflight.outputs.minecraft_version != '1.21.1'
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
       - name: Download the qualified native117 six-file bundle
         if: needs.preflight.outputs.minecraft_version == '1.17.1'

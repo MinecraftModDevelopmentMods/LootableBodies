@@ -1,9 +1,19 @@
 name: Audit LootableBodies 1.21 artifacts
-run-name: Audit 1.21.1 artifacts from ${{ github.event.workflow_run.head_sha }}
+run-name: Audit 1.21.1 artifacts from ${{ github.event.workflow_run.head_sha || inputs.source_sha }}
 on:
   workflow_run:
-    workflows: [LootableBodies 1.21.1 CI]
+    workflows: [LootableBodies 1.20 CI, LootableBodies 1.20.6 CI, LootableBodies 1.21.1 CI]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: Successful archive build run ID
+        required: true
+        type: string
+      source_sha:
+        description: Exact merged 1.21.1 source SHA
+        required: true
+        type: string
 permissions:
   contents: read
   actions: read
@@ -11,23 +21,55 @@ jobs:
   audit:
     if: >-
       github.repository == 'MinecraftModDevelopmentMods/LootableBodies' &&
-      github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'master-1.21.1' && github.event.workflow_run.name == 'LootableBodies 1.21.1 CI'
+      github.ref == 'refs/heads/master-1.12' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'master-1.21.1' && github.event.workflow_run.name == 'LootableBodies 1.21.1 CI'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Verify the exact merged archive build
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ github.event.workflow_run.id || inputs.source_run }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha || inputs.source_sha }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess
+
+          repo = 'MinecraftModDevelopmentMods/LootableBodies'
+          run_id = os.environ['SOURCE_RUN']
+          source = os.environ['SOURCE_SHA']
+          if not re.fullmatch(r'[1-9][0-9]*', run_id) or not re.fullmatch(r'[a-f0-9]{40}', source):
+              raise SystemExit('An exact build run ID and source SHA are required')
+
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/{path}']))
+
+          run = api(f'actions/runs/{run_id}')
+          branch = api('git/ref/heads/master-1.21.1')
+          if (str(run['id']) != run_id or run['head_repository']['full_name'] != repo or
+              run['event'] != 'push' or run['head_branch'] != 'master-1.21.1' or run['head_sha'] != source or
+              run['path'] != '.github/workflows/native120.yml' or run['status'] != 'completed' or
+              run['conclusion'] != 'success' or branch['object']['sha'] != source):
+              raise SystemExit('The selected run is not the successful build of the current merged 1.21.1 source')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write(f'run={run_id}\nsha={source}\n')
+          PY
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ steps.source.outputs.sha }}
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: LootableBodies-1.21.1-${{ github.event.workflow_run.head_sha }}
-          run-id: ${{ github.event.workflow_run.id }}
+          name: LootableBodies-1.21.1-${{ steps.source.outputs.sha }}
+          run-id: ${{ steps.source.outputs.run }}
           github-token: ${{ github.token }}
           path: audited
       - name: Independently verify every locally qualified byte
         env:
-          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
         run: |
           python3 -B tools/native120_build.py --bundle audited
           python3 - <<'PY'
@@ -43,6 +85,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: native120-independent-audit-${{ github.event.workflow_run.head_sha }}
+          name: native120-independent-audit-${{ steps.source.outputs.sha }}
           if-no-files-found: error
           path: independent-audit.json
