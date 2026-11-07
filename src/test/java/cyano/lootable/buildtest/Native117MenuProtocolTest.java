@@ -28,19 +28,22 @@ class Native117MenuProtocolTest {
         }finally{buffer.release();}
     }
     private RegistryFriendlyByteBuf wire() {
-        return new RegistryFriendlyByteBuf(Unpooled.buffer(),RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+        return new RegistryFriendlyByteBuf(Unpooled.buffer(),registries());
+    }
+    private RegistryAccess registries() {
+        return RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
     }
     @Test void fullContentCarriesStateAndCursorWithoutMutatingThePacket() throws Exception {
         NonNullList<ItemStack> slots=NonNullList.withSize(84,ItemStack.EMPTY);slots.set(47,stack(31));ItemStack cursor=stack(17);
         ClientboundContainerSetContentPacket packet=new ClientboundContainerSetContentPacket(7,321,slots,cursor);byte[] before=bytes(packet);
-        NativeMenuObservation observed=NativeMenuObservation.decode(packet);assertNotNull(observed);assertTrue(observed.content);
+        NativeMenuObservation observed=NativeMenuObservation.decode(packet,registries());assertNotNull(observed);assertTrue(observed.content);
         assertEquals(7,observed.containerId);assertEquals(321,observed.stateId);assertEquals(84,observed.items.size());
         assertTrue(ItemStack.matches(slots.get(47),observed.items.get(47)));assertTrue(ItemStack.matches(cursor,observed.carried));assertArrayEquals(before,bytes(packet));
     }
     @Test void slotAndCursorCorrectionsUseTheirActualNativeWindowAndState() throws Exception {
         for(int window:new int[]{7,-1,-2}) {
             ClientboundContainerSetSlotPacket packet=new ClientboundContainerSetSlotPacket(window,123,window==-1?-1:47,stack(19));byte[] before=bytes(packet);
-            NativeMenuObservation observed=NativeMenuObservation.decode(packet);assertNotNull(observed);assertFalse(observed.content);
+            NativeMenuObservation observed=NativeMenuObservation.decode(packet,registries());assertNotNull(observed);assertFalse(observed.content);
             assertEquals(window,observed.containerId);assertEquals(123,observed.stateId);assertEquals(window==-1?-1:47,observed.slot);
             assertTrue(ItemStack.matches(stack(19),observed.item));assertArrayEquals(before,bytes(packet));
         }
@@ -63,6 +66,6 @@ class Native117MenuProtocolTest {
             public net.minecraft.network.protocol.PacketType<? extends Packet<ClientGamePacketListener>> type(){throw new AssertionError("Observer serialized an unrelated packet");}
             public void handle(ClientGamePacketListener listener){throw new AssertionError("Observer handled a live packet");}
         };
-        assertNull(NativeMenuObservation.decode(other));
+        assertNull(NativeMenuObservation.decode(other,registries()));
     }
 }

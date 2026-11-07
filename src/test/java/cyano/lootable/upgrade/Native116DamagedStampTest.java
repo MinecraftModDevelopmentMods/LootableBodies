@@ -51,7 +51,7 @@ class Native116DamagedStampTest {
     @Test void bothNativeAnvilPassesRetainNestedChestDataWithMissingChunkStamps()throws Exception {
         CompoundTag source=original();assertEquals(2230,source.getInt("DataVersion"));
         CompoundTag nativeInput=source.copy();ChunkStorage.injectDatafixingContext(nativeInput,Level.OVERWORLD,java.util.Optional.empty());
-        CompoundTag expected=NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,nativeInput,2230,3839);
+        CompoundTag expected=NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,nativeInput,2230,3955);
         CompoundTag damaged=source.copy();damaged.remove("DataVersion");preserve(damaged);
         byte[] originalRegion=Files.readAllBytes(world.resolve("region/r.0.0.mca"));
         try(ChunkStorage loader=new ChunkStorage(new net.minecraft.world.level.chunk.storage.RegionStorageInfo("fixture",net.minecraft.world.level.Level.OVERWORLD,"chunk"),world.resolve("reader"),UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),false)) {

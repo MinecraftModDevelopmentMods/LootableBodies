@@ -67,7 +67,7 @@ tasks.register('isolateEclipseProductionRuns') {
             if (!launch.isFile()) throw new GradleException("Generate ${name} with genEclipseRuns first")
             String contents = launch.getText('UTF-8')
             File nativeRoot=minecraftNatives.asFile
-            if(!nativeRoot.isDirectory())throw new GradleException('Prepare the official native1.20.6 client inputs before generating Eclipse launches')
+            if(!nativeRoot.isDirectory())throw new GradleException('Prepare the official native 1.21.1 client inputs before generating Eclipse launches')
             contents=contents.replace('{asset_index}',minecraftAssetIndex)
                 .replace('{assets_root}',minecraftAssets.asFile.absolutePath)
                 .replace('{natives}',nativeRoot.absolutePath)
@@ -138,7 +138,7 @@ tasks.register('verifyEclipseProductionClasspath') {
                     !arguments.contains(metadataJar) || (side == 'client' && !arguments.contains("--assetIndex ${minecraftAssetIndex}")) ||
                     xml.contains('{asset_index}') || xml.contains('{assets_root}') || xml.contains('{natives}'))
                 throw new GradleException("Eclipse Forge metadata, target or client assets are unresolved for ${name}")
-            // Forge 50 discovers the processed mods.toml directly on the
+            // Forge 52 discovers the processed mods.toml directly on the
             // project classpath. The launcher no longer reads MOD_CLASSES.
             def entries = launchModel.listAttribute.find {
                 it.@key.text() == 'org.eclipse.jdt.launching.CLASSPATH'

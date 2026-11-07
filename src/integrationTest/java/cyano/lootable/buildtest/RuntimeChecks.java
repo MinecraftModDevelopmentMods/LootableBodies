@@ -96,9 +96,9 @@ public final class RuntimeChecks {
     public static void run(MinecraftServer server, String phase) throws Exception {
         ServerLevel world = server.getLevel(FixtureApi.dimensionKey(0));
         File folder = world.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();
-        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.12.120061"), "identity/version");
+        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.13.121011"), "identity/version");
         require(net.minecraftforge.fml.ModList.get().getModContainerById("lootablebodies").get().getModInfo().getVersion().toString().equals(phase.equals("seed") ? "2.4.0" : phase.equals("issues") ?
-                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.12.120061") : "2.4.12.120061"), "loaded release version");
+                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.13.121011") : "2.4.13.121011"), "loaded release version");
         if (!defaultsChecked) require(LootableBodies.addBonesToCorpse && LootableBodies.displayNameTag && !LootableBodies.hurtByEnvironment &&
                 !LootableBodies.hurtByAttacks && !LootableBodies.hurtByMisc && LootableBodies.corpseHP == 20 &&
                 LootableBodies.ticksPerItemDecay == 6000 && LootableBodies.corpseDecayTime == 72000 &&
@@ -216,7 +216,8 @@ public final class RuntimeChecks {
         contents.add(FixtureStackData.save(new ItemStack(Items.DIAMOND,3)));
         nested.put("contents", contents); custom.put("nested", nested);
         FixtureStackData.setCustom(stack,custom);if(index<=5)stack.setDamageValue(index<4?index+2:index==4?17:9); stack.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,net.minecraft.network.chat.Component.literal("Fixture " + index));
-        if (index == 4) stack.enchant(net.minecraft.world.item.enchantment.Enchantments.UNBREAKING, 2);
+        if (index == 4) stack.enchant(FixtureStackData.registries()
+                .lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT).getOrThrow(Enchantments.UNBREAKING), 2);
         return stack;
     }
     static net.minecraft.world.level.chunk.LevelChunk awaitChunk(ServerLevel world,int x,int z) {

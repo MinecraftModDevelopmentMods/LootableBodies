@@ -19,7 +19,7 @@ public final class Native120FixtureGenerator {
                 .getCompound("minecraft:overworld").getCompound("generator");
         if(data.getInt("DataVersion")!=target || !generator.getString("type").equals("minecraft:flat"))
             throw new AssertionError("Wrong native flat header");
-        Files.copy(source,root.resolve("native1206-flat-level.dat"));
+        Files.copy(source,root.resolve("native121-flat-level.dat"));
         Path world=root.resolve("controlled-entity-source");Files.createDirectory(world);
         CompoundTag originalOwned=new CompoundTag();originalOwned.putString("unknownField","retained-native1206-header");originalOwned.putLongArray("unknownData",new long[]{Long.MIN_VALUE,1234567890123L,Long.MAX_VALUE});
         header.put("lootablebodies",originalOwned);NbtIo.writeCompressed(header,world.resolve("level.dat"));

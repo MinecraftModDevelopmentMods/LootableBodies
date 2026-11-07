@@ -31,7 +31,7 @@ class Native120LaunchTests(unittest.TestCase):
             command=run.call_args.args[0]
             self.assertNotIn('-jar',command)
             self.assertIn('-Xmx2G',command)
-            self.assertTrue(any(arg.startswith('@libraries/net/minecraftforge/forge/1.20.6-50.2.14/') for arg in command))
+            self.assertTrue(any(arg.startswith('@libraries/net/minecraftforge/forge/1.21.1-52.1.20/') for arg in command))
             gc=next((arg for arg in command if arg.startswith('-Xlog:')),None)
             self.assertIsNotNone(gc)
             self.assertIn('gc*,safepoint',gc)
@@ -73,16 +73,16 @@ class Native120LaunchTests(unittest.TestCase):
             self.assertEqual(['jstack','jstat'],started)
 
     def test_server_inputs_pin_native50_instead_of_the_old_launcher(self):
-        self.assertEqual('forge-1.20.6-50.2.14',native_runtime.FORGE)
-        for path in ('libraries/net/minecraftforge/forge/1.20.6-50.2.14/win_args.txt',
-                     'libraries/net/minecraftforge/forge/1.20.6-50.2.14/unix_args.txt',
-                     'libraries/net/minecraftforge/forge/1.20.6-50.2.14/forge-1.20.6-50.2.14-server.jar'):
+        self.assertEqual('forge-1.21.1-52.1.20',native_runtime.FORGE)
+        for path in ('libraries/net/minecraftforge/forge/1.21.1-52.1.20/win_args.txt',
+                     'libraries/net/minecraftforge/forge/1.21.1-52.1.20/unix_args.txt',
+                     'libraries/net/minecraftforge/forge/1.21.1-52.1.20/forge-1.21.1-52.1.20-server.jar'):
             self.assertIn(path,native_runtime.SERVER_INPUTS)
         self.assertFalse(any('1.16.5' in path for path in native_runtime.SERVER_INPUTS))
 
     def test_native50_historical_workers_have_their_own_fresh_qualification_binding(self):
         proof=native_runtime.WORKER_BUDGET_PROOF
-        self.assertEqual(('1.20.6','50.2.14',200,4,True),tuple(proof[key] for key in
+        self.assertEqual(('1.21.1','52.1.20',200,4,True),tuple(proof[key] for key in
             ('minecraft','forge','reloads','jvms','qualified')))
         self.assertIn('server_input_manifest_sha256',proof)
         self.assertRegex(proof['qualification_evidence_sha256'],r'^[A-F0-9]{64}$')

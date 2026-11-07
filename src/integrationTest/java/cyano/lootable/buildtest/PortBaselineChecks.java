@@ -41,7 +41,7 @@ public final class PortBaselineChecks {
             var buffer=new net.minecraft.network.RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(),world.registryAccess());
             try {
                 EntityLootableBody corpse=new EntityLootableBody(world);
-                net.minecraft.network.protocol.game.ClientboundAddEntityPacket sent=new net.minecraft.network.protocol.game.ClientboundAddEntityPacket(corpse);
+                net.minecraft.network.protocol.game.ClientboundAddEntityPacket sent=new net.minecraft.network.protocol.game.ClientboundAddEntityPacket(corpse,0,corpse.blockPosition());
                 net.minecraft.network.protocol.game.ClientboundAddEntityPacket.STREAM_CODEC.encode(buffer,sent);
                 net.minecraft.network.protocol.game.ClientboundAddEntityPacket received=net.minecraft.network.protocol.game.ClientboundAddEntityPacket.STREAM_CODEC.decode(buffer);
                 require(RespawnPacketTrace.describe(sent).equals(RespawnPacketTrace.describe(received)),"Spawn observer differs before/after native decoding");
@@ -62,7 +62,7 @@ public final class PortBaselineChecks {
                 if(e.getEntity() instanceof EntityLootableBody) e.setCanceled(true);
             }};
             MinecraftForge.EVENT_BUS.register(veto);
-            try { new PlayerDeathEventHandler().entityDropEvent(new LivingDropsEvent(player,player.damageSources().generic(),drops,0,false)); }
+            try { new PlayerDeathEventHandler().entityDropEvent(new LivingDropsEvent(player,player.damageSources().generic(),drops,false)); }
             finally { MinecraftForge.EVENT_BUS.unregister(veto); }
             require(drops.size()==1 && drops.get(0).getItem().getCount()==7,"original drops were discarded");
         });

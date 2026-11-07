@@ -64,7 +64,7 @@ def require_qualified_manifest(record):
     if record.get('local_qualification_complete') is not True or record.get('qualification_integrity_status')!='verified':
         raise ValueError('Local qualification evidence is incomplete or on an integrity hold')
     version=record.get('version','')
-    if not re.fullmatch(r'\d+\.\d+\.\d+\.120061',version) or record.get('minecraft')!='1.20.6' or record.get('forge')!='50.2.14':raise ValueError('Wrong target qualification')
+    if not re.fullmatch(r'\d+\.\d+\.\d+\.121011',version) or record.get('minecraft')!='1.21.1' or record.get('forge')!='52.1.20':raise ValueError('Wrong target qualification')
     base='LootableBodies-'+version
     names={'CHANGELOG.txt','SHA256SUMS',base+'.jar',base+'-sources.jar',base+'-javadoc.jar',base+'.pom'}
     if set(record.get('files',{}))!=names or any(not re.fullmatch('[A-F0-9]{64}',value or '') for value in record['files'].values()):raise ValueError('Incomplete six-file declaration')
@@ -80,10 +80,11 @@ def check_source(root):
     if 'workflow_dispatch:' in(root/'.github/workflows/migration-matrix.yml').read_text():raise ValueError('Copied legacy migration workflow can still dispatch on a modern ref')
     guard=(root/'settings.gradle').read_text()
     policy=json.loads((root/'tools/qualification-policy.json').read_text())
-    if any(rule not in guard for rule in ("System.getenv('GITHUB_ACTIONS') == 'true'",
-            'org.gradle.api.tasks.testing.Test', 'org.gradle.api.tasks.JavaExec',
-            'Run expensive verification locally before publishing')):
-        raise ValueError('Missing hosted test and game task guard')
+    if policy['target']!='1.21.1' or any(rule not in guard for rule in (
+            "System.getenv('GITHUB_ACTIONS') == 'true'",
+            "System.getenv('GITHUB_REPOSITORY') != 'MinecraftModDevelopmentMods/LootableBodies'",
+            'Hosted builds are limited to the MMD repository')):
+        raise ValueError('Missing MMD-only hosted build guard')
     runtime=(root/'gradle/runtime.gradle').read_text()
     if "tasks.named('check') { dependsOn 'integrationTest' }" in runtime or "tasks.register('localRuntimeVerification')" not in runtime:raise ValueError('Game checks must remain explicit local gates')
     if policy['hosted']['full_java_suite'] or policy['hosted']['full_python_suite'] or policy['hosted']['gameplay_or_migration'] or policy['phase_consolidation']['enabled']:raise ValueError('Unvalidated expensive-test policy')

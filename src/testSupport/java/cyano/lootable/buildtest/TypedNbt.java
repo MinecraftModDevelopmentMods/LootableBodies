@@ -15,22 +15,27 @@ public final class TypedNbt {
     public static boolean same(Tag left, Tag right) {
         return canonical(left).equals(canonical(right));
     }
-    /** Native Attributes is a map; inventory and recovery lists stay ordered. */
+    /** The native attribute map is unordered; inventory and recovery lists stay ordered. */
     public static boolean sameEntity(CompoundTag left,CompoundTag right) {
         return same(entityCopy(left),entityCopy(right));
     }
     private static CompoundTag entityCopy(CompoundTag input) {
         CompoundTag copy=input.copy();
-        if(!copy.contains("Attributes",9))return copy;
-        ListTag attributes=copy.getList("Attributes",10);
-        if(attributes.size()!=((ListTag)copy.get("Attributes")).size())return copy;
+        sortAttributes(copy,"Attributes","Name");
+        sortAttributes(copy,"attributes","id");
+        return copy;
+    }
+    private static void sortAttributes(CompoundTag copy,String key,String identity) {
+        if(!(copy.get(key) instanceof ListTag raw))return;
+        ListTag attributes=copy.getList(key,10);
+        if(attributes.size()!=raw.size())return;
         java.util.List<Tag> entries=new java.util.ArrayList<>();
         for(Tag value:attributes) {
-            if(!(value instanceof CompoundTag) || !((CompoundTag)value).contains("Name",8))return copy;
+            if(!(value instanceof CompoundTag compound) || !compound.contains(identity,8))return;
             entries.add(value);
         }
         entries.sort(java.util.Comparator.comparing(TypedNbt::canonical));
-        ListTag sorted=new ListTag();entries.forEach(sorted::add);copy.put("Attributes",sorted);return copy;
+        ListTag sorted=new ListTag();entries.forEach(sorted::add);copy.put(key,sorted);
     }
     public static String canonical(Tag tag) {
         if(tag==null)return "null";

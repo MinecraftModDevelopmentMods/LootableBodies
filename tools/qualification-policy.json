@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "target": "1.20.6",
-  "status": "Forge 1.20.6 qualifies locally. Hosted checks verify production archives and release contracts.",
+  "target": "1.21.1",
+  "status": "Forge 1.21.1 stays local until qualification and manual testing are complete.",
   "hosted": {
     "allowed": [
       "policy",

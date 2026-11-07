@@ -1,4 +1,4 @@
-"""Pinned Forge 50 client preparation and descriptor-driven Java 21 launch."""
+"""Pinned Forge 52 client preparation and descriptor-driven Java 21 launch."""
 import hashlib
 import json
 import os
@@ -8,10 +8,10 @@ import re
 import struct
 import zipfile
 
-BASE_VERSION = '1.20.6'
-VERSION = '1.20.6-forge-50.2.14'
-BASE_SHA1 = '4dd84bf5b646a75cba5c0c5f7723eb478a2b78af'
-FORGE_SHA256 = '40A8892EAB75917AA96D5D63DD92F9BE8BA86A3D50429B96A12A1F2F206FEB46'
+BASE_VERSION = '1.21.1'
+VERSION = '1.21.1-forge-52.1.20'
+BASE_SHA1 = '82ba6501da174a665c1787775f946487422f2432'
+FORGE_SHA256 = '359AF0F59286C8680B64CED0C830BBCF5F66A0DAB2CE6A27BB6C2030AC2D5193'
 
 
 def native_for_platform(library,system,architecture):
@@ -43,9 +43,9 @@ def descriptors(runtime):
     base = runtime/'versions'/BASE_VERSION/(BASE_VERSION+'.json')
     forge = runtime/'versions'/VERSION/(VERSION+'.json')
     if not base.is_file() or hashlib.sha1(base.read_bytes()).hexdigest() != BASE_SHA1:
-        raise RuntimeError('Incorrect official native 1.20.6 client descriptor')
+        raise RuntimeError('Incorrect official native 1.21.1 client descriptor')
     if not forge.is_file() or hashlib.sha256(forge.read_bytes()).hexdigest().upper() != FORGE_SHA256:
-        raise RuntimeError('Incorrect installed Forge 50 client descriptor')
+        raise RuntimeError('Incorrect installed Forge 52 client descriptor')
     return json.loads(base.read_text()), json.loads(forge.read_text())
 
 
@@ -175,7 +175,7 @@ def command(java, home, runtime, assets, prepared, *, username, extra=()):
     base, forge, record = load(runtime,prepared)
     index = assets/'indexes'/(base['assetIndex']['id']+'.json')
     if not index.is_file() or hashlib.sha1(index.read_bytes()).hexdigest() != base['assetIndex']['sha1']:
-        raise RuntimeError('Incorrect official native 1.20.6 asset index')
+        raise RuntimeError('Incorrect official native 1.21.1 asset index')
     values = {'version_name':VERSION,'library_directory':record['library_directory'],
               'classpath_separator':os.pathsep,'classpath':os.pathsep.join(record['classpath']),
               'natives_directory':record['natives'],'launcher_name':'LootableBodiesTests','launcher_version':'1',

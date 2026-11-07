@@ -11,6 +11,7 @@ import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.util.datafix.DataFixers;
+import com.mojang.datafixers.DataFixer;
 import net.minecraft.util.datafix.fixes.References;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -35,7 +36,7 @@ class Native116UpgradeTest {
         body.put("Equipment",inventory);return body;
     }
     @Test void currentFormatUsesThe119SchemaAndMarker() {
-        assertEquals(3839,UpgradePreservation.MINECRAFT_VERSION);assertEquals(11,UpgradePreservation.DATA_VERSION);
+        assertEquals(3955,UpgradePreservation.MINECRAFT_VERSION);assertEquals(12,UpgradePreservation.DATA_VERSION);
     }
     @Test void legacyCorpseUuidSurvivesShieldingWithoutTruncatingCustomInventory() {
         CompoundTag body=legacy(),before=body.copy(),context=new CompoundTag();context.putInt("DataVersion",2230);
@@ -78,10 +79,11 @@ class Native116UpgradeTest {
             References.LEVEL,root,-1,2586);
         assertEquals(before.get("WorldGenSettings"),fixed.get("WorldGenSettings"));assertEquals(before,root);
     }
-    @Test void registrationProtectsTheNativeLevelReaderBeforeServerCreation() throws Exception {
-        UpgradePreservation.register(DataFixers.getDataFixer());
+    @Test void nativeAccessorWrapperProtectsLevelSettingsBeforeServerCreation() throws Exception {
+        DataFixer nativeFixer=DataFixers.getDataFixer();
+        UpgradePreservation.register(nativeFixer);
         CompoundTag raw=settings(),before=raw.copy();
-        CompoundTag fixed=NativeNbt.update(DataFixers.getDataFixer(),
+        CompoundTag fixed=NativeNbt.update(UpgradePreservation.wrapper(nativeFixer),
             References.WORLD_GEN_SETTINGS,raw,-1,2586);
         assertEquals(before,fixed,"The world reader obtains its fixer before server-about-to-start");
         assertEquals(before,raw);

@@ -62,22 +62,22 @@ ext.auditReleaseArchives = { File directory ->
                     if (!names.contains(it)) throw new GradleException("Missing production entry ${it}")
                 }
                 String info=zip.getInputStream(zip.getEntry('META-INF/mods.toml')).getText('UTF-8')
-                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.20.6]"'].each {
+                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.21.1]"'].each {
                     if(!info.contains(it))throw new GradleException("Incorrect production metadata: ${it}")
                 }
                 def pack=new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack
-                if(pack.pack_format!=32 || pack.supported_formats!=[min_inclusive:32,max_inclusive:41] || pack.containsKey('forge:server_data_pack_format') ||
+                if(pack.pack_format!=34 || pack.supported_formats!=[min_inclusive:34,max_inclusive:48] || pack.containsKey('forge:server_data_pack_format') ||
                         pack.containsKey('forge:resource_pack_format') || pack.containsKey('forge:data_pack_format'))
-                    throw new GradleException('Native pack formats must be resource32/server-data41')
+                    throw new GradleException('Native pack formats must be resource34/server-data48')
                 def coremods=new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('META-INF/coremods.json')).getText('UTF-8'))
                 if(coremods!=[lootablebodies_preservation:'coremods/early-world-preservation.js'])
                     throw new GradleException('Missing or changed early native save attachment')
-                def atEntry=zip.getEntry('META-INF/accesstransformer.cfg')
-                def atRules=atEntry?zip.getInputStream(atEntry).getText('UTF-8').readLines()
-                        .collect {it.split('#',2)[0].trim()}.findAll {!it.isEmpty()}:[]
-                if(atRules!=['public-f net.minecraft.util.datafix.DataFixers dataFixer'] ||
-                        manifest.getValue('FMLAT')!='accesstransformer.cfg')
-                    throw new GradleException('Missing or changed native world-reader access boundary')
+                String hooks=zip.getInputStream(zip.getEntry('coremods/early-world-preservation.js')).getText('UTF-8')
+                if (!hooks.contains('lootablebodies_fixer') || !hooks.contains('getDataFixer') ||
+                        manifest.getValue('FMLAT')!=null)
+                    throw new GradleException('Missing or changed native data fixer attachment')
+                if (!hooks.contains('lootablebodies_dedicated_read') || !hooks.contains('readDedicatedWorld'))
+                    throw new GradleException('Missing dedicated world refusal guard')
                 def languages=names.findAll {it.startsWith('assets/lootablebodies/lang/') && !it.endsWith('/')}
                 if(languages.size()!=14 || languages.any {!it.endsWith('.json') || it!=it.toLowerCase(Locale.ROOT)})
                     throw new GradleException('Incorrect native language resources')
@@ -90,7 +90,7 @@ ext.auditReleaseArchives = { File directory ->
                     throw new GradleException('Production jar does not use the official Forge runtime names')
                 ['can_breathe_under_water', 'undead', 'ignores_poison_and_regen',
                         'inverted_healing_and_harm', 'sensitive_to_smite'].each { tagName ->
-                    def entry=zip.getEntry("data/minecraft/tags/entity_types/${tagName}.json")
+                    def entry=zip.getEntry("data/minecraft/tags/entity_type/${tagName}.json")
                     if(!entry || new JsonSlurper().parseText(zip.getInputStream(entry).getText('UTF-8'))!=
                             [replace:false,values:['lootablebodies:corpse']])
                         throw new GradleException("Missing corpse entity tag: ${tagName}")
@@ -98,9 +98,6 @@ ext.auditReleaseArchives = { File directory ->
             } else if (index == 1) {
                 if (!names.contains('cyano/lootable/LootableBodies.java'))
                     throw new GradleException('Sources jar does not contain production sources')
-                def entry = zip.getEntry('META-INF/accesstransformer.cfg')
-                if (!entry || zip.getInputStream(entry).getText('UTF-8').contains('\r'))
-                    throw new GradleException('Source access transformer must use LF line endings')
             } else if (index == 2) {
                 if (!names.contains('index.html')) throw new GradleException('Javadoc jar has no index')
                 File jdk = tasks.named('javadoc', Javadoc).get().javadocTool.get().metadata.installationPath.asFile

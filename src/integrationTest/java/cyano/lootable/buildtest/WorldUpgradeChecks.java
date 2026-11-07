@@ -360,9 +360,9 @@ final class WorldUpgradeChecks {
         require(player.getUUID().equals(id),"Player UUID changed");
         if(manifest.contains("Recipe",8)) {
             require(HistoricalUnlocks.sugarPair(manifest.getString("Recipe"),manifest.getString("Advancement")),"Unexpected historical recipe/advancement fixture");
-            net.minecraft.world.item.crafting.RecipeHolder<?> recipe=server.getRecipeManager().byKey(new ResourceLocation("minecraft:sugar_from_sugar_cane")).orElse(null);
+            net.minecraft.world.item.crafting.RecipeHolder<?> recipe=server.getRecipeManager().byKey(ResourceLocation.parse("minecraft:sugar_from_sugar_cane")).orElse(null);
             require(recipe!=null && player.getRecipeBook().contains(recipe),"Native sugar recipe conversion lost its unlock");
-            net.minecraft.advancements.AdvancementHolder advancement=server.getAdvancements().get(new ResourceLocation("minecraft:recipes/misc/sugar_from_sugar_cane"));
+            net.minecraft.advancements.AdvancementHolder advancement=server.getAdvancements().get(ResourceLocation.parse("minecraft:recipes/misc/sugar_from_sugar_cane"));
             require(advancement!=null && player.getAdvancements().getOrStartProgress(advancement).isDone(),"Native sugar advancement conversion lost its completion");
             player.getAdvancements().save();
         }

@@ -15,6 +15,7 @@ public final class ItemMigration {
     // The native componentization fix is in schema 3818.5. Validate the
     // legacy item format through the last complete schema before that change.
     private static final int LAST_LEGACY_ITEM_VERSION=3817;
+    private static final int RELEASED_COMPONENT_VERSION=3839;
 
     /** Null means the caller retains the original raw record for recovery. */
     public static CompoundTag convert(CompoundTag raw,CompoundTag versions) {
@@ -33,6 +34,7 @@ public final class ItemMigration {
         if(!versions.contains("DataVersion",3))return null;
         int source=versions.getInt("DataVersion");
         if(source==UpgradePreservation.MINECRAFT_VERSION)return raw.copy();
+        if(source==RELEASED_COMPONENT_VERSION)return convertReleasedComponents(raw);
         if(source<512 || source>LAST_LEGACY_ITEM_VERSION || pipeline==null)return null;
         CompoundTag legacy=convertNbt(raw,versions);
         if(legacy==null || !supportedLegacyStack(legacy))return null;
@@ -45,6 +47,102 @@ public final class ItemMigration {
         } catch(RuntimeException invalid) {
             return null;
         }
+    }
+
+    private static CompoundTag convertReleasedComponents(CompoundTag raw) {
+        if(pipeline==null || !Set.of("id","count","components","Slot").containsAll(raw.getAllKeys())
+                || !raw.contains("id",8) || ResourceLocation.tryParse(raw.getString("id"))==null
+                || (raw.contains("components") && !raw.contains("components",10)))return null;
+        Long count=raw.contains("count")?integral(raw.get("count")):Long.valueOf(1);
+        if(count==null || count<=0 || count>127)return null;
+        try {
+            CompoundTag fixed=NativeNbt.update(pipeline,net.minecraft.util.datafix.fixes.References.ITEM_STACK,
+                    raw.copy(),RELEASED_COMPONENT_VERSION,UpgradePreservation.MINECRAFT_VERSION);
+            return componentStackSurvives(raw,fixed)?fixed:null;
+        } catch(RuntimeException invalid) {
+            return null;
+        }
+    }
+
+    /** Resolve a legacy modifier name and UUID through the native 3945 mapping. */
+    public static ResourceLocation legacyModifierId(UUID uuid,String name) {
+        CompoundTag modifier=new CompoundTag();
+        modifier.putUUID("uuid",uuid);
+        modifier.putString("name",name);
+        ListTag modifiers=new ListTag();
+        modifiers.add(modifier);
+        CompoundTag attributes=new CompoundTag(), components=new CompoundTag(), carrier=new CompoundTag();
+        attributes.put("modifiers",modifiers);
+        components.put("minecraft:attribute_modifiers",attributes);
+        carrier.putString("id","minecraft:stick");
+        carrier.putInt("count",1);
+        carrier.put("components",components);
+        CompoundTag converted=convertReleasedComponents(carrier);
+        return converted==null?null:ResourceLocation.tryParse(converted.getCompound("components")
+                .getCompound("minecraft:attribute_modifiers").getList("modifiers",10).getCompound(0).getString("id"));
+    }
+
+    private static boolean componentStackSurvives(CompoundTag before,CompoundTag after) {
+        if(before.equals(after))return true;
+        if(!equalExcept(before,after,"components")
+                || !before.contains("components",10) || !after.contains("components",10))return false;
+        CompoundTag old=before.getCompound("components"), fixed=after.getCompound("components");
+        if(!old.getAllKeys().equals(fixed.getAllKeys()))return false;
+        for(String key:old.getAllKeys()) {
+            Tag previous=old.get(key), current=fixed.get(key);
+            if(previous.equals(current))continue;
+            boolean preserved=switch(key) {
+                case "minecraft:attribute_modifiers" -> previous instanceof CompoundTag a && current instanceof CompoundTag b
+                        && modifiersSurvive(a,b);
+                case "minecraft:container" -> componentItemsSurvive(previous,current,true);
+                case "minecraft:bundle_contents","minecraft:charged_projectiles" -> componentItemsSurvive(previous,current,false);
+                case "minecraft:food" -> previous instanceof CompoundTag a && current instanceof CompoundTag b
+                        && equalExcept(a,b,"using_converts_to") && a.contains("using_converts_to",10)
+                        && b.contains("using_converts_to",10)
+                        && componentStackSurvives(a.getCompound("using_converts_to"),b.getCompound("using_converts_to"));
+                default -> false;
+            };
+            if(!preserved)return false;
+        }
+        return true;
+    }
+
+    private static boolean equalExcept(CompoundTag before,CompoundTag after,String... fields) {
+        CompoundTag old=before.copy(), fixed=after.copy();
+        for(String field:fields) {
+            old.remove(field);
+            fixed.remove(field);
+        }
+        return old.equals(fixed);
+    }
+
+    private static boolean componentItemsSurvive(Tag previous,Tag current,boolean indexed) {
+        if(!(previous instanceof ListTag before) || !(current instanceof ListTag after) || before.size()!=after.size())return false;
+        for(int i=0;i<before.size();i++) {
+            if(!(before.get(i) instanceof CompoundTag a) || !(after.get(i) instanceof CompoundTag b))return false;
+            if(indexed) {
+                if(!equalExcept(a,b,"item") || !a.contains("item",10) || !b.contains("item",10)
+                        || !componentStackSurvives(a.getCompound("item"),b.getCompound("item")))return false;
+            } else if(!componentStackSurvives(a,b))return false;
+        }
+        return true;
+    }
+
+    private static boolean modifiersSurvive(CompoundTag before,CompoundTag after) {
+        if(!equalExcept(before,after,"modifiers")
+                || !(before.get("modifiers") instanceof ListTag old)
+                || !(after.get("modifiers") instanceof ListTag fixed)
+                || old.size()!=fixed.size())return false;
+        Set<ResourceLocation> identities=new HashSet<>();
+        for(int i=0;i<old.size();i++) {
+            if(!(old.get(i) instanceof CompoundTag a) || !(fixed.get(i) instanceof CompoundTag b))return false;
+            ResourceLocation id=b.contains("id",8)?ResourceLocation.tryParse(b.getString("id")):null;
+            // The native 3945 fix can combine modifiers with colliding names or
+            // IDs. Only restore a one-to-one conversion with unchanged values.
+            if(a.contains("id") || !a.hasUUID("uuid") || !a.contains("name",8) || id==null || !identities.add(id)
+                    || b.contains("uuid") || b.contains("name") || !equalExcept(a,b,"uuid","name","id"))return false;
+        }
+        return true;
     }
 
     /** Validate legacy flattening without running the later component schema. */

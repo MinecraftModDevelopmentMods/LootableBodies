@@ -53,14 +53,14 @@ final class EffectHurtChecks {
         // Forge 1.12 assigns IDs through registry events. Fill the isolated test
         // registry through its public API so unsigned-byte coverage still uses 200.
         for(int i=0;net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.byId(199)==null && i<200;i++)
-            net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.register(new net.minecraft.resources.ResourceLocation("lootablebodiesbuildtest:padding_"+i),new MobEffect(net.minecraft.world.effect.MobEffectCategory.BENEFICIAL,0){});
-        net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.register(new net.minecraft.resources.ResourceLocation("lootablebodiesbuildtest:extended_effect"),extended);
+            net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.register(net.minecraft.resources.ResourceLocation.parse("lootablebodiesbuildtest:padding_"+i),new MobEffect(net.minecraft.world.effect.MobEffectCategory.BENEFICIAL,0){});
+        net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.register(net.minecraft.resources.ResourceLocation.parse("lootablebodiesbuildtest:extended_effect"),extended);
         RuntimeChecks.require(net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.getId(extended)==200,"Fixture potion must exercise unsigned byte ID 200");
         // Older probes saved a different number of padding effects. Retain their
         // registry names during upgrades without changing fresh-world ID tests.
         if(System.getProperty("lootablebodies.phase","").startsWith("upgrade-"))
             for(int i=0;i<200;i++) {
-                net.minecraft.resources.ResourceLocation name=new net.minecraft.resources.ResourceLocation("lootablebodiesbuildtest:padding_"+i);
+                net.minecraft.resources.ResourceLocation name=net.minecraft.resources.ResourceLocation.parse("lootablebodiesbuildtest:padding_"+i);
                 if(!net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.containsKey(name))
                     net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.register(name,new MobEffect(net.minecraft.world.effect.MobEffectCategory.BENEFICIAL,0){});
             }
@@ -133,7 +133,7 @@ final class EffectHurtChecks {
     }
     private static CompoundTag effect(){return effect(MobEffects.NIGHT_VISION,200,1);}
     private static CompoundTag with(CompoundTag e){CompoundTag n=base();n.put("ActiveEffects",NbtRecoveryChecks.list(e));return n;}
-    private static void stable(EntityLootableBody b){CompoundTag a=saved(b),z=saved(read(a));for(String k:new String[]{"Equipment","Aux",NbtRecoveryChecks.RECOVERY,NameLifetimeChecks.RECOVERY,"active_effects","HurtTime","Health","AbsorptionAmount","Attributes"})require(NameLifetimeChecks.same(a.get(k),z.get(k)),"Round trip changed "+k);require(RuntimeChecks.sameStack(b.getItem(6),NbtRecoveryChecks.item(120,17)),"Complete known inventory changed");}
+    private static void stable(EntityLootableBody b){CompoundTag a=saved(b),z=saved(read(a));for(String k:new String[]{"Equipment","Aux",NbtRecoveryChecks.RECOVERY,NameLifetimeChecks.RECOVERY,"active_effects","HurtTime","Health","AbsorptionAmount","attributes"})require(NameLifetimeChecks.same(a.get(k),z.get(k)),"Round trip changed "+k);require(RuntimeChecks.sameStack(b.getItem(6),NbtRecoveryChecks.item(120,17)),"Complete known inventory changed");}
     private static void badHurt(Tag raw){CompoundTag n=base();n.put("HurtTime",raw.copy());EntityLootableBody b=read(n);require(b.hurtTime==0 && b.isAlive(),"Bad hurt time activated");NameLifetimeChecks.retained(b,"HurtTime",raw);stable(b);}
     private static void validHurt(Tag raw){CompoundTag n=base();n.put("HurtTime",raw);EntityLootableBody b=read(n);int v=((NumericTag)raw).getAsInt();require(b.hurtTime==v,"Valid countdown narrowed");stable(b);b.baseTick();require(b.hurtTime==v-1,"Countdown no longer ticks");}
     private static void badList(Tag raw){CompoundTag n=base();n.put("ActiveEffects",raw.copy());EntityLootableBody b=read(n);require(b.getActiveEffects().isEmpty(),"Bad effect list activated");NameLifetimeChecks.retained(b,"ActiveEffects",raw);stable(b);}

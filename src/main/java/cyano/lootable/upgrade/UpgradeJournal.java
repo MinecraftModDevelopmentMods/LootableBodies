@@ -349,7 +349,8 @@ public final class UpgradeJournal {
         else if(marker==8)version=2975;
         else if(marker==9)version=3337;
         else if(marker==10)version=3465;
-        else if(marker==11)version=UpgradePreservation.MINECRAFT_VERSION;
+        else if(marker==11)version=3839;
+        else if(marker==12)version=UpgradePreservation.MINECRAFT_VERSION;
         if(legacy) {if(version!=512)context.putBoolean("Inferred",true);version=512;}
         if(legacy || (marker>=1 && marker<=UpgradePreservation.DATA_VERSION))
             context.putInt("CorpseWriterDataVersion",version);
@@ -358,7 +359,8 @@ public final class UpgradeJournal {
         for(int i=0;i<mods.size();i++) {
             CompoundTag mod=mods.getCompound(i);if(!mod.getString("ModId").equals("lootablebodies"))continue;
             String release=mod.getString("ModVersion");
-            if(release.endsWith(".120061"))family=UpgradePreservation.MINECRAFT_VERSION;
+            if(release.endsWith(".121011"))family=UpgradePreservation.MINECRAFT_VERSION;
+            else if(release.endsWith(".120061"))family=3839;
             else if(release.endsWith(".120011"))family=3465;
             else if(release.endsWith(".119041"))family=3337;
             else if(release.endsWith(".118021"))family=2975;

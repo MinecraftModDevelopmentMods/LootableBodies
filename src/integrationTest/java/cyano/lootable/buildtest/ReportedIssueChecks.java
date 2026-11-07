@@ -306,7 +306,7 @@ final class ReportedIssueChecks {
         int menuEvents,menuState=-1;ItemStack carried=ItemStack.EMPTY;
         QuietConnection(ServerPlayer p){super(ReportedIssueChecks.server,new Connection(PacketFlow.SERVERBOUND),p,net.minecraft.server.network.CommonListenerCookie.createInitial(p.getGameProfile(),false));}
         @Override public void send(Packet<?> packet) {
-            NativeMenuObservation observed=NativeMenuObservation.decode(packet);if(observed==null)return;
+            NativeMenuObservation observed=NativeMenuObservation.decode(packet,player.registryAccess());if(observed==null)return;
             if(observed.containerId==player.containerMenu.containerId){menuEvents++;menuState=observed.stateId;if(observed.content)carried=observed.carried;}
             else if(observed.containerId==-1)carried=observed.item;
         }

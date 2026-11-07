@@ -27,8 +27,8 @@ import net.minecraftforge.fml.loading.FMLPaths;
 public final class LootableBodies {
     public static final String MODID = "lootablebodies";
     public static final String NAME = "DrCyano's Lootable Bodies";
-    public static final String VERSION = "2.4.12.120061";
-    public static final ResourceLocation CORPSE_ID = new ResourceLocation("lootablebodies:corpse");
+    public static final String VERSION = "2.4.13.121011";
+    public static final ResourceLocation CORPSE_ID = ResourceLocation.fromNamespaceAndPath(MODID,"corpse");
     public static EntityType<EntityLootableBody> CORPSE;
     public static Item CORPSE_EGG;
     public static net.minecraft.world.inventory.MenuType<cyano.lootable.graphics.CorpseContainer> CORPSE_CONTAINER;
@@ -85,7 +85,7 @@ public final class LootableBodies {
         event.register(Registries.ENTITY_TYPE,CORPSE_ID,LootableBodies::corpseType);
     }
     private void registerItems(RegisterEvent event) {
-        event.register(Registries.ITEM,new ResourceLocation(MODID,"corpse_spawn_egg"),()-> {
+        event.register(Registries.ITEM,ResourceLocation.fromNamespaceAndPath(MODID,"corpse_spawn_egg"),()-> {
             CORPSE_EGG=new SpawnEggItem(corpseType(),1,1,new Item.Properties());
             return CORPSE_EGG;
         });
@@ -105,7 +105,7 @@ public final class LootableBodies {
         File level=event.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();
         try {
             UpgradePreservation.register(event.getServer().getFixerUpper());
-            int count=UpgradePreservation.prepareForStart(level.toPath()).size();
+            int count=UpgradePreservation.prepareForStart(level.toPath(),event.getServer().getFixerUpper()).size();
             ChunkVersionContext.installServer(event.getServer());
             ModLog.info("Lootable Bodies preserved %s existing corpses before world loading",count);
         } catch(java.io.IOException unsafe) {

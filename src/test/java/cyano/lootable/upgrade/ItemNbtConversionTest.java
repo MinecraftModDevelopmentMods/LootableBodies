@@ -36,7 +36,7 @@ class ItemNbtConversionTest {
         CompoundTag versions=context(922);versions.putBoolean("Ambiguous",true);versions.putIntArray("CandidateDataVersions",new int[]{922,1343});assertNull(ItemMigration.convertNbt(item("minecraft:bed",0),versions));assertNotNull(ItemMigration.convertNbt(item("minecraft:stone",1),versions));
     }
     @Test void malformedCountsAndUnknownFutureVersionsAreNotGuessed() {
-        CompoundTag raw=item("minecraft:stone",1);raw.putString("Count","bad");assertNull(ItemMigration.convertNbt(raw,context(512)));assertNull(ItemMigration.convertNbt(item("minecraft:stone",1),context(3840)));
+        CompoundTag raw=item("minecraft:stone",1);raw.putString("Count","bad");assertNull(ItemMigration.convertNbt(raw,context(512)));assertNull(ItemMigration.convertNbt(item("minecraft:stone",1),context(3956)));
     }
     @Test void unrecognisedMetadataAndEnchantmentsRemainRecoverable() {
         assertNull(ItemMigration.convertNbt(item("minecraft:stone",99),context(1343)));

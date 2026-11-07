@@ -287,11 +287,8 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 				&& item.getCount() == 1
 				&& item.isDamageableItem()){
 			int durabilityRemaining = item.getMaxDamage() - item.getDamageValue() - 1;
-			if(durabilityRemaining > 0){
-				item.hurtAndBreak(Math.min(durabilityRemaining,amount),getRandom(),null,()->{
-                    item.shrink(1);
-                    item.setDamageValue(0);
-                });
+			if(durabilityRemaining > 0 && level() instanceof net.minecraft.server.level.ServerLevel server){
+				item.hurtAndBreak(Math.min(durabilityRemaining,amount),server,null,broken -> {});
 			}
 		}
 		return item;
@@ -302,7 +299,8 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 			stack = mergeItem(slot,stack);
 			if(emptyStack(stack)) return;
 		}
-		auxInventory.addLast(stack);
+		int limit=Math.max(1,Math.min(stack.getMaxStackSize(),getMaxStackSize()));
+		while(!emptyStack(stack))auxInventory.addLast(stack.split(limit));
 		setChanged();
 	}
 
@@ -519,8 +517,13 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 
 
 	@Override
-	public int getExperienceReward() {
+	protected int getBaseExperienceReward() {
 		return 0;
+	}
+
+	@Override
+	protected void dropExperience(net.minecraft.world.entity.Entity attacker) {
+		// Enchantments can add experience even when the base reward is zero.
 	}
 
 
@@ -541,7 +544,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
     }
 
 	@Override
-	protected void dropCustomDeathLoot(DamageSource source, int lootingModifier, boolean wasRecentlyHit) {
+	protected void dropCustomDeathLoot(net.minecraft.server.level.ServerLevel level, DamageSource source, boolean wasRecentlyHit) {
 		// Corpse equipment belongs to the inventory release path, not mob loot.
 	}
 
@@ -552,7 +555,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 
 
 	@Override
-	public boolean canBeLeashed(Player player) {
+	public boolean canBeLeashed() {
 		return false; // leashing not allowed
 	}
 
@@ -914,7 +917,11 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		// attributes and absorption are restored below, just as on a fresh entity.
 		getActiveEffects().clear();
 		for(AttributeInstance attribute : corpseAttributes()) restoreAttribute(attribute);
-		vanilla.put("Attributes",readAttributes(root.get("Attributes")));
+		boolean legacyAttributes=!root.contains("attributes");
+		Tag rawAttributes=root.get(legacyAttributes?"Attributes":"attributes");
+		if(!legacyAttributes && root.contains("Attributes"))retainInvalid("Attributes",root.get("Attributes"));
+		vanilla.remove("Attributes");
+		vanilla.put("attributes",readAttributes(rawAttributes,legacyAttributes));
 		vanilla.remove("ActiveEffects");
 		if(root.contains("active_effects") && root.contains("ActiveEffects"))
 			retainInvalid("ActiveEffects",root.get("ActiveEffects"));
@@ -929,7 +936,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		for(AttributeInstance attribute : corpseAttributes()) {
 			if(!Double.isFinite(attribute.getValue())) {
 				// Also protect against engine ordering/parent-attribute arithmetic.
-				if(root.contains("Attributes")) retainInvalid("Attributes",root.get("Attributes"));
+				if(rawAttributes!=null) retainInvalid("Attributes",rawAttributes);
 				restoreAttribute(attribute);
 			}
 		}
@@ -1071,21 +1078,22 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		return fallback;
 	}
 
-	private ListTag readAttributes(Tag raw) {
+	private ListTag readAttributes(Tag raw,boolean legacy) {
 		ListTag clean = new ListTag();
 		if(raw == null) return clean;
 		if(!isInventoryList(raw)) { retainInvalid("Attributes",raw); return clean; }
 		Set<String> seen = new HashSet<>();
+		String nameKey=legacy?"Name":"id", baseKey=legacy?"Base":"base", modifiersKey=legacy?"Modifiers":"modifiers";
 		ListTag list = (ListTag)raw;
 		for(int i = 0; i < list.size(); i++) {
 			CompoundTag record = list.getCompound(i);
-			AttributeInstance attribute = record.contains("Name",8)
-					? attributeNamed(record.getString("Name")) : null;
-			Double base = finiteNumber(record.get("Base"));
+			AttributeInstance attribute = record.contains(nameKey,8)
+					? attributeNamed(record.getString(nameKey)) : null;
+			Double base = finiteNumber(record.get(baseKey));
 			if(attribute == null || base == null) { retainInvalid("Attribute",record); continue; }
-            if(record.getString("Name").equals("forge:step_height_addition")) {
-                Tag modifiers=record.get("Modifiers");
-                if(base < -512D || base > 512D || !Set.of("Name","Base","Modifiers").containsAll(record.getAllKeys())
+            if(legacy && record.getString(nameKey).equals("forge:step_height_addition")) {
+                Tag modifiers=record.get(modifiersKey);
+                if(base < -512D || base > 512D || !Set.of(nameKey,baseKey,modifiersKey).containsAll(record.getAllKeys())
                         || (modifiers!=null && (!(modifiers instanceof ListTag listValue) || !listValue.isEmpty()))) {
                     retainInvalid("Attribute",record);continue;
                 }
@@ -1107,41 +1115,60 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 					&& !configuredHealth && !legacyNameDistance && !base.equals(defaultAttributeBases.get(name))) || !seen.add(name)) {
 				retainInvalid("Attribute",record); continue;
 			}
-			boolean changed = !Arrays.asList("Name","Base","Modifiers").containsAll(record.getAllKeys());
+			boolean changed = !Set.of(nameKey,baseKey,modifiersKey).containsAll(record.getAllKeys());
 			CompoundTag accepted = new CompoundTag();
-			accepted.putString("Name",name); accepted.putDouble("Base",base);
-			Tag rawModifiers = record.get("Modifiers");
+			accepted.putString("id",name); accepted.putDouble("base",base);
+			Tag rawModifiers = record.get(modifiersKey);
 			if(rawModifiers != null) {
 				ListTag modifiers = new ListTag();
 				if(!isInventoryList(rawModifiers)) changed = true;
 				else {
-					Set<UUID> ids = new HashSet<>();
+					Set<ResourceLocation> ids = new HashSet<>();
 					ListTag entries = (ListTag)rawModifiers;
 					for(int m = 0; m < entries.size(); m++) {
 						CompoundTag entry = entries.getCompound(m);
-						Long operation = integral(entry.get("Operation"));
-						UUID id=attributeUuid(entry);
-						Double amount = finiteNumber(entry.get("Amount"));
-						if(!entry.contains("Name",8) || entry.getString("Name").isEmpty() || operation == null
-								|| operation < 0 || operation > 2 || id == null || amount == null) {
+						String operation=legacy?legacyOperation(entry):entry.getString("operation");
+						ResourceLocation id=legacy?legacyModifier(entry):
+								entry.contains("id",8)?ResourceLocation.tryParse(entry.getString("id")):null;
+						Double amount = finiteNumber(entry.get(legacy?"Amount":"amount"));
+						if(operation==null || !Set.of("add_value","add_multiplied_base","add_multiplied_total").contains(operation)
+								|| id == null || id.getPath().isEmpty() || amount == null) {
 							changed = true; continue;
 						}
 						if(ids.contains(id)) { changed = true; continue; }
 						CompoundTag modifier = new CompoundTag();
-						modifier.putString("Name",entry.getString("Name")); modifier.putDouble("Amount",amount);
-						modifier.putInt("Operation",operation.intValue()); modifier.putUUID("UUID",id);
+						modifier.putString("id",id.toString()); modifier.putDouble("amount",amount);
+						modifier.putString("operation",operation);
 						ListTag candidate = modifiers.copy(); candidate.add(modifier);
 						if(!finiteAttributeValue(base,candidate)) { changed = true; continue; }
 						ids.add(id); modifiers.add(modifier);
-						if(!Arrays.asList("Name","Amount","Operation","UUIDMost","UUIDLeast","UUID").containsAll(entry.getAllKeys())) changed = true;
+						Set<String> fields=legacy?Set.of("Name","Amount","Operation","UUIDMost","UUIDLeast","UUID"):
+								Set.of("id","amount","operation");
+						if(!fields.containsAll(entry.getAllKeys())) changed = true;
 					}
 				}
-				accepted.put("Modifiers",modifiers);
+				accepted.put("modifiers",modifiers);
 			}
 			if(changed) retainInvalid("Attribute",record);
 			clean.add(accepted);
 		}
 		return clean;
+	}
+
+	private static ResourceLocation legacyModifier(CompoundTag entry) {
+		UUID uuid=attributeUuid(entry);
+		String name=entry.getString("Name");
+		return uuid==null || !entry.contains("Name",8) || name.isEmpty()?null:ItemMigration.legacyModifierId(uuid,name);
+	}
+
+	private static String legacyOperation(CompoundTag entry) {
+		Long operation=integral(entry.get("Operation"));
+		if(operation==null || operation<0 || operation>2)return null;
+		return switch(operation.intValue()) {
+			case 0 -> "add_value";
+			case 1 -> "add_multiplied_base";
+			default -> "add_multiplied_total";
+		};
 	}
 
 	private static UUID attributeUuid(CompoundTag entry) {
@@ -1161,18 +1188,18 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		double value = base;
 		for(int i = 0; i < modifiers.size(); i++) {
 			CompoundTag m = modifiers.getCompound(i);
-			if(m.getInt("Operation") == 0) value += m.getDouble("Amount");
+			if(m.getString("operation").equals("add_value")) value += m.getDouble("amount");
 		}
 		if(!Double.isFinite(value)) return false;
 		double additive = value;
 		for(int i = 0; i < modifiers.size(); i++) {
 			CompoundTag m = modifiers.getCompound(i);
-			if(m.getInt("Operation") == 1) value += additive * m.getDouble("Amount");
+			if(m.getString("operation").equals("add_multiplied_base")) value += additive * m.getDouble("amount");
 		}
 		if(!Double.isFinite(value)) return false;
 		for(int i = 0; i < modifiers.size(); i++) {
 			CompoundTag m = modifiers.getCompound(i);
-			if(m.getInt("Operation") == 2) value *= 1D + m.getDouble("Amount");
+			if(m.getString("operation").equals("add_multiplied_total")) value *= 1D + m.getDouble("amount");
 		}
 		return Double.isFinite(value);
 	}
@@ -1248,18 +1275,21 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
             CompoundTag input=raw.copy();
             input.remove("Slot");
             input.putString("id",id.toString());
-            input.putInt("count",count.intValue());
+            // The native codec rejects counts above 99. Decode the identity
+            // and components first, then split the saved count into legal stacks.
+            input.putInt("count",1);
             var ops=registryAccess().createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE);
             ItemStack stack=ItemStack.CODEC.parse(ops,input).result().orElse(ItemStack.EMPTY);
-            if(emptyStack(stack) || stack.getCount()!=count || stack.getMaxStackSize()<=0)return null;
+            if(emptyStack(stack) || stack.getCount()!=1 || stack.getMaxStackSize()<=0)return null;
             // The component codec accepts a raw value that the gameplay
             // accessor silently clamps. Keep that original stack recoverable.
             Integer damage=stack.get(net.minecraft.core.component.DataComponents.DAMAGE);
             if(damage!=null && damage!=stack.getDamageValue())return null;
             CompoundTag encoded=(CompoundTag)stack.save(registryAccess());
             if(!id.toString().equals(encoded.getString("id"))
-                    || encoded.getInt("count")!=count
+                    || encoded.getInt("count")!=1
                     || !ItemMigration.sameSavedComponents(input.getCompound("components"),encoded.getCompound("components")))return null;
+            stack.setCount(count.intValue());
             return stack;
         } catch(RuntimeException unreadable) {
             return null;

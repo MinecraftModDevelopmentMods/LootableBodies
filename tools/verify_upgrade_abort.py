@@ -8,11 +8,6 @@ from native_runtime import prepare_server as prepare, fingerprint, digest
 from release_identity import MAIN_JAR
 
 
-def source_files(world):
-    return {name: value for name, value in fingerprint(world).items()
-            if not name.startswith('data/lootablebodies-upgrade')}
-
-
 def same_typed_values(expected, actual):
     if type(expected) is not type(actual):
         return False
@@ -172,9 +167,9 @@ def inject_future_entity_version(world):
     before=digest(path);original=world.parent/'future-entity-original.mca'
     if original.exists():raise ValueError('Future fixture original already exists')
     shutil.copy2(path,original)
-    root['DataVersion']=Tag(3,3840);write_disposable_region(path,chunks)
+    root['DataVersion']=Tag(3,3956);write_disposable_region(path,chunks)
     return {'region':path.relative_to(world).as_posix(),'chunk_index':index,'source_version':2975,
-            'injected_version':3840,'nbt_type':'Int','original_sha256':before,'mutated_sha256':digest(path),
+            'injected_version':3956,'nbt_type':'Int','original_sha256':before,'mutated_sha256':digest(path),
             'original_copy':str(original),'corpse_marker':8}
 
 
@@ -184,6 +179,50 @@ def run_abort(java, home):
     return run_java(java, home, 'abort', timeout=180,
                     jvm_args=['-Xmx1G', *HISTORICAL_JVM_ARGS,
                               '-Dlog4j.configurationFile='+logging.as_uri()])
+
+
+def verified_future_journal(world, before, after):
+    """The future-version check runs after the immutable backup is written."""
+    from gzip import decompress
+    from hashlib import sha256
+    import re
+    from nbt_regions import Tag, decode
+
+    prefix = 'data/lootablebodies-upgrade/'
+    index = prefix + 'index.nbt'
+    added = set(after) - set(before)
+    journal = {name for name in added if name.startswith(prefix)}
+    for name in journal - {index}:
+        match = re.fullmatch(prefix + r'(chunks|snapshots)/([a-f0-9]{64})\.(bin|nbt)', name)
+        if not match or (match[1], match[3]) not in {('chunks', 'bin'), ('snapshots', 'nbt')}:
+            raise ValueError('Unexpected recovery file after refusal: ' + name)
+        if after[name].lower() != match[2]:
+            raise ValueError('Recovery content hash mismatch after refusal: ' + name)
+    if index not in after or not journal:
+        raise ValueError('Future-version refusal did not retain its recovery backup')
+    envelope = decode(decompress((world / index).read_bytes()))[1].value
+    payload = envelope['Payload']
+    if (envelope.get('Format') != Tag(3, 2) or payload.kind != 7
+            or envelope.get('Digest') != Tag(8, sha256(payload.value).hexdigest())):
+        raise ValueError('Recovery index checksum mismatch after refusal')
+    record = decode(decompress(payload.value))[1].value
+    if record.get('Format') != Tag(3, 2) or record['Regions'].value[0] != 10:
+        raise ValueError('Invalid recovery index after refusal')
+    snapshots = {prefix + 'snapshots/' + item.value for region in record['Regions'].value[1]
+                 for item in region.value['Snapshots'].value[1]}
+    new_snapshots = {name for name in journal if name.startswith(prefix + 'snapshots/')}
+    if not new_snapshots or not new_snapshots <= snapshots:
+        raise ValueError('Recovery index omitted a new original')
+    referenced = set()
+    for name in new_snapshots:
+        snapshot = decode(decompress((world / name).read_bytes()))[1].value
+        chunk = prefix + 'chunks/' + snapshot['OriginalChunk'].value + '.bin'
+        if chunk not in after or after[chunk].lower() != snapshot['OriginalChunk'].value:
+            raise ValueError('Recovery original chunk missing or changed: ' + chunk)
+        referenced.add(chunk)
+    if not (journal - new_snapshots - {index}) <= referenced:
+        raise ValueError('Recovery journal contains an unreferenced new chunk')
+    return sorted(journal | {index})
 
 
 def main():
@@ -211,12 +250,12 @@ def main():
         world = home / 'world'
         mutation=inject_future_entity_version(world) if case=='future-entity-version' else None
         if mutation is None:inject_unsafe_journal(world, case)
-        before = source_files(world)
-        config = world/'serverconfig/forge-server.toml'
-        original_config = config.read_bytes() if config.is_file() else None
+        before = fingerprint(world)
         lock=world/'session.lock';original_lock=lock.read_bytes() if lock.is_file() else None
         log = home / 'abort.log'
         result = run_abort(args.java.resolve(), home)
+        if result.returncode != 1:
+            raise RuntimeError('Dedicated preservation refusal did not exit with status 1: ' + str(log))
         text = log.read_text(encoding='utf-8')
         if "Lootable Bodies could not preserve this world's corpses" not in text:
             raise RuntimeError('Missing explicit preservation abort: ' + str(log))
@@ -225,34 +264,33 @@ def main():
         if any(token in text for token in ['Preparing start region', 'Preparing spawn area',
                                            'LOOTABLE_BODIES_RUNTIME_PASS', 'Done (']):
             raise RuntimeError('World loading continued after unsafe preservation')
-        after = source_files(world)
+        after = fingerprint(world)
         raw_after = dict(after)
-        platform_additions = allowed_forge_platform_additions(before, after, world, original_config,forge=50)
         lock_updates=allowed_native_session_lock(before,after,world,original_lock)
-        for name in platform_additions+lock_updates:
+        recovery_updates = verified_future_journal(world, before, after) if mutation else []
+        for name in lock_updates + recovery_updates:
             if name in before: after[name] = before[name]
             else: del after[name]
         source_after = fingerprint(source)
         comparison = {
             'before': before, 'after': raw_after,
-            'allowed_stock_config_files': platform_additions,
+            'allowed_stock_config_files': [],
             'allowed_native_session_lock_files': lock_updates,
+            'verified_recovery_files': recovery_updates,
             'original_session_lock_hex':original_lock.hex() if original_lock is not None else None,
             'world_added': sorted(set(after) - set(before)),
             'world_removed': sorted(set(before) - set(after)),
             'world_changed': sorted(name for name in set(before) & set(after) if before[name] != after[name]),
             'sealed_source_unchanged': source_after == sealed,
-            'original_forge_config': original_config.decode('utf-8', errors='replace') if original_config else None,
-            'resulting_forge_config': config.read_text(encoding='utf-8') if config.is_file() else None,
         }
         (home / 'comparison.json').write_text(json.dumps(comparison, indent=2) + '\n', encoding='utf-8')
         if before != after or source_after != sealed:
             raise RuntimeError('A failed preflight changed source world data: ' + str(home / 'comparison.json'))
         report['cases'][case] = {'exit': result.returncode, 'source_unchanged': True,
                                  'world_data_unchanged': True, 'world_loading_started': False,
-                                 'stock_forge_config_created': [name for name in platform_additions if name not in before],
-                                 'stock_forge_config_updated': [name for name in platform_additions if name in before]}
+                                 'stock_forge_config_created': [], 'stock_forge_config_updated': []}
         report['cases'][case]['native_session_lock_updates']=lock_updates
+        report['cases'][case]['verified_recovery_files']=recovery_updates
         if mutation:report['cases'][case]['fixture_mutation']=mutation
         print('UPGRADE_ABORT_PASS', case, flush=True)
     (root / 'result.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')

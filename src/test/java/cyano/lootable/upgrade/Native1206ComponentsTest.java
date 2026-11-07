@@ -1,7 +1,7 @@
 package cyano.lootable.upgrade;
 
 import net.minecraft.SharedConstants;
-import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -33,10 +33,10 @@ class Native1206ComponentsTest {
         return stack;
     }
 
-    @Test void targetUsesTheActual3839NativeSchema() {
-        assertEquals(3839,SharedConstants.getCurrentVersion().getDataVersion().getVersion());
-        assertEquals(3839,UpgradePreservation.MINECRAFT_VERSION);
-        assertEquals(11,UpgradePreservation.DATA_VERSION);
+    @Test void targetUsesTheActual3955NativeSchema() {
+        assertEquals(3955,SharedConstants.getCurrentVersion().getDataVersion().getVersion());
+        assertEquals(3955,UpgradePreservation.MINECRAFT_VERSION);
+        assertEquals(12,UpgradePreservation.DATA_VERSION);
     }
 
     @Test void released120ItemShapePreservesDamageEnchantmentsAndTypedCustomData() {
@@ -64,7 +64,7 @@ class Native1206ComponentsTest {
         assertEquals(27,components.getInt("minecraft:damage"));
         assertEquals(3,components.getCompound("minecraft:enchantments").getCompound("levels").getInt("minecraft:sharpness"));
         assertArrayEquals(tag.getLongArray("keepsake"),components.getCompound("minecraft:custom_data").getLongArray("keepsake"));
-        RegistryAccess registry=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        HolderLookup.Provider registry=net.minecraft.data.registries.VanillaRegistries.createLookup();
         ItemStack stack=ItemStack.parse(registry,converted).orElseThrow();
         assertSame(Items.DIAMOND_SWORD,stack.getItem());
         assertEquals(27,stack.getDamageValue());
@@ -164,7 +164,7 @@ class Native1206ComponentsTest {
         var block=new CompoundTag();
         block.putString("Name",from.toString());
         var fixed=NativeNbt.update(DataFixers.getDataFixer(),net.minecraft.util.datafix.fixes.References.BLOCK_STATE,
-                block,3465,3839);
+                block,3465,3955);
         assertEquals(fixed.getString("Name"),LegacyRegistryMappings.blockReplacement(from).toString());
         for(String name:new String[]{"grass","scute"}) {
             var key=net.minecraft.resources.ResourceLocation.withDefaultNamespace(name);
@@ -202,14 +202,83 @@ class Native1206ComponentsTest {
     }
 
     @Test void validCurrentComponentItemIsCopiedWithoutLegacyConversion() {
-        RegistryAccess registry=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        HolderLookup.Provider registry=net.minecraft.data.registries.VanillaRegistries.createLookup();
         ItemStack stack=new ItemStack(Items.DIAMOND,31);
         stack.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
                 net.minecraft.network.chat.Component.literal("Saved keepsake"));
         CompoundTag current=(CompoundTag)stack.save(registry);
         current.putByte("Slot",(byte)47);
-        CompoundTag converted=ItemMigration.convert(current,context(3839));
+        CompoundTag converted=ItemMigration.convert(current,context(3955));
         assertEquals(current,converted);
         assertNotSame(current,converted);
+    }
+
+    @Test void released1206ModifiersKeepTheirValuesAndSlotThroughNativeConversion() {
+        CompoundTag old=releasedModifierStack();
+        CompoundTag original=old.copy();
+        CompoundTag migrated=ItemMigration.convert(old,context(3839));
+        assertNotNull(migrated);
+        assertEquals(47,migrated.getByte("Slot"));
+        CompoundTag modifier=migrated.getCompound("components").getCompound("minecraft:attribute_modifiers")
+                .getList("modifiers",10).getCompound(0);
+        assertEquals("minecraft:00000000-0000-0065-0000-0000000000ca",modifier.getString("id"));
+        assertEquals(2.75,modifier.getDouble("amount"));
+        assertEquals("add_value",modifier.getString("operation"));
+        assertEquals("mainhand",modifier.getString("slot"));
+        assertFalse(modifier.contains("uuid"));
+        assertEquals(original,old);
+        HolderLookup.Provider registry=net.minecraft.data.registries.VanillaRegistries.createLookup();
+        assertSame(Items.DIAMOND_SWORD,ItemStack.parse(registry,migrated).orElseThrow().getItem());
+    }
+
+    @Test void legacyEntityModifiersUseTheNativeUuidAndNameMapping() {
+        assertEquals("minecraft:effect.speed",ItemMigration.legacyModifierId(
+                java.util.UUID.fromString("91aeaa56-376b-4498-935b-2f7f68070635"),"Old speed").toString());
+        assertEquals("minecraft:00000000-0000-0065-0000-0000000000ca",
+                ItemMigration.legacyModifierId(new java.util.UUID(101,202),"Old modifier").toString());
+    }
+
+    @Test void released1206NestedStackKeepsContainerIndexAndRejectsCollidingModifierIds() {
+        CompoundTag sword=releasedModifierStack();
+        sword.remove("Slot");
+        CompoundTag box=new CompoundTag(),components=new CompoundTag(),entry=new CompoundTag();
+        box.putString("id","minecraft:blue_shulker_box");
+        box.putInt("count",1);
+        entry.putInt("slot",19);
+        entry.put("item",sword);
+        ListTag contents=new ListTag();
+        contents.add(entry);
+        components.put("minecraft:container",contents);
+        box.put("components",components);
+        CompoundTag upgraded=ItemMigration.convert(box,context(3839));
+        assertNotNull(upgraded);
+        CompoundTag migrated=upgraded.getCompound("components").getList("minecraft:container",10).getCompound(0);
+        assertEquals(19,migrated.getInt("slot"));
+        assertEquals("minecraft:diamond_sword",migrated.getCompound("item").getString("id"));
+        ListTag modifiers=sword.getCompound("components").getCompound("minecraft:attribute_modifiers").getList("modifiers",10);
+        modifiers.add(modifiers.getCompound(0).copy());
+        CompoundTag original=box.copy();
+        assertNull(ItemMigration.convert(box,context(3839)));
+        assertEquals(original,box);
+    }
+
+    private static CompoundTag releasedModifierStack() {
+        CompoundTag item=new CompoundTag(),components=new CompoundTag(),attributes=new CompoundTag(),modifier=new CompoundTag();
+        item.putString("id","minecraft:diamond_sword");
+        item.putInt("count",1);
+        item.putByte("Slot",(byte)47);
+        modifier.putUUID("uuid",new java.util.UUID(101,202));
+        modifier.putString("name","Old modifier");
+        modifier.putString("type","minecraft:generic.attack_damage");
+        modifier.putDouble("amount",2.75);
+        modifier.putString("operation","add_value");
+        modifier.putString("slot","mainhand");
+        ListTag list=new ListTag();
+        list.add(modifier);
+        attributes.put("modifiers",list);
+        attributes.putBoolean("show_in_tooltip",false);
+        components.put("minecraft:attribute_modifiers",attributes);
+        item.put("components",components);
+        return item;
     }
 }

@@ -51,7 +51,7 @@ final class NamelessCorpseClientChecks {
 
     private static String translation(Minecraft mc, String code) throws Exception {
         com.google.gson.JsonObject values;
-        try(Reader in=new InputStreamReader(mc.getResourceManager().getResource(new ResourceLocation("lootablebodies","lang/"+code+".json")).orElseThrow().open(),StandardCharsets.UTF_8)) {
+        try(Reader in=new InputStreamReader(mc.getResourceManager().getResource(ResourceLocation.fromNamespaceAndPath("lootablebodies","lang/"+code+".json")).orElseThrow().open(),StandardCharsets.UTF_8)) {
             values=new com.google.gson.JsonParser().parse(in).getAsJsonObject();
         }
         String expected=values.get("entity.lootablebodies.Corpse.name").getAsString();
@@ -71,7 +71,7 @@ final class NamelessCorpseClientChecks {
         retained.putString("Source","FutureFixture"); retained.putString("Data","retain verbatim");
         data.put("LootableBodiesUnresolved",NbtRecoveryChecks.list(retained));
         body = (EntityLootableBody)FixtureApi.loadEntity(data,mc.level);
-        RuntimeChecks.require(body != null && new ResourceLocation("lootablebodies:corpse").equals(net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(body.getType())), "Registry/display identity changed");
+        RuntimeChecks.require(body != null && ResourceLocation.parse("lootablebodies:corpse").equals(net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(body.getType())), "Registry/display identity changed");
         CompoundTag before = NameLifetimeChecks.saved(body);
         RuntimeChecks.require(expected.equals(body.getName().getString()), "Untranslated nameless corpse in "+code+": "+body.getName().getString());
         RuntimeChecks.require(expected.equals(body.getDisplayName().getString()), "Wrong rendered name in "+code);

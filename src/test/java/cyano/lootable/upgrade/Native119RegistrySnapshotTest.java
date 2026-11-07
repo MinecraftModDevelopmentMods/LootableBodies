@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Actual Forge45 mapping actions and native PoI data fixes, without a world. */
 class Native119RegistrySnapshotTest {
     private MissingMappingsEvent.Action action(ResourceKey<? extends Registry<?>> registry,String name)throws Exception {
-        MissingMappingsEvent.Mapping<Object> mapping=new MissingMappingsEvent.Mapping<>(null,null,new ResourceLocation(name),17);
+        MissingMappingsEvent.Mapping<Object> mapping=new MissingMappingsEvent.Mapping<>(null,null,ResourceLocation.parse(name),17);
         MissingMappingsEvent event=new MissingMappingsEvent(registry,null,List.of(mapping));
         for(java.lang.reflect.Method method:LegacyRegistryMappings.class.getDeclaredMethods())
             if(method.isAnnotationPresent(SubscribeEvent.class) && Arrays.equals(method.getParameterTypes(),new Class<?>[]{MissingMappingsEvent.class}))method.invoke(null,event);
