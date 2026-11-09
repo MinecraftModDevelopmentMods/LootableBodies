@@ -3,10 +3,11 @@ package cyano.lootable.graphics;
 import cyano.lootable.LootableBodies;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.Container;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -15,7 +16,7 @@ import net.minecraft.network.chat.Component;
 @OnlyIn(Dist.CLIENT)
 public class CorpseGUIContainer extends net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<CorpseContainer>{
 
-	private final ResourceLocation image = ResourceLocation.parse(LootableBodies.MODID+":textures/gui/corpse.png");
+	private final Identifier image = Identifier.parse(LootableBodies.MODID+":textures/gui/corpse.png");
 
 	public CorpseGUIContainer(Inventory playerItems, Container entity) {
 		this(new CorpseContainer(playerItems,entity),playerItems,entity instanceof net.minecraft.world.entity.Entity?((net.minecraft.world.entity.Entity)entity).getDisplayName():Component.literal(LootableBodies.NAME));
@@ -38,7 +39,7 @@ public class CorpseGUIContainer extends net.minecraft.client.gui.screens.invento
 	protected void renderBg(GuiGraphics graphics, float partialTicks, int mouseX, int mouseY) {
 		int x = (width - imageWidth) / 2;
 		int y = (height - imageHeight) / 2;
-		graphics.blit(image, x, y, 0, 0, imageWidth, imageHeight);
+		graphics.blit(RenderPipelines.GUI_TEXTURED, image, x, y, 0, 0, imageWidth, imageHeight, 256, 256);
 	}
 
     @Override

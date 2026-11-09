@@ -1,11 +1,8 @@
 package cyano.lootable.buildtest;
 
 import java.util.List;
-import java.util.Optional;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.levelgen.WorldDimensions;
 
 /** One native vanilla bootstrap per test JVM; never historical world evidence. */
@@ -19,11 +16,10 @@ public final class Native119Registries {
         var stems=new net.minecraft.core.MappedRegistry<net.minecraft.world.level.dimension.LevelStem>(
                 net.minecraft.core.registries.Registries.LEVEL_STEM,com.mojang.serialization.Lifecycle.stable());
         dimensions.dimensions().forEach((key,value)->stems.register(key,value,net.minecraft.core.RegistrationInfo.BUILT_IN));
-        return new RegistryAccess.ImmutableRegistryAccess(List.of(stems.freeze())) {
-            @Override public <T> Optional<HolderLookup.RegistryLookup<T>> lookup(ResourceKey<? extends Registry<? extends T>> key) {
-                Optional<HolderLookup.RegistryLookup<T>> saved=super.lookup(key);
-                return saved.isPresent()?saved:Native119Registries.lookup().lookup(key);
-            }
-        };
+        var types = new net.minecraft.core.MappedRegistry<net.minecraft.world.level.dimension.DimensionType>(
+                net.minecraft.core.registries.Registries.DIMENSION_TYPE, com.mojang.serialization.Lifecycle.stable());
+        lookup().lookupOrThrow(net.minecraft.core.registries.Registries.DIMENSION_TYPE).listElements()
+                .forEach(holder -> types.register(holder.key(), holder.value(), net.minecraft.core.RegistrationInfo.BUILT_IN));
+        return new RegistryAccess.ImmutableRegistryAccess(List.of(stems.freeze(), types.freeze()));
     }
 }

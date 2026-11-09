@@ -1,5 +1,8 @@
 package cyano.lootable.upgrade;
 
+import static cyano.lootable.upgrade.NativeNbt.typedList;
+import static cyano.lootable.upgrade.NativeNbt.isListOf;
+
 import net.minecraft.nbt.*;
 
 /** Recover saved coordinates before native 1.17 builds entity-section indexes. */
@@ -17,7 +20,7 @@ public final class SavedCorpsePosition {
     private static void visit(CompoundTag entity,int x,int z,boolean root,int depth) {
         if(depth>512)throw new IllegalStateException("Saved corpse passenger tree is too deep");
         if(UpgradeJournal.corpse(entity))repair(entity,x,z,root);
-        for(Tag rider:entity.getList("Passengers",10))visit((CompoundTag)rider,x,z,false,depth+1);
+        for(Tag rider:typedList(entity, "Passengers", 10))visit((CompoundTag)rider,x,z,false,depth+1);
     }
     private static void repair(CompoundTag entity,int x,int z,boolean root) {
         Tag raw=entity.get("Pos");ListTag list=raw instanceof ListTag?(ListTag)raw:null;
@@ -25,7 +28,7 @@ public final class SavedCorpsePosition {
         double[] position=new double[3];
         for(int axis=0;axis<3;axis++) {
             Tag value=list!=null && axis<list.size()?list.get(axis):null;
-            double number=value instanceof NumericTag?((NumericTag)value).getAsDouble():Double.NaN;
+            double number=value instanceof NumericTag?((NumericTag)value).doubleValue():Double.NaN;
             if(!isSafeCoordinate(axis,number)) {
                 number=axis==1?64D:(axis==0?x:z)*16D+8.5D;changed=true;
             }
@@ -44,7 +47,7 @@ public final class SavedCorpsePosition {
         cyano.lootable.ModLog.warning("Lootable Bodies recovered malformed corpse position in chunk %s,%s",x,z);
         if(raw==null)return;
         Tag metadata=entity.get(RECOVERY);ListTag records=new ListTag();
-        if(metadata instanceof ListTag && (((ListTag)metadata).isEmpty() || ((ListTag)metadata).getElementType()==10))
+        if(isListOf(metadata, 10))
             records=(ListTag)metadata.copy();
         else if(metadata!=null)retain(records,"Recovery",metadata);
         retain(records,"Pos",raw);entity.put(RECOVERY,records);

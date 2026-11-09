@@ -1,6 +1,5 @@
 package cyano.lootable.buildtest;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.entity.boss.enderdragon.phases.AbstractDragonPhaseInstance;
 import net.minecraft.server.level.ServerLevel;
 
 import cyano.lootable.entities.EntityLootableBody;
@@ -15,16 +14,16 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.event.TickEvent;
 
 /** Death/respawn timing matrix, with an independently connected observer. */
 public final class RespawnPacketChecks {
     private final MinecraftServer server;
+    private final net.minecraftforge.eventbus.api.listener.EventListener tickListener;
     private int index,phase,ticks,phaseTicks,startupTicks;
     private ServerPlayer dead;
     private ServerPlayer observerDead;
@@ -38,7 +37,7 @@ public final class RespawnPacketChecks {
         RuntimeChecks.require(!LootableBodies.useLocalSkin&&LootableBodies.allowCorpseDecay&&LootableBodies.decayOnlyWhenEmpty
             &&LootableBodies.ticksPerItemDecay==6000&&LootableBodies.corpseDecayTime==72000&&LootableBodies.corpseHP==20
             &&!LootableBodies.hurtByEnvironment&&!LootableBodies.hurtByAttacks&&!LootableBodies.hurtByMisc,"Respawn matrix requires production defaults");
-        this.server=server;state(0);Files.write(file("server.ready").toPath(),new byte[]{1});net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);
+        this.server=server;state(0);Files.write(file("server.ready").toPath(),new byte[]{1});tickListener = TickEvent.ServerTickEvent.Post.BUS.addListener(this::tick);
     }
     static void verifySlowClientStartup(MinecraftServer server) throws Exception {
         String previous=System.getProperty("lootablebodies.multiplayer.sync");
@@ -55,7 +54,7 @@ public final class RespawnPacketChecks {
                 "Client startup consumed the death/respawn case deadline");
             System.out.println("RESPAWN_STARTUP_CLOCK_PASS waiting_ticks=1000 case_ticks=0");
         } finally {
-            if(fixture!=null)net.minecraftforge.common.MinecraftForge.EVENT_BUS.unregister(fixture);
+            if(fixture!=null)TickEvent.ServerTickEvent.Post.BUS.removeListener(fixture.tickListener);
             if(previous==null)System.clearProperty("lootablebodies.multiplayer.sync");
             else System.setProperty("lootablebodies.multiplayer.sync",previous);
         }
@@ -63,9 +62,9 @@ public final class RespawnPacketChecks {
     static File file(String name){return new File(System.getProperty("lootablebodies.multiplayer.sync"),name);}
     private ServerPlayer player(String role){return server.getPlayerList().getPlayerByName("Container"+role);}
     private boolean ack(String role,int p){return file(role+".case-"+index+"-"+p).isFile();}
-    private void trace(ServerPlayer p){if(p!=null&&traced.add(p.getGameProfile().getName()))RespawnPacketTrace.install(p.connection.getConnection(),file(p.getGameProfile().getName()+"-server-packets.txt"),null);}
-    @SubscribeEvent public void tick(TickEvent.ServerTickEvent e) {
-        if(e.phase!=TickEvent.Phase.END||finished)return;
+    private void trace(ServerPlayer p){if(p!=null&&traced.add(p.getGameProfile().name()))RespawnPacketTrace.install(p.connection.getConnection(),file(p.getGameProfile().name()+"-server-packets.txt"),null);}
+    public void tick(TickEvent.ServerTickEvent.Post e) {
+        if(finished)return;
         try {
             RuntimeChecks.require(++ticks<20000,"Respawn matrix total timeout");
             RuntimeChecks.require(!file("abort").exists(),"Respawn matrix aborted");
@@ -84,21 +83,21 @@ public final class RespawnPacketChecks {
                 double x=kind==6?-.4:96.5,z=kind==6?-.4:96.5;
                 FixtureArena.prepare(BlockPos.containing(x,79,z),w::setBlockAndUpdate);
                 FixtureArena.prepare(new BlockPos(160,79,96),w::setBlockAndUpdate);
-                w.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBSPAWNING).set(false,null);w.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);
+                w.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.SPAWN_MOBS,false,null);w.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.KEEP_INVENTORY,false,null);
                 a.setGameMode(GameType.SURVIVAL);b.setGameMode(GameType.SURVIVAL);a.getInventory().clearContent();b.getInventory().clearContent();
                 FixtureApi.spawn(a,new BlockPos(kind==5?160:(int)Math.floor(x),80,(int)Math.floor(z)-3),true,false,a.level().dimension());
                 FixtureApi.spawn(b,new BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),true,false,b.level().dimension());
                 if(kind==7)FixtureApi.spawn(a,new BlockPos(96,80,93),true,false,a.level().dimension());
-                a.getInventory().items.set(9,RuntimeChecks.stack(520+index));a.containerMenu.broadcastChanges();
-                if(simultaneous){b.getInventory().items.set(9,RuntimeChecks.stack(620+index));b.containerMenu.broadcastChanges();}
+                a.getInventory().getNonEquipmentItems().set(9,RuntimeChecks.stack(520+index));a.containerMenu.broadcastChanges();
+                if(simultaneous){b.getInventory().getNonEquipmentItems().set(9,RuntimeChecks.stack(620+index));b.containerMenu.broadcastChanges();}
                 a.connection.teleport(x,80,z,0,0);b.connection.teleport(kind==4?160.5:x+2,80,z-2.5,0,25);
                 state(1);
             } else if(phase==1&&ack("A",1)&&ack("B",1)&&phaseTicks>10) {
-                dead=a;Set<Entity> before=new HashSet<>(FixtureApi.entities(a.level()));a.kill();body=null;
+                dead=a;Set<Entity> before=new HashSet<>(FixtureApi.entities(a.level()));a.kill(a.level());body=null;
                 for(Entity ent:FixtureApi.entities(a.level()))if(ent instanceof EntityLootableBody&&!before.contains(ent))body=(EntityLootableBody)ent;
                 RuntimeChecks.require(body!=null,"No server death corpse");state(2);
                 if(simultaneous) {
-                    observerDead=b;before=new HashSet<>(FixtureApi.entities(b.level()));b.kill();observerBody=null;
+                    observerDead=b;before=new HashSet<>(FixtureApi.entities(b.level()));b.kill(b.level());observerBody=null;
                     for(Entity ent:FixtureApi.entities(b.level()))if(ent instanceof EntityLootableBody&&!before.contains(ent))observerBody=(EntityLootableBody)ent;
                     RuntimeChecks.require(observerBody!=null,"No observer death corpse");
                 }
@@ -148,11 +147,11 @@ public final class RespawnPacketChecks {
         ServerLevel target=server.getLevel(dimension);
         // This is an absolute fixture move, not a portal-generation check.
         // Use the native16 command path, including its real respawn packet.
-        player.teleportTo(target,96.5,80,96.5,player.getYRot(),0);
+        player.teleportTo(target,96.5,80,96.5,java.util.Set.of(),player.getYRot(),0,false);
 
     }
     private void writeTracked(ServerPlayer player,String role) throws Exception {
-        List<String> expected=new ArrayList<>();ServerLevel w=player.serverLevel();
+        List<String> expected=new ArrayList<>();ServerLevel w=player.level();
         for(Entity e:FixtureApi.entities(w))if(e instanceof EntityLootableBody&&e.isAlive()&&FixtureApi.tracked(e).contains(player))expected.add(e.getId()+" "+e.getUUID());
         Collections.sort(expected);Files.write(file("expected-"+index+"-"+role+".txt").toPath(),expected,StandardCharsets.UTF_8);
     }

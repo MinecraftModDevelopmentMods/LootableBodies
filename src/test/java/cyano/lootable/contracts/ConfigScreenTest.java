@@ -29,7 +29,7 @@ class ConfigScreenTest {
     @Test void modsListUsesAClientOnlyFactory() throws Exception {
         String source = new String(Files.readAllBytes(Paths.get(
                 "src/main/java/cyano/lootable/LootableBodies.java")), StandardCharsets.UTF_8);
-        assertTrue(source.contains("DistExecutor.runWhenOn"));
+        assertTrue(source.contains("if (FMLEnvironment.dist == Dist.CLIENT) ClientProxy.register(context);"));
         assertFalse(source.contains("import net.minecraft.client"));
     }
 
@@ -107,6 +107,27 @@ class ConfigScreenTest {
             assertNotNull(language.get(property.getLanguageKey() + ".tooltip"), property.getName());
         }
     }
+    private java.lang.reflect.Field unitClient;
+    private Object previousClient;
+
+    @BeforeEach void installConstructorFixture() throws Exception {
+        // The native Screen constructor reads Minecraft.font. These checks
+        // only exercise drafts and lifecycle methods, with no window or font.
+        Class<?> unsafeType = Class.forName("sun.misc.Unsafe");
+        var singleton = unsafeType.getDeclaredField("theUnsafe");
+        singleton.setAccessible(true);
+        Class<?> minecraft = net.minecraft.client.Minecraft.class;
+        unitClient = minecraft.getDeclaredField("instance");
+        unitClient.setAccessible(true);
+        previousClient = unitClient.get(null);
+        Object client = unsafeType.getMethod("allocateInstance", Class.class).invoke(singleton.get(null), minecraft);
+        unitClient.set(null, client);
+    }
+
+    @AfterEach void restoreConstructorFixture() throws Exception {
+        if (unitClient != null) unitClient.set(null, previousClient);
+    }
+
     @Test void cancelledChildEditsCannotLeakIntoTheRootDraft()throws Exception {
         load("");cyano.lootable.graphics.CorpseConfigGui root=new cyano.lootable.graphics.CorpseConfigGui(null);
         java.lang.reflect.Field pending=root.getClass().getDeclaredField("pending");pending.setAccessible(true);
@@ -126,7 +147,7 @@ class ConfigScreenTest {
     }
     @Test void corpseLayoutKeepsItsOriginalUnlabelledForeground()throws Exception {
         cyano.lootable.graphics.CorpseGUIContainer screen=new cyano.lootable.graphics.CorpseGUIContainer(
-            (cyano.lootable.graphics.CorpseContainer)null,new net.minecraft.world.entity.player.Inventory(null),net.minecraft.network.chat.Component.literal("Saved owner"));
+            (cyano.lootable.graphics.CorpseContainer)null,new net.minecraft.world.entity.player.Inventory(null,new net.minecraft.world.entity.EntityEquipment()),net.minecraft.network.chat.Component.literal("Saved owner"));
         java.lang.reflect.Method foreground=cyano.lootable.graphics.CorpseGUIContainer.class.getDeclaredMethod(
             "renderLabels",net.minecraft.client.gui.GuiGraphics.class,int.class,int.class);foreground.setAccessible(true);
         // The original layout uses all seven rows. Native labels would draw

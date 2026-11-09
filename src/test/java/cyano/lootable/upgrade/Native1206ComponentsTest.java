@@ -1,9 +1,15 @@
 package cyano.lootable.upgrade;
 
+import cyano.lootable.buildtest.NativeVanillaDataFixer;
+
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
+import static cyano.lootable.buildtest.TestNativeNbt.writeUuid;
+
 import net.minecraft.SharedConstants;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.util.datafix.DataFixers;
 import net.minecraft.world.item.ItemStack;
@@ -33,10 +39,10 @@ class Native1206ComponentsTest {
         return stack;
     }
 
-    @Test void targetUsesTheActual3955NativeSchema() {
-        assertEquals(3955,SharedConstants.getCurrentVersion().getDataVersion().getVersion());
-        assertEquals(3955,UpgradePreservation.MINECRAFT_VERSION);
-        assertEquals(12,UpgradePreservation.DATA_VERSION);
+    @Test void targetUsesTheActual4671NativeSchema() {
+        assertEquals(4671,SharedConstants.getCurrentVersion().dataVersion().version());
+        assertEquals(4671,UpgradePreservation.MINECRAFT_VERSION);
+        assertEquals(13,UpgradePreservation.DATA_VERSION);
     }
 
     @Test void released120ItemShapePreservesDamageEnchantmentsAndTypedCustomData() {
@@ -57,27 +63,61 @@ class Native1206ComponentsTest {
         CompoundTag before=original.copy();
         CompoundTag converted=ItemMigration.convert(original,context(3465));
         assertNotNull(converted);
-        assertEquals(47,converted.getByte("Slot"));
-        assertEquals(1,converted.getInt("count"));
+        assertEquals(47,converted.getByteOr("Slot", (byte) 0));
+        assertEquals(1,converted.getIntOr("count", 0));
         assertFalse(converted.contains("Count"));
-        CompoundTag components=converted.getCompound("components");
-        assertEquals(27,components.getInt("minecraft:damage"));
-        assertEquals(3,components.getCompound("minecraft:enchantments").getCompound("levels").getInt("minecraft:sharpness"));
-        assertArrayEquals(tag.getLongArray("keepsake"),components.getCompound("minecraft:custom_data").getLongArray("keepsake"));
+        CompoundTag components=converted.getCompoundOrEmpty("components");
+        assertEquals(27,components.getIntOr("minecraft:damage", 0));
+        assertEquals(3,components.getCompoundOrEmpty("minecraft:enchantments").getIntOr("minecraft:sharpness", 0));
+        assertArrayEquals(tag.getLongArray("keepsake").orElseGet(() -> new long[0]),components.getCompoundOrEmpty("minecraft:custom_data").getLongArray("keepsake").orElseGet(() -> new long[0]));
         HolderLookup.Provider registry=net.minecraft.data.registries.VanillaRegistries.createLookup();
-        ItemStack stack=ItemStack.parse(registry,converted).orElseThrow();
+        ItemStack stack=ItemStack.CODEC.parse(registry.createSerializationContext(NbtOps.INSTANCE), converted).getOrThrow();
         assertSame(Items.DIAMOND_SWORD,stack.getItem());
         assertEquals(27,stack.getDamageValue());
-        CompoundTag encoded=((CompoundTag)stack.save(registry)).getCompound("components");
-        assertEquals("\"Old Blade\"",encoded.getString("minecraft:custom_name"));
+        CompoundTag encoded=cyano.lootable.buildtest.TestNativeNbt.saveStack(stack,registry).getCompoundOrEmpty("components");
+        assertEquals("Old Blade",stack.getHoverName().getString());
         assertTrue(ItemMigration.sameSavedComponents(components,encoded));
         CompoundTag changed=components.copy();
-        changed.putString("minecraft:custom_name","{\"text\":\"Old Blade\",\"italic\":false}");
+        CompoundTag explicitStyle = new CompoundTag();
+        explicitStyle.putString("text","Old Blade");
+        explicitStyle.putBoolean("italic",false);
+        changed.put("minecraft:custom_name",explicitStyle);
         assertFalse(ItemMigration.sameSavedComponents(changed,encoded));
         changed=components.copy();
-        changed.getCompound("minecraft:custom_data").putString("extra","must retain");
+        changed.getCompoundOrEmpty("minecraft:custom_data").putString("extra","must retain");
         assertFalse(ItemMigration.sameSavedComponents(changed,encoded));
         assertEquals(before,original);
+    }
+
+    @Test void original110SpawnEggKeepsNativeEntityDataAndCustomName() {
+        CompoundTag egg = legacy("spawn_egg",3,40);
+        egg.putShort("Damage",(short)0);
+        CompoundTag pig = new CompoundTag();
+        pig.putString("id","Pig");
+        pig.putString("CustomName","Saved pig");
+        CompoundTag tag = new CompoundTag();
+        tag.put("EntityTag",pig);
+        tag.putString("keepsake","old egg");
+        egg.put("tag",tag);
+        CompoundTag original = egg.copy();
+
+        CompoundTag legacy = ItemMigration.convertNbt(egg,context(512));
+        assertNotNull(legacy);
+        CompoundTag at121 = NativeNbt.update(NativeVanillaDataFixer.get(),
+                net.minecraft.util.datafix.fixes.References.ITEM_STACK,legacy.copy(),3817,3955);
+        CompoundTag at12111 = NativeNbt.update(NativeVanillaDataFixer.get(),
+                net.minecraft.util.datafix.fixes.References.ITEM_STACK,at121.copy(),3955,4671);
+        CompoundTag converted = ItemMigration.convert(egg,context(512));
+        assertNotNull(converted, () -> at121+" -> "+at12111);
+        assertEquals("minecraft:pig_spawn_egg",converted.getStringOr("id",""));
+        assertEquals(3,converted.getIntOr("count",0));
+        assertEquals(40,converted.getByteOr("Slot",(byte)-1));
+        var registry=cyano.lootable.buildtest.Native119Registries.lookup();
+        var stack=ItemStack.CODEC.parse(registry.createSerializationContext(NbtOps.INSTANCE),converted).getOrThrow();
+        var encoded=cyano.lootable.buildtest.TestNativeNbt.saveStack(stack,registry);
+        assertTrue(ItemMigration.sameSavedComponents(converted.getCompoundOrEmpty("components"),
+                encoded.getCompoundOrEmpty("components")));
+        assertEquals(original,egg);
     }
 
     @Test void original110BannerKeepsItsFlattenedColourAndComponentData() {
@@ -96,13 +136,13 @@ class Native1206ComponentsTest {
         assertNotNull(flattened);
         CompoundTag migrated=ItemMigration.convert(original,context(512));
         assertNotNull(migrated,flattened::toString);
-        assertEquals("minecraft:purple_banner",migrated.getString("id"));
-        assertEquals(2,migrated.getInt("count"));
-        assertEquals(8,migrated.getByte("Slot"));
-        CompoundTag components=migrated.getCompound("components");
-        assertEquals("purple",components.getString("minecraft:base_color"));
-        assertEquals(1234567890123L,components.getCompound("minecraft:custom_data").getLong("typed_long"));
-        assertArrayEquals(new byte[]{0,-1,17},components.getCompound("minecraft:custom_data").getByteArray("typed_bytes"));
+        assertEquals("minecraft:purple_banner",migrated.getStringOr("id", ""));
+        assertEquals(2,migrated.getIntOr("count", 0));
+        assertEquals(8,migrated.getByteOr("Slot", (byte) 0));
+        CompoundTag components=migrated.getCompoundOrEmpty("components");
+        assertEquals("purple",components.getStringOr("minecraft:base_color", ""));
+        assertEquals(1234567890123L,components.getCompoundOrEmpty("minecraft:custom_data").getLongOr("typed_long", 0L));
+        assertArrayEquals(new byte[]{0,-1,17},components.getCompoundOrEmpty("minecraft:custom_data").getByteArray("typed_bytes").orElseGet(() -> new byte[0]));
         assertEquals(before,original);
     }
 
@@ -129,12 +169,12 @@ class Native1206ComponentsTest {
         original.put("tag",tag);
         CompoundTag converted=ItemMigration.convert(original,context(3465));
         assertNotNull(converted);
-        ListTag slots=converted.getCompound("components").getList("minecraft:container",10);
+        ListTag slots=typedList(converted.getCompoundOrEmpty("components"), "minecraft:container", 10);
         assertEquals(1,slots.size());
-        assertEquals(3,slots.getCompound(0).getInt("slot"));
-        assertEquals("minecraft:emerald",slots.getCompound(0).getCompound("item").getString("id"));
-        assertEquals(29,slots.getCompound(0).getCompound("item").getInt("count"));
-        assertEquals(3,children.getCompound(0).getByte("Slot"));
+        assertEquals(3,slots.getCompoundOrEmpty(0).getIntOr("slot", 0));
+        assertEquals("minecraft:emerald",slots.getCompoundOrEmpty(0).getCompoundOrEmpty("item").getStringOr("id", ""));
+        assertEquals(29,slots.getCompoundOrEmpty(0).getCompoundOrEmpty("item").getIntOr("count", 0));
+        assertEquals(3,children.getCompoundOrEmpty(0).getByteOr("Slot", (byte) 0));
     }
 
     @Test void legacyCapabilityPayloadAndDuplicateNestedSlotsAreLeftForRecovery() {
@@ -160,17 +200,17 @@ class Native1206ComponentsTest {
     }
 
     @Test void registryAliasesAgreeWithNative1206Fixers() {
-        var from=net.minecraft.resources.ResourceLocation.withDefaultNamespace("grass");
+        var from=net.minecraft.resources.Identifier.withDefaultNamespace("grass");
         var block=new CompoundTag();
         block.putString("Name",from.toString());
         var fixed=NativeNbt.update(DataFixers.getDataFixer(),net.minecraft.util.datafix.fixes.References.BLOCK_STATE,
                 block,3465,3955);
-        assertEquals(fixed.getString("Name"),LegacyRegistryMappings.blockReplacement(from).toString());
+        assertEquals(fixed.getStringOr("Name", ""),LegacyRegistryMappings.blockReplacement(from).toString());
         for(String name:new String[]{"grass","scute"}) {
-            var key=net.minecraft.resources.ResourceLocation.withDefaultNamespace(name);
+            var key=net.minecraft.resources.Identifier.withDefaultNamespace(name);
             var migrated=ItemMigration.convert(legacy(name,2,47),context(3465));
             assertNotNull(migrated);
-            assertEquals(migrated.getString("id"),LegacyRegistryMappings.itemReplacement(key).toString());
+            assertEquals(migrated.getStringOr("id", ""),LegacyRegistryMappings.itemReplacement(key).toString());
         }
         var item=legacy("diamond_sword",1,6);
         CompoundTag tag=new CompoundTag(), enchant=new CompoundTag();
@@ -182,14 +222,14 @@ class Native1206ComponentsTest {
         item.put("tag",tag);
         var migrated=ItemMigration.convert(item,context(3465));
         assertNotNull(migrated);
-        var sweeping=net.minecraft.resources.ResourceLocation.withDefaultNamespace("sweeping");
+        var sweeping=net.minecraft.resources.Identifier.withDefaultNamespace("sweeping");
         var replacement=LegacyRegistryMappings.enchantmentReplacement(sweeping);
-        assertEquals(2,migrated.getCompound("components").getCompound("minecraft:enchantments").getCompound("levels").getInt(replacement.toString()));
-        assertNull(LegacyRegistryMappings.itemReplacement(net.minecraft.resources.ResourceLocation.tryParse("other:scute")));
+        assertEquals(2,migrated.getCompoundOrEmpty("components").getCompoundOrEmpty("minecraft:enchantments").getIntOr(replacement.toString(), 0));
+        assertNull(LegacyRegistryMappings.itemReplacement(net.minecraft.resources.Identifier.tryParse("other:scute")));
     }
 
     @Test void emptyPotionRemainsEmptyWithoutAnArtificialRegistryAlias() {
-        var key=net.minecraft.resources.ResourceLocation.withDefaultNamespace("empty");
+        var key=net.minecraft.resources.Identifier.withDefaultNamespace("empty");
         assertTrue(LegacyRegistryMappings.retiredPotion(key));
         assertFalse(BuiltInRegistries.POTION.containsKey(key));
         CompoundTag original=legacy("potion",1,6), tag=new CompoundTag();
@@ -197,8 +237,8 @@ class Native1206ComponentsTest {
         original.put("tag",tag);
         var migrated=ItemMigration.convert(original,context(3465));
         assertNotNull(migrated);
-        assertFalse(migrated.getCompound("components").getCompound("minecraft:potion_contents").contains("potion"));
-        assertEquals("minecraft:empty",original.getCompound("tag").getString("Potion"));
+        assertFalse(migrated.getCompoundOrEmpty("components").getCompoundOrEmpty("minecraft:potion_contents").contains("potion"));
+        assertEquals("minecraft:empty",original.getCompoundOrEmpty("tag").getStringOr("Potion", ""));
     }
 
     @Test void validCurrentComponentItemIsCopiedWithoutLegacyConversion() {
@@ -206,9 +246,9 @@ class Native1206ComponentsTest {
         ItemStack stack=new ItemStack(Items.DIAMOND,31);
         stack.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
                 net.minecraft.network.chat.Component.literal("Saved keepsake"));
-        CompoundTag current=(CompoundTag)stack.save(registry);
+        CompoundTag current=cyano.lootable.buildtest.TestNativeNbt.saveStack(stack,registry);
         current.putByte("Slot",(byte)47);
-        CompoundTag converted=ItemMigration.convert(current,context(3955));
+        CompoundTag converted=ItemMigration.convert(current,context(4671));
         assertEquals(current,converted);
         assertNotSame(current,converted);
     }
@@ -218,17 +258,24 @@ class Native1206ComponentsTest {
         CompoundTag original=old.copy();
         CompoundTag migrated=ItemMigration.convert(old,context(3839));
         assertNotNull(migrated);
-        assertEquals(47,migrated.getByte("Slot"));
-        CompoundTag modifier=migrated.getCompound("components").getCompound("minecraft:attribute_modifiers")
-                .getList("modifiers",10).getCompound(0);
-        assertEquals("minecraft:00000000-0000-0065-0000-0000000000ca",modifier.getString("id"));
-        assertEquals(2.75,modifier.getDouble("amount"));
-        assertEquals("add_value",modifier.getString("operation"));
-        assertEquals("mainhand",modifier.getString("slot"));
+        assertEquals(47,migrated.getByteOr("Slot", (byte) 0));
+        CompoundTag migratedComponents = migrated.getCompoundOrEmpty("components");
+        CompoundTag modifier = migratedComponents.getListOrEmpty("minecraft:attribute_modifiers").getCompoundOrEmpty(0);
+        assertEquals("minecraft:attack_damage", modifier.getStringOr("type", ""));
+        CompoundTag tooltip = migratedComponents.getCompoundOrEmpty("minecraft:tooltip_display");
+        assertFalse(tooltip.getBooleanOr("hide_tooltip", true));
+        assertEquals("minecraft:attribute_modifiers", tooltip.getListOrEmpty("hidden_components").getStringOr(0, ""));
+        assertEquals("minecraft:00000000-0000-0065-0000-0000000000ca",modifier.getStringOr("id", ""));
+        assertEquals(2.75,modifier.getDoubleOr("amount", 0D));
+        assertEquals("add_value",modifier.getStringOr("operation", ""));
+        assertEquals("mainhand",modifier.getStringOr("slot", ""));
         assertFalse(modifier.contains("uuid"));
         assertEquals(original,old);
         HolderLookup.Provider registry=net.minecraft.data.registries.VanillaRegistries.createLookup();
-        assertSame(Items.DIAMOND_SWORD,ItemStack.parse(registry,migrated).orElseThrow().getItem());
+        ItemStack actual = ItemStack.CODEC.parse(registry.createSerializationContext(NbtOps.INSTANCE), migrated).getOrThrow();
+        assertSame(Items.DIAMOND_SWORD, actual.getItem());
+        CompoundTag encoded = cyano.lootable.buildtest.TestNativeNbt.saveStack(actual,registry).getCompoundOrEmpty("components");
+        assertTrue(ItemMigration.sameSavedComponents(migratedComponents, encoded), () -> migratedComponents+" -> "+encoded);
     }
 
     @Test void legacyEntityModifiersUseTheNativeUuidAndNameMapping() {
@@ -252,11 +299,11 @@ class Native1206ComponentsTest {
         box.put("components",components);
         CompoundTag upgraded=ItemMigration.convert(box,context(3839));
         assertNotNull(upgraded);
-        CompoundTag migrated=upgraded.getCompound("components").getList("minecraft:container",10).getCompound(0);
-        assertEquals(19,migrated.getInt("slot"));
-        assertEquals("minecraft:diamond_sword",migrated.getCompound("item").getString("id"));
-        ListTag modifiers=sword.getCompound("components").getCompound("minecraft:attribute_modifiers").getList("modifiers",10);
-        modifiers.add(modifiers.getCompound(0).copy());
+        CompoundTag migrated=typedList(upgraded.getCompoundOrEmpty("components"), "minecraft:container", 10).getCompoundOrEmpty(0);
+        assertEquals(19,migrated.getIntOr("slot", 0));
+        assertEquals("minecraft:diamond_sword",migrated.getCompoundOrEmpty("item").getStringOr("id", ""));
+        ListTag modifiers=typedList(sword.getCompoundOrEmpty("components").getCompoundOrEmpty("minecraft:attribute_modifiers"), "modifiers", 10);
+        modifiers.add(modifiers.getCompoundOrEmpty(0).copy());
         CompoundTag original=box.copy();
         assertNull(ItemMigration.convert(box,context(3839)));
         assertEquals(original,box);
@@ -267,7 +314,7 @@ class Native1206ComponentsTest {
         item.putString("id","minecraft:diamond_sword");
         item.putInt("count",1);
         item.putByte("Slot",(byte)47);
-        modifier.putUUID("uuid",new java.util.UUID(101,202));
+        writeUuid(modifier, "uuid", new java.util.UUID(101,202));
         modifier.putString("name","Old modifier");
         modifier.putString("type","minecraft:generic.attack_damage");
         modifier.putDouble("amount",2.75);

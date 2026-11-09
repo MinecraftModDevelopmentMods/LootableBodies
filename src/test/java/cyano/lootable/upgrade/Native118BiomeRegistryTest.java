@@ -4,7 +4,7 @@ import com.mojang.serialization.Dynamic;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.StringTag;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.datafix.fixes.BiomeFix;
 import net.minecraft.util.datafix.fixes.CavesAndCliffsRenames;
 import net.minecraft.util.datafix.fixes.References;
@@ -20,28 +20,28 @@ class Native118BiomeRegistryTest {
     @Test void everyCavesAndCliffsAliasMatchesTheActualNativeFixAndRegisteredTarget(){
         CavesAndCliffsRenames.RENAMES.forEach((old,current)->{
             assertEquals(current,nativeName(old,2730),old);
-            ResourceLocation target=ResourceLocation.parse(current);
+            Identifier target=Identifier.parse(current);
             assertTrue(cyano.lootable.buildtest.Native119Registries.lookup().lookupOrThrow(Registries.BIOME)
                     .get(net.minecraft.resources.ResourceKey.create(Registries.BIOME,target)).isPresent(),current);
-            assertEquals(target,LegacyRegistryMappings.biomeReplacement(ResourceLocation.parse(old)),old);
+            assertEquals(target,LegacyRegistryMappings.biomeReplacement(Identifier.parse(old)),old);
         });
     }
     @Test void earlierNativeBiomeRenamesChainIntoTheCurrentNativeBiomeNames(){
         BiomeFix.BIOMES.forEach((old,renamed)->{
             String current=CavesAndCliffsRenames.RENAMES.getOrDefault(renamed,renamed);
             if(current.equals("minecraft:deep_warm_ocean"))current="minecraft:warm_ocean";
-            ResourceLocation target=ResourceLocation.parse(current);
+            Identifier target=Identifier.parse(current);
             assertTrue(cyano.lootable.buildtest.Native119Registries.lookup().lookupOrThrow(Registries.BIOME)
                     .get(net.minecraft.resources.ResourceKey.create(Registries.BIOME,target)).isPresent(),current);
-            assertEquals(target,LegacyRegistryMappings.biomeReplacement(ResourceLocation.parse(old)),old);
+            assertEquals(target,LegacyRegistryMappings.biomeReplacement(Identifier.parse(old)),old);
         });
     }
     @Test void replacedNetherAndDeepWarmOceanFollowTheirSeparateActualNativeRules(){
         for(String old:new String[]{"minecraft:nether","minecraft:deep_warm_ocean"})
-            assertEquals(ResourceLocation.parse(nativeName(old,2230)),LegacyRegistryMappings.biomeReplacement(ResourceLocation.parse(old)));
+            assertEquals(Identifier.parse(nativeName(old,2230)),LegacyRegistryMappings.biomeReplacement(Identifier.parse(old)));
     }
     @Test void healthyUnknownAndOtherModNamesDoNotReceiveGuessedReplacements(){
         for(String name:new String[]{"minecraft:plains","minecraft:forest","minecraft:unknown_saved_biome","anothermod:wooded_hills"})
-            assertNull(LegacyRegistryMappings.biomeReplacement(ResourceLocation.parse(name)),name);
+            assertNull(LegacyRegistryMappings.biomeReplacement(Identifier.parse(name)),name);
     }
 }

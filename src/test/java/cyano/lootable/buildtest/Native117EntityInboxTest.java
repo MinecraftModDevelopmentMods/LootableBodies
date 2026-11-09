@@ -28,6 +28,7 @@ class Native117EntityInboxTest {
         public void setRemoved(Entity.RemovalReason reason) { }
         public boolean shouldBeSaved() { return true; }
         public boolean isAlwaysTicking() { return false; }
+        public boolean isRemoved() { return false; }
     }
     private static final class Storage implements EntityPersistentStorage<Saved> {
         final CompletableFuture<ChunkEntities<Saved>> read = new CompletableFuture<>();
@@ -85,22 +86,22 @@ class Native117EntityInboxTest {
     private static final class BeforeGameLoop extends net.minecraft.util.thread.BlockableEventLoop<Runnable> {
         private final Thread owner=Thread.currentThread();
         BeforeGameLoop(){super("NativeFixtureBeforeGameLoop");}
-        protected Runnable wrapRunnable(Runnable task){return task;}
+        public Runnable wrapRunnable(Runnable task){return task;}
         protected boolean shouldRun(Runnable task){return false;}
         protected Thread getRunningThread(){return owner;}
     }
     @Test void nativeManagedBlockAdmitsCompletionsGatedBeforeTheGameLoop() {
         Fixture f=new Fixture();BeforeGameLoop loop=new BeforeGameLoop();AtomicLong clock=new AtomicLong();
-        loop.tell(()->f.storage.read.complete(new ChunkEntities<>(POS,Collections.singletonList(new Saved()))));
+        loop.schedule(()->f.storage.read.complete(new ChunkEntities<>(POS,Collections.singletonList(new Saved()))));
         assertFalse(loop.pollTask(),"Native event-loop gate must reproduce the pre-loop condition");
         NativeEntityInbox.await(f.manager,POS.toLong(),loop::pollTask,clock::getAndIncrement,10,loop::managedBlock);
         assertTrue(f.manager.areEntitiesLoaded(POS.toLong()));assertEquals(1,f.tracked.get());assertEquals(0,loop.getPendingTasksCount());
-        loop.tell(()->{});assertFalse(loop.pollTask(),"Managed blocking must not leave the native task gate bypassed");
+        loop.schedule(()->{});assertFalse(loop.pollTask(),"Managed blocking must not leave the native task gate bypassed");
     }
     @Test void nativeManagedBlockRestoresItsGateAfterAPendingDeadline() {
         Fixture f=new Fixture();BeforeGameLoop loop=new BeforeGameLoop();AtomicLong clock=new AtomicLong();
         assertThrows(IllegalStateException.class,()->NativeEntityInbox.await(f.manager,POS.toLong(),loop::pollTask,
                 clock::getAndIncrement,3,loop::managedBlock));
-        loop.tell(()->{});assertFalse(loop.pollTask());assertFalse(f.manager.areEntitiesLoaded(POS.toLong()));assertEquals(0,f.storage.stores);
+        loop.schedule(()->{});assertFalse(loop.pollTask());assertFalse(f.manager.areEntitiesLoaded(POS.toLong()));assertEquals(0,f.storage.stores);
     }
 }

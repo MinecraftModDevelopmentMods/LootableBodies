@@ -39,12 +39,12 @@ class EarlyWorldPreservationTest {
         LevelStorageSource format=new LevelStorageSource(directory,directory.resolve("backups"),new DirectoryValidator(new PathAllowList(java.util.List.of())),NativeVanillaDataFixer.get());
         try(LevelStorageSource.LevelStorageAccess save=format.createAccess("fixture")) {
             EarlyWorldPreservation.beforeRead(save,false);
-            UpgradeJournal early=UpgradePreservation.journal();assertEquals(2230,early.worldVersions().getInt("WorldDataVersion"));
+            UpgradeJournal early=UpgradePreservation.journal();assertEquals(2230,early.worldVersions().getIntOr("WorldDataVersion", 0));
             write(world,level(2586));assertSame(early,UpgradePreservation.prepareForStart(world,net.minecraft.util.datafix.DataFixers.getDataFixer()));
-            assertEquals(2230,early.worldVersions().getInt("WorldDataVersion"));
+            assertEquals(2230,early.worldVersions().getIntOr("WorldDataVersion", 0));
             CompoundTag output=new CompoundTag();EarlyWorldPreservation.beforeWrite(save,output);
             assertEquals(root.get("lootablebodies"),output.get("lootablebodies"));
-            output.getCompound("lootablebodies").putString("unknown","changed copy");
+            output.getCompoundOrEmpty("lootablebodies").putString("unknown","changed copy");
             CompoundTag again=new CompoundTag();EarlyWorldPreservation.beforeWrite(save,again);
             assertEquals(root.get("lootablebodies"),again.get("lootablebodies"));
         }

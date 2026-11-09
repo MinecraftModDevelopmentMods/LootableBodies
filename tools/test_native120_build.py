@@ -10,7 +10,7 @@ class Native120BuildContractTests(unittest.TestCase):
             root=Path(directory);bundle=root/'bundle';bundle.mkdir();manifest=root/'manifest.json'
             names=['CHANGELOG.txt','SHA256SUMS',MAIN_JAR,MAIN_JAR[:-4]+'-sources.jar',MAIN_JAR[:-4]+'-javadoc.jar',MAIN_JAR[:-4]+'.pom']
             for name in names:(bundle/name).write_bytes(name.encode())
-            record={'version':MOD_VERSION,'minecraft':'1.21.1','forge':'52.1.20','local_qualification_complete':True,'qualification_integrity_status':'verified','files':{p.name:digest(p) for p in bundle.iterdir()}}
+            record={'version':MOD_VERSION,'minecraft':'1.21.11','forge':'61.2.4','local_qualification_complete':True,'qualification_integrity_status':'verified','files':{p.name:digest(p) for p in bundle.iterdir()}}
             manifest.write_text(json.dumps(record));self.assertEqual(record['files'],check_bundle(manifest,bundle))
             for mutation in ['unqualified','integrity-hold','wrong-target','missing-file','changed-file','extra-file','missing-identity']:
                 with self.subTest(mutation=mutation):

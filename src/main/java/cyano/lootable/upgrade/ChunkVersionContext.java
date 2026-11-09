@@ -6,8 +6,7 @@ import java.util.function.UnaryOperator;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.chunk.storage.ChunkStorage;
-import net.minecraft.world.level.levelgen.structure.LegacyStructureDataHandler;
+import net.minecraft.world.level.chunk.storage.SimpleRegionStorage;
 /** Installs preservation before native save handlers and chunk readers run. */
 public final class ChunkVersionContext {
     private ChunkVersionContext() { }
@@ -20,8 +19,8 @@ public final class ChunkVersionContext {
     }
     public static void installWorld(ServerLevel world) {
         Object loader=world.getChunkSource().chunkMap;
-        if(!(loader instanceof ChunkStorage))throw new IllegalStateException("Unsupported chunk reader; refusing unprotected world loading");
-        installFixer(loader,chunk->LegacyStructureDataHandler.getLegacyStructureHandler(world.dimension(),world.getServer().getLevel(net.minecraft.world.level.Level.OVERWORLD).getDataStorage()).updateFromLegacy(chunk));
+        if (!(loader instanceof SimpleRegionStorage) || !(loader instanceof UpgradePreservation.RegionAttached))
+            throw new IllegalStateException("Unsupported chunk reader; refusing unprotected world loading");
     }
     private static Object related(Object owner,Class<?> expected) {
         java.util.List<Field> matches=new java.util.ArrayList<>();

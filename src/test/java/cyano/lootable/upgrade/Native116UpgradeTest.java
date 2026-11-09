@@ -1,5 +1,9 @@
 package cyano.lootable.upgrade;
 
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
+import static cyano.lootable.buildtest.TestNativeNbt.readUuid;
+import static cyano.lootable.buildtest.TestNativeNbt.hasUuid;
+
 import com.mojang.serialization.Dynamic;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -20,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class Native116UpgradeTest {
     private static final UUID CORPSE=UUID.fromString("00000000-1111-4111-8111-000000000001");
     private CompoundTag settings() throws Exception {
-        return TagParser.parseTag(new String(Files.readAllBytes(
+        return TagParser.parseCompoundFully(new String(Files.readAllBytes(
             Paths.get("src/test/resources/native116-worldgen.snbt")),StandardCharsets.UTF_8));
     }
     private CompoundTag legacy() {
@@ -36,23 +40,23 @@ class Native116UpgradeTest {
         body.put("Equipment",inventory);return body;
     }
     @Test void currentFormatUsesThe119SchemaAndMarker() {
-        assertEquals(3955,UpgradePreservation.MINECRAFT_VERSION);assertEquals(12,UpgradePreservation.DATA_VERSION);
+        assertEquals(4671,UpgradePreservation.MINECRAFT_VERSION);assertEquals(13,UpgradePreservation.DATA_VERSION);
     }
     @Test void legacyCorpseUuidSurvivesShieldingWithoutTruncatingCustomInventory() {
         CompoundTag body=legacy(),before=body.copy(),context=new CompoundTag();context.putInt("DataVersion",2230);
         CompoundTag fixed=NativeSafeFixer.stageCorpse(body,context);
-        assertTrue(fixed.hasUUID("UUID"));assertEquals(CORPSE,fixed.getUUID("UUID"));
-        assertEquals(48,fixed.getList("LootableBodiesUnresolved",10).size());
-        for(int slot=0;slot<48;slot++)assertEquals(body.getList("Equipment",10).getCompound(slot),
-            fixed.getList("LootableBodiesUnresolved",10).getCompound(slot).getCompound("Data"));
+        assertTrue(hasUuid(fixed, "UUID"));assertEquals(CORPSE,readUuid(fixed, "UUID"));
+        assertEquals(48,typedList(fixed, "LootableBodiesUnresolved", 10).size());
+        for(int slot=0;slot<48;slot++)assertEquals(typedList(body, "Equipment", 10).getCompoundOrEmpty(slot),
+            typedList(fixed, "LootableBodiesUnresolved", 10).getCompoundOrEmpty(slot).getCompoundOrEmpty("Data"));
         assertEquals(before,body);
     }
     @Test void released115MarkerKeepsItsOwnItemContextUnderAnOlderOuterStamp() {
         CompoundTag body=legacy(),before=body.copy();
         CompoundTag fixed=NativeNbt.update(UpgradePreservation.wrapper(DataFixers.getDataFixer()),
             References.ENTITY_TREE,body,512,2586);
-        assertEquals(2230,fixed.getList("LootableBodiesUnresolved",10).getCompound(0)
-            .getCompound("SourceVersions").getInt("DataVersion"));
+        assertEquals(2230,typedList(fixed, "LootableBodiesUnresolved", 10).getCompoundOrEmpty(0)
+            .getCompoundOrEmpty("SourceVersions").getIntOr("DataVersion", 0));
         assertEquals(before,body);
     }
     @Test void actualNativeCurrentSettingsSurviveOldAndMissingStampContexts() throws Exception {
@@ -61,13 +65,13 @@ class Native116UpgradeTest {
             CompoundTag fixed=NativeNbt.update(UpgradePreservation.wrapper(DataFixers.getDataFixer()),
                 References.WORLD_GEN_SETTINGS,raw,source,2586);
             assertEquals(before,fixed,"Source version "+source);assertEquals(before,raw);
-            assertEquals(4267321L,fixed.getLong("seed"));
-            assertEquals("minecraft:flat",fixed.getCompound("dimensions").getCompound("minecraft:overworld")
-                .getCompound("generator").getString("type"));
+            assertEquals(4267321L,fixed.getLongOr("seed", 0L));
+            assertEquals("minecraft:flat",fixed.getCompoundOrEmpty("dimensions").getCompoundOrEmpty("minecraft:overworld")
+                .getCompoundOrEmpty("generator").getStringOr("type", ""));
         }
     }
     @Test void nonSingletonNbtOpsArePreservedWithCurrentWorldSettings() throws Exception {
-        NbtOps ops=new NbtOps(){};CompoundTag raw=settings(),before=raw.copy();
+        var ops=cyano.lootable.buildtest.Native119Registries.lookup().createSerializationContext(NbtOps.INSTANCE);CompoundTag raw=settings(),before=raw.copy();
         Dynamic<Tag> result=UpgradePreservation.wrapper(DataFixers.getDataFixer()).update(
             References.WORLD_GEN_SETTINGS,new Dynamic<Tag>(ops,raw),-1,2586);
         assertSame(ops,result.getOps());assertEquals(before,result.getValue());assertEquals(before,raw);

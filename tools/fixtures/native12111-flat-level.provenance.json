@@ -1,0 +1,14 @@
+{
+  "minecraft": "1.21.11",
+  "forge": "61.2.4",
+  "data_version": 4671,
+  "generator": "minecraft:flat",
+  "level_sha256": "33DBE405659FB4EF57D23A07485EBC9AFA57694D7B54357C5B534A3E8963F86F",
+  "mod_list": {
+    "minecraft": "1.21.11",
+    "forge": "61.2.4",
+    "lootablebodies": "2.4.14.121111"
+  },
+  "creation": "Saved and cleanly stopped by the installed native dedicated server",
+  "native_only": false
+}

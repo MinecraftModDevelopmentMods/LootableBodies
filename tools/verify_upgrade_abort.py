@@ -167,9 +167,11 @@ def inject_future_entity_version(world):
     before=digest(path);original=world.parent/'future-entity-original.mca'
     if original.exists():raise ValueError('Future fixture original already exists')
     shutil.copy2(path,original)
-    root['DataVersion']=Tag(3,3956);write_disposable_region(path,chunks)
+    future_version = 4672  # Immediately beyond Minecraft 1.21.11's 4671.
+    root['DataVersion'] = Tag(3, future_version)
+    write_disposable_region(path, chunks)
     return {'region':path.relative_to(world).as_posix(),'chunk_index':index,'source_version':2975,
-            'injected_version':3956,'nbt_type':'Int','original_sha256':before,'mutated_sha256':digest(path),
+            'injected_version':future_version,'nbt_type':'Int','original_sha256':before,'mutated_sha256':digest(path),
             'original_copy':str(original),'corpse_marker':8}
 
 

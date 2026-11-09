@@ -1,6 +1,5 @@
 package cyano.lootable.buildtest;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.entity.boss.enderdragon.phases.AbstractDragonPhaseInstance;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.nbt.ListTag;
@@ -21,10 +20,16 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.GameRules;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketType;
+import net.minecraft.network.protocol.common.CommonPacketTypes;
+import net.minecraft.network.protocol.common.ServerCommonPacketListener;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraftforge.event.network.CustomPayloadEvent;
+import java.util.function.Consumer;
+import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.GameType;
 
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.network.ChannelBuilder;
 import net.minecraftforge.network.NetworkDirection;
@@ -44,29 +49,54 @@ public final class MultiplayerChecks {
         CHANNEL.messageBuilder(Step.class,0,NetworkDirection.PLAY_TO_SERVER)
                 .encoder((message,buffer)->buffer.writeInt(message.number))
                 .decoder(buffer->new Step(buffer.readInt()))
-                .consumerMainThread((message,context)->acknowledge(message,context.getSender())).add();
+                .consumer((message, context) -> enqueuePlayAction(context,
+                        player -> acknowledge(message, player))).add();
         CHANNEL.messageBuilder(FixtureDeath.class,1,NetworkDirection.PLAY_TO_SERVER)
-                .encoder((message,buffer)->{})
-                .decoder(buffer->new FixtureDeath())
-                .consumerMainThread((message,context)->{
-                    RuntimeChecks.require(Boolean.getBoolean("lootablebodies.issueClientCheck")
-                            && context.getSender()!=null,"Unexpected fixture death signal");
-                    context.getSender().kill();
-                }).add();
+                .encoder((message,buffer) -> buffer.writeInt(message.selectedSlot()))
+                .decoder(buffer -> new FixtureDeath(buffer.readInt()))
+                .consumer((message, context) -> enqueuePlayAction(context, player -> {
+                    RuntimeChecks.require(Boolean.getBoolean("lootablebodies.issueClientCheck"),
+                            "Unexpected fixture death signal");
+                    RuntimeChecks.require(player.getInventory().getSelectedSlot() == message.selectedSlot(),
+                            "Native carried-item packet did not precede the fixture death");
+                    player.kill(player.level());
+                    RuntimeChecks.require(!player.isAlive(), "Ordered native fixture death did not take effect");
+                    System.out.println("NATIVE_ORDERED_HELD_ITEM_DEATH_PASS slot=" + message.selectedSlot());
+                })).add();
         CHANNEL.build();
     }
-    public static final class FixtureDeath { }
+
+    private static void enqueuePlayAction(CustomPayloadEvent.Context context, Consumer<ServerPlayer> action) {
+        var listener = context.getConnection().getPacketListener();
+        RuntimeChecks.require(listener instanceof ServerGamePacketListenerImpl, "Missing native play listener");
+        var server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+        RuntimeChecks.require(server != null, "Missing native packet processor");
+        server.packetProcessor().scheduleIfPossible((ServerCommonPacketListener) listener, new NativePlayAction(action));
+        context.setPacketHandled(true);
+    }
+
+    private record NativePlayAction(Consumer<ServerPlayer> action) implements Packet<ServerCommonPacketListener> {
+        @Override public PacketType<? extends Packet<ServerCommonPacketListener>> type() {
+            return CommonPacketTypes.SERVERBOUND_CUSTOM_PAYLOAD;
+        }
+
+        @Override public void handle(ServerCommonPacketListener listener) {
+            action.accept(((ServerGamePacketListenerImpl) listener).player);
+        }
+    }
+
+    public record FixtureDeath(int selectedSlot) { }
     public MultiplayerChecks(MinecraftServer server) throws Exception {
         this.server=server;sync=sync();
         LootableBodies.allowCorpseDecay=false;LootableBodies.ticksPerItemDecay=-1;
         setPhase(0);Files.write(new File(sync,"server.ready").toPath(),"ready\n".getBytes(StandardCharsets.UTF_8));
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);
+        TickEvent.ServerTickEvent.Post.BUS.addListener(this::tick);
     }
     public static File sync(){return new File(System.getProperty("lootablebodies.multiplayer.sync"));}
     private ServerPlayer player(String role){return server.getPlayerList().getPlayerByName("Container"+role);}
     private boolean ack(String role,int step){return new File(sync,"Container"+role+".step-"+step).isFile();}
-    @SubscribeEvent public void tick(TickEvent.ServerTickEvent e){
-        if(e.phase!=TickEvent.Phase.END || finishing)return;
+    public void tick(TickEvent.ServerTickEvent.Post e){
+        if(finishing)return;
         try{
             RuntimeChecks.require(++ticks<2400,"Two-client timeout phase="+phase);
             if(new File(sync,"abort").exists())throw new AssertionError("Runner aborted multiplayer fixture");
@@ -74,7 +104,7 @@ public final class MultiplayerChecks {
             if(phase==0 && a!=null && b!=null){
                 ServerLevel w=server.getLevel(FixtureApi.dimensionKey(0));
                 for(int x=93;x<=100;x++)for(int z=93;z<=100;z++)w.setBlockAndUpdate(new BlockPos(x,79,z),Blocks.STONE.defaultBlockState());
-                w.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBSPAWNING).set(false,null);
+                w.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.SPAWN_MOBS,false,null);
                 body=new EntityLootableBody(w);body.setUUID(BODY);body.setPos(96.5,80.5,96.5);body.setNoGravity(true);body.setUserName("SharedFixture");RuntimeChecks.disableVacuum(body);
                 body.setItem(6,stack(19,23));RuntimeChecks.require(w.addFreshEntity(body),"Shared corpse spawn");
                 a.setGameMode(GameType.SURVIVAL);b.setGameMode(GameType.SURVIVAL);a.getInventory().clearContent();b.getInventory().clearContent();
@@ -86,7 +116,7 @@ public final class MultiplayerChecks {
                 RuntimeChecks.require(count(a,19)==0 || count(b,19)==0,"Both clients recovered the same stack");
                 mark("two_tcp_clients_contested_shift_click");
                 a.getInventory().clearContent();b.getInventory().clearContent();body.clearContent();
-                a.containerMenu.setCarried(stack(19,10));b.getInventory().items.set(0,stack(20,7));refresh(a);refresh(b);setPhase(3);
+                a.containerMenu.setCarried(stack(19,10));b.getInventory().getNonEquipmentItems().set(0,stack(20,7));refresh(a);refresh(b);setPhase(3);
             }else if(phase==3 && ack("A",3))setPhase(4);
             else if(phase==4 && ack("B",4)){
                 equal(body.getItem(6),stack(20,7),"TCP hotbar swap failed");setPhase(5);
@@ -117,7 +147,7 @@ public final class MultiplayerChecks {
     private static int count(ServerPlayer p,int index){int n=0;ItemStack expected=RuntimeChecks.stack(index);for(int i=0;i<p.getInventory().getContainerSize();i++){ItemStack s=p.getInventory().getItem(i);if((s != null && !s.isEmpty()) && cyano.lootable.ItemStacks.canMerge(s,expected))n+=s.getCount();}return n;}
     private static void refresh(ServerPlayer p){p.containerMenu.broadcastChanges();p.containerMenu.broadcastFullState();}
     private static void savePlayer(File folder,ServerPlayer p,String role) throws Exception {
-        CompoundTag n=new CompoundTag();n.putString("UUID",p.getUUID().toString());n.put("Inventory",p.getInventory().save(new ListTag()));
+        CompoundTag n=new CompoundTag();n.putString("UUID",p.getUUID().toString());n.put("Inventory",FixtureApi.saveInventory(p));
         try(FileOutputStream out=new FileOutputStream(new File(folder,"multiplayer-player-"+role+".nbt"))){NbtIo.writeCompressed(n,out);}
     }
     static void verifyReload(MinecraftServer server) throws Exception {
@@ -125,13 +155,13 @@ public final class MultiplayerChecks {
         File folder=world.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();RuntimeChecks.verifyExpected(folder,"multiplayer-body",body);
         for(String role:new String[]{"A","B"}){
             CompoundTag expected;try(FileInputStream in=new FileInputStream(new File(folder,"multiplayer-player-"+role+".nbt"))){expected=NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
-            CompoundTag actual;try(FileInputStream in=new FileInputStream(new File(folder,"playerdata/"+expected.getString("UUID")+".dat"))){actual=NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
+            CompoundTag actual;try(FileInputStream in=new FileInputStream(new File(folder,"playerdata/"+expected.getStringOr("UUID", "")+".dat"))){actual=NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
             RuntimeChecks.require(expected.get("Inventory").equals(actual.get("Inventory")),"Real player "+role+" inventory changed on disk");
         }
     }
     public static final class Step {private final int number;public Step(int number){this.number=number;}}
     private static void acknowledge(Step message,ServerPlayer player) {
-        try {RuntimeChecks.require(player!=null && player.getGameProfile().getName().matches("Container[AB]"),"Unexpected fixture player");Files.write(new File(sync(),player.getGameProfile().getName()+".step-"+message.number).toPath(),"ack\n".getBytes(StandardCharsets.UTF_8));}
+        try {RuntimeChecks.require(player!=null && player.getGameProfile().name().matches("Container[AB]"),"Unexpected fixture player");Files.write(new File(sync(),player.getGameProfile().name()+".step-"+message.number).toPath(),"ack\n".getBytes(StandardCharsets.UTF_8));}
         catch(Exception error){throw new RuntimeException(error);}
     }
 }

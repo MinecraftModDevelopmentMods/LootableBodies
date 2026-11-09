@@ -20,7 +20,7 @@ final class FixtureStackData {
     }
 
     static CompoundTag save(ItemStack stack) {
-        return (CompoundTag)stack.save(registries());
+        return TestNativeNbt.saveStack(stack, registries());
     }
 
     static ItemStack load(CompoundTag raw) {

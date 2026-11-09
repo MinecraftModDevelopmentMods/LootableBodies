@@ -3,7 +3,7 @@ plugins {
 }
 rootProject.name = 'LootableBodies'
 
-// Local qualification and manual testing come before hosted checks.
+// The MMD repository builds and audits release archives.
 if (System.getenv('GITHUB_ACTIONS') == 'true' &&
         System.getenv('GITHUB_REPOSITORY') != 'MinecraftModDevelopmentMods/LootableBodies') {
     throw new GradleException('Hosted builds are limited to the MMD repository')

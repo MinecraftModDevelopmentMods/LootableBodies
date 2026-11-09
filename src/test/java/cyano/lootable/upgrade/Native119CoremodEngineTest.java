@@ -1,146 +1,131 @@
 package cyano.lootable.upgrade;
 
+import com.google.gson.JsonParser;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
-import java.lang.reflect.InvocationTargetException;
-import java.nio.file.Path;
-import java.util.List;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.tree.*;
-import javax.script.Invocable;
-import javax.script.ScriptEngine;
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.Type;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.MethodNode;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Use the actual target CoreMods engine and its Java class-access filter. */
+/** Forge 61 uses required Mixins. Packaged runs separately exercise their actual application. */
 class Native119CoremodEngineTest {
-    static void blackboardFixture()throws Exception {
-        Class<?> launcher=Class.forName("cpw.mods.modlauncher.Launcher");
-        if(launcher.getField("INSTANCE").get(null)==null) {
-            // Plain JUnit is not a ModLauncher module layer. The target engine
-            // only needs its native blackboard for one compatibility flag.
-            // Seed that fixture without running launcher services or any game.
-            Class<?> unsafeType=Class.forName("sun.misc.Unsafe");Field singleton=unsafeType.getDeclaredField("theUnsafe");singleton.setAccessible(true);
-            Object fixture=unsafeType.getMethod("allocateInstance",Class.class).invoke(singleton.get(null),launcher);
-            Field blackboard=launcher.getDeclaredField("blackboard");blackboard.setAccessible(true);
-            blackboard.set(fixture,Class.forName("cpw.mods.modlauncher.api.TypesafeMap").getConstructor().newInstance());
-            launcher.getField("INSTANCE").set(null,fixture);
+    static ClassNode classFile(String name) throws Exception {
+        try (var input = Native119CoremodEngineTest.class.getClassLoader().getResourceAsStream(name+".class")) {
+            assertNotNull(input, name);
+            ClassNode node = new ClassNode();
+            new ClassReader(input).accept(node, 0);
+            return node;
         }
     }
-    static ScriptEngine actualEngine()throws Exception {
-        blackboardFixture();
-        Class<?> factory=Class.forName("net.minecraftforge.coremod.NashornFactory");
-        String source=factory.getProtectionDomain().getCodeSource().getLocation().toString();
-        assertTrue(source.endsWith("coremods-5.2.6.jar"),source);System.out.println("COREMOD_ENGINE_SOURCE="+source);
-        Method create=factory.getDeclaredMethod("createEngine");create.setAccessible(true);
-        return (ScriptEngine)create.invoke(null);
-    }
-    private Object actualTransformer(String className)throws Exception {
-        blackboardFixture();Class<?> type=Class.forName("net.minecraftforge.coremod.CoreModEngine");Object engine=type.getConstructor().newInstance();
-        Method load=java.util.Arrays.stream(type.getDeclaredMethods()).filter(m->m.getName().equals("loadCoreMod")).findFirst().orElseThrow();load.setAccessible(true);
-        Class<?> api=load.getParameterTypes()[0];java.util.List<java.io.Reader> readers=new java.util.ArrayList<>();
-        Object file=Proxy.newProxyInstance(api.getClassLoader(),new Class<?>[]{api},(proxy,method,args)->{
-            switch(method.getName()) {
-            case "getPath": return Path.of("coremods/early-world-preservation.js");
-            case "getOwnerId": return "lootablebodies";
-            case "readCoreMod":
-                java.io.Reader reader=new InputStreamReader(getClass().getClassLoader().getResourceAsStream("coremods/early-world-preservation.js"),StandardCharsets.UTF_8);readers.add(reader);return reader;
-            case "toString": return "Local production coremod fixture";
-            default: throw new AssertionError("Unexpected coremod file API: "+method);
-            }
-        });
-        try {
-            load.invoke(engine,file);List<?> transforms=(List<?>)type.getMethod("initializeCoreMods").invoke(engine);
-            assertEquals(3,transforms.size(),"Actual native engine must install the three shipped transformers");
-            return transforms.stream().map(item->(cpw.mods.modlauncher.api.ITransformer<?>)item)
-                    .filter(item->item.targets().stream().anyMatch(target->target.getClassName().replace('/','.').equals(className)))
-                    .findFirst().orElseThrow();
-        } finally {for(var reader:readers)reader.close();}
-    }
-    private static final String READER="net.minecraft.world.level.storage.LevelStorageSource$LevelStorageAccess";
-    private static final String FIXER="net.minecraft.util.datafix.DataFixers";
-    private static final String DEDICATED_MAIN="net.minecraft.server.Main";
 
-    private ClassNode nativeClass(String name)throws Exception {
-        ClassNode node=new ClassNode(Opcodes.ASM9);
-        try(var input=getClass().getClassLoader().getResourceAsStream(name.replace('.','/')+".class")) {
-            assertNotNull(input);
-            new ClassReader(input).accept(node,0);
-        }
+    static ClassNode mixin(String name, String target) throws Exception {
+        ClassNode node = classFile("cyano/lootable/mixin/"+name);
+        var declaration = node.invisibleAnnotations.stream()
+                .filter(annotation -> annotation.desc.equals("Lorg/spongepowered/asm/mixin/Mixin;"))
+                .findFirst().orElseThrow();
+        assertTrue(declaration.values.stream().anyMatch(value -> value instanceof java.util.List<?> types
+                && types.equals(java.util.List.of(Type.getObjectType(target)))), name);
         return node;
     }
-    private ClassNode transform(Object transformer,ClassNode node)throws Exception {
-        Method apply=transformer.getClass().getMethod("transform",Object.class,Class.forName("cpw.mods.modlauncher.api.ITransformerVotingContext"));
-        return (ClassNode)apply.invoke(transformer,node,null);
+
+    static MethodNode method(ClassNode node, String name, String descriptor) {
+        var methods = node.methods.stream().filter(m -> m.name.equals(name) && m.desc.equals(descriptor)).toList();
+        assertEquals(1, methods.size(), node.name+"."+name+descriptor);
+        return methods.getFirst();
     }
-    private Class<?> define(ClassNode node) {
-        ClassWriter writer=new ClassWriter(ClassWriter.COMPUTE_MAXS);node.accept(writer);byte[] bytes=writer.toByteArray();
-        class ReaderLoader extends ClassLoader {ReaderLoader(){super(Native119CoremodEngineTest.class.getClassLoader());}Class<?> define(){return defineClass(node.name.replace('/','.'),bytes,0,bytes.length);}}
-        return new ReaderLoader().define();
+
+    static MethodNode named(ClassNode node, String name) {
+        var methods = node.methods.stream().filter(m -> m.name.equals(name)).toList();
+        assertEquals(1, methods.size(), node.name+"."+name);
+        return methods.getFirst();
     }
-    private void verify(Class<?> reader)throws Exception {
-        Method verify=EarlyWorldPreservation.class.getDeclaredMethod("verifyAttachment",Class.class);verify.setAccessible(true);verify.invoke(null,reader);
+
+    static long calls(MethodNode method, String owner, String name) {
+        return Arrays.stream(method.instructions.toArray()).filter(instruction ->
+                instruction instanceof MethodInsnNode call && call.owner.equals(owner) && call.name.equals(name)).count();
     }
-    @Test void productionScriptInitializesUnderTheActualForgeClassFilter()throws Exception {
-        ScriptEngine engine=actualEngine();
-        try(var input=getClass().getClassLoader().getResourceAsStream("coremods/early-world-preservation.js")) {
-            assertNotNull(input);engine.eval(new InputStreamReader(input,StandardCharsets.UTF_8));
+
+    static void requiredCall(MethodNode method, String owner, String name) {
+        assertEquals(1, calls(method, owner, name), method.name+" -> "+owner+"."+name);
+    }
+
+    @Test void packagedConfigRequiresEveryPreservationHook() throws Exception {
+        var loader = getClass().getClassLoader();
+        assertNull(loader.getResource("META-INF/coremods.json"));
+        try (var input = loader.getResourceAsStream("lootablebodies.mixins.json")) {
+            assertNotNull(input);
+            var config = JsonParser.parseReader(new InputStreamReader(input, StandardCharsets.UTF_8)).getAsJsonObject();
+            assertTrue(config.get("required").getAsBoolean());
+            assertEquals(1, config.getAsJsonObject("injectors").get("defaultRequire").getAsInt());
+            assertEquals(java.util.Set.of("DataFixersMixin","SaveAccessMixin","RegionStorageMixin","LegacyStructuresMixin","CapabilityDataMixin"),
+                    config.getAsJsonArray("mixins").asList().stream().map(v -> v.getAsString()).collect(java.util.stream.Collectors.toSet()));
+            assertEquals("DedicatedWorldMixin", config.getAsJsonArray("server").get(0).getAsString());
+            assertEquals(1, config.getAsJsonArray("client").size());
+            assertEquals("CorpseRenderDispatcherMixin", config.getAsJsonArray("client").get(0).getAsString());
         }
-        assertNotNull(((Invocable)engine).invokeFunction("initializeCoreMod"));
     }
-    @Test void nativeEngineTransformsActualReaderAndItsAttachmentIsVerifiable()throws Exception {
-        ClassNode transformed=transform(actualTransformer(READER),nativeClass(READER));
-        verify(define(transformed));
+
+    @Test void nativeAccessorHasExactlyOneWrapper() throws Exception {
+        String target = "net/minecraft/util/datafix/DataFixers";
+        method(classFile(target), "getDataFixer", "()Lcom/mojang/datafixers/DataFixer;");
+        var mixin = mixin("DataFixersMixin",target);
+        requiredCall(named(mixin,"wrapNativeFixer"), "cyano/lootable/upgrade/UpgradePreservation","wrapper");
     }
-    @Test void nativeEngineWrapsTheDataFixerAccessorExactlyOnce()throws Exception {
-        Object transformer=actualTransformer(FIXER);
-        ClassNode result=transform(transformer,nativeClass(FIXER));
-        result=transform(transformer,result);
-        MethodNode accessor=result.methods.stream().filter(method->method.name.equals("getDataFixer")
-                && method.desc.equals("()Lcom/mojang/datafixers/DataFixer;")).findFirst().orElseThrow();
-        int calls=0;
-        for(AbstractInsnNode instruction:accessor.instructions) {
-            if(instruction instanceof MethodInsnNode invoke && invoke.owner.equals("cyano/lootable/upgrade/UpgradePreservation")) {
-                assertEquals("wrapper",invoke.name);
-                assertEquals("(Lcom/mojang/datafixers/DataFixer;)Lcom/mojang/datafixers/DataFixer;",invoke.desc);
-                assertEquals(Opcodes.ARETURN,invoke.getNext().getOpcode());
-                calls++;
-            }
+
+    @Test void dedicatedReaderGuardsBothActualHeaderReads() throws Exception {
+        String target = "net/minecraft/server/Main";
+        String save = "net/minecraft/world/level/storage/LevelStorageSource$LevelStorageAccess";
+        var entry = method(classFile(target),"main","([Ljava/lang/String;)V");
+        requiredCall(entry,save,"getDataTag");
+        requiredCall(entry,save,"getDataTagFallback");
+        var mixin = mixin("DedicatedWorldMixin",target);
+        for (String handler : java.util.List.of("readWorld","readFallback")) {
+            requiredCall(named(mixin,handler),"cyano/lootable/upgrade/EarlyWorldPreservation","readDedicatedWorld");
         }
-        assertEquals(1,calls);
     }
-    @Test void nativeDedicatedReaderGuardsBothHeaderReads()throws Exception {
-        Object transformer=actualTransformer(DEDICATED_MAIN);
-        ClassNode result=transform(transformer,nativeClass(DEDICATED_MAIN));
-        result=transform(transformer,result);
-        MethodNode main=result.methods.stream().filter(method->method.name.equals("main")
-                && method.desc.equals("([Ljava/lang/String;)V")).findFirst().orElseThrow();
-        java.util.ArrayList<Integer> guardedReads=new java.util.ArrayList<>();
-        for(AbstractInsnNode instruction:main.instructions) {
-            if(instruction instanceof MethodInsnNode invoke && invoke.owner.equals("cyano/lootable/upgrade/EarlyWorldPreservation")) {
-                assertEquals("readDedicatedWorld",invoke.name);
-                assertEquals(Opcodes.INVOKESTATIC,invoke.getOpcode());
-                guardedReads.add(invoke.getPrevious().getOpcode());
-            }
+
+    @Test void regionHookProtectsTheActualVersionShortcut() throws Exception {
+        String target = "net/minecraft/world/level/chunk/storage/SimpleRegionStorage";
+        method(classFile(target),"upgradeChunkTag","(Lnet/minecraft/nbt/CompoundTag;ILnet/minecraft/nbt/CompoundTag;)Lnet/minecraft/nbt/CompoundTag;");
+        var mixin = mixin("RegionStorageMixin",target);
+        assertTrue(mixin.interfaces.contains("cyano/lootable/upgrade/UpgradePreservation$RegionAttached"));
+        requiredCall(named(mixin,"preserveRegion"),"cyano/lootable/upgrade/UpgradePreservation","upgradeRegion");
+    }
+
+    @Test void capabilitiesHookUsesTheActualDimensionDataReader() throws Exception {
+        String target = "net/minecraft/world/level/storage/DimensionDataStorage";
+        method(classFile(target),"readTagFromDisk","(Ljava/lang/String;Lnet/minecraft/util/datafix/DataFixTypes;I)Lnet/minecraft/nbt/CompoundTag;");
+        requiredCall(named(mixin("CapabilityDataMixin",target),"preserveOldCapabilities"),
+                "cyano/lootable/upgrade/UpgradePreservation","upgradeLevelCapabilities");
+    }
+
+    @Test void corpseSubmissionHookUsesTheNativeStateDispatcher() throws Exception {
+        String target = "net/minecraft/client/renderer/entity/EntityRenderDispatcher";
+        var dispatch = method(classFile(target), "getRenderer",
+                "(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;)Lnet/minecraft/client/renderer/entity/EntityRenderer;");
+        assertTrue(Arrays.stream(dispatch.instructions.toArray()).anyMatch(instruction ->
+                instruction instanceof org.objectweb.asm.tree.TypeInsnNode type
+                        && type.getOpcode() == org.objectweb.asm.Opcodes.INSTANCEOF
+                        && type.desc.equals("net/minecraft/client/renderer/entity/state/AvatarRenderState")));
+        requiredCall(named(mixin("CorpseRenderDispatcherMixin", target), "useCorpseRenderer"),
+                "org/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable", "setReturnValue");
+    }
+
+    @Test void serialSetupRefusesAnUnattachedNativeReaderBeforeAnyWorldCanOpen() throws Exception {
+        var installed = EarlyWorldPreservation.class.getDeclaredField("installed");
+        installed.setAccessible(true);
+        boolean before = installed.getBoolean(null);
+        try {
+            installed.setBoolean(null,false);
+            assertThrows(IllegalStateException.class,EarlyWorldPreservation::install);
+            assertFalse(installed.getBoolean(null));
+        } finally {
+            installed.setBoolean(null,before);
         }
-        assertEquals(List.of(Opcodes.ICONST_0,Opcodes.ICONST_1),guardedReads);
-        define(result);
-    }
-    @Test void serialSetupRefusesAnUntransformedReaderBeforeAnyWorldCanOpen()throws Exception {
-        Field installed=EarlyWorldPreservation.class.getDeclaredField("installed");installed.setAccessible(true);boolean before=installed.getBoolean(null);
-        try {installed.setBoolean(null,false);assertThrows(IllegalStateException.class,EarlyWorldPreservation::install);assertFalse(installed.getBoolean(null));}
-        finally {installed.setBoolean(null,before);}
-    }
-    @Test void nativeWrapperCannotTurnAFailedTransformIntoAnAcceptedAttachment()throws Exception {
-        ClassNode node=nativeClass(READER);Object transformer=actualTransformer(READER);
-        for(MethodNode method:node.methods)for(AbstractInsnNode i=method.instructions.getFirst();i!=null;){AbstractInsnNode next=i.getNext();if(i instanceof MethodInsnNode&&((MethodInsnNode)i).owner.equals("net/minecraftforge/common/ForgeHooks")&&((MethodInsnNode)i).name.equals("writeAdditionalLevelSaveData")){method.instructions.insertBefore(i,new InsnNode(Opcodes.POP2));method.instructions.remove(i);}i=next;}
-        ClassNode returned=transform(transformer,node);
-        InvocationTargetException refused=assertThrows(InvocationTargetException.class,()->verify(define(returned)));
-        assertInstanceOf(IllegalStateException.class,refused.getCause());
     }
 }

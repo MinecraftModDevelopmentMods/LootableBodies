@@ -10,15 +10,20 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.SpawnEggItem;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.registries.RegisterEvent;
 import net.minecraft.core.registries.Registries;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
+import net.minecraftforge.event.entity.EntityAttributeCreationEvent;
+import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
+import net.minecraftforge.eventbus.api.listener.Priority;
+import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.minecraftforge.fml.loading.FMLEnvironment;
+import net.minecraftforge.registries.NewRegistryEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.loading.FMLPaths;
@@ -27,8 +32,8 @@ import net.minecraftforge.fml.loading.FMLPaths;
 public final class LootableBodies {
     public static final String MODID = "lootablebodies";
     public static final String NAME = "DrCyano's Lootable Bodies";
-    public static final String VERSION = "2.4.13.121011";
-    public static final ResourceLocation CORPSE_ID = ResourceLocation.fromNamespaceAndPath(MODID,"corpse");
+    public static final String VERSION = "2.4.14.121111";
+    public static final Identifier CORPSE_ID = Identifier.fromNamespaceAndPath(MODID,"corpse");
     public static EntityType<EntityLootableBody> CORPSE;
     public static Item CORPSE_EGG;
     public static net.minecraft.world.inventory.MenuType<cyano.lootable.graphics.CorpseContainer> CORPSE_CONTAINER;
@@ -51,25 +56,30 @@ public final class LootableBodies {
     public static boolean voidPlatform = false;
     public static boolean dimensionSpecificPlatform = true;
 
-    public LootableBodies() {
+    public LootableBodies(FMLJavaModLoadingContext context) {
         INSTANCE=this;
         UpgradePreservation.register(net.minecraft.util.datafix.DataFixers.getDataFixer());
         loadConfiguration(FMLPaths.CONFIGDIR.get().resolve("lootablebodies.cfg").toFile());
-        net.minecraftforge.eventbus.api.IEventBus bus=FMLJavaModLoadingContext.get().getModEventBus();
-        bus.addListener((net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent event) ->
+        var modBus = context.getModBusGroup();
+        FMLCommonSetupEvent.getBus(modBus).addListener(event ->
             event.enqueueWork(cyano.lootable.upgrade.EarlyWorldPreservation::install));
-        bus.addListener(cyano.lootable.upgrade.LegacyProfessionRegistry::create);
-        bus.addListener((net.minecraftforge.event.entity.EntityAttributeCreationEvent event)->event.put(corpseType(),EntityLootableBody.corpseAttributeDefaults().build()));
-        bus.addListener(this::registerEntities);
-        bus.addListener(this::registerItems);
-        bus.addListener(cyano.lootable.upgrade.LegacyRegistryMappings::retiredMemories);
-        bus.addListener(this::registerContainers);
-        bus.addListener((net.minecraftforge.event.BuildCreativeModeTabContentsEvent event) -> {
-            if(CreativeModeTabs.SPAWN_EGGS.equals(event.getTabKey()))event.accept(CORPSE_EGG);
+        NewRegistryEvent.getBus(modBus).addListener(cyano.lootable.upgrade.LegacyProfessionRegistry::create);
+        EntityAttributeCreationEvent.getBus(modBus).addListener(event ->
+            event.put(corpseType(), EntityLootableBody.corpseAttributeDefaults().build()));
+        RegisterEvent.getBus(modBus).addListener(this::registerEntities);
+        RegisterEvent.getBus(modBus).addListener(this::registerItems);
+        RegisterEvent.getBus(modBus).addListener(cyano.lootable.upgrade.LegacyRegistryMappings::retiredMemories);
+        RegisterEvent.getBus(modBus).addListener(this::registerContainers);
+        BuildCreativeModeTabContentsEvent.getBus(modBus).addListener(event -> {
+            if (CreativeModeTabs.SPAWN_EGGS.equals(event.getTabKey())) event.accept(() -> CORPSE_EGG);
         });
-        MinecraftForge.EVENT_BUS.register(new PlayerDeathEventHandler());
-        MinecraftForge.EVENT_BUS.register(this);
-        DistExecutor.runWhenOn(Dist.CLIENT,()->ClientProxy::register);
+        new PlayerDeathEventHandler().register();
+        cyano.lootable.upgrade.LegacyRegistryMappings.register();
+        ServerAboutToStartEvent.BUS.addListener(this::beforeWorldLoading);
+        LevelEvent.Load.BUS.addListener(Priority.HIGHEST, this::worldLoaded);
+        LevelEvent.CreateSpawnPosition.BUS.addListener(Priority.HIGHEST, this::beforeSpawn);
+        ServerStoppedEvent.BUS.addListener(this::worldStopped);
+        if (FMLEnvironment.dist == Dist.CLIENT) ClientProxy.register(context);
     }
     private static synchronized EntityType<EntityLootableBody> corpseType() {
         if(CORPSE==null) {
@@ -77,7 +87,7 @@ public final class LootableBodies {
                 // Native 1.14 expresses tracking range in chunks: two retain 32 blocks.
                 .sized(0.85F,0.75F).setTrackingRange(2).setUpdateInterval(1).setShouldReceiveVelocityUpdates(true);
             if(completelyInvulnerable || !hurtByEnvironment)type.fireImmune();
-            CORPSE=type.build(CORPSE_ID.toString());
+            CORPSE=type.build(ResourceKey.create(Registries.ENTITY_TYPE, CORPSE_ID));
         }
         return CORPSE;
     }
@@ -85,8 +95,9 @@ public final class LootableBodies {
         event.register(Registries.ENTITY_TYPE,CORPSE_ID,LootableBodies::corpseType);
     }
     private void registerItems(RegisterEvent event) {
-        event.register(Registries.ITEM,ResourceLocation.fromNamespaceAndPath(MODID,"corpse_spawn_egg"),()-> {
-            CORPSE_EGG=new SpawnEggItem(corpseType(),1,1,new Item.Properties());
+        Identifier egg = Identifier.fromNamespaceAndPath(MODID, "corpse_spawn_egg");
+        event.register(Registries.ITEM, egg, () -> {
+            CORPSE_EGG = new SpawnEggItem(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, egg)).spawnEgg(corpseType()));
             return CORPSE_EGG;
         });
     }
@@ -101,7 +112,7 @@ public final class LootableBodies {
         });
     }
     public static LootableBodies getInstance(){return INSTANCE;}
-    @SubscribeEvent public void beforeWorldLoading(ServerAboutToStartEvent event) {
+    public void beforeWorldLoading(ServerAboutToStartEvent event) {
         File level=event.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();
         try {
             UpgradePreservation.register(event.getServer().getFixerUpper());
@@ -112,15 +123,13 @@ public final class LootableBodies {
             throw new IllegalStateException("Lootable Bodies could not preserve this world's corpses. World loading has been stopped; keep the original world and recovery journal.",unsafe);
         }
     }
-    @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.HIGHEST)
     public void worldLoaded(net.minecraftforge.event.level.LevelEvent.Load event) {
         if(event.getLevel() instanceof net.minecraft.server.level.ServerLevel)ChunkVersionContext.installWorld((net.minecraft.server.level.ServerLevel)event.getLevel());
     }
-    @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.HIGHEST)
     public void beforeSpawn(net.minecraftforge.event.level.LevelEvent.CreateSpawnPosition event) {
         if(event.getLevel() instanceof net.minecraft.server.level.ServerLevel)ChunkVersionContext.installWorld((net.minecraft.server.level.ServerLevel)event.getLevel());
     }
-    @SubscribeEvent public void worldStopped(ServerStoppedEvent event){UpgradePreservation.close();}
+    public void worldStopped(ServerStoppedEvent event){UpgradePreservation.close();}
     private static boolean or(boolean... values){for(boolean value:values)if(value)return true;return false;}
     /** Reads startup rules. GUI saves deliberately do not call this method. */
     public static void loadConfiguration(File file) {

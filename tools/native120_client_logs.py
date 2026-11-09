@@ -1,18 +1,18 @@
-"""Explicit Forge 52 client diagnostics, separate from strict server/error audits."""
+"""Explicit Forge 61 client diagnostics, separate from strict server/error audits."""
 from pathlib import Path
 import gzip,hashlib,json,re,tempfile
 from native120_logs import audit as strict_audit
 
 def validated_baseline(policy_path=None,proof_path=None):
     project=Path(__file__).resolve().parents[1]
-    policy_path=Path(policy_path) if policy_path else Path(__file__).with_name('native121_client_diagnostics.json')
-    proof_path=Path(proof_path) if proof_path else project/'.gradle/native121-client-sound-control-01/proof.json'
+    policy_path=Path(policy_path) if policy_path else Path(__file__).with_name('native12111_client_diagnostics.json')
+    proof_path=Path(proof_path) if proof_path else project/'.gradle/native12111-client-sound-control-01/proof.json'
     if not policy_path.is_file() or not proof_path.is_file():raise RuntimeError('Missing native client diagnostic qualification')
     policy=json.loads(policy_path.read_text(encoding='utf-8'))
     raw=proof_path.read_bytes()
     if hashlib.sha256(raw).hexdigest().upper()!=policy.get('proof_sha256'):raise RuntimeError('Changed native client diagnostic qualification')
     proof=json.loads(raw)
-    if tuple(policy.get(k) for k in ('minecraft','forge','platform'))!=('1.21.1','52.1.20','Windows amd64') or policy.get('qualified') is not True:raise RuntimeError('Wrong native client diagnostic target')
+    if tuple(policy.get(k) for k in ('minecraft','forge','platform'))!=('1.21.11','61.2.4','Windows amd64') or policy.get('qualified') is not True:raise RuntimeError('Wrong native client diagnostic target')
     if any(proof.get(k)!=policy.get(k) for k in ('minecraft','forge','platform','events','control_sha256')):raise RuntimeError('Native client proof identity mismatch')
     if proof.get('qualified') is not True or proof.get('no_candidate') is not True or proof.get('no_world') is not True or type(proof.get('native_client_exit')) is not int or proof.get('native_client_exit')!=0 or proof.get('original_strict_audit_passed') is not False:raise RuntimeError('Incomplete independent native client control')
     for group in ('critical_files','raw_control_logs'):
@@ -49,7 +49,7 @@ def audit_client(path,**options):
     # Preserve original bytes and their strict failure. Only a derived audit
     # view excludes these proved native WARN records; every generic error and
     # referenced missing-resource check still runs unchanged on that view.
-    with tempfile.TemporaryDirectory(prefix='native121-diagnostic-audit-') as directory:
+    with tempfile.TemporaryDirectory(prefix='native12111-diagnostic-audit-') as directory:
         view=Path(directory)/'client.log';view.write_text(residual,encoding='utf-8',newline='')
         try:result=strict_audit(view,**options)
         except RuntimeError as error:raise RuntimeError(str(path)+'\n'+str(error)) from error

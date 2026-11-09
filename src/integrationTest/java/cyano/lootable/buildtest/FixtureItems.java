@@ -4,7 +4,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ICapabilityProvider;
 import net.minecraftforge.common.capabilities.ICapabilitySerializable;
@@ -12,19 +12,19 @@ import net.minecraftforge.common.capabilities.ICapabilitySerializable;
 /** Controlled dependency used only by sealed disposable upgrade worlds. */
 public final class FixtureItems {
     public static Item keepsake;
-    public static void register(net.minecraftforge.eventbus.api.IEventBus bus) {
-        bus.register(new RegistryItems());
+    public static void register(net.minecraftforge.eventbus.api.bus.BusGroup bus) {
+        net.minecraftforge.registries.RegisterEvent.getBus(bus).addListener(new RegistryItems()::register);
     }
     public static final class RegistryItems {
-        @net.minecraftforge.eventbus.api.SubscribeEvent
         public void register(net.minecraftforge.registries.RegisterEvent event) {
             if(!event.getRegistryKey().equals(net.minecraft.core.registries.Registries.ITEM))return;
             // Native18 creates an intrusive holder inside Item's constructor;
             // construction belongs to the same open registration event.
-            keepsake=new Item(new Item.Properties()) {
+            keepsake=new Item(new Item.Properties().setId(net.minecraft.resources.ResourceKey.create(
+                    net.minecraft.core.registries.Registries.ITEM, Identifier.parse("lootablebodiesbuildtest:keepsake")))) {
                 @Override public ICapabilityProvider getCapabilityProvider(ItemStack stack){return new Stored();}
             };
-            event.register(net.minecraft.core.registries.Registries.ITEM,ResourceLocation.parse("lootablebodiesbuildtest:keepsake"),()->keepsake);
+            event.register(net.minecraft.core.registries.Registries.ITEM,Identifier.parse("lootablebodiesbuildtest:keepsake"),()->keepsake);
         }
     }
     private static final class Stored implements ICapabilitySerializable<CompoundTag> {

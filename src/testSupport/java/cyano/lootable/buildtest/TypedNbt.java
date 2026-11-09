@@ -1,5 +1,8 @@
 package cyano.lootable.buildtest;
 
+import static cyano.lootable.buildtest.TestNativeNbt.hasType;
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
+
 import java.util.TreeSet;
 import net.minecraft.nbt.ByteArrayTag;
 import net.minecraft.nbt.CompoundTag;
@@ -27,11 +30,11 @@ public final class TypedNbt {
     }
     private static void sortAttributes(CompoundTag copy,String key,String identity) {
         if(!(copy.get(key) instanceof ListTag raw))return;
-        ListTag attributes=copy.getList(key,10);
+        ListTag attributes=typedList(copy, key, 10);
         if(attributes.size()!=raw.size())return;
         java.util.List<Tag> entries=new java.util.ArrayList<>();
         for(Tag value:attributes) {
-            if(!(value instanceof CompoundTag compound) || !compound.contains(identity,8))return;
+            if(!(value instanceof CompoundTag compound) || !hasType(compound, identity, 8))return;
             entries.add(value);
         }
         entries.sort(java.util.Comparator.comparing(TypedNbt::canonical));
@@ -42,16 +45,16 @@ public final class TypedNbt {
         StringBuilder text=new StringBuilder().append(tag.getId()).append(':');
         if(tag instanceof CompoundTag) {
             CompoundTag compound=(CompoundTag)tag;
-            for(String key:new TreeSet<>(compound.getAllKeys()))text.append(key.length()).append(':').append(key).append('=').append(canonical(compound.get(key))).append(';');
+            for(String key:new TreeSet<>(compound.keySet()))text.append(key.length()).append(':').append(key).append('=').append(canonical(compound.get(key))).append(';');
         } else if(tag instanceof ListTag) {
-            ListTag list=(ListTag)tag;text.append(list.getElementType()).append('/').append(list.size()).append('[');
+            ListTag list=(ListTag)tag;text.append(list.size()).append('[');
             for(int i=0;i<list.size();i++)text.append(canonical(list.get(i))).append(';');text.append(']');
         } else if(tag instanceof ByteArrayTag) {
             for(byte value:((ByteArrayTag)tag).getAsByteArray())text.append(Integer.toHexString((value&255)|256).substring(1));
         } else if(tag instanceof IntArrayTag) {
             for(int value:((IntArrayTag)tag).getAsIntArray())text.append(Integer.toHexString(value)).append(',');
-        } else if(tag instanceof FloatTag) text.append(Integer.toHexString(Float.floatToRawIntBits(((FloatTag)tag).getAsFloat())));
-        else if(tag instanceof DoubleTag) text.append(Long.toHexString(Double.doubleToRawLongBits(((DoubleTag)tag).getAsDouble())));
+        } else if(tag instanceof FloatTag) text.append(Integer.toHexString(Float.floatToRawIntBits(((FloatTag)tag).floatValue())));
+        else if(tag instanceof DoubleTag) text.append(Long.toHexString(Double.doubleToRawLongBits(((DoubleTag)tag).doubleValue())));
         else text.append(tag.toString());
         return text.toString();
     }

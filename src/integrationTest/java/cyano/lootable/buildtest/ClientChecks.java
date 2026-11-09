@@ -1,6 +1,5 @@
 package cyano.lootable.buildtest;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.entity.boss.enderdragon.phases.AbstractDragonPhaseInstance;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerLevel;
 
@@ -16,7 +15,6 @@ import net.minecraft.client.Screenshot;
 import net.minecraft.world.level.GameType;
 import net.minecraftforge.common.MinecraftForge;
 
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.event.TickEvent;
 
 /** Automated real-client world, packet interaction, GUI render and reload check. */
@@ -27,6 +25,7 @@ public final class ClientChecks {
     }
 
     private int stage, ticks, frames;
+    private boolean fixtureProfilesInstalled;
     private int reportedStage=-1;
     private Future<?> pending;
     private final ConnectedClientChecks connected = new ConnectedClientChecks();
@@ -36,24 +35,23 @@ public final class ClientChecks {
     private final VisibilitySkinClientChecks visibilitySkins = new VisibilitySkinClientChecks();
     private final ConfigClientChecks configScreen = new ConfigClientChecks();
     private final NamelessCorpseClientChecks namelessNames = new NamelessCorpseClientChecks();
-    @SubscribeEvent public void mouse(net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre event) {
-        event.setCanceled(true);
-    }
-    @SubscribeEvent public void keyboard(net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre event) {
-        event.setCanceled(true);
-    }
-    @SubscribeEvent public void tooltip(net.minecraftforge.client.event.RenderTooltipEvent.Color event) {
+    private void tooltip(net.minecraftforge.client.event.RenderTooltipEvent.Pre event) {
         if(Boolean.getBoolean("lootablebodies.configUiCheck"))try {configScreen.tooltip(event);}catch(Throwable error){fail(error);}
     }
     public void register() {
         if (Boolean.getBoolean("lootablebodies.clientCheck")) {
-            net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);
-            MinecraftForge.EVENT_BUS.register(this);
+            net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre.BUS.addListener(event -> true);
+            net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre.BUS.addListener(event -> true);
+            net.minecraftforge.client.event.RenderTooltipEvent.Pre.BUS.addListener(this::tooltip);
+            TickEvent.ClientTickEvent.Post.BUS.addListener(this::tick);
         }
     }
-    @SubscribeEvent public void tick(TickEvent.ClientTickEvent event) {
-        if(event.phase != TickEvent.Phase.END) return;
+    private void tick(TickEvent.ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
+        if (!fixtureProfilesInstalled) {
+            FixtureProfileCache.install(name -> java.util.concurrent.CompletableFuture.completedFuture(java.util.Optional.empty()));
+            fixtureProfilesInstalled = true;
+        }
         // The verifier never needs to capture the user's mouse or keyboard.
         if(mc.isWindowActive()) mc.mouseHandler.releaseMouse();
         net.minecraft.client.KeyMapping.releaseAll();
@@ -62,7 +60,7 @@ public final class ClientChecks {
                     " position="+(mc.player==null?"none":mc.player.blockPosition())+" focus="+mc.isWindowActive());
             reportedStage=stage;
         }
-        if(ticks>0 && ticks%150==0) Screenshot.grab(mc.gameDirectory,"diagnostic-stage-"+stage+"-tick-"+ticks+".png",mc.getMainRenderTarget(),message->System.out.println(message.getString()));
+        if(ticks>0 && ticks%150==0) Screenshot.grab(mc.gameDirectory,"diagnostic-stage-"+stage+"-tick-"+ticks+".png",mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));
         if(++ticks > 12000) fail(new AssertionError("client timeout stage="+stage));
         try {
             RuntimeChecks.require(!new File(mc.gameDirectory,"abort").exists(),"Disposable graphical check aborted");
@@ -106,7 +104,7 @@ public final class ClientChecks {
                 }
             } else if(stage==3 && mc.screen instanceof CorpseGUIContainer && ++frames>20) {
                 RuntimeChecks.require(((CorpseGUIContainer)mc.screen).getMenu().slots.size()==84,"rendered GUI slots");
-                Screenshot.grab(mc.gameDirectory,"corpse-gui-fresh.png",mc.getMainRenderTarget(),message->System.out.println(message.getString()));
+                Screenshot.grab(mc.gameDirectory,"corpse-gui-fresh.png",mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));
                 mc.player.closeContainer(); stage=4;
                 FixtureConnections.disconnect(mc);
             } else if(stage==4 && FixtureConnections.stopped(mc)) {
@@ -125,7 +123,7 @@ public final class ClientChecks {
                     stage=7; frames=0; break;
                 }
             } else if(stage==7 && mc.screen instanceof CorpseGUIContainer && ++frames>20) {
-                Screenshot.grab(mc.gameDirectory,"corpse-gui-reload.png",mc.getMainRenderTarget(),message->System.out.println(message.getString()));
+                Screenshot.grab(mc.gameDirectory,"corpse-gui-reload.png",mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));
                 mc.player.closeContainer(); stage=20; connected.start(mc);
             } else if(stage==20 && connected.tick(mc)) {
                 mc.player.closeContainer();
@@ -152,7 +150,7 @@ public final class ClientChecks {
         } catch(Throwable error) { fail(error); }
     }
     private static void positionViewer(net.minecraft.server.level.ServerPlayer player) {
-        ServerLevel world=player.serverLevel();
+        ServerLevel world=player.level();
         RuntimeChecks.awaitChunk(world,0,0);
         for(int x=7;x<=9;x++)for(int z=6;z<=8;z++)
             world.setBlockAndUpdate(new net.minecraft.core.BlockPos(x,79,z),net.minecraft.world.level.block.Blocks.STONE.defaultBlockState());

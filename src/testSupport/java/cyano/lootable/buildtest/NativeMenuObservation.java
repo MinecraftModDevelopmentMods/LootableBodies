@@ -27,8 +27,8 @@ public final class NativeMenuObservation {
             if(packet instanceof ClientboundContainerSetContentPacket content) {
                 ClientboundContainerSetContentPacket.STREAM_CODEC.encode(wire,content);
                 var decoded=ClientboundContainerSetContentPacket.STREAM_CODEC.decode(wire);
-                result=new NativeMenuObservation(true,decoded.getContainerId(),decoded.getStateId(),-1,
-                        List.copyOf(decoded.getItems()),decoded.getCarriedItem(),ItemStack.EMPTY);
+                result=new NativeMenuObservation(true,decoded.containerId(),decoded.stateId(),-1,
+                        List.copyOf(decoded.items()),decoded.carriedItem(),ItemStack.EMPTY);
             } else {
                 ClientboundContainerSetSlotPacket.STREAM_CODEC.encode(wire,(ClientboundContainerSetSlotPacket)packet);
                 var decoded=ClientboundContainerSetSlotPacket.STREAM_CODEC.decode(wire);

@@ -1,5 +1,7 @@
 package cyano.lootable.upgrade;
 
+import static cyano.lootable.buildtest.TestNativeNbt.writeUuid;
+
 import java.io.*;
 import java.nio.file.*;
 import java.util.UUID;
@@ -11,7 +13,7 @@ import net.minecraft.world.level.chunk.storage.RegionFile;
 public final class Native117RegionFixtures {
     private Native117RegionFixtures(){}
     public static CompoundTag body(UUID id,int marker) {
-        CompoundTag body=new CompoundTag();body.putString("id","lootablebodies:corpse");body.putUUID("UUID",id);
+        CompoundTag body=new CompoundTag();body.putString("id","lootablebodies:corpse");writeUuid(body, "UUID", id);
         body.putInt(UpgradePreservation.VERSION,marker);body.putString("Name","Kept native owner");
         ListTag position=new ListTag();for(double coordinate:new double[]{8.5,64,8.5})position.add(DoubleTag.valueOf(coordinate));body.put("Pos",position);
         ListTag items=new ListTag();
@@ -19,8 +21,8 @@ public final class Native117RegionFixtures {
             CompoundTag item=new CompoundTag();item.putByte("Slot",(byte)slot);item.putString("id","minecraft:diamond");item.putByte("Count",(byte)(slot+1));
             CompoundTag custom=new CompoundTag();custom.putString("keep","slot-"+slot);item.put("tag",custom);items.add(item);
         }
-        body.put("Equipment",items);ListTag aux=new ListTag();aux.add(items.getCompound(47).copy());body.put("Aux",aux);
-        CompoundTag recovered=new CompoundTag();recovered.putString("Source","FixtureUnknown");recovered.put("Data",items.getCompound(46).copy());
+        body.put("Equipment",items);ListTag aux=new ListTag();aux.add(items.getCompoundOrEmpty(47).copy());body.put("Aux",aux);
+        CompoundTag recovered=new CompoundTag();recovered.putString("Source","FixtureUnknown");recovered.put("Data",items.getCompoundOrEmpty(46).copy());
         ListTag recovery=new ListTag();recovery.add(recovered);body.put("LootableBodiesUnresolved",recovery);return body;
     }
     public static CompoundTag chunk(int version,CompoundTag... roots) {

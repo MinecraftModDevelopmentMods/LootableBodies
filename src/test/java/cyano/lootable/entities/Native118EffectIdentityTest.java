@@ -15,11 +15,14 @@ class Native118EffectIdentityTest {
     }
 
     @Test void nativeForgeSaveUsesARecognizedStableNamedIdentity() {
-        CompoundTag raw=(CompoundTag)new MobEffectInstance(MobEffects.NIGHT_VISION,200,1,false,true,false).save();
+        CompoundTag raw=(CompoundTag)MobEffectInstance.CODEC.encodeStart(
+                cyano.lootable.buildtest.Native119Registries.lookup().createSerializationContext(NbtOps.INSTANCE),
+                new MobEffectInstance(MobEffects.NIGHT_VISION,200,1,false,true,false)).getOrThrow();
         CompoundTag before=raw.copy();
-        assertEquals("minecraft:night_vision",raw.getString("id"));
+        assertEquals("minecraft:night_vision",raw.getStringOr("id", ""));
         assertEquals(MobEffects.NIGHT_VISION,SavedEffectIdentity.resolve(raw,null));
-        assertEquals(MobEffects.NIGHT_VISION,MobEffectInstance.load(raw).getEffect());
+        assertEquals(MobEffects.NIGHT_VISION,MobEffectInstance.CODEC.parse(
+                cyano.lootable.buildtest.Native119Registries.lookup().createSerializationContext(NbtOps.INSTANCE), raw).getOrThrow().getEffect());
         assertEquals(before,raw);
     }
 

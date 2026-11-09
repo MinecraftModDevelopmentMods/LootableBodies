@@ -1,6 +1,6 @@
 # Testing
 
-Run qualification for Forge 1.21.1 locally with Forge 52.1.20 and Java 21.
+Run qualification for Forge 1.21.11 locally with Forge 61.2.4 and Java 21.
 Qualification runs locally on this branch.
 
 During development, reproduce the changed behaviour first, then batch the cheap
@@ -32,7 +32,7 @@ For a frozen candidate:
 
 Unchanged mod-free resource/protocol controls can be reused only with the same
 control, SDK, JDK, flags, resources and auditor contract. Changes to those inputs
-require new control qualification. Use `tools/fixtures/native1206-forge-only-flat-level.dat`
+require new control qualification. Use `tools/fixtures/native12111-forge-only-flat-level.dat`
 for the Forge-only respawn control so it starts with Forge's own saved registry.
 Changes confined to a test fixture require
 the affected proof and tool contracts, not an automatic replay of unrelated

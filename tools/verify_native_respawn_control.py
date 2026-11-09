@@ -1,4 +1,4 @@
-"""Exercise Forge 52 delayed respawns and FIFO packets without Lootable Bodies."""
+"""Exercise Forge 61 delayed respawns and FIFO packets without Lootable Bodies."""
 import argparse,gzip,json,socket,subprocess,time,os,re
 from pathlib import Path
 from native120_logs import audit
@@ -9,7 +9,7 @@ from nbt_regions import decode
 from owned_process import native_process
 
 def control_error_counts(path):
-    """Retained native36 log-fixture contract; never used to qualify native37."""
+    """Retained native36 log-fixture contract; never used to qualify Forge 61."""
     report=legacy_audit(path,native=True)
     _,count=forge36_dead_player_movement_blocks(path.read_text(errors='replace').splitlines(),position_only=True)
     if count!=8:raise RuntimeError('Native control did not reproduce eight delayed position packets')
@@ -24,7 +24,7 @@ def require_forge_only_header(header):
         mods = [(entry.value['ModId'].value, entry.value['ModVersion'].value) for entry in entries]
     except (AttributeError, KeyError, TypeError, ValueError) as error:
         raise ValueError('Expected a Forge-only saved mod list') from error
-    if kind != 10 or sorted(mods) != [('forge', '52.1.20'), ('minecraft', '1.21.1')]:
+    if kind != 10 or sorted(mods) != [('forge', '61.2.4'), ('minecraft', '1.21.11')]:
         raise ValueError('Expected a Forge-only saved mod list')
 
 
@@ -93,10 +93,10 @@ def main():
     server=(root/'server.log').read_text(errors='replace')
     batches=[int(value) for value in re.findall(r'NATIVE_FIFO_DELAY_RELEASE packets=([0-9]+)',client)]
     if server.count('NATIVE_DEATH ')!=8 or len(batches)!=8 or sum(batches)<=0:
-        raise RuntimeError('Forge 52 control did not exercise all eight real delayed respawn/FIFO actions')
-    result={'lootable_bodies_installed':False,'respawns':8,'forge52_delayed_fifo_batches':batches,
+        raise RuntimeError('Forge 61 control did not exercise all eight real delayed respawn/FIFO actions')
+    result={'lootable_bodies_installed':False,'respawns':8,'forge61_delayed_fifo_batches':batches,
         'flat_header_sha256':digest(args.flat_header),
-        'legacy36_error_matcher_used':False,'forge52_complete_logs_audited':True,'no_unclassified_diagnostics':True,
+        'legacy36_error_matcher_used':False,'forge61_complete_logs_audited':True,'no_unclassified_diagnostics':True,
         'control_jar_sha256':digest(probe),'native_outbound_packets_delayed_fifo':True,'log_audits':reports}
     (root/'result.json').write_text(json.dumps(result,indent=2)+'\n')
     print('NATIVE_RESPAWN_CONTROL_PASS',json.dumps(result),flush=True)

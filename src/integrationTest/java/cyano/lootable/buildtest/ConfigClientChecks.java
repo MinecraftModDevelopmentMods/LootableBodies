@@ -19,15 +19,18 @@ import net.minecraftforge.client.gui.ModListScreen;
 /** Real native Mods button and widgets, without operating the user's desktop. */
 final class ConfigClientChecks {
     private int stage,frames,step,tooltipsChecked;private File report;private ModListScreen mods;private CorpseConfigGui root;private Future<?> pending;
-    void tooltip(net.minecraftforge.client.event.RenderTooltipEvent.Color event) {
+    void tooltip(net.minecraftforge.client.event.RenderTooltipEvent.Pre event) {
         Screen screen=Minecraft.getInstance().screen;
         if(!(screen instanceof CorpseConfigGui))return;
         int width=0,height=event.getComponents().size()==1?-2:0;
         for(net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent line:event.getComponents()) {
-            width=Math.max(width,line.getWidth(event.getFont()));height+=line.getHeight();
+            width=Math.max(width,line.getWidth(event.getFont()));height+=line.getHeight(event.getFont());
         }
-        RuntimeChecks.require(event.getX()>=3 && event.getX()+width+3<=screen.width && event.getY()>=4 && event.getY()+height+4<=screen.height,
-                "Native configuration tooltip clipped: "+event.getX()+","+event.getY()+" "+width+"x"+height+" screen="+screen.width+"x"+screen.height);
+        var position = event.getTooltipPositioner().positionTooltip(
+                screen.width, screen.height, event.getX(), event.getY(), width, height);
+        RuntimeChecks.require(position.x()>=3 && position.x()+width+3<=screen.width
+                && position.y()>=4 && position.y()+height+4<=screen.height,
+                "Native configuration tooltip clipped: "+position+" "+width+"x"+height+" screen="+screen.width+"x"+screen.height);
         tooltipsChecked++;
     }
     void tick(Minecraft mc)throws Exception {
@@ -72,7 +75,7 @@ final class ConfigClientChecks {
         } else if(stage==6) {
             screenshot(mc,"05-world-rules-disabled.png");click(root,1);CorpseConfigGui appearance=(CorpseConfigGui)mc.screen;click(appearance,20);click(appearance,21);click(appearance,200);click(root,200);
             check(!LootableBodies.useLocalSkin && LootableBodies.displayNameTag,"appearance_changes_while_world_open");
-            FixtureConnections.disconnect(mc);stage=5;
+            stage=5;FixtureConnections.disconnect(mc);
         } else if(stage==5 && FixtureConnections.stopped(mc)) {
             check(tooltipsChecked>0,"native_tooltip_bounds_checked_at_left_centre_right");finish(mc);
         }
@@ -88,7 +91,8 @@ final class ConfigClientChecks {
     private void openConfig(Minecraft mc)throws Exception {click(mods,20);check(mc.screen instanceof CorpseConfigGui,"mods_button_opens_regular_config");root=(CorpseConfigGui)mc.screen;}
     private static Object get(Object target,String name)throws Exception {for(Class<?> type=target.getClass();type!=null;type=type.getSuperclass())try{Field f=type.getDeclaredField(name);f.setAccessible(true);return f.get(target);}catch(NoSuchFieldException absent){}throw new NoSuchFieldException(name);}
     private static Button button(Screen screen,int id)throws Exception {if(screen instanceof ModListScreen && id==20)return (Button)get(screen,"configButton");for(Object value:screen.children())if(value instanceof CorpseConfigGui.SettingButton && ((CorpseConfigGui.SettingButton)value).id==id)return (CorpseConfigGui.SettingButton)value;throw new AssertionError("Missing GUI button "+id);}
-    private static void click(Screen screen,int id)throws Exception {Button button=button(screen,id);RuntimeChecks.require(button.active,"Disabled GUI button "+id);button.onClick(button.getX()+1,button.getY()+1);}
+    private static void click(Screen screen,int id)throws Exception {Button button=button(screen,id);RuntimeChecks.require(button.active,"Disabled GUI button "+id);button.onClick(new net.minecraft.client.input.MouseButtonEvent(button.getX()+1,button.getY()+1,
+                new net.minecraft.client.input.MouseButtonInfo(0,0)), false);}
     @SuppressWarnings("unchecked") private static EditBox field(CorpseConfigGui screen,String key)throws Exception {
         for(int attempt=0;attempt<10;attempt++){EditBox field=((Map<String,EditBox>)get(screen,"fields")).get(key);if(field!=null)return field;int page=(Integer)get(screen,"page");try{click(screen,4);}catch(AssertionError end){while((Integer)get(screen,"page")>0)click(screen,3);}if(page==(Integer)get(screen,"page") && attempt>0)break;}
         throw new AssertionError("Missing config text field "+key);
@@ -98,29 +102,28 @@ final class ConfigClientChecks {
     @SuppressWarnings("unchecked") private static void screenshot(Minecraft mc,String name)throws Exception {
         // Capture the completed native frame before the tooltip exercise
         // redraws the same render target several times in a single tick.
-        Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),message->System.out.println(message.getString()));
+        Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));
         if(mc.screen instanceof CorpseConfigGui) {
             Screen screen=mc.screen;Map<String,Integer> rows=(Map<String,Integer>)get(screen,"rows");
             Collection<Integer> positions=rows.isEmpty()?java.util.Collections.singletonList(100):rows.values();
-            var graphics=new net.minecraft.client.gui.GuiGraphics(mc,mc.renderBuffers().bufferSource());
             BackgroundObserver observer=new BackgroundObserver(screen);
-            var bus=net.minecraftforge.common.MinecraftForge.EVENT_BUS;
-            bus.register(observer);
+            var bus=net.minecraftforge.client.event.ScreenEvent.BackgroundRendered.BUS;
+            var listener=bus.addListener(observer::rendered);
             try {
                 for(int y:positions)for(int x:new int[]{screen.width/2-150,screen.width/2,screen.width/2+150}) {
                     int before=observer.count;
-                    screen.render(graphics,x,y+5,0);
-                    graphics.flush();
-                    RuntimeChecks.require(observer.count==before+1,"Config background rendered twice, blurring its text");
+                    var graphics = new GuiGraphics(mc, new net.minecraft.client.gui.render.state.GuiRenderState(), x, y+5);
+                    screen.renderWithTooltipAndSubtitles(graphics,x,y+5,0);
+                    RuntimeChecks.require(observer.count==before+1,
+                            "Native config background rendered "+(observer.count-before)+" times");
                 }
-            } finally {bus.unregister(observer);}
+            } finally {bus.removeListener(listener);}
         }
     }
     public static final class BackgroundObserver {
         private final Screen screen;
         private int count;
         BackgroundObserver(Screen screen){this.screen=screen;}
-        @net.minecraftforge.eventbus.api.SubscribeEvent
         public void rendered(net.minecraftforge.client.event.ScreenEvent.BackgroundRendered event) {
             if(event.getScreen()==screen)count++;
         }

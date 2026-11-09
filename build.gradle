@@ -82,6 +82,7 @@ tasks.withType(JavaCompile).configureEach {
 tasks.named('compileTestJava', JavaCompile) { options.compilerArgs.add('-proc:none') }
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+    maxHeapSize = "1536m"
     javaLauncher = productionLauncher
     workingDir = projectDir
 }
@@ -101,7 +102,7 @@ tasks.register('generateNative120Fixtures', JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'cyano.lootable.buildtest.Native120FixtureGenerator'
     args providers.gradleProperty('nativeFixtureOutput').getOrElse('build/native121-fixture-preparation-01'),
-        file('tools/fixtures/native121-flat-level.dat').absolutePath
+        file('tools/fixtures/native12111-flat-level.dat').absolutePath
 }
 tasks.withType(JavaExec).configureEach { javaLauncher = productionLauncher }
 tasks.withType(Javadoc).configureEach {
@@ -150,6 +151,7 @@ minecraft {
                     providers.gradleProperty('gameRunDirectory').getOrElse('run'))
             jvmArgs '--add-opens', 'java.base/java.lang.invoke=ALL-UNNAMED'
             systemProperty 'log4j.configurationFile', file('gradle/log4j2.xml').toURI().toString()
+            args '--mixin.config=lootablebodies.mixins.json'
             mods { lootablebodies { source sourceSets.main } }
         }
         register('client')
@@ -214,6 +216,8 @@ dependencies {
 }
 
 tasks.named('processResources', ProcessResources) {
+    // Keep the empty directory present in the qualified 1.21.11 archives.
+    exclude 'coremods/.gitkeep'
     filteringCharset = 'UTF-8'
     inputs.properties(version: project.version, mcversion: project.minecraft_version,
             mod_url: project.mod_url, mod_license: project.mod_license)
@@ -229,13 +233,14 @@ tasks.named('jar', Jar) {
             'Implementation-Version': project.version, 'Implementation-Vendor': project.mod_vendor,
             'Maven-Artifact': "${project.group}:${base.archivesName.get()}:${project.version}",
             'Implementation-License': project.mod_license,
-            'Built-On-Java': '21', 'Built-On': "${minecraft_version}-${forge_version}")
+            'Built-On-Java': '21', 'Built-On': "${minecraft_version}-${forge_version}", 'MixinConfigs': 'lootablebodies.mixins.json')
     filesMatching(archiveTextPatterns, normalizeArchiveText)
 }
 // Forge 52.1.20 ships its runtime with official names.
 ext.releaseJar = tasks.named('jar', Jar)
 ['sourcesJar', 'javadocJar'].each { name ->
     tasks.named(name, Jar) {
+        if (name == 'sourcesJar') exclude 'coremods/.gitkeep'
         from(['LICENSE', 'LICENSE-CC0', 'NOTICE']) { into 'META-INF' }
         manifest.attributes('Implementation-Title': project.mod_name,
                 'Implementation-Version': project.version, 'Implementation-Vendor': project.mod_vendor,

@@ -1,9 +1,9 @@
 name: Validate release workflow
 on:
   push:
-    branches: ['feature/**', 'master-1.21.1']
+    branches: ['feature/**', 'master-1.21.11']
   pull_request:
-    branches: ['master-1.21.1']
+    branches: ['master-1.21.11']
 permissions:
   contents: read
 jobs:

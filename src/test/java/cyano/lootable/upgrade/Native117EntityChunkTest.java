@@ -1,5 +1,8 @@
 package cyano.lootable.upgrade;
 
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
+import static cyano.lootable.buildtest.TestNativeNbt.writeUuid;
+
 import java.nio.file.*;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -23,16 +26,16 @@ class Native117EntityChunkTest {
         return NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.ENTITY_CHUNK,root,source,3955);
     }
     @Test void nativeEntityChunkShieldsAllSlotsAuxRecoveryAndPassengers() throws Exception {
-        CompoundTag corpse=body(ID,6),cart=new CompoundTag();cart.putString("id","minecraft:chest_minecart");cart.putUUID("UUID",new UUID(12,13));
+        CompoundTag corpse=body(ID,6),cart=new CompoundTag();cart.putString("id","minecraft:chest_minecart");writeUuid(cart, "UUID", new UUID(12,13));
         ListTag passengers=new ListTag();passengers.add(corpse);cart.put("Passengers",passengers);
         CompoundTag raw=chunk(2586,cart),before=raw.copy();Path region=write(world,raw);byte[] bytes=Files.readAllBytes(region);
         UpgradePreservation.prepare(world);
-        CompoundTag fixed=convert(raw,2586).getList("Entities",10).getCompound(0).getList("Passengers",10).getCompound(0);
-        assertEquals(12,fixed.getInt(UpgradePreservation.VERSION));assertEquals(2586,fixed.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
-        ListTag records=fixed.getList("LootableBodiesUnresolved",10);assertEquals(50,records.size());
-        for(int slot=0;slot<48;slot++) {assertEquals(corpse.getList("Equipment",10).getCompound(slot),records.getCompound(slot).getCompound("Data"));assertEquals("Equipment",records.getCompound(slot).getString("Source"));}
-        assertEquals(corpse.getList("Aux",10).getCompound(0),records.getCompound(48).getCompound("Data"));
-        assertEquals(corpse.getList("LootableBodiesUnresolved",10).getCompound(0),records.getCompound(49));
+        CompoundTag fixed=convert(raw,2586).getListOrEmpty("Entities").getCompoundOrEmpty(0).getListOrEmpty("Passengers").getCompoundOrEmpty(0);
+        assertEquals(13,fixed.getIntOr(UpgradePreservation.VERSION, 0));assertEquals(2586,fixed.getCompoundOrEmpty(UpgradePreservation.SOURCES).getIntOr("DataVersion", 0));
+        ListTag records=typedList(fixed, "LootableBodiesUnresolved", 10);assertEquals(50,records.size());
+        for(int slot=0;slot<48;slot++) {assertEquals(typedList(corpse, "Equipment", 10).getCompoundOrEmpty(slot),records.getCompoundOrEmpty(slot).getCompoundOrEmpty("Data"));assertEquals("Equipment",records.getCompoundOrEmpty(slot).getStringOr("Source", ""));}
+        assertEquals(typedList(corpse, "Aux", 10).getCompoundOrEmpty(0),records.getCompoundOrEmpty(48).getCompoundOrEmpty("Data"));
+        assertEquals(typedList(corpse, "LootableBodiesUnresolved", 10).getCompoundOrEmpty(0),records.getCompoundOrEmpty(49));
         assertEquals(before,raw);assertArrayEquals(bytes,Files.readAllBytes(region));
     }
     @Test void currentMarkerProtectsNativeRootAgainstDamagedStamps() {
@@ -40,7 +43,7 @@ class Native117EntityChunkTest {
         for(int version:new int[]{-1,0,512,2230,2586,2730,2975,3337,3465,3839,3955}) {
             CompoundTag raw=chunk(version,corpse),before=raw.copy();
             CompoundTag fixed=convert(raw,version);
-            assertEquals(corpse,fixed.getList("Entities",10).getCompound(0));assertEquals(before,raw);
+            assertEquals(corpse,typedList(fixed, "Entities", 10).getCompoundOrEmpty(0));assertEquals(before,raw);
         }
     }
     @Test void malformedEntityChunkCannotReachNativeConstruction() {

@@ -1,4 +1,6 @@
 package cyano.lootable.buildtest;
+
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerChunkCache;
@@ -38,7 +40,7 @@ import net.minecraft.server.level.ServerPlayerGameMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.chunk.LevelChunk;
 
@@ -90,9 +92,9 @@ final class ReportedIssueChecks {
     static Map<String,Integer> inventory(EntityLootableBody body) {
         Map<String,Integer> total=new TreeMap<>();
         for(int i=0;i<48;i++) add(total,body.getItem(i));
-        CompoundTag n=new CompoundTag();body.addAdditionalSaveData(n);
-        ListTag aux=n.getList("Aux",10);
-        for(int i=0;i<aux.size();i++)add(total,FixtureStackData.load(aux.getCompound(i)));
+        CompoundTag n=new CompoundTag();FixtureApi.writeAdditional(body,n);
+        ListTag aux=typedList(n, "Aux", 10);
+        for(int i=0;i<aux.size();i++)add(total,FixtureStackData.load(aux.getCompoundOrEmpty(i)));
         return total;
     }
     private static void add(Map<String,Integer> total,ItemStack stack) {
@@ -112,24 +114,39 @@ final class ReportedIssueChecks {
         return n;
     }
     private static EntityLootableBody death(ServerPlayer player) {
-        Set<Entity> before=new HashSet<>(FixtureApi.entities(world));player.kill();
-        for(Entity e:FixtureApi.entities(world))if(e instanceof EntityLootableBody && !before.contains(e))return (EntityLootableBody)e;
-        throw new AssertionError("Real player death did not create corpse");
+        Set<Entity> before = new HashSet<>(FixtureApi.entities(world));
+        var source = player.damageSources().genericKill();
+        boolean clientLoaded = player.connection.hasClientLoaded();
+        boolean immune = player.isInvulnerableTo(player.level(), source);
+        float healthBefore = player.getHealth();
+        // This is the same actual native damage call used by LivingEntity.kill.
+        boolean damaged = player.hurtServer(player.level(), source, Float.MAX_VALUE);
+        for (Entity entity : FixtureApi.entities(world)) {
+            if (entity instanceof EntityLootableBody body && !before.contains(body)) return body;
+        }
+        throw new AssertionError("Real player death did not create corpse: damage="+damaged+" immune="+immune
+                +" clientLoaded="+clientLoaded+" previousHealth="+healthBefore+" currentHealth="+player.getHealth()
+                +" removed="+player.isRemoved()+" dimension="+player.level().dimension().identifier());
     }
+    private static void acknowledgeNativeLoad(ServerPlayer player) {
+        RuntimeChecks.require(player.connection instanceof QuietConnection, "Synthetic loaded receipt on a live connection");
+        player.connection.handleAcceptPlayerLoad(new net.minecraft.network.protocol.game.ServerboundPlayerLoadedPacket());
+        RuntimeChecks.require(player.connection.hasClientLoaded(), "The native loaded receipt did not complete");
+    }
+
     private static ServerPlayer respawn(ServerPlayer player) {
         ServerGamePacketListenerImpl connection=player.connection;
         connection.handleClientCommand(new ServerboundClientCommandPacket(ServerboundClientCommandPacket.Action.PERFORM_RESPAWN));
         ServerPlayer replacement=connection.player;
         RuntimeChecks.require(replacement!=player && replacement.isAlive(),"Actual player recreation did not occur");
+        acknowledgeNativeLoad(replacement);
         replacement.setPos(32.5,80,0.5);return replacement;
     }
     private static void click(ServerPlayer p,int slot,int button,ClickType type) throws IOException {
         QuietConnection observed=(QuietConnection)p.connection;int before=observed.menuEvents;
         // Server-side conservation fixture: omit predicted slots and require
         // native authoritative corrections. Real clients test normal prediction.
-        ServerboundContainerClickPacket outgoing=new ServerboundContainerClickPacket(p.containerMenu.containerId,
-                p.containerMenu.getStateId(),slot,button,type,p.containerMenu.getCarried().copy(),
-                new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<ItemStack>());
+        ServerboundContainerClickPacket outgoing=FixtureApi.clickPacket(p,p.containerMenu.getStateId(),slot,button,type,null);
         var wire=new net.minecraft.network.RegistryFriendlyByteBuf(Unpooled.buffer(),p.registryAccess());
         try {
             ServerboundContainerClickPacket.STREAM_CODEC.encode(wire,outgoing);p.connection.handleContainerClick(ServerboundContainerClickPacket.STREAM_CODEC.decode(wire));
@@ -155,38 +172,40 @@ final class ReportedIssueChecks {
         RuntimeChecks.require(server.getPlayerList().getPlayers().contains(player),"Fixture player list observation");
     }
     private static void deathSequence() throws Exception {
-        world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);RuntimeChecks.awaitChunk(world,2,0);
+        world.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.KEEP_INVENTORY,false,null);RuntimeChecks.awaitChunk(world,2,0);
         ServerPlayer p=new ServerPlayer(server,world,new GameProfile(UUID.randomUUID(),"IssueFive"),net.minecraft.server.level.ClientInformation.createDefault());
-        p.connection=new QuietConnection(p);p.setGameMode(GameType.SURVIVAL);p.setPos(32.5,80,0.5);
-        // Vanilla clients need player-list information before a tracked player
-        // spawn, including the brief spawn-point visit during real respawn.
-        server.getPlayerList().broadcastAll(net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(java.util.List.of(p)));
-        RuntimeChecks.require(world.addFreshEntity(p),"Fixture player spawn");addFixturePlayer(p);
-        p.getInventory().selected=4;p.getInventory().items.set(4,shovel());p.getInventory().items.set(9,RuntimeChecks.stack(301));
-        Map<String,Integer> expected=tagged(p);
-        EntityLootableBody first=death(p);RuntimeChecks.require(expected.equals(tagged(first)),"First death lost inventory");
-        p=respawn(p);CorpseContainer gui=new CorpseContainer(17,p.getInventory(),first);p.containerMenu=gui;p.initMenu(gui);
-        click(p,4,0,ClickType.SWAP);
-        RuntimeChecks.require(RuntimeChecks.sameStack(p.getInventory().items.get(0),shovel()),"Key1 did not recover original main hand");
-        for(int slot=0;slot<48;slot++)if(gui.getSlot(slot).hasItem())click(p,slot,0,ClickType.QUICK_MOVE);
-        RuntimeChecks.require(first.isEmpty() && expected.equals(tagged(p)),"First recovery lost or duplicated tagged inventory: remaining="+inventory(first)+" expected="+expected+" player="+tagged(p)+" state="+gui.getStateId());
-        FriendlyByteBuf close=new FriendlyByteBuf(Unpooled.buffer());
-        try {ServerboundContainerClosePacket.STREAM_CODEC.encode(close,new ServerboundContainerClosePacket(gui.containerId));p.connection.handleContainerClose(ServerboundContainerClosePacket.STREAM_CODEC.decode(close));RuntimeChecks.require(!close.isReadable(),"Native issue close left undecoded fields");}
-        finally {close.release();}
-        int active=-1;for(int slot=1;slot<9;slot++)if(!(p.getInventory().items.get(slot)).isEmpty() && FixtureStackData.hasCustom(p.getInventory().items.get(slot)) && FixtureStackData.custom(p.getInventory().items.get(slot)).contains("fixture"))active=slot;
-        RuntimeChecks.require(active>0,"Shift-click did not leave a different occupied hotbar slot");
-        FriendlyByteBuf held=new FriendlyByteBuf(Unpooled.buffer());
-        try {ServerboundSetCarriedItemPacket.STREAM_CODEC.encode(held,new ServerboundSetCarriedItemPacket(active));p.connection.handleSetCarriedItem(ServerboundSetCarriedItemPacket.STREAM_CODEC.decode(held));RuntimeChecks.require(!held.isReadable(),"Native held-item packet left undecoded fields");}
-        finally {held.release();}
-        // Deliberately do not tick/sync container or reopen inventory here.
-        EntityLootableBody second=death(p);
-        RuntimeChecks.require(expected.equals(tagged(second)),"Second death lost original key1 shovel or another exact stack");
-        RuntimeChecks.require(RuntimeChecks.sameStack(second.getItem(4),RuntimeChecks.stack(301)),"Second death active hand differs");
-        System.out.println("ISSUE5_REAL_RESPAWN_AND_HELD_ITEM_PACKET_PASS");
-        p=respawn(p);server.getPlayerList().remove(p);
-        CompoundTag n=new CompoundTag();second.saveAsPassenger(n);
-        EntityLootableBody loaded=new EntityLootableBody(world);loaded.load(n);
-        RuntimeChecks.require(expected.equals(tagged(loaded)),"Second corpse NBT reload lost recovery");
+        try (QuietConnection connection = new QuietConnection(p)) {
+            p.connection=connection;acknowledgeNativeLoad(p);p.setGameMode(GameType.SURVIVAL);p.setPos(32.5,80,0.5);
+            // Vanilla clients need player-list information before a tracked player
+            // spawn, including the brief spawn-point visit during real respawn.
+            server.getPlayerList().broadcastAll(net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(java.util.List.of(p)));
+            RuntimeChecks.require(world.addFreshEntity(p),"Fixture player spawn");addFixturePlayer(p);
+            p.getInventory().setSelectedSlot(4);p.getInventory().getNonEquipmentItems().set(4,shovel());p.getInventory().getNonEquipmentItems().set(9,RuntimeChecks.stack(301));
+            Map<String,Integer> expected=tagged(p);
+            EntityLootableBody first=death(p);RuntimeChecks.require(expected.equals(tagged(first)),"First death lost inventory");
+            p=respawn(p);CorpseContainer gui=new CorpseContainer(17,p.getInventory(),first);p.containerMenu=gui;p.initMenu(gui);
+            click(p,4,0,ClickType.SWAP);
+            RuntimeChecks.require(RuntimeChecks.sameStack(p.getInventory().getNonEquipmentItems().get(0),shovel()),"Key1 did not recover original main hand");
+            for(int slot=0;slot<48;slot++)if(gui.getSlot(slot).hasItem())click(p,slot,0,ClickType.QUICK_MOVE);
+            RuntimeChecks.require(first.isEmpty() && expected.equals(tagged(p)),"First recovery lost or duplicated tagged inventory: remaining="+inventory(first)+" expected="+expected+" player="+tagged(p)+" state="+gui.getStateId());
+            FriendlyByteBuf close=new FriendlyByteBuf(Unpooled.buffer());
+            try {ServerboundContainerClosePacket.STREAM_CODEC.encode(close,new ServerboundContainerClosePacket(gui.containerId));p.connection.handleContainerClose(ServerboundContainerClosePacket.STREAM_CODEC.decode(close));RuntimeChecks.require(!close.isReadable(),"Native issue close left undecoded fields");}
+            finally {close.release();}
+            int active=-1;for(int slot=1;slot<9;slot++)if(!(p.getInventory().getNonEquipmentItems().get(slot)).isEmpty() && FixtureStackData.hasCustom(p.getInventory().getNonEquipmentItems().get(slot)) && FixtureStackData.custom(p.getInventory().getNonEquipmentItems().get(slot)).contains("fixture"))active=slot;
+            RuntimeChecks.require(active>0,"Shift-click did not leave a different occupied hotbar slot");
+            FriendlyByteBuf held=new FriendlyByteBuf(Unpooled.buffer());
+            try {ServerboundSetCarriedItemPacket.STREAM_CODEC.encode(held,new ServerboundSetCarriedItemPacket(active));p.connection.handleSetCarriedItem(ServerboundSetCarriedItemPacket.STREAM_CODEC.decode(held));RuntimeChecks.require(!held.isReadable(),"Native held-item packet left undecoded fields");}
+            finally {held.release();}
+            // Deliberately do not tick/sync container or reopen inventory here.
+            EntityLootableBody second=death(p);
+            RuntimeChecks.require(expected.equals(tagged(second)),"Second death lost original key1 shovel or another exact stack");
+            RuntimeChecks.require(RuntimeChecks.sameStack(second.getItem(4),RuntimeChecks.stack(301)),"Second death active hand differs");
+            System.out.println("ISSUE5_REAL_RESPAWN_AND_HELD_ITEM_PACKET_PASS");
+            p=respawn(p);server.getPlayerList().remove(p);
+            CompoundTag n=new CompoundTag();FixtureApi.saveEntity(second,n);
+            EntityLootableBody loaded=new EntityLootableBody(world);FixtureApi.loadEntityData(loaded,n);
+            RuntimeChecks.require(expected.equals(tagged(loaded)),"Second corpse NBT reload lost recovery");
+        }
     }
     private static EntityLootableBody fullBody(int cx,int cz,double offset) {return fullBody(cx,cz,offset,null);}
     private static EntityLootableBody fullBody(int cx,int cz,double offset,UUID savedId) {
@@ -226,10 +245,10 @@ final class ReportedIssueChecks {
         EntityLootableBody body; int cx,cz,nx,nz; BlockPos platform;
         boolean forced;
         Map<String,Integer> expected;
-        void unload(){world.setChunkForced(cx,cz,false);net.minecraft.world.level.ChunkPos pos=new net.minecraft.world.level.ChunkPos(cx,cz);world.getChunkSource().addRegionTicket(net.minecraft.server.level.TicketType.FORCED,pos,0,pos);unloadChunk(nx,nz);RuntimeChecks.require(!world.getChunkSource().hasChunk(nx,nz),"Support chunk did not unload");}
+        void unload(){world.setChunkForced(cx,cz,false);net.minecraft.world.level.ChunkPos pos=new net.minecraft.world.level.ChunkPos(cx,cz);world.getChunkSource().addRegionTicket(net.minecraft.server.level.TicketType.FORCED,pos,0,true);unloadChunk(nx,nz);RuntimeChecks.require(!world.getChunkSource().hasChunk(nx,nz),"Support chunk did not unload");}
         void frozen(){for(int i=0;i<100;i++)body.tick();System.out.println("ISSUE17_UNLOADED_SUPPORT y="+body.getY()+" alive="+body.isAlive()+" inventory="+inventory(body).size()+" supportLoaded="+world.getChunkSource().hasChunk(nx,nz));RuntimeChecks.require(body.isAlive() && body.getY()==80 && expected.equals(inventory(body)),"Corpse fell through unloaded neighbour support and lost recoverable inventory");}
         void resume(){RuntimeChecks.awaitChunk(world,nx,nz);FixtureApi.awaitTicking(body);for(int i=0;i<10;i++)world.tickNonPassenger(body);RuntimeChecks.require(body.onGround() && body.getY()==80 && FixtureApi.sectionContains(body,cx,cz) && expected.equals(inventory(body)),"Corpse failed to resume safely after support terrain loaded");}
-        @Override public void close(){if(forced)world.setChunkForced(cx,cz,false);net.minecraft.world.level.ChunkPos pos=new net.minecraft.world.level.ChunkPos(cx,cz);world.getChunkSource().removeRegionTicket(net.minecraft.server.level.TicketType.FORCED,pos,0,pos);}
+        @Override public void close(){if(forced)world.setChunkForced(cx,cz,false);net.minecraft.world.level.ChunkPos pos=new net.minecraft.world.level.ChunkPos(cx,cz);world.getChunkSource().removeRegionTicket(net.minecraft.server.level.TicketType.FORCED,pos,0,true);}
     }
     private static Support support(int axis,int direction) {return support(axis,direction,null);}
     private static Support support(int axis,int direction,UUID savedId) {
@@ -242,7 +261,7 @@ final class ReportedIssueChecks {
         f.platform=new BlockPos(floorX+(axis==0?direction:0),79,floorZ+(axis==1?direction:0));
         // A body can straddle a chunk boundary while its centre remains in the ticketed chunk.
         // Remove only the two fixture columns' ground, leaving one thin supporting platform.
-        for(int y=world.getMinBuildHeight();y<79;y++){world.removeBlock(new BlockPos(floorX,y,floorZ),false);world.removeBlock(new BlockPos(f.platform.getX(),y,f.platform.getZ()),false);}
+        for(int y=world.getMinY();y<79;y++){world.removeBlock(new BlockPos(floorX,y,floorZ),false);world.removeBlock(new BlockPos(f.platform.getX(),y,f.platform.getZ()),false);}
         world.setBlockAndUpdate(f.platform,Blocks.STONE.defaultBlockState());
         f.body=fullBody(f.cx,f.cz,8.5,savedId);f.body.setPos(x,80,z);f.expected=inventory(f.body);
         f.forced=world.setChunkForced(f.cx,f.cz,true);
@@ -254,9 +273,9 @@ final class ReportedIssueChecks {
     }
     private static void forcedSupport(int axis,int direction) {
         try(Support f=support(axis,direction)) {
-            CompoundTag before=new CompoundTag();f.body.saveAsPassenger(before);
+            CompoundTag before=new CompoundTag();FixtureApi.saveEntity(f.body,before);
             f.unload();f.frozen();
-            CompoundTag after=new CompoundTag();f.body.saveAsPassenger(after);
+            CompoundTag after=new CompoundTag();FixtureApi.saveEntity(f.body,after);
             RuntimeChecks.require(before.equals(after),"Waiting for terrain changed healthy saved NBT");
             f.resume();
         }
@@ -302,9 +321,27 @@ final class ReportedIssueChecks {
         world.setChunkForced(cx,cz,false);
         System.out.println("ISSUE17_COLD_RELOAD_DEFERRED_SUPPORT_AND_COMPLETE_NBT_PASS");
     }
-    private static final class QuietConnection extends ServerGamePacketListenerImpl {
+    private static final class QuietConnection extends ServerGamePacketListenerImpl implements AutoCloseable {
         int menuEvents,menuState=-1;ItemStack carried=ItemStack.EMPTY;
-        QuietConnection(ServerPlayer p){super(ReportedIssueChecks.server,new Connection(PacketFlow.SERVERBOUND),p,net.minecraft.server.network.CommonListenerCookie.createInitial(p.getGameProfile(),false));}
+        private final io.netty.channel.embedded.EmbeddedChannel channel;
+
+        QuietConnection(ServerPlayer player) {
+            this(player, new Connection(PacketFlow.SERVERBOUND));
+        }
+
+        private QuietConnection(ServerPlayer player, Connection connection) {
+            super(ReportedIssueChecks.server, connection, player,
+                    net.minecraft.server.network.CommonListenerCookie.createInitial(player.getGameProfile(), false));
+            // Native Forge command filtering reads the network context from the
+            // Netty channel during respawn. Keep the fixture local to this JVM.
+            channel = new io.netty.channel.embedded.EmbeddedChannel(connection);
+        }
+
+        @Override
+        public void close() {
+            channel.finishAndReleaseAll();
+        }
+
         @Override public void send(Packet<?> packet) {
             NativeMenuObservation observed=NativeMenuObservation.decode(packet,player.registryAccess());if(observed==null)return;
             if(observed.containerId==player.containerMenu.containerId){menuEvents++;menuState=observed.stateId;if(observed.content)carried=observed.carried;}

@@ -59,7 +59,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             values = dict(line.split('=', 1) for line in output.read_text().splitlines()) if output.exists() else {}
             return result.returncode, values
 
-    def validate(self, minecraft, names=None, mutation=None, release_exists=False, wrong_tag=False, audit_success=True, qualification=None, local_receipt=None):
+    def validate(self, minecraft, names=None, mutation=None, release_exists=False, wrong_tag=False, audit_success=True, qualification=None, local_receipt=None, audit_run=None):
         suffix, branch, forge = {
             '1.10.2': ('110021', '1.10.2', '12.18.3.2511'),
             '1.11.2': ('111021', '1.11.2-dev', '13.20.1.2588'),
@@ -73,13 +73,14 @@ class ReleaseWorkflowTests(unittest.TestCase):
             '1.19.4': ('119041', 'master-1.19.4', '45.4.5'),
             '1.20.1': ('120011', 'master-1.20.1', '47.4.28'),
             '1.20.6': ('120061', 'master-1.20.6', '50.2.14'),
-            '1.21.1': ('121011', 'master-1.21.1', '52.1.20')}[minecraft]
+            '1.21.1': ('121011', 'master-1.21.1', '52.1.20'),
+            '1.21.11': ('121111', 'master-1.21.11', '61.2.4')}[minecraft]
         version = '2.4.2.' + suffix
         files={name:'C'*64 for name in ['main.jar','sources.jar','javadoc.jar','release.pom','CHANGELOG.txt','SHA256SUMS']}
         receipt={'schema':1,'source':SHA,'version':version,'files':files,'evidence_sha256':'F'*64,'qualified_locally':True,'manual_accepted':True}
         if local_receipt is not None:receipt=local_receipt
         values = dict(minecraft_version=minecraft, forge_version=forge, loader_name='forge', loader_code='1',
-            java_version='21' if minecraft in ('1.20.6','1.21.1') else '17' if minecraft in ('1.18.2','1.19.4','1.20.1') else '16' if minecraft=='1.17.1' else '8', java_toolchain_version='21.0.7+6' if minecraft in ('1.20.6','1.21.1') else '17.0.20.1+1' if minecraft in ('1.18.2','1.19.4','1.20.1') else '16.0.2+7' if minecraft=='1.17.1' else '8.0.502+7', gradle_java_version='21' if minecraft in ('1.20.6','1.21.1') else '17', mod_id='lootablebodies',
+            java_version='21' if minecraft in ('1.20.6','1.21.1','1.21.11') else '17' if minecraft in ('1.18.2','1.19.4','1.20.1') else '16' if minecraft=='1.17.1' else '8', java_toolchain_version='21.0.7+6' if minecraft in ('1.20.6','1.21.1','1.21.11') else '17.0.20.1+1' if minecraft in ('1.18.2','1.19.4','1.20.1') else '16.0.2+7' if minecraft=='1.17.1' else '8.0.502+7', gradle_java_version='21' if minecraft in ('1.20.6','1.21.1','1.21.11') else '17', mod_id='lootablebodies',
             mod_artifact='LootableBodies', mod_group='zone.moddev.mc.lootablebodies', mod_license='LGPL-2.1-only',
             curseforge_project_id='240968', mod_version=version)
         if mutation:
@@ -89,19 +90,24 @@ class ReleaseWorkflowTests(unittest.TestCase):
                          '1.14.4': MATRIX114 + ['Validate release workflow'],
                          '1.15.2': MATRIX115, '1.16.5': MATRIX116}.get(minecraft, []) if names is None else names
         if minecraft=='1.17.1' and names is None:checks=CORE117+MATRIX117
-        if minecraft in ('1.18.2','1.19.4','1.20.1','1.20.6','1.21.1') and names is None:checks=CORE118
+        if minecraft in ('1.18.2','1.19.4','1.20.1','1.20.6','1.21.1','1.21.11') and names is None:checks=CORE118
 
         def command(args, **options):
             if args[0] == 'git':
                 return SHA + '\n'
             if any('/actions/workflows/native'+code+'.yml/' in args[-1] for code in ['117','118','119','120']):
-                code={'1.17.1':'117','1.18.2':'118','1.19.4':'119','1.20.1':'120','1.20.6':'120','1.21.1':'120'}[minecraft]
+                code={'1.17.1':'117','1.18.2':'118','1.19.4':'119','1.20.1':'120','1.20.6':'120','1.21.1':'120','1.21.11':'120'}[minecraft]
                 row=dict(id=int(code),head_sha=SHA,head_branch=branch,event='push',path='.github/workflows/native'+code+'.yml',conclusion='success')
                 if qualification:row.update(qualification)
                 return json.dumps({'workflow_runs':[row]})
             if '/actions/workflows/' in args[-1]:
-                return json.dumps({'workflow_runs': [{'id': 1, 'display_title': 'Audit ' + minecraft + ' artifacts from ' + SHA,
-                    'conclusion': 'success' if audit_success else 'failure'}]})
+                audit = {'id': 1, 'display_title': 'Audit ' + minecraft + ' artifacts from ' + SHA,
+                         'conclusion': 'success' if audit_success else 'failure', 'event': 'workflow_run',
+                         'head_sha': 'c' * 40, 'head_branch': 'master-1.12',
+                         'path': '.github/workflows/artifact-audit-1.21.yml'}
+                if audit_run is not None:
+                    audit.update(audit_run)
+                return json.dumps({'workflow_runs': [audit]})
             return json.dumps({'check_runs': [dict(name=name, id=i, conclusion='success') for i, name in enumerate(checks)]})
         def existing(args, **options):
             if '/releases/tags/' in args[-1] and release_exists:
@@ -112,7 +118,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         code = script('Validate identity, exact commit and successful checks').split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {
                 'RELEASE_VERSION': version, 'GITHUB_REPOSITORY': REPOSITORY,
-                'MINECRAFT_VERSION': minecraft, 'SOURCE_BRANCH': branch,
+                'MINECRAFT_VERSION': minecraft, 'SOURCE_BRANCH': branch, 'GITHUB_SHA': 'c' * 40,
                 'GITHUB_OUTPUT': str(Path(directory) / 'output'),
                 'LOCAL_QUALIFICATION':json.dumps(receipt) if receipt else ''}), \
                 patch('pathlib.Path.read_text', side_effect=['\n'.join(k+'='+v for k,v in values.items()),json.dumps({'files':files,'local_qualification_complete':True,'qualification_integrity_status':'verified','manual_accepted':True})]), \
@@ -129,8 +135,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
                         {'local_receipt': {'manual_accepted': False}}):
             with self.subTest(options=options), self.assertRaises(SystemExit):
                 self.validate('1.20.6', **options)
-        self.assertIn("(needs.preflight.outputs.minecraft_version == '1.20.6' || needs.preflight.outputs.minecraft_version == '1.21.1') && 'Java 21'", WORKFLOW.read_text())
-        self.assertEqual(2, WORKFLOW.read_text().count("(needs.preflight.outputs.minecraft_version == '1.20.6' || needs.preflight.outputs.minecraft_version == '1.21.1') && '21.0.7+6.0.LTS'"))
+        self.assertIn("(needs.preflight.outputs.minecraft_version == '1.20.6' || needs.preflight.outputs.minecraft_version == '1.21.1' || needs.preflight.outputs.minecraft_version == '1.21.11') && 'Java 21'", WORKFLOW.read_text())
+        self.assertEqual(2, WORKFLOW.read_text().count("(needs.preflight.outputs.minecraft_version == '1.20.6' || needs.preflight.outputs.minecraft_version == '1.21.1' || needs.preflight.outputs.minecraft_version == '1.21.11') && '21.0.7+6.0.LTS'"))
 
     def test_1211_requires_exact_archives_and_java_21(self):
         code, values = self.select('2.4.13.121011')
@@ -143,8 +149,65 @@ class ReleaseWorkflowTests(unittest.TestCase):
             with self.subTest(options=options), self.assertRaises(SystemExit):
                 self.validate('1.21.1', **options)
 
-    def test_future_12111_candidate_cannot_dispatch_publication(self):
-        self.assertNotEqual(0, self.select('2.4.14.121111')[0])
+    def test_1211_audit_receives_registered_archive_workflow_completion(self):
+        audit = WORKFLOW.with_name('artifact-audit-1.21.yml').read_text(encoding='utf-8')
+        event_names = audit.split('workflows: [', 1)[1].split(']', 1)[0].split(',')
+        self.assertIn('LootableBodies 1.20 CI', [name.strip() for name in event_names])
+
+    def test_1211_only_accepts_an_audit_from_the_active_dispatcher(self):
+        self.validate('1.21.1', audit_run={'event': 'workflow_dispatch'})
+        for changes in ({'event': 'push'}, {'head_branch': 'master-1.21.1'},
+                        {'head_sha': 'd' * 40}, {'path': '.github/workflows/artifact-audit-1.20.yml'}):
+            with self.subTest(changes=changes), self.assertRaises(SystemExit):
+                self.validate('1.21.1', audit_run=changes)
+
+    def test_1211_audit_requires_the_successful_current_source_push(self):
+        path = WORKFLOW.with_name('artifact-audit-1.21.yml')
+        text = path.read_text(encoding='utf-8')
+        code = text.split("python3 - <<'PY'\n", 1)[1].split('\n          PY', 1)[0]
+        code = textwrap.dedent(code)
+        good = {'id': 25, 'head_repository': {'full_name': REPOSITORY}, 'event': 'push',
+                'head_branch': 'master-1.21.1', 'head_sha': SHA, 'path': '.github/workflows/native120.yml',
+                'status': 'completed', 'conclusion': 'success'}
+
+        def resolve(run, branch=SHA, run_id='25', source=SHA, target='1.21.1'):
+            def api(args):
+                if args[-1].endswith('/actions/runs/25'):
+                    return json.dumps(run)
+                if args[-1].endswith('/git/ref/heads/master-' + target):
+                    return json.dumps({'object': {'sha': branch}})
+                raise AssertionError(args)
+            with tempfile.TemporaryDirectory() as folder, patch('subprocess.check_output', side_effect=api):
+                output = Path(folder) / 'output'
+                with patch.dict(os.environ, SOURCE_RUN=run_id, SOURCE_SHA=source, TARGET_VERSION=target, GITHUB_OUTPUT=str(output)):
+                    exec(compile(code, 'audit-source', 'exec'), {})
+                return output.read_text()
+
+        self.assertEqual('run=25\nsha=' + SHA + '\nversion=1.21.1\n', resolve(good))
+        self.assertEqual('run=25\nsha=' + SHA + '\nversion=1.21.11\n',
+                         resolve(dict(good, head_branch='master-1.21.11'), target='1.21.11'))
+        with self.assertRaises(SystemExit):
+            resolve(good, target='1.21.11')
+        for changes in ({'event': 'pull_request'}, {'head_sha': 'b' * 40}, {'head_branch': 'master-1.20.6'},
+                        {'head_repository': {'full_name': 'SkyBlade1978/LootableBodies'}},
+                        {'path': '.github/workflows/native119.yml'}, {'conclusion': 'failure'}, {'id': 26}):
+            with self.subTest(changes=changes), self.assertRaises(SystemExit):
+                resolve(dict(good, **changes))
+        with self.assertRaises(SystemExit):
+            resolve(good, branch='b' * 40)
+        with self.assertRaises(SystemExit):
+            resolve(good, run_id='25;false')
+
+    def test_12111_requires_the_exact_archive_and_dispatcher(self):
+        self.assertEqual((0, {'minecraft_version': '1.21.11', 'source_branch': 'master-1.21.11'}),
+                         self.select('2.4.14.121111'))
+        self.validate('1.21.11', audit_run={'event': 'workflow_dispatch'})
+        for options in ({'audit_success': False}, {'qualification': {'head_branch': 'master-1.21.1'}},
+                        {'audit_run': {'head_sha': 'd' * 40}}, {'mutation': {'java_version': '17'}},
+                        {'local_receipt': {'manual_accepted': False}}):
+            with self.subTest(options=options), self.assertRaises(SystemExit):
+                self.validate('1.21.11', **options)
+        self.assertNotEqual(0, self.select('2.4.15.261021')[0])
 
     def test_routes_all_supported_versions(self):
         for suffix, minecraft, branch in [('110021', '1.10.2', '1.10.2'), ('111021', '1.11.2', '1.11.2-dev'), ('112021', '1.12.2', 'master-1.12'), ('113021', '1.13.2', 'master-1.13.2'), ('114041', '1.14.4', 'master-1.14.4')]:

@@ -1,4 +1,6 @@
 package cyano.lootable.buildtest;
+
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.world.SimpleContainer;
@@ -30,7 +32,7 @@ import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import net.minecraft.client.Screenshot;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.GameType;
 
 /** Exact issue5 sequence over a real connected client and two disk reloads. */
@@ -39,7 +41,9 @@ final class ReportedIssueClientChecks {
     private int stage,frames,active;
     private boolean distantViewerObserved,approachPending;
     private Future<?> pending;
+    private Future<Boolean> nativeLoaded;
     private UUID firstId,secondId;
+    private BlockPos firstOrigin, secondOrigin;
     private File report;
     private CompoundTag savedBody,savedPlayer;
     static ItemStack original() {
@@ -55,13 +59,17 @@ final class ReportedIssueClientChecks {
             FixtureApi.ClientWorlds.create(mc,"issue-fixture","Issue fixture",net.minecraft.world.level.GameType.SURVIVAL,true);next(1);
         } else if(stage==1 && ready(mc)) {
             schedule(mc,()->{
-                ServerLevel w=player(mc).serverLevel();w.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);
-                w.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBSPAWNING).set(false,null);
+                ServerLevel w=player(mc).level();
+                RuntimeChecks.awaitChunk(w, 2, 0);
+                w.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.KEEP_INVENTORY,false,null);
+                w.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.SPAWN_MOBS,false,null);
                 for(int x=29;x<=36;x++)for(int z=-3;z<=4;z++)w.setBlockAndUpdate(new BlockPos(x,79,z),Blocks.STONE.defaultBlockState());
-                ServerPlayer p=player(mc);p.setGameMode(GameType.SURVIVAL);p.getInventory().clearContent();p.getInventory().selected=4;
-                p.getInventory().items.set(4,original());p.getInventory().items.set(9,RuntimeChecks.stack(301));
+                ServerPlayer p=player(mc);p.setGameMode(GameType.SURVIVAL);p.getInventory().clearContent();p.getInventory().setSelectedSlot(4);
+                p.getInventory().getNonEquipmentItems().set(4,original());p.getInventory().getNonEquipmentItems().set(9,RuntimeChecks.stack(301));
                 p.connection.teleport(32.5,80,.5,0,0);p.containerMenu.broadcastChanges();
-                firstId=die(p,null).getUUID();
+                EntityLootableBody first = die(p, null);
+                firstId = first.getUUID();
+                firstOrigin = first.blockPosition();
             });next(2);
         } else if(stage==2 && done() && mc.screen instanceof DeathScreen && frames>10) {
             mc.player.respawn();next(3);
@@ -72,32 +80,37 @@ final class ReportedIssueClientChecks {
             equal(mc.player.containerMenu.getSlot(4).getItem(),original(),"First corpse main hand");shot(mc,"issue5-first-main-hand.png");
             mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,4,0,ClickType.SWAP,mc.player);next(6);
         } else if(stage==6 && frames>15) {
-            equal(mc.player.getInventory().items.get(0),original(),"Key1 original shovel recovery");
+            equal(mc.player.getInventory().getNonEquipmentItems().get(0),original(),"Key1 original shovel recovery");
             for(int slot=0;slot<48;slot++)if(mc.player.containerMenu.getSlot(slot).hasItem())
                 mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,slot,0,ClickType.QUICK_MOVE,mc.player);
             next(7);
         } else if(stage==7 && frames>20) {
-            equal(mc.player.getInventory().items.get(0),original(),"Original shovel changed before switch");
-            active=-1;for(int slot=1;slot<9;slot++)if(RuntimeChecks.sameStack(mc.player.getInventory().items.get(slot),RuntimeChecks.stack(301)))active=slot;
+            equal(mc.player.getInventory().getNonEquipmentItems().get(0),original(),"Original shovel changed before switch");
+            active=-1;for(int slot=1;slot<9;slot++)if(RuntimeChecks.sameStack(mc.player.getInventory().getNonEquipmentItems().get(slot),RuntimeChecks.stack(301)))active=slot;
             RuntimeChecks.require(active>0,"No different recovered hotbar item");
             mark("first_death_respawn_key1_and_shift_recovery");
-            mc.player.closeContainer();mc.player.getInventory().selected=active;
+            mc.player.closeContainer();mc.player.getInventory().setSelectedSlot(active);
             mc.getConnection().send(new ServerboundSetCarriedItemPacket(active));
             // Same ordered connection: held-item change, then a build-only death signal.
             // This uses the vanilla death path without native command permissions.
-            MultiplayerChecks.CHANNEL.send(new MultiplayerChecks.FixtureDeath(),net.minecraftforge.network.PacketDistributor.SERVER.noArg());next(8);
+            MultiplayerChecks.CHANNEL.send(new MultiplayerChecks.FixtureDeath(active),net.minecraftforge.network.PacketDistributor.SERVER.noArg());next(8);
         } else if(stage==8 && mc.screen instanceof DeathScreen && frames>10) {
             mc.player.respawn();next(9);
         } else if(stage==9 && ready(mc) && mc.player.isAlive() && !(mc.screen instanceof DeathScreen)) {
             schedule(mc,()->{
                 ServerPlayer p=player(mc);EntityLootableBody second=null;
-                for(Entity e:FixtureApi.entities(p.level()))if(e instanceof EntityLootableBody && !e.getUUID().equals(firstId) && p.getGameProfile().getName().equals(((EntityLootableBody)e).getCustomNameTag()))second=(EntityLootableBody)e;
-                RuntimeChecks.require(second!=null,"Second actual death corpse absent");secondId=second.getUUID();
+                for(Entity e:FixtureApi.entities(p.level()))if(e instanceof EntityLootableBody && !e.getUUID().equals(firstId) && p.getGameProfile().name().equals(((EntityLootableBody)e).getCustomNameTag()))second=(EntityLootableBody)e;
+                RuntimeChecks.require(second!=null,"Second actual death corpse absent");
+                secondId = second.getUUID();
+                secondOrigin = second.blockPosition();
                 verifyOriginals(second);equal(second.getItem(4),RuntimeChecks.stack(301),"Second selected main hand");
-                RuntimeChecks.require(p.getInventory().save(new ListTag()).size()==0,"Second death duplicated player inventory");
-                if(Boolean.getBoolean("lootablebodies.issueClient.offsetViewer"))
-                    p.connection.teleport(64.5,4,64.5,0,0);
-                else p.connection.teleport(32.5,80,.5,0,0);
+                RuntimeChecks.require(FixtureApi.saveInventory(p).size()==0,"Second death duplicated player inventory");
+                if (Boolean.getBoolean("lootablebodies.issueClient.offsetViewer")) {
+                    RuntimeChecks.awaitChunk(p.level(), 4, 4);
+                    for (int x = 63; x <= 65; x++) for (int z = 63; z <= 65; z++)
+                        p.level().setBlockAndUpdate(new BlockPos(x, 79, z), Blocks.STONE.defaultBlockState());
+                    p.connection.teleport(64.5, 80, 64.5, 0, 0);
+                } else p.connection.teleport(32.5,80,.5,0,0);
                 mark("second_death_without_inventory_resync_preserves_original_shovel_and_all_tags");
             });next(10);
         } else if(stage==10 && done()) {
@@ -147,7 +160,7 @@ final class ReportedIssueClientChecks {
         } else if(stage==22 && FixtureConnections.stopped(mc)) {mc.stop();next(23);}
     }
     private EntityLootableBody die(ServerPlayer p,UUID skip) {
-        Set<Entity> before=new HashSet<>(FixtureApi.entities(p.level()));p.kill();
+        Set<Entity> before=new HashSet<>(FixtureApi.entities(p.level()));p.kill(p.level());
         for(Entity e:FixtureApi.entities(p.level()))if(e instanceof EntityLootableBody && !before.contains(e))return (EntityLootableBody)e;
         throw new AssertionError("Actual connected death absent");
     }
@@ -162,21 +175,40 @@ final class ReportedIssueClientChecks {
     }
     private static void verifyClientOriginals(Minecraft mc){Map<String,Integer> n=new TreeMap<>();for(int i=0;i<48;i++)addTagged(n,mc.player.containerMenu.getSlot(i).getItem());RuntimeChecks.require(originals().equals(n),"Connected GUI differs from exact originals");}
     private void save(Minecraft mc) throws Exception {
-        savedBody=new CompoundTag();body(mc).saveAsPassenger(savedBody);savedPlayer=new CompoundTag();savedPlayer.put("Inventory",player(mc).getInventory().save(new ListTag()));
-        File folder=player(mc).serverLevel().getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();
+        savedBody=new CompoundTag();FixtureApi.saveEntity(body(mc),savedBody);savedPlayer=new CompoundTag();savedPlayer.put("Inventory",FixtureApi.saveInventory(player(mc)));
+        File folder=player(mc).level().getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();
         try(FileOutputStream out=new FileOutputStream(new File(folder,"issue5-corpse-expected.nbt"))){NbtIo.writeCompressed(savedBody,out);}
         try(FileOutputStream out=new FileOutputStream(new File(folder,"issue5-player-expected.nbt"))){NbtIo.writeCompressed(savedPlayer,out);}
         mc.getSingleplayerServer().getPlayerList().saveAll();mc.getSingleplayerServer().saveAllChunks(false,true,false);
     }
     private void verifyDisk(Minecraft mc) {
-        RuntimeChecks.awaitChunk(player(mc).serverLevel(),2,0);CompoundTag actual=new CompoundTag();body(mc).saveAsPassenger(actual);
+        RuntimeChecks.awaitChunk(player(mc).level(),2,0);CompoundTag actual=new CompoundTag();FixtureApi.saveEntity(body(mc),actual);
         for(String key:Arrays.asList("id","UUID","UUIDMost","UUIDLeast","Equipment","Aux","Name"))RuntimeChecks.require(Objects.equals(savedBody.get(key),actual.get(key)),"Disk corpse differs: "+key);
-        RuntimeChecks.require(savedPlayer.getList("Inventory",10).equals(player(mc).getInventory().save(new ListTag())),"Complete player inventory differs after disk reload");
+        RuntimeChecks.require(typedList(savedPlayer, "Inventory", 10).equals(FixtureApi.saveInventory(player(mc))),"Complete player inventory differs after disk reload");
     }
     private ServerPlayer player(Minecraft mc){return mc.getSingleplayerServer().getPlayerList().getPlayer(mc.player.getUUID());}
-    private EntityLootableBody body(Minecraft mc){return RuntimeChecks.find(player(mc).serverLevel(),secondId);}
+    private EntityLootableBody body(Minecraft mc){return RuntimeChecks.find(player(mc).level(),secondId);}
     private static void equal(ItemStack a,ItemStack b,String reason){RuntimeChecks.require(RuntimeChecks.sameStack(a == null ? ItemStack.EMPTY : a,b == null ? ItemStack.EMPTY : b),reason);}
-    private static boolean ready(Minecraft mc){return mc.level!=null && mc.player!=null && mc.getSingleplayerServer()!=null;}
+    private boolean ready(Minecraft mc) throws Exception {
+        if (mc.level == null || mc.player == null || mc.getSingleplayerServer() == null
+                || mc.screen instanceof net.minecraft.client.gui.screens.LevelLoadingScreen) {
+            nativeLoaded = null;
+            return false;
+        }
+        if (nativeLoaded == null) {
+            UUID id = mc.player.getUUID();
+            var server = mc.getSingleplayerServer();
+            nativeLoaded = server.submit(() -> {
+                ServerPlayer player = server.getPlayerList().getPlayer(id);
+                return player != null && player.connection.hasClientLoaded();
+            });
+            return false;
+        }
+        if (!nativeLoaded.isDone()) return false;
+        boolean loaded = nativeLoaded.get();
+        nativeLoaded = null;
+        return loaded;
+    }
     private static boolean gui(Minecraft mc){return mc.screen instanceof CorpseGUIContainer;}
     private boolean open(Minecraft mc,UUID id) throws Exception {
         // Sending an interaction does not mean the server has opened its GUI.
@@ -188,10 +220,11 @@ final class ReportedIssueClientChecks {
             // into range, then wait for normal tracking and interaction.
             schedule(mc,()->{
                 ServerPlayer p=player(mc);
-                EntityLootableBody corpse=RuntimeChecks.find(p.serverLevel(),id);
-                if(p.distanceToSqr(corpse)>9) {
-                    double x=corpse.getX(),z=corpse.getZ()-2;
-                    int y=net.minecraft.util.Mth.floor(corpse.getY());
+                BlockPos origin = id.equals(firstId) ? firstOrigin : secondOrigin;
+                RuntimeChecks.require(origin != null, "Missing observed corpse position");
+                if (p.distanceToSqr(origin.getX() + 0.5, origin.getY(), origin.getZ() + 0.5) > 9) {
+                    double x = origin.getX() + 0.5, z = origin.getZ() - 1.5;
+                    int y = origin.getY();
                     // A respawn can leave the viewer far from the original
                     // platform. Give this disposable fixture a stable place
                     // beside the actual corpse before sending normal clicks.
@@ -218,6 +251,6 @@ final class ReportedIssueClientChecks {
     private boolean done() throws Exception {if(!pending.isDone())return false;pending.get();return true;}
     private void next(int n){stage=n;frames=0;System.out.println("ISSUE5_CLIENT_STAGE "+n);}
     private void mark(String name) throws Exception {try(FileWriter out=new FileWriter(report,true)){out.write("PASS "+name+"\n");}System.out.println("ISSUE5_CLIENT_CHECK_PASS "+name);}
-    private static void shot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),message->System.out.println(message.getString()));}
+    private static void shot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));}
     private static void quit(Minecraft mc){mc.player.closeContainer();FixtureConnections.disconnect(mc);}
 }

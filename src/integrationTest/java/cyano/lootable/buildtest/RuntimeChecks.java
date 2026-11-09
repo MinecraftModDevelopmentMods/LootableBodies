@@ -1,4 +1,6 @@
 package cyano.lootable.buildtest;
+
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
@@ -29,7 +31,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraftforge.fml.common.*;
 import net.minecraftforge.event.server.ServerStartedEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.eventbus.api.listener.Priority;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.loading.FMLEnvironment;
+import net.minecraftforge.registries.RegisterEvent;
 
 /** Build-only verifier. Never included in the production source set or jars. */
 @Mod("lootablebodiesbuildtest")
@@ -41,34 +46,43 @@ public final class RuntimeChecks {
     private static boolean defaultsChecked;
     private static UUID pendingDeathId;
     private boolean rejectedFirstCorpseOpen;
-    public RuntimeChecks() {
+    public RuntimeChecks(FMLJavaModLoadingContext context) {
         MultiplayerChecks.registerChannel();
-        net.minecraftforge.eventbus.api.IEventBus bus=net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus();
+        var bus = context.getModBusGroup();
         NativePreflightChecks.install(bus);
-        bus.register(new TestRegistries());FixtureItems.register(bus);
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);
-        net.minecraftforge.fml.DistExecutor.runWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,()->()->{
-            new ClientChecks().register();new MultiplayerClientChecks().register();new VisibilityClientChecks().register();new RespawnPacketClientChecks().register();
-        });
-    }
-    @SubscribeEvent public void rejectFirstCorpseOpen(net.minecraftforge.event.entity.player.PlayerInteractEvent.EntityInteract event) {
-        if(Boolean.getBoolean("lootablebodies.rejectFirstCorpseOpen") && !rejectedFirstCorpseOpen
-                && !event.getLevel().isClientSide && event.getTarget() instanceof EntityLootableBody) {
-            rejectedFirstCorpseOpen=true;
-            event.setCanceled(true);
-            System.out.println("CORPSE_GUI_FIRST_INTERACTION_REJECTED_CONTROL");
+        var registries = new TestRegistries();
+        RegisterEvent.getBus(bus).addListener(registries::items);
+        RegisterEvent.getBus(bus).addListener(registries::potions);
+        FixtureItems.register(bus);
+        net.minecraftforge.event.entity.player.PlayerInteractEvent.EntityInteract.BUS.addListener(this::rejectFirstCorpseOpen);
+        net.minecraftforge.event.entity.EntityJoinLevelEvent.BUS.addListener(Priority.LOWEST,this::fixtureAdmission);
+        ServerStartedEvent.BUS.addListener(this::started);
+        if (FMLEnvironment.dist == net.minecraftforge.api.distmarker.Dist.CLIENT) {
+            new ClientChecks().register();
+            new MultiplayerClientChecks().register();
+            new VisibilityClientChecks().register();
+            new RespawnPacketClientChecks().register();
         }
     }
-    @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.LOWEST) public void fixtureAdmission(net.minecraftforge.event.entity.EntityJoinLevelEvent event) {
+    private boolean rejectFirstCorpseOpen(net.minecraftforge.event.entity.player.PlayerInteractEvent.EntityInteract event) {
+        if(Boolean.getBoolean("lootablebodies.rejectFirstCorpseOpen") && !rejectedFirstCorpseOpen
+                && !event.getLevel().isClientSide() && event.getTarget() instanceof EntityLootableBody) {
+            rejectedFirstCorpseOpen=true;
+            System.out.println("CORPSE_GUI_FIRST_INTERACTION_REJECTED_CONTROL");
+            return true;
+        }
+        return false;
+    }
+    private void fixtureAdmission(net.minecraftforge.event.entity.EntityJoinLevelEvent event) {
         NbtWorldChecks.verifyGraphicalAdmission(event.getEntity());
-        if(pendingDeathId!=null && event.getEntity() instanceof EntityLootableBody && !event.getLevel().isClientSide
+        if(pendingDeathId!=null && event.getEntity() instanceof EntityLootableBody && !event.getLevel().isClientSide()
                 && "BuildDeath".equals(((EntityLootableBody)event.getEntity()).getCustomNameTag()))event.getEntity().setUUID(pendingDeathId);
-        if(Boolean.getBoolean("lootablebodies.assertFixtureAdmission") && event.getEntity() instanceof EntityLootableBody && !event.getLevel().isClientSide && !event.getEntity().isAddedToWorld()) {
+        if(Boolean.getBoolean("lootablebodies.assertFixtureAdmission") && event.getEntity() instanceof EntityLootableBody && !event.getLevel().isClientSide() && !event.getEntity().isAddedToWorld()) {
             EntityLootableBody body=(EntityLootableBody)event.getEntity();
             require(event.getLevel().getChunkSource().hasChunk(net.minecraft.util.Mth.floor(body.getX())>>4,net.minecraft.util.Mth.floor(body.getZ())>>4),"Manual corpse fixture spawned before chunk admission: "+body.blockPosition()+" name="+body.getCustomNameTag());
         }
     }
-    @SubscribeEvent public void started(ServerStartedEvent event) {
+    private void started(ServerStartedEvent event) {
         if ((net.minecraftforge.fml.loading.FMLEnvironment.dist==net.minecraftforge.api.distmarker.Dist.CLIENT)) return;
         MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
         if(Boolean.getBoolean("lootablebodies.respawn")) {
@@ -96,9 +110,9 @@ public final class RuntimeChecks {
     public static void run(MinecraftServer server, String phase) throws Exception {
         ServerLevel world = server.getLevel(FixtureApi.dimensionKey(0));
         File folder = world.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();
-        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.13.121011"), "identity/version");
+        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.14.121111"), "identity/version");
         require(net.minecraftforge.fml.ModList.get().getModContainerById("lootablebodies").get().getModInfo().getVersion().toString().equals(phase.equals("seed") ? "2.4.0" : phase.equals("issues") ?
-                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.13.121011") : "2.4.13.121011"), "loaded release version");
+                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.14.121111") : "2.4.14.121111"), "loaded release version");
         if (!defaultsChecked) require(LootableBodies.addBonesToCorpse && LootableBodies.displayNameTag && !LootableBodies.hurtByEnvironment &&
                 !LootableBodies.hurtByAttacks && !LootableBodies.hurtByMisc && LootableBodies.corpseHP == 20 &&
                 LootableBodies.ticksPerItemDecay == 6000 && LootableBodies.corpseDecayTime == 72000 &&
@@ -240,15 +254,15 @@ public final class RuntimeChecks {
         return body;
     }
     static void verifyRoundTrip(ServerLevel world, EntityLootableBody body) {
-        CompoundTag before = new CompoundTag(); body.saveAsPassenger(before);
-        require(before.getString("id").equals("lootablebodies:corpse"), "persistent entity name: " + before.getString("id"));
+        CompoundTag before = new CompoundTag(); FixtureApi.saveEntity(body,before);
+        require(before.getStringOr("id", "").equals("lootablebodies:corpse"), "persistent entity name: " + before.getStringOr("id", ""));
         Entity copy = FixtureApi.loadEntity(before.copy(), world);
         require(copy instanceof EntityLootableBody, "NBT factory registration");
-        CompoundTag after = new CompoundTag(); copy.saveAsPassenger(after);
+        CompoundTag after = new CompoundTag(); FixtureApi.saveEntity(copy,after);
         compare(before,after);
         if (body.getUUID().equals(NEAR)) {
-            require(before.getList("Equipment",10).size()==48, "all indexed stacks");
-            require(before.getList("Aux",10).size()==2, "ordered overflow");
+            require(typedList(before, "Equipment", 10).size()==48, "all indexed stacks");
+            require(typedList(before, "Aux", 10).size()==2, "ordered overflow");
         }
     }
     static void death(MinecraftServer server, ServerLevel world, File folder) throws Exception {
@@ -257,9 +271,9 @@ public final class RuntimeChecks {
         player.connection = new net.minecraft.server.network.ServerGamePacketListenerImpl(server,
                 new net.minecraft.network.Connection(net.minecraft.network.protocol.PacketFlow.SERVERBOUND), player,net.minecraft.server.network.CommonListenerCookie.createInitial(player.getGameProfile(),false));
         player.setPos(32.5,80,0.5); awaitChunk(world,2,0); require(world.getChunkSource().hasChunk(2,0),"Death fixture must await native chunk admission before spawning its corpse");
-        world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);
-        player.getInventory().items.set(0,stack(4));
-        player.getInventory().items.set(9,stack(19));
+        world.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.KEEP_INVENTORY,false,null);
+        player.getInventory().getNonEquipmentItems().set(0,stack(4));
+        player.getInventory().getNonEquipmentItems().set(9,stack(19));
         player.setItemSlot(EquipmentSlot.HEAD,stack(0));
         player.setItemSlot(EquipmentSlot.OFFHAND,stack(5));
         // Assign the fixture ID before the native entity-section manager indexes
@@ -297,16 +311,16 @@ public final class RuntimeChecks {
         } catch (Exception error) { throw new AssertionError(error); }
     }
     static void saveExpected(File folder,String name,EntityLootableBody body) throws Exception {
-        CompoundTag data = new CompoundTag(); body.saveAsPassenger(data);
+        CompoundTag data = new CompoundTag(); FixtureApi.saveEntity(body,data);
         NbtIo.writeCompressed(data,new FileOutputStream(new File(folder,name+".nbt")));
     }
     static void verifyExpected(File folder,String name,EntityLootableBody body) throws Exception {
         CompoundTag expected = NbtIo.readCompressed(new File(folder,name+".nbt").toPath(),net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));
-        CompoundTag actual = new CompoundTag(); body.saveAsPassenger(actual); compare(expected,actual);
+        CompoundTag actual = new CompoundTag(); FixtureApi.saveEntity(body,actual); compare(expected,actual);
     }
     static void compare(CompoundTag expected,CompoundTag actual) {
         for(String key : Arrays.asList("id","UUID","UUIDMost","UUIDLeast","Pos","Rotation","CustomName","Equipment","Aux","DeathTime","DecayTime"))
             require(Objects.equals(expected.get(key),actual.get(key)),"Saved field differs " + key + ": " + expected.get(key) + " != " + actual.get(key));
-        if(expected.contains("Name")) require(expected.getString("Name").equals(actual.getString("Name")),"profile name");
+        if(expected.contains("Name")) require(expected.getStringOr("Name", "").equals(actual.getStringOr("Name", "")),"profile name");
     }
 }

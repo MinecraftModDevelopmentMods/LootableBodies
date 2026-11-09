@@ -11,14 +11,12 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.entity.HumanoidArm;
-import net.minecraft.world.level.Level;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.gamerules.GameRules;
+import net.minecraftforge.eventbus.api.listener.Priority;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
-import net.minecraftforge.event.entity.EntityEvent;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import cyano.lootable.ModLog;
-import net.minecraftforge.eventbus.api.Event;
-import net.minecraftforge.eventbus.api.EventPriority;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -33,14 +31,26 @@ public class PlayerDeathEventHandler {
 
 	private static final Map<Player,Map<ItemStack,EquipmentSlot>> equipmentCache = new WeakHashMap<>();
 
-	@SubscribeEvent(priority= EventPriority.LOW, receiveCanceled = true)
+    public Runnable register() {
+        var death = LivingDeathEvent.BUS.addListener(Priority.LOW, this::entityDeathEvent);
+        var drops = LivingDropsEvent.BUS.addListener(Priority.LOWEST, this::entityDropEvent);
+        var deathCleanup = LivingDeathEvent.BUS.addListener((event, cancelled) -> {
+            if (cancelled) equipmentCache.remove(event.getEntity());
+        });
+        var dropCleanup = LivingDropsEvent.BUS.addListener((event, cancelled) -> {
+            if (cancelled) equipmentCache.remove(event.getEntity());
+        });
+        return () -> {
+            LivingDeathEvent.BUS.removeListener(deathCleanup);
+            LivingDeathEvent.BUS.removeListener(death);
+            LivingDropsEvent.BUS.removeListener(drops);
+            LivingDropsEvent.BUS.removeListener(dropCleanup);
+        };
+    }
+
 	public void entityDeathEvent(LivingDeathEvent e){
-		if(e.getEntity() instanceof Player
-				&& !e.getEntity().getCommandSenderWorld().isClientSide) {
-			final Player player = (Player)e.getEntity();
-			equipmentCache.remove(player);
-			if(e.isCanceled() || e.getResult() == Event.Result.DENY || player.isSpectator()
-					|| player.getCommandSenderWorld().getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY)) return;
+		if (e.getEntity() instanceof Player player && player.level() instanceof ServerLevel world) {
+			if (player.isSpectator() || world.getGameRules().get(GameRules.KEEP_INVENTORY)) return;
 			Map<ItemStack,EquipmentSlot> cache = new IdentityHashMap<>();
 			for(EquipmentSlot slot : EntityLootableBody.EQUIPMENT_SLOTS){
 				ItemStack stack = player.getItemBySlot(slot);
@@ -56,19 +66,14 @@ public class PlayerDeathEventHandler {
 		}
 	}
 
-	@SubscribeEvent(priority= EventPriority.LOWEST, receiveCanceled = true)
 	public void entityDropEvent(LivingDropsEvent e){
-		if(e.getEntity() instanceof Player
-				&& !e.getEntity().getCommandSenderWorld().isClientSide) {
-			final Player player = (Player)e.getEntity();
+		if (e.getEntity() instanceof Player player && player.level() instanceof ServerLevel world) {
 			Map<ItemStack,EquipmentSlot> cache = equipmentCache.remove(player);
-			if(e.isCanceled() || e.getResult() == Event.Result.DENY || player.isSpectator()
-					|| player.getCommandSenderWorld().getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY)) return;
+			if (player.isSpectator() || world.getGameRules().get(GameRules.KEEP_INVENTORY)) return;
 			if(cache == null) cache = Collections.emptyMap();
-			final Level w = player.getCommandSenderWorld();
 
 			EntityLootableBody corpse = new EntityLootableBody(player);
-			corpse.setUserName(player.getGameProfile().getName());
+			corpse.setUserName(player.getGameProfile().name());
 			corpse.setRotation(player.getYRot());
 
 			List<ItemStack> items = new ArrayList<>();
@@ -87,11 +92,11 @@ public class PlayerDeathEventHandler {
 			corpse.initializeItems(items.toArray(new ItemStack[0]));
 
 			if(LootableBodies.addBonesToCorpse){
-				corpse.addItem(new ItemStack(Items.BONE,1+w.random.nextInt(3)));
-				corpse.addItem(new ItemStack(Items.ROTTEN_FLESH,1+w.random.nextInt(3)));
+				corpse.addItem(new ItemStack(Items.BONE,1+world.random.nextInt(3)));
+				corpse.addItem(new ItemStack(Items.ROTTEN_FLESH,1+world.random.nextInt(3)));
 			}
 
-			if(w.addFreshEntity(corpse)) {
+			if(world.addFreshEntity(corpse)) {
 				e.getDrops().clear();
 			} else {
 				ModLog.warning("%s: Corpse spawn rejected; original death drops retained", LootableBodies.MODID);

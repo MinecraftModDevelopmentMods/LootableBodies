@@ -18,6 +18,7 @@ import io.netty.buffer.Unpooled;
 import java.io.*;
 import java.util.*;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.Blocks;
@@ -39,7 +40,6 @@ import net.minecraft.world.level.GameType;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.item.ItemTossEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /** Server packet/transaction tests; packets are decoded from their actual wire layout. */
 final class ContainerInteractionChecks {
@@ -123,8 +123,8 @@ final class ContainerInteractionChecks {
     }
     private static void toolThrow(int rejection) throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();open(p,b);b.setItem(4,item(4,1));Map<String,Integer> before=total(b,p);
-        RejectedDrops reject=new RejectedDrops();reject.toss=rejection==1;reject.join=rejection==2;MinecraftForge.EVENT_BUS.register(reject);
-        try{packet(p,4,0,ClickType.THROW,null);}finally{MinecraftForge.EVENT_BUS.unregister(reject);}
+        RejectedDrops reject=new RejectedDrops();reject.toss=rejection==1;reject.join=rejection==2;reject.install();
+        try{packet(p,4,0,ClickType.THROW,null);}finally{reject.close();}
         conserved(before,b,p);equal(b.getItem(4),rejection==0?null:item(4,1),"Equipment throw changed damage/enchantment/custom data");
     }
     private static void interruptDrag(boolean outside) throws Exception {
@@ -137,13 +137,13 @@ final class ContainerInteractionChecks {
         EntityLootableBody b=body();ServerPlayer p=player();p.setGameMode(creative?GameType.CREATIVE:GameType.SURVIVAL);
         fill(b);fill(p);open(p,b);ItemStack original=item(120,17);
         if(source==0)b.setItem(6,original.copy());
-        else if(source==1)p.getInventory().items.set(9,original.copy());else p.containerMenu.setCarried(original.copy());
+        else if(source==1)p.getInventory().getNonEquipmentItems().set(9,original.copy());else p.containerMenu.setCarried(original.copy());
         if(capture){p.captureDrops(new java.util.ArrayList<>());p.captureDrops().add(new ItemEntity(world,96.5,80,96.5,item(121,11)));}
         Map<String,Integer> before=total(b,p);RejectedDrops reject=new RejectedDrops();reject.toss=rejection==1;reject.join=rejection==2;
         RecordingConnection connection=(RecordingConnection)p.connection;int initialSyncs=connection.resyncs;
-        MinecraftForge.EVENT_BUS.register(reject);
+        reject.install();
         try{packet(p,source==2?-999:source==0?6:48,button,source==2?ClickType.PICKUP:ClickType.THROW,null);}
-        finally{MinecraftForge.EVENT_BUS.unregister(reject);}
+        finally{reject.close();}
         conserved(before,b,p);RuntimeChecks.require((p.captureDrops()!=null)==capture,"Toss changed capture state");
         int amount=source==2?(button==0?17:1):(button==0?1:17);
         ItemStack remaining=rejection==0 && amount==17?null:item(120,rejection==0?17-amount:17);
@@ -157,32 +157,32 @@ final class ContainerInteractionChecks {
     }
     private static void creativeFallback(boolean toss,boolean swap) throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();fill(b);fill(p);p.setGameMode(GameType.CREATIVE);open(p,b);
-        if(swap){b.setItem(0,item(0,1));p.getInventory().items.set(0,pumpkins(64));}
+        if(swap){b.setItem(0,item(0,1));p.getInventory().getNonEquipmentItems().set(0,pumpkins(64));}
         else p.containerMenu.setCarried(item(120,17));
-        Map<String,Integer> before=total(b,p);RejectedDrops reject=new RejectedDrops();reject.toss=toss;reject.join=!toss;MinecraftForge.EVENT_BUS.register(reject);
-        try{if(swap)packet(p,0,0,ClickType.SWAP,null);else close(p);}finally{MinecraftForge.EVENT_BUS.unregister(reject);}
+        Map<String,Integer> before=total(b,p);RejectedDrops reject=new RejectedDrops();reject.toss=toss;reject.join=!toss;reject.install();
+        try{if(swap)packet(p,0,0,ClickType.SWAP,null);else close(p);}finally{reject.close();}
         conserved(before,b,p);RuntimeChecks.require(b.isAlive(),"Creative fallback owner no longer alive");
     }
     private static void collect(int mode) throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player(),q=player();open(p,b);open(q,b);
         b.setItem(6,item(120,20));b.setItem(7,item(120,30));b.setItem(8,item(121,14));
         ItemStack differentDamage=item(120,12);differentDamage.setDamageValue((differentDamage.getDamageValue()+1)%16);b.setItem(9,differentDamage);
-        p.getInventory().items.set(9,item(120,10));p.containerMenu.setCarried(mode==3?ItemStack.EMPTY:item(120,mode==2?64:5));
+        p.getInventory().getNonEquipmentItems().set(9,item(120,10));p.containerMenu.setCarried(mode==3?ItemStack.EMPTY:item(120,mode==2?64:5));
         if(mode==4)p.setGameMode(GameType.CREATIVE);
         if(mode==5){q.containerMenu.setCarried(item(120,4));packet(q,10,0,ClickType.PICKUP_ALL,null);}
         Map<String,Integer> before=total(b,p,q);int wanted=mode==3?0:mode==2?64:mode==5?15:64;
         packet(p,10,mode==1?1:0,ClickType.PICKUP_ALL,null);
         RuntimeChecks.require(((p.containerMenu.getCarried()).isEmpty()?0:p.containerMenu.getCarried().getCount())==wanted,"Double click count/capacity differs");
         equal(b.getItem(8),item(121,14),"Double click collected different custom NBT");equal(b.getItem(9),differentDamage,"Double click collected different damage");
-        if(mode==0)equal(p.getInventory().items.get(9),item(120,1),"Forward collection order differs");
+        if(mode==0)equal(p.getInventory().getNonEquipmentItems().get(9),item(120,1),"Forward collection order differs");
         if(mode==1)equal(b.getItem(6),item(120,1),"Reverse collection order differs");
         conserved(before,b,p,q);
     }
     private static void fallbackOrder(boolean offhand) throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();open(p,b);
-        if(offhand){fill(p);p.getInventory().offhand.set(0,item(120,60));}
-        p.containerMenu.setCarried(item(120,10));Map<String,Integer> before=total(b,p);RejectedDrops reject=new RejectedDrops();reject.toss=true;MinecraftForge.EVENT_BUS.register(reject);
-        try{close(p);}finally{MinecraftForge.EVENT_BUS.unregister(reject);}
+        if(offhand){fill(p);p.setItemSlot(EquipmentSlot.OFFHAND,item(120,60));}
+        p.containerMenu.setCarried(item(120,10));Map<String,Integer> before=total(b,p);RejectedDrops reject=new RejectedDrops();reject.toss=true;reject.install();
+        try{close(p);}finally{reject.close();}
         equal(p.getInventory().getItem(offhand?40:0),item(120,offhand?64:10),"Rejected-drop fallback changed vanilla player insertion priority");conserved(before,b,p);
     }
     private static void cloneStack(boolean creative,boolean occupied) throws Exception {
@@ -199,14 +199,14 @@ final class ContainerInteractionChecks {
     }
     private static void creativePacket(boolean creative,boolean cancelled) throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();p.setGameMode(creative?GameType.CREATIVE:GameType.SURVIVAL);open(p,b);b.setItem(6,item(120,17));CompoundTag unchanged=data(b);
-        RejectedDrops reject=new RejectedDrops();reject.toss=cancelled;MinecraftForge.EVENT_BUS.register(reject);var wire=new net.minecraft.network.RegistryFriendlyByteBuf(Unpooled.buffer(),p.registryAccess());
+        RejectedDrops reject=new RejectedDrops();reject.toss=cancelled;reject.install();var wire=new net.minecraft.network.RegistryFriendlyByteBuf(Unpooled.buffer(),p.registryAccess());
         try {
             ServerboundSetCreativeModeSlotPacket.STREAM_CODEC.encode(wire,new ServerboundSetCreativeModeSlotPacket(cancelled?-1:9,item(121,23)));
             p.connection.handleSetCreativeModeSlot(ServerboundSetCreativeModeSlotPacket.STREAM_CODEC.decode(wire));
             RuntimeChecks.require(!wire.isReadable(),"Native creative packet left undecoded fields");
         }
-        finally{wire.release();MinecraftForge.EVENT_BUS.unregister(reject);}
-        RuntimeChecks.require(unchanged.equals(data(b)),"Creative inventory packet changed corpse instead of player");equal(p.getInventory().items.get(9),creative&&!cancelled?item(121,23):null,"Creative player packet permission/target differs");
+        finally{wire.release();reject.close();}
+        RuntimeChecks.require(unchanged.equals(data(b)),"Creative inventory packet changed corpse instead of player");equal(p.getInventory().getNonEquipmentItems().get(9),creative&&!cancelled?item(121,23):null,"Creative player packet permission/target differs");
         if(cancelled)RuntimeChecks.require(FixtureApi.entities(world,6,6).stream().noneMatch(e->e instanceof ItemEntity && !e.isRemoved()),"Cancelled creative minted drop spawned anyway");
     }
 
@@ -231,18 +231,15 @@ final class ContainerInteractionChecks {
     }
     private static ItemStack item(int id,int count){ItemStack s=RuntimeChecks.stack(id);s.setCount(count);return s;}
     private static ItemStack pumpkins(int count){ItemStack s=new ItemStack(Blocks.CARVED_PUMPKIN,count);FixtureStackData.setCustom(s,FixtureStackData.custom(item(120,1)));return s;}
-    private static void fill(ServerPlayer p){for(int i=0;i<36;i++)p.getInventory().items.set(i,item(100+i,64));}
+    private static void fill(ServerPlayer p){for(int i=0;i<36;i++)p.getInventory().getNonEquipmentItems().set(i,item(100+i,64));}
     private static void fill(EntityLootableBody b){for(int i=0;i<48;i++)b.setItem(i,item(i,i<6?1:64));b.addItem(item(70,31));}
     private static void packet(ServerPlayer p,int slot,int button,ClickType type,ItemStack predicted) throws Exception {
         packetWithState(p,slot,button,type,predicted,p.containerMenu.getStateId());
     }
     private static void packetWithState(ServerPlayer p,int slot,int button,ClickType type,ItemStack predicted,int stateId) throws Exception {
-        it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<ItemStack> changed=new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>();
-        if(predicted!=null && slot>=0)changed.put(slot,predicted.copy());
         // These server-side fixtures deliberately report pre-action predictions;
         // native broadcasts must repair them. Real clients cover normal prediction.
-        ServerboundContainerClickPacket outgoing=new ServerboundContainerClickPacket(
-                p.containerMenu.containerId,stateId,slot,button,type,p.containerMenu.getCarried().copy(),changed);
+        ServerboundContainerClickPacket outgoing=FixtureApi.clickPacket(p,stateId,slot,button,type,predicted);
         var wire=new net.minecraft.network.RegistryFriendlyByteBuf(Unpooled.buffer(),p.registryAccess());
         try {
             ServerboundContainerClickPacket.STREAM_CODEC.encode(wire,outgoing);ServerboundContainerClickPacket decoded=ServerboundContainerClickPacket.STREAM_CODEC.decode(wire);
@@ -271,15 +268,15 @@ final class ContainerInteractionChecks {
         packet(p,-999,2|(mode<<2),ClickType.QUICK_CRAFT,null);
     }
     private static void equal(ItemStack actual,ItemStack expected,String reason){RuntimeChecks.require(RuntimeChecks.sameStack(actual == null ? ItemStack.EMPTY : actual,expected == null ? ItemStack.EMPTY : expected),reason);}
-    private static CompoundTag data(EntityLootableBody b){CompoundTag n=new CompoundTag();b.addAdditionalSaveData(n);return n;}
+    private static CompoundTag data(EntityLootableBody b){CompoundTag n=new CompoundTag();FixtureApi.writeAdditional(b,n);return n;}
     private static void add(Map<String,Integer> all,ItemStack s){
         if((s == null || s.isEmpty()) || s.getCount()<=0)return;CompoundTag n=FixtureStackData.save(s);n.remove("count");
         String key=n.toString();all.put(key,all.getOrDefault(key,0)+s.getCount());
     }
     private static Map<String,Integer> total(EntityLootableBody b,ServerPlayer... players){
         Map<String,Integer> all=new TreeMap<>();
-        for(int i=0;i<48;i++)add(all,b.getItem(i));ListTag aux=data(b).getList("Aux",10);
-        for(int i=0;i<aux.size();i++)add(all,FixtureStackData.load(aux.getCompound(i)));
+        for(int i=0;i<48;i++)add(all,b.getItem(i));ListTag aux=data(b).getListOrEmpty("Aux");
+        for(int i=0;i<aux.size();i++)add(all,FixtureStackData.load(aux.getCompoundOrEmpty(i)));
         for(ServerPlayer p:players){for(int i=0;i<p.getInventory().getContainerSize();i++)add(all,p.getInventory().getItem(i));add(all,p.containerMenu.getCarried());for(ItemEntity e:p.captureDrops()==null?java.util.Collections.<ItemEntity>emptyList():p.captureDrops())add(all,e.getItem());}
         for(Entity e:FixtureApi.entities(world,6,6))if(e instanceof ItemEntity && !e.isRemoved())add(all,((ItemEntity)e).getItem());
         return all;
@@ -292,29 +289,29 @@ final class ContainerInteractionChecks {
             delta.values().removeIf(count->count==0);
             throw new AssertionError("Item count/type/damage/custom NBT lost or duplicated: "+delta);
         }
-        CompoundTag before=data(b),immutable=before.copy();EntityLootableBody copy=new EntityLootableBody(world);copy.readAdditionalSaveData(before);
+        CompoundTag before=data(b),immutable=before.copy();EntityLootableBody copy=new EntityLootableBody(world);FixtureApi.readAdditional(copy,before);
         RuntimeChecks.require(Objects.equals(before.get("Equipment"),data(copy).get("Equipment")) && Objects.equals(before.get("Aux"),data(copy).get("Aux")),"Post-interaction NBT round trip changed inventory");
         RuntimeChecks.require(before.equals(immutable),"Post-interaction reader mutated saved input");
     }
     private static void hotbar() throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();open(p,b);
         for(int key=0;key<9;key++){
-            p.getInventory().items.set(key,item(30+key,13));Map<String,Integer> before=total(b,p);
-            click(p,6,key,ClickType.SWAP);equal(b.getItem(6),item(30+key,13),"Empty hotbar swap failed");equal(p.getInventory().items.get(key),null,"Hotbar source remained");
+            p.getInventory().getNonEquipmentItems().set(key,item(30+key,13));Map<String,Integer> before=total(b,p);
+            click(p,6,key,ClickType.SWAP);equal(b.getItem(6),item(30+key,13),"Empty hotbar swap failed");equal(p.getInventory().getNonEquipmentItems().get(key),null,"Hotbar source remained");
             click(p,6,key,ClickType.SWAP);equal(b.getItem(6),null,"Hotbar return left source");
             b.setItem(6,item(19,23));before=total(b,p);
-            click(p,6,key,ClickType.SWAP);equal(b.getItem(6),item(30+key,13),"Occupied hotbar incoming differs");equal(p.getInventory().items.get(key),item(19,23),"Occupied hotbar outgoing differs");
-            click(p,6,key,ClickType.SWAP);conserved(before,b,p);b.setItem(6,null);p.getInventory().items.set(key,ItemStack.EMPTY);
+            click(p,6,key,ClickType.SWAP);equal(b.getItem(6),item(30+key,13),"Occupied hotbar incoming differs");equal(p.getInventory().getNonEquipmentItems().get(key),item(19,23),"Occupied hotbar outgoing differs");
+            click(p,6,key,ClickType.SWAP);conserved(before,b,p);b.setItem(6,null);p.getInventory().getNonEquipmentItems().set(key,ItemStack.EMPTY);
         }
     }
     private static void armorSwap() throws Exception {
-        EntityLootableBody b=body();ServerPlayer p=player();open(p,b);p.getInventory().items.set(0,item(4,1));
+        EntityLootableBody b=body();ServerPlayer p=player();open(p,b);p.getInventory().getNonEquipmentItems().set(0,item(4,1));
         click(p,0,0,ClickType.SWAP);equal(b.getItem(0),null,"Sword inserted into armor slot");
-        p.getInventory().items.set(0,pumpkins(64));Map<String,Integer> before=total(b,p);click(p,0,0,ClickType.SWAP);
-        equal(b.getItem(0),pumpkins(1),"Hotbar armor limit ignored");equal(p.getInventory().items.get(0),pumpkins(63),"Hotbar armor remainder lost");conserved(before,b,p);
+        p.getInventory().getNonEquipmentItems().set(0,pumpkins(64));Map<String,Integer> before=total(b,p);click(p,0,0,ClickType.SWAP);
+        equal(b.getItem(0),pumpkins(1),"Hotbar armor limit ignored");equal(p.getInventory().getNonEquipmentItems().get(0),pumpkins(63),"Hotbar armor remainder lost");conserved(before,b,p);
     }
     private static void wearableShift() throws Exception {
-        EntityLootableBody b=body();ServerPlayer p=player();p.getInventory().items.set(9,pumpkins(64));open(p,b);
+        EntityLootableBody b=body();ServerPlayer p=player();p.getInventory().getNonEquipmentItems().set(9,pumpkins(64));open(p,b);
         Map<String,Integer> before=total(b,p);click(p,48,0,ClickType.QUICK_MOVE);
         RuntimeChecks.require(!(b.getItem(0)).isEmpty() && b.getItem(0).getCount()==1,"Shift-click put a stack into the one-item head slot");
         conserved(before,b,p);
@@ -346,30 +343,39 @@ final class ContainerInteractionChecks {
         Map<String,Integer> before=total(b,p);packet(p,6,0,ClickType.QUICK_MOVE,null);equal(b.getItem(6),item(19,23),"Full player inventory consumed corpse stack");conserved(before,b,p);
     }
     private static void partialPlayer() throws Exception {
-        EntityLootableBody b=body();b.setItem(6,item(19,23));ServerPlayer p=player();fill(p);p.getInventory().items.set(35,item(19,63));open(p,b);
-        Map<String,Integer> before=total(b,p);click(p,6,0,ClickType.QUICK_MOVE);equal(p.getInventory().items.get(35),item(19,64),"Partial merge did not fill one space");equal(b.getItem(6),item(19,22),"Partial merge discarded remainder");conserved(before,b,p);
+        EntityLootableBody b=body();b.setItem(6,item(19,23));ServerPlayer p=player();fill(p);p.getInventory().getNonEquipmentItems().set(35,item(19,63));open(p,b);
+        Map<String,Integer> before=total(b,p);click(p,6,0,ClickType.QUICK_MOVE);equal(p.getInventory().getNonEquipmentItems().get(35),item(19,64),"Partial merge did not fill one space");equal(b.getItem(6),item(19,22),"Partial merge discarded remainder");conserved(before,b,p);
     }
     private static void fullCorpse() throws Exception {
-        EntityLootableBody b=body();fill(b);ServerPlayer p=player();p.getInventory().items.set(9,item(110,23));open(p,b);
+        EntityLootableBody b=body();fill(b);ServerPlayer p=player();p.getInventory().getNonEquipmentItems().set(9,item(110,23));open(p,b);
         CompoundTag unchanged=data(b);Map<String,Integer> before=total(b,p);packet(p,48,0,ClickType.QUICK_MOVE,null);b.baseTick();
         RuntimeChecks.require(unchanged.get("Equipment").equals(data(b).get("Equipment")) && unchanged.get("Aux").equals(data(b).get("Aux")),"Full corpse overwrote indexed/Aux contents");conserved(before,b,p);
     }
     public static final class RejectedDrops {
         boolean join,toss;
-        @SubscribeEvent public void join(EntityJoinLevelEvent e){if(join && e.getEntity() instanceof ItemEntity)e.setCanceled(true);}
-        @SubscribeEvent public void toss(ItemTossEvent e){if(toss)e.setCanceled(true);}
+        private net.minecraftforge.eventbus.api.listener.EventListener joinListener, tossListener;
+
+        void install() {
+            joinListener = EntityJoinLevelEvent.BUS.addListener(event -> join && event.getEntity() instanceof ItemEntity);
+            tossListener = ItemTossEvent.BUS.addListener(event -> toss);
+        }
+
+        void close() {
+            EntityJoinLevelEvent.BUS.removeListener(joinListener);
+            ItemTossEvent.BUS.removeListener(tossListener);
+        }
     }
     private static void displacement(boolean rejectJoin,boolean rejectToss) throws Exception {
-        EntityLootableBody b=body();b.setItem(0,item(0,1));ServerPlayer p=player();fill(p);p.getInventory().items.set(0,pumpkins(64));open(p,b);Map<String,Integer> before=total(b,p);
-        RejectedDrops reject=new RejectedDrops();reject.join=rejectJoin;reject.toss=rejectToss;MinecraftForge.EVENT_BUS.register(reject);
-        try{click(p,0,0,ClickType.SWAP);}finally{MinecraftForge.EVENT_BUS.unregister(reject);}
-        equal(b.getItem(0),pumpkins(1),"Displacement changed normal incoming swap");equal(p.getInventory().items.get(0),pumpkins(63),"Displacement changed hotbar remainder");conserved(before,b,p);
+        EntityLootableBody b=body();b.setItem(0,item(0,1));ServerPlayer p=player();fill(p);p.getInventory().getNonEquipmentItems().set(0,pumpkins(64));open(p,b);Map<String,Integer> before=total(b,p);
+        RejectedDrops reject=new RejectedDrops();reject.join=rejectJoin;reject.toss=rejectToss;reject.install();
+        try{click(p,0,0,ClickType.SWAP);}finally{reject.close();}
+        equal(b.getItem(0),pumpkins(1),"Displacement changed normal incoming swap");equal(p.getInventory().getNonEquipmentItems().get(0),pumpkins(63),"Displacement changed hotbar remainder");conserved(before,b,p);
         if(!rejectJoin && !rejectToss)RuntimeChecks.require(FixtureApi.entities(world,6,6).stream().anyMatch(e->e instanceof ItemEntity && !e.isRemoved()),"Successful displacement no longer drops normally");
     }
     private static void closeCursor(boolean rejected,boolean full) throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();if(full){fill(b);fill(p);}open(p,b);p.containerMenu.setCarried(item(120,17));Map<String,Integer> before=total(b,p);
-        RejectedDrops reject=new RejectedDrops();reject.join=rejected;MinecraftForge.EVENT_BUS.register(reject);
-        try{close(p);}finally{MinecraftForge.EVENT_BUS.unregister(reject);}
+        RejectedDrops reject=new RejectedDrops();reject.join=rejected;reject.install();
+        try{close(p);}finally{reject.close();}
         equal(p.containerMenu.getCarried(),null,"Closing left a nonsaved cursor stack");conserved(before,b,p);
         if(!rejected)RuntimeChecks.require(FixtureApi.entities(world,6,6).stream().anyMatch(e->e instanceof ItemEntity && !e.isRemoved()),"Cursor close no longer performs normal accepted drop");
     }
@@ -380,9 +386,9 @@ final class ContainerInteractionChecks {
     }
     private static void dyingCursor() throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();fill(p);open(p,b);p.containerMenu.setCarried(item(120,17));
-        b.kill();b.baseTick();Map<String,Integer> before=total(b,p);
-        RejectedDrops reject=new RejectedDrops();reject.join=true;MinecraftForge.EVENT_BUS.register(reject);
-        try{close(p);}finally{MinecraftForge.EVENT_BUS.unregister(reject);}
+        b.kill(world);b.baseTick();Map<String,Integer> before=total(b,p);
+        RejectedDrops reject=new RejectedDrops();reject.join=true;reject.install();
+        try{close(p);}finally{reject.close();}
         for(int i=0;i<15;i++)b.baseTick();
         RuntimeChecks.require(b.isAlive() || b.isEmpty(),"Cursor fallback was put into an owner still scheduled for removal");
         conserved(before,b,p);
@@ -406,15 +412,15 @@ final class ContainerInteractionChecks {
     }
     private static void interleavedDrag(boolean swap) throws Exception {
         EntityLootableBody b=body();ServerPlayer a=player(),c=player();open(a,b);open(c,b);a.containerMenu.setCarried(item(19,10));
-        if(swap)c.getInventory().items.set(0,item(20,7));else c.containerMenu.setCarried(item(20,7));Map<String,Integer> before=total(b,a,c);
+        if(swap)c.getInventory().getNonEquipmentItems().set(0,item(20,7));else c.containerMenu.setCarried(item(20,7));Map<String,Integer> before=total(b,a,c);
         packet(a,-999,0,ClickType.QUICK_CRAFT,null);packet(a,6,1,ClickType.QUICK_CRAFT,null);packet(a,7,1,ClickType.QUICK_CRAFT,null);
         click(c,6,0,swap?ClickType.SWAP:ClickType.PICKUP);packet(a,-999,2,ClickType.QUICK_CRAFT,null);
         equal(b.getItem(6),item(20,7),"Other player's stack was overwritten by drag");equal(b.getItem(7),item(19,5),"Surviving drag slot differs");equal(a.containerMenu.getCarried(),item(19,5),"Interrupted drag lost remainder");conserved(before,b,a,c);
     }
     private static void twoPlayerClose() throws Exception {
         EntityLootableBody b=body();b.setItem(6,item(19,23));ServerPlayer a=player(),c=player();fill(a);open(a,b);open(c,b);Map<String,Integer> before=total(b,a,c);
-        click(a,6,0,ClickType.PICKUP);packet(c,6,0,ClickType.QUICK_MOVE,item(19,23));RejectedDrops reject=new RejectedDrops();reject.join=true;MinecraftForge.EVENT_BUS.register(reject);
-        try{close(a);}finally{MinecraftForge.EVENT_BUS.unregister(reject);}
+        click(a,6,0,ClickType.PICKUP);packet(c,6,0,ClickType.QUICK_MOVE,item(19,23));RejectedDrops reject=new RejectedDrops();reject.join=true;reject.install();
+        try{close(a);}finally{reject.close();}
         c.containerMenu.broadcastChanges();conserved(before,b,a,c);
     }
     private static void stale(boolean removed) throws Exception {

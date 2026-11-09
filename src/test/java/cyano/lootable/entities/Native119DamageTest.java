@@ -11,7 +11,7 @@ import net.minecraft.data.worldgen.BootstrapContext;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.damagesource.*;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -37,7 +37,7 @@ class Native119DamageTest {
             }
         });
         // Deliberately shares the vanilla anvil message, but has its own mod identity.
-        custom=registry.register(ResourceKey.create(Registries.DAMAGE_TYPE,ResourceLocation.parse("example:custom")),
+        custom=registry.register(ResourceKey.create(Registries.DAMAGE_TYPE,Identifier.parse("example:custom")),
                 new DamageType("anvil",0),net.minecraft.core.RegistrationInfo.BUILT_IN);
         registry.freeze();
         sources=new DamageSources(new RegistryAccess.ImmutableRegistryAccess(java.util.List.of(registry)));
@@ -111,8 +111,9 @@ class Native119DamageTest {
     private static final class SourceEntity extends Entity {
         SourceEntity(){super(EntityType.FALLING_BLOCK,null);}
         protected void defineSynchedData(net.minecraft.network.syncher.SynchedEntityData.Builder builder){ }
-        protected void readAdditionalSaveData(CompoundTag tag){ }
-        protected void addAdditionalSaveData(CompoundTag tag){ }
+        protected void readAdditionalSaveData(net.minecraft.world.level.storage.ValueInput tag){ }
+        protected void addAdditionalSaveData(net.minecraft.world.level.storage.ValueOutput tag){ }
+        public boolean hurtServer(net.minecraft.server.level.ServerLevel level, DamageSource damage, float amount) { throw new UnsupportedOperationException("Damage source only"); }
         public Packet<net.minecraft.network.protocol.game.ClientGamePacketListener> getAddEntityPacket(){throw new UnsupportedOperationException("No network in this unit fixture");}
     }
 }

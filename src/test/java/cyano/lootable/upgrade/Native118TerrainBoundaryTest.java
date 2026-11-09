@@ -1,5 +1,9 @@
 package cyano.lootable.upgrade;
 
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
+import static cyano.lootable.buildtest.TestNativeNbt.readUuid;
+import static cyano.lootable.buildtest.TestNativeNbt.writeUuid;
+
 import cyano.lootable.buildtest.NativeVanillaDataFixer;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -10,7 +14,7 @@ import net.minecraft.nbt.*;
 import net.minecraft.util.datafix.fixes.References;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.chunk.storage.ChunkStorage;
+import net.minecraft.world.level.chunk.storage.SimpleRegionStorage;
 import net.minecraft.world.level.chunk.storage.RegionFile;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.*;
@@ -18,6 +22,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Synthetic native-codec cases, distinct from genuine historical writer worlds. */
 class Native118TerrainBoundaryTest {
+    private static CompoundTag overworldContext() {
+        CompoundTag context = new CompoundTag();
+        context.putString("dimension", Level.OVERWORLD.identifier().toString());
+        return context;
+    }
     @TempDir(cleanup=CleanupMode.ON_SUCCESS) Path world;
     @AfterEach void close(){UpgradePreservation.close();System.out.println("NATIVE118_TERRAIN_FIXTURE="+world);}
     private CompoundTag root(CompoundTag... bodies) {
@@ -46,7 +55,7 @@ class Native118TerrainBoundaryTest {
     }
     @Test void missingStampOnModernThreeDimensionalBiomesStillRunsNativeHeightFix()throws Exception {
         CompoundTag old=legacy();int[] biomes=new int[1024];for(int i=0;i<biomes.length;i++)biomes[i]=1+i%2;
-        old.getCompound("Level").putIntArray("Biomes",biomes);ChunkStorage.injectDatafixingContext(old,Level.OVERWORLD,Optional.empty());
+        old.getCompoundOrEmpty("Level").putIntArray("Biomes",biomes);SimpleRegionStorage.injectDatafixingContext(old, overworldContext());
         CompoundTag expected=NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,old.copy(),2730,3955);
         CompoundTag damaged=old.copy();damaged.remove("DataVersion");CompoundTag before=damaged.copy();
         CompoundTag result=NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.CHUNK,damaged,512,3955);
@@ -59,8 +68,8 @@ class Native118TerrainBoundaryTest {
     @Test void flattenedTerrainRetainsAllOriginalOwnedPayloadAndSource()throws Exception {
         UUID id=UUID.randomUUID();CompoundTag body=Native117RegionFixtures.body(id,7),input=root(body);
         Path file=write(input);byte[] original=Files.readAllBytes(file);UpgradeJournal journal=UpgradeJournal.scan(world);
-        assertEquals(1,journal.size());assertEquals(body,journal.originalFor(id,0,0).getCompound("Entity"));
-        assertEquals(2730,journal.originalFor(id,0,0).getCompound("SourceVersions").getInt("CorpseWriterDataVersion"));
+        assertEquals(1,journal.size());assertEquals(body,journal.originalFor(id,0,0).getCompoundOrEmpty("Entity"));
+        assertEquals(2730,journal.originalFor(id,0,0).getCompoundOrEmpty("SourceVersions").getIntOr("CorpseWriterDataVersion", 0));
         assertArrayEquals(original,Files.readAllBytes(file));
     }
     @Test void original1122HeaderCorroboratesTheWriterWhenBothDataStampsAreDamaged() throws Exception {
@@ -86,7 +95,7 @@ class Native118TerrainBoundaryTest {
         UUID id=UUID.fromString("00000000-0000-4000-8000-000000000112");
         CompoundTag body=new CompoundTag(),chunk=new CompoundTag(),level=new CompoundTag();
         body.putString("id","lootablebodies:corpse");
-        body.putUUID("UUID",id);
+        writeUuid(body, "UUID", id);
         ListTag entities=new ListTag();
         entities.add(body);
         level.putInt("xPos",0);
@@ -96,8 +105,8 @@ class Native118TerrainBoundaryTest {
         Path file=write(chunk);
         byte[] originalRegion=Files.readAllBytes(file),originalHeader=Files.readAllBytes(headerFile);
         CompoundTag snapshot=UpgradeJournal.scan(world).originalFor(id,0,0);
-        assertEquals(1343,snapshot.getCompound("SourceVersions").getInt("DataVersion"));
-        assertEquals(body,snapshot.getCompound("Entity"));
+        assertEquals(1343,snapshot.getCompoundOrEmpty("SourceVersions").getIntOr("DataVersion", 0));
+        assertEquals(body,snapshot.getCompoundOrEmpty("Entity"));
         assertArrayEquals(originalRegion,Files.readAllBytes(file));
         assertArrayEquals(originalHeader,Files.readAllBytes(headerFile));
     }
@@ -107,41 +116,41 @@ class Native118TerrainBoundaryTest {
         assertThrows(IOException.class,()->UpgradeJournal.scan(world));assertArrayEquals(original,Files.readAllBytes(file));
     }
     @Test void actualNativeHeightAndRootConversionRetainsTheProtectedCorpse()throws Exception {
-        CompoundTag old=legacy(),level=old.getCompound("Level");
+        CompoundTag old=legacy(),level=old.getCompoundOrEmpty("Level");
         CompoundTag corpse=Native117RegionFixtures.body(UUID.randomUUID(),7);ListTag bodies=new ListTag();bodies.add(corpse);level.put("Entities",bodies);
         CompoundTag before=old.copy();Path file=write(old);byte[] original=Files.readAllBytes(file);UpgradePreservation.prepare(world);
-        ChunkStorage.injectDatafixingContext(old,Level.OVERWORLD,Optional.empty());
-        CompoundTag vanilla=old.copy();vanilla.getCompound("Level").put("Entities",new ListTag());
+        SimpleRegionStorage.injectDatafixingContext(old, overworldContext());
+        CompoundTag vanilla=old.copy();vanilla.getCompoundOrEmpty("Level").put("Entities",new ListTag());
         CompoundTag expected=NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,vanilla,2730,3955);
         NbtIo.writeCompressed(expected,world.resolve("native-reference.nbt"));
         CompoundTag fixed=NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.CHUNK,old,2730,3955);
-        assertFalse(fixed.contains("Level"));assertEquals(expected.get("sections"),fixed.get("sections"));assertTrue(fixed.getList("sections",10).size()>=16);
-        CompoundTag staged=fixed.getList("entities",10).getCompound(0);assertEquals(12,staged.getInt(UpgradePreservation.VERSION));
-        assertEquals(50,staged.getList("LootableBodiesUnresolved",10).size());assertEquals(2730,staged.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
+        assertFalse(fixed.contains("Level"));assertEquals(expected.get("sections"),fixed.get("sections"));assertTrue(typedList(fixed, "sections", 10).size()>=16);
+        CompoundTag staged=typedList(fixed, "entities", 10).getCompoundOrEmpty(0);assertEquals(13,staged.getIntOr(UpgradePreservation.VERSION, 0));
+        assertEquals(50,typedList(staged, "LootableBodiesUnresolved", 10).size());assertEquals(2730,staged.getCompoundOrEmpty(UpgradePreservation.SOURCES).getIntOr("DataVersion", 0));
         old.remove("__context");assertEquals(before,old);assertArrayEquals(original,Files.readAllBytes(file));
     }
     @Test void nativeHeightConversionNormalizesARecoveredLegacyStampBeforeValidatingTheFlattenedResult()throws Exception {
         CompoundTag old=legacy(),body=Native117RegionFixtures.body(UUID.randomUUID(),7);
-        ListTag bodies=new ListTag();bodies.add(body);old.getCompound("Level").put("Entities",bodies);
+        ListTag bodies=new ListTag();bodies.add(body);old.getCompoundOrEmpty("Level").put("Entities",bodies);
         old.putInt("DataVersion",Integer.MAX_VALUE);
         Path file=write(old);byte[] original=Files.readAllBytes(file);UpgradePreservation.prepare(world);
-        ChunkStorage.injectDatafixingContext(old,Level.OVERWORLD,Optional.empty());CompoundTag before=old.copy();
+        SimpleRegionStorage.injectDatafixingContext(old, overworldContext());CompoundTag before=old.copy();
         // The native schema conversion leaves DataVersion to ChunkStorage's
         // caller. This stale stamp does not describe the newly converted root.
-        CompoundTag nativeCopy=old.copy();nativeCopy.getCompound("Level").put("Entities",new ListTag());
+        CompoundTag nativeCopy=old.copy();nativeCopy.getCompoundOrEmpty("Level").put("Entities",new ListTag());
         CompoundTag nativeResult=NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,nativeCopy,2730,3955);
-        assertFalse(nativeResult.contains("Level"));assertEquals(Integer.MAX_VALUE,nativeResult.getInt("DataVersion"));
+        assertFalse(nativeResult.contains("Level"));assertEquals(Integer.MAX_VALUE,nativeResult.getIntOr("DataVersion", 0));
         CompoundTag fixed=NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.CHUNK,old,2730,3955);
-        assertFalse(fixed.contains("Level"));assertEquals(3955,fixed.getInt("DataVersion"));
+        assertFalse(fixed.contains("Level"));assertEquals(3955,fixed.getIntOr("DataVersion", 0));
         assertEquals(nativeResult.get("sections"),fixed.get("sections"));
-        assertEquals(body.getUUID("UUID"),fixed.getList("entities",10).getCompound(0).getUUID("UUID"));
+        assertEquals(readUuid(body, "UUID"),readUuid(fixed.getListOrEmpty("entities").getCompoundOrEmpty(0), "UUID"));
         assertEquals(before,old);assertArrayEquals(original,Files.readAllBytes(file));
     }
     @Test void genuinelyFutureFlattenedTerrainStillRefusesBeforeConversion()throws Exception {
-        CompoundTag future=root();future.putInt("DataVersion",3956);CompoundTag before=future.copy();
+        CompoundTag future=root();future.putInt("DataVersion",4672);CompoundTag before=future.copy();
         Path file=write(future);byte[] original=Files.readAllBytes(file);
         assertThrows(IOException.class,()->UpgradeJournal.scan(world));
-        assertThrows(Error.class,()->NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.CHUNK,future,3956,3955));
+        assertThrows(Error.class,()->NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.CHUNK,future,4672,4671));
         assertEquals(before,future);assertArrayEquals(original,Files.readAllBytes(file));
     }
 }

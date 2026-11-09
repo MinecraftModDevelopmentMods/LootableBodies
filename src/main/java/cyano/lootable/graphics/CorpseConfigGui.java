@@ -27,7 +27,7 @@ public final class CorpseConfigGui extends Screen {
     private static List<String> keys(){List<String> result=new ArrayList<>(Arrays.asList(APPEARANCE));result.addAll(Arrays.asList(RULES));return result;}
     private static Property property(String key){for(String category:new String[]{"options","corpse damage","corpse decay","corpse recovery"}){Property value=LootableBodies.getConfiguration().getCategory(category).get(key);if(value!=null)return value;}throw new IllegalArgumentException(key);}
     private Button button(int id,int x,int y,int width,String label,Runnable click){return addRenderableWidget(new SettingButton(id,x,y,width,label,click));}
-    public static final class SettingButton extends Button {
+    public static final class SettingButton extends Button.Plain {
         public final int id;
         SettingButton(int id,int x,int y,int width,String label,Runnable action){super(x,y,width,20,net.minecraft.network.chat.Component.literal(label),button->action.run(),DEFAULT_NARRATION);this.id=id;}
     }
@@ -41,12 +41,12 @@ public final class CorpseConfigGui extends Screen {
             int start=page*perPage,end=Math.min(keys.length,start+perPage);
             for(int i=start;i<end;i++){
                 String key=keys[i];Property value=property(key);int y=48+(i-start)*26;rows.put(key,y);
-                if(value.getType()=='B')button(20+i,width/2+70,y,85,booleanLabel(key),()->{capture();pending.put(key,Boolean.toString(!Boolean.parseBoolean(pending.get(key))));init(minecraft,width,height);});
+                if(value.getType()=='B')button(20+i,width/2+70,y,85,booleanLabel(key),()->{capture();pending.put(key,Boolean.toString(!Boolean.parseBoolean(pending.get(key))));rebuildWidgets();});
                 else {EditBox field=new EditBox(font,width/2+60,y+1,95,18,net.minecraft.network.chat.Component.translatable(property(key).getLanguageKey()));field.setMaxLength(64);field.setValue(pending.get(key));fields.put(key,field);addWidget(field);}
             }
             if(page>0)button(3,left,height-56,80,"<",()->changePage(-1));
             if(end<keys.length)button(4,width/2+75,height-56,80,">",()->changePage(1));
-            button(5,width/2-65,height-56,130,I18n.get("controls.reset"),()->{for(String key:keys)pending.put(key,property(key).getDefault());init(minecraft,width,height);});
+            button(5,width/2-65,height-56,130,I18n.get("controls.reset"),()->{for(String key:keys)pending.put(key,property(key).getDefault());rebuildWidgets();});
         }
         button(200,width/2-155,height-28,150,I18n.get("gui.done"),()->{
             capture();if(!validPending()){invalid=true;return;}
@@ -55,7 +55,7 @@ public final class CorpseConfigGui extends Screen {
         button(201,width/2+5,height-28,150,I18n.get("gui.cancel"),()->minecraft.setScreen(parent));
     }
     private void capture(){for(Map.Entry<String,EditBox> entry:fields.entrySet())pending.put(entry.getKey(),entry.getValue().getValue());}
-    private void changePage(int change){capture();page+=change;init(minecraft,width,height);}
+    private void changePage(int change){capture();page+=change;rebuildWidgets();}
     private String booleanLabel(String key){return I18n.get(Boolean.parseBoolean(pending.get(key))?"options.on":"options.off");}
     private boolean validPending(){
         for(String key:keys()){
@@ -66,17 +66,17 @@ public final class CorpseConfigGui extends Screen {
     }
     @Override public void render(GuiGraphics graphics,int mouseX,int mouseY,float partialTicks){
         super.render(graphics,mouseX,mouseY,partialTicks);
-        graphics.drawCenteredString(font,LootableBodies.NAME,width/2,12,0xffffff);
-        graphics.drawCenteredString(font,I18n.get(group==null?"lootablebodies.config.local_file":"lootablebodies.config."+group),width/2,28,0xcccccc);
+        graphics.drawCenteredString(font,LootableBodies.NAME,width/2,12,0xffffffff);
+        graphics.drawCenteredString(font,I18n.get(group==null?"lootablebodies.config.local_file":"lootablebodies.config."+group),width/2,28,0xffcccccc);
         for(Map.Entry<String,Integer> row:rows.entrySet()){
-            String text=I18n.get(property(row.getKey()).getLanguageKey());graphics.drawString(font,font.plainSubstrByWidth(text,205),width/2-155,row.getValue()+6,0xffffff);
+            String text=I18n.get(property(row.getKey()).getLanguageKey());graphics.drawString(font,font.plainSubstrByWidth(text,205),width/2-155,row.getValue()+6,0xffffffff);
         }
         for(EditBox field:fields.values())field.render(graphics,mouseX,mouseY,partialTicks);
         for(Map.Entry<String,Integer> row:rows.entrySet())if(mouseX>=width/2-155 && mouseX<width/2+155 && mouseY>=row.getValue() && mouseY<row.getValue()+22)
-            graphics.renderComponentTooltip(font,java.util.Collections.singletonList(net.minecraft.network.chat.Component.translatable(property(row.getKey()).getLanguageKey()+".tooltip")),mouseX,mouseY);
+            graphics.renderComponentTooltip(font,java.util.Collections.singletonList(net.minecraft.network.chat.Component.translatable(property(row.getKey()).getLanguageKey()+".tooltip")),mouseX,mouseY,net.minecraft.world.item.ItemStack.EMPTY);
         if(group==null && mouseX>=width/2-155 && mouseX<width/2+155 && mouseY>=95 && mouseY<115)
-            graphics.renderComponentTooltip(font,java.util.Collections.singletonList(net.minecraft.network.chat.Component.translatable("lootablebodies.config.rules.tooltip")),mouseX,mouseY);
-        if(invalid)graphics.drawCenteredString(font,I18n.get("lootablebodies.config.invalid"),width/2,height-72,0xff5555);
+            graphics.renderComponentTooltip(font,java.util.Collections.singletonList(net.minecraft.network.chat.Component.translatable("lootablebodies.config.rules.tooltip")),mouseX,mouseY,net.minecraft.world.item.ItemStack.EMPTY);
+        if(invalid)graphics.drawCenteredString(font,I18n.get("lootablebodies.config.invalid"),width/2,height-72,0xffff5555);
     }
     @Override public void onClose(){capture();minecraft.setScreen(parent);}
     public static boolean isValidDecayTime(String value) {

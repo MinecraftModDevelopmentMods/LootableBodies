@@ -1,7 +1,6 @@
 package cyano.lootable.buildtest;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.DeathScreen;
-import net.minecraft.world.entity.boss.enderdragon.phases.AbstractDragonPhaseInstance;
 import net.minecraft.network.chat.Component;
 
 import cyano.lootable.entities.EntityLootableBody;
@@ -23,7 +22,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.client.event.RenderLivingEvent;
 
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.event.TickEvent;
 
 /** Receives real Forge spawn/destroy/respawn packets; never takes native input focus. */
@@ -36,37 +34,46 @@ final class VisibilityClientChecks {
     private final Set<UUID> deathRendered=new HashSet<>();
     private net.minecraft.network.Connection traced;
     private net.minecraft.client.multiplayer.ClientLevel profileWorld;
-    void register(){if(Boolean.getBoolean("lootablebodies.visibility")&&role!=null){net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);MinecraftForge.EVENT_BUS.register(this);}}
-    @SubscribeEvent public void mouse(net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre e){e.setCanceled(true);}
-    @SubscribeEvent public void key(net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre e){e.setCanceled(true);}
-    @SubscribeEvent public void rendered(RenderLivingEvent.Post<?,?> e){
-        if(e.getEntity() instanceof EntityLootableBody) {
-            rendered.add(e.getEntity().getUUID());
-            if(Minecraft.getInstance().screen instanceof DeathScreen && !e.getEntity().isRemoved() && !e.getEntity().isInvisible())deathRendered.add(e.getEntity().getUUID());
-        }
+    void register(){if(Boolean.getBoolean("lootablebodies.visibility")&&role!=null){
+            net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre.BUS.addListener(event -> true);
+            net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre.BUS.addListener(event -> true);
+            TickEvent.ClientTickEvent.Pre.BUS.addListener(event -> tick(true));
+            TickEvent.ClientTickEvent.Post.BUS.addListener(event -> tick(false));
+            RenderLivingEvent.Post.BUS.addListener(this::rendered);
+            net.minecraftforge.client.event.ScreenEvent.Render.Post.BUS.addListener(this::deathScreenDrawn);
+            net.minecraftforge.event.entity.EntityLeaveLevelEvent.BUS.addListener(this::removed);
+            ProbeFrames.observe(this::readyForRealDeath);
+        }}
+    private void rendered(RenderLivingEvent.Post<?,?,?> event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null || !(event.getRenderer() instanceof cyano.lootable.graphics.CorpseRenderer)
+                || !(event.getState() instanceof net.minecraft.client.renderer.entity.state.AvatarRenderState state)
+                || !(mc.level.getEntity(state.id) instanceof EntityLootableBody body)) return;
+        rendered.add(body.getUUID());
+        if (mc.screen instanceof DeathScreen && !body.isRemoved() && !body.isInvisible()) deathRendered.add(body.getUUID());
     }
-    @SubscribeEvent public void readyForRealDeath(net.minecraftforge.client.event.RenderLevelStageEvent e) {
-        if(!role.equals("A") || (phase!=1&&phase!=13) || done.contains(phase) || frames<20 ||
-                e.getStage()!=net.minecraftforge.client.event.RenderLevelStageEvent.Stage.AFTER_PARTICLES)return;
+
+    private void readyForRealDeath(ProbeFrames.Frame frame) {
+        if(!role.equals("A") || (phase!=1&&phase!=13) || done.contains(phase) || frames<20) return;
         Minecraft mc=Minecraft.getInstance();
         if(mc.level==null || mc.player==null || !mc.player.isAlive() || mc.screen!=null ||
-                !mc.level.hasChunkAt(mc.player.blockPosition()) || e.getCamera().getEntity()!=mc.player ||
-                e.getCamera().getLookVector().y()>-0.75F)return;
+                !mc.level.hasChunkAt(mc.player.blockPosition()) || frame.camera().entity()!=mc.player ||
+                frame.camera().forwardVector().y()>-0.75F)return;
         // Client ticks can catch up before a world frame has actually drawn.
         // Native death removes the owner's tracking connection after20ticks;
         // begin that finite window only with a real, loaded, downward view.
         net.minecraft.world.phys.Vec3 p=mc.player.position();
         net.minecraft.world.phys.AABB futureBody=new net.minecraft.world.phys.AABB(
                 p.x-0.425D,p.y,p.z-0.425D,p.x+0.425D,p.y+1.25D,p.z+0.425D).inflate(0.5D);
-        if(!e.getFrustum().isVisible(futureBody))return;
+        if(!frame.frustum().isVisible(futureBody))return;
         try {
-            String receipt="{\"phase\":"+phase+",\"native_world_frame\":true,\"render_tick\":"+e.getRenderTick()+
+            String receipt="{\"phase\":"+phase+",\"native_world_frame\":true,\"render_tick\":"+frame.tick()+
                 ",\"pitch\":"+mc.player.getXRot()+",\"corpse_box_in_native_frustum\":true,\"at_nanos\":"+System.nanoTime()+"}";
             Files.write(VisibilityChecks.file("A.predeath-render-"+phase+".json").toPath(),receipt.getBytes(StandardCharsets.UTF_8));
             System.out.println("VISIBILITY_PREDEATH_RENDER_READY "+receipt);ack();
         }catch(Throwable failure){failure.printStackTrace();finished=true;mc.stop();}
     }
-    @SubscribeEvent public void deathScreenDrawn(net.minecraftforge.client.event.ScreenEvent.Render.Post e) {
+    private void deathScreenDrawn(net.minecraftforge.client.event.ScreenEvent.Render.Post e) {
         if(!role.equals("A") || !(e.getScreen() instanceof DeathScreen) || (phase!=2&&phase!=14) || done.contains(phase))return;
         Minecraft mc=Minecraft.getInstance();
         try {
@@ -79,16 +86,16 @@ final class VisibilityClientChecks {
             System.out.println("VISIBILITY_DEATH_RENDER_PROOF "+role+" "+receipt);ack();
         } catch(Throwable error){error.printStackTrace();finished=true;mc.stop();}
     }
-    @SubscribeEvent public void removed(net.minecraftforge.event.entity.EntityLeaveLevelEvent e) {
+    private void removed(net.minecraftforge.event.entity.EntityLeaveLevelEvent e) {
         Entity entity=e.getEntity();
-        if(entity instanceof EntityLootableBody && entity.level().isClientSide) {
+        if(entity instanceof EntityLootableBody && entity.level().isClientSide()) {
             System.out.println("VISIBILITY_CLIENT_REMOVAL "+role+" phase="+phase+" uuid="+entity.getUUID()+" reason="+entity.getRemovalReason()+" rendered="+rendered.contains(entity.getUUID()));
             StackWalker.getInstance().forEach(frame->System.out.println("VISIBILITY_REMOVAL_FRAME "+frame));
         }
     }
-    @SubscribeEvent public void tick(TickEvent.ClientTickEvent e) {
+    private void tick(boolean beforeClientTick) {
         Minecraft mc=Minecraft.getInstance();
-        if(e.phase==TickEvent.Phase.START) {
+        if(beforeClientTick) {
             if(mc.level!=null&&mc.level!=profileWorld) {
                 profileWorld=mc.level;
                 // These two offline fixture accounts use explicit empty native
@@ -96,10 +103,9 @@ final class VisibilityClientChecks {
                 FixtureProfileCache.install(name->{
                     RuntimeChecks.require(name.matches("Container[AB]"),"Unexpected offline fixture profile");
                     UUID id=UUID.nameUUIDFromBytes(("OfflinePlayer:"+name).getBytes(StandardCharsets.UTF_8));
-                    var profile=new com.mojang.authlib.GameProfile(id,name);
                     String texture="{\"timestamp\":0,\"profileId\":\""+id.toString().replace("-","")+"\",\"profileName\":\""+name+"\",\"textures\":{}}";
-                    profile.getProperties().put("textures",new com.mojang.authlib.properties.Property("textures",Base64.getEncoder().encodeToString(texture.getBytes(StandardCharsets.UTF_8))));
-                    return java.util.concurrent.CompletableFuture.completedFuture(java.util.Optional.of(profile));
+                    return java.util.concurrent.CompletableFuture.completedFuture(java.util.Optional.of(
+                            FixtureProfileCache.withTexture(id, name, Base64.getEncoder().encodeToString(texture.getBytes(StandardCharsets.UTF_8)))));
                 });
             }
             return;
@@ -153,7 +159,7 @@ final class VisibilityClientChecks {
             } else if(phase==7 || phase==9 || phase==11) {
                 EntityLootableBody b=body(mc,"first");if(b!=null&&!b.isRemoved()&&!b.isInvisible()&&rendered.contains(b.getUUID())){shot(mc,"tracked-"+phase+".png");ack();}
             } else if(phase==8 || phase==10) {
-                if(role.equals(phase==8?"A":"B")){mc.level.disconnect();mc.disconnect();mc.setScreen(new TitleScreen());connecting=false;}
+                if(role.equals(phase==8?"A":"B")){FixtureConnections.disconnect(mc);connecting=false;}
                 ack();
             } else if(phase==12 || phase==120) {
                 EntityLootableBody b=body(mc,"first");if(b!=null&&!b.isRemoved()&&rendered.contains(b.getUUID()))ack();
@@ -180,5 +186,5 @@ final class VisibilityClientChecks {
         for(Entity e:FixtureApi.entities(mc.level))if(e instanceof EntityLootableBody&&e.getUUID().equals(id))return (EntityLootableBody)e;return null;
     }
     private void ack() throws Exception {done.add(phase);Files.write(VisibilityChecks.file(role+".visibility-"+phase).toPath(),new byte[]{1});}
-    private static void shot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),message->System.out.println(message.getString()));}
+    private static void shot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));}
 }
