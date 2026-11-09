@@ -18,10 +18,10 @@ class Native115PacketTest {
     static { net.minecraft.SharedConstants.tryDetectVersion();net.minecraft.server.Bootstrap.bootStrap(); }
     private static final long SEED=0x13572468ABCDEF01L;
     private ClientboundRespawnPacket packet(ResourceKey<Level> dimension,long seed) {
-        var registry=dimensions().registryOrThrow(net.minecraft.core.registries.Registries.DIMENSION_TYPE);
-        var type=registry.getHolderOrThrow(net.minecraft.world.level.dimension.BuiltinDimensionTypes.OVERWORLD);
+        var registry=dimensions().lookupOrThrow(net.minecraft.core.registries.Registries.DIMENSION_TYPE);
+        var type=registry.getOrThrow(net.minecraft.world.level.dimension.BuiltinDimensionTypes.OVERWORLD);
         return new ClientboundRespawnPacket(new CommonPlayerSpawnInfo(type,dimension,seed,
-                GameType.SURVIVAL,GameType.CREATIVE,false,true,java.util.Optional.empty(),0),
+                GameType.SURVIVAL,GameType.CREATIVE,false,true,java.util.Optional.empty(),0,63),
                 ClientboundRespawnPacket.KEEP_ALL_DATA);
     }
     private static RegistryAccess dimensions() {
@@ -66,7 +66,7 @@ class Native115PacketTest {
                         NativeRespawnDescription.describe(packet(Level.NETHER,SEED)));
     }
     @Test void observationKeepsUnknownDimensionKeysAndEveryDecodedField() throws Exception {
-        ResourceKey<Level> key=ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION,net.minecraft.resources.ResourceLocation.parse("fixture:unhandled"));
+        ResourceKey<Level> key=ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION,net.minecraft.resources.Identifier.parse("fixture:unhandled"));
         ClientboundRespawnPacket packet=packet(key,SEED);
         java.util.Map<Field,Object> before=new java.util.HashMap<>();
         for(Field field:ClientboundRespawnPacket.class.getDeclaredFields()){field.setAccessible(true);before.put(field,field.get(packet));}

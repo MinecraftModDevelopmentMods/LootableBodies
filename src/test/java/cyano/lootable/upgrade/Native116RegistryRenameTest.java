@@ -1,28 +1,28 @@
 package cyano.lootable.upgrade;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.datafix.DataFixers;
 import net.minecraft.util.datafix.fixes.References;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 class Native116RegistryRenameTest {
     @Test void zombiePigmanMappingsAgreeWithNativeEntityAndItemFixes(){
-        ResourceLocation old=ResourceLocation.parse("minecraft:zombie_pigman"),current=ResourceLocation.parse("minecraft:zombified_piglin");
+        Identifier old=Identifier.parse("minecraft:zombie_pigman"),current=Identifier.parse("minecraft:zombified_piglin");
         assertEquals(current,LegacyRegistryMappings.entityReplacement(old));
-        assertEquals(ResourceLocation.parse("minecraft:zombified_piglin_spawn_egg"),LegacyRegistryMappings.itemReplacement(ResourceLocation.parse("minecraft:zombie_pigman_spawn_egg")));
+        assertEquals(Identifier.parse("minecraft:zombified_piglin_spawn_egg"),LegacyRegistryMappings.itemReplacement(Identifier.parse("minecraft:zombie_pigman_spawn_egg")));
         CompoundTag entity=new CompoundTag();entity.putString("id",old.toString());
-        assertEquals(current.toString(),NativeNbt.update(DataFixers.getDataFixer(),References.ENTITY_TREE,entity,2230,2586).getString("id"));
+        assertEquals(current.toString(),NativeNbt.update(DataFixers.getDataFixer(),References.ENTITY_TREE,entity,2230,2586).getStringOr("id", ""));
         CompoundTag item=new CompoundTag();item.putString("id","minecraft:zombie_pigman_spawn_egg");item.putByte("Count",(byte)7);
-        assertEquals("minecraft:zombified_piglin_spawn_egg",NativeNbt.update(DataFixers.getDataFixer(),References.ITEM_STACK,item,2230,2586).getString("id"));
+        assertEquals("minecraft:zombified_piglin_spawn_egg",NativeNbt.update(DataFixers.getDataFixer(),References.ITEM_STACK,item,2230,2586).getStringOr("id", ""));
     }
     @Test void onlyExactRetiredVanillaSoundsAndBiomesAreRenamed(){
-        for(String sound:new String[]{"ambient","angry","death","hurt"})assertEquals(ResourceLocation.parse("minecraft:entity.zombified_piglin."+sound),LegacyRegistryMappings.soundReplacement(ResourceLocation.parse("minecraft:entity.zombie_pigman."+sound)));
-        assertEquals(ResourceLocation.parse("minecraft:music.nether.nether_wastes"),LegacyRegistryMappings.soundReplacement(ResourceLocation.parse("minecraft:music.nether")));
-        for(String key:new String[]{"othermod:zombie_pigman","minecraft:unrecognised","minecraft:zombified_piglin"})assertNull(LegacyRegistryMappings.entityReplacement(ResourceLocation.parse(key)));
-        assertNull(LegacyRegistryMappings.soundReplacement(ResourceLocation.parse("othermod:music.nether")));
+        for(String sound:new String[]{"ambient","angry","death","hurt"})assertEquals(Identifier.parse("minecraft:entity.zombified_piglin."+sound),LegacyRegistryMappings.soundReplacement(Identifier.parse("minecraft:entity.zombie_pigman."+sound)));
+        assertEquals(Identifier.parse("minecraft:music.nether.nether_wastes"),LegacyRegistryMappings.soundReplacement(Identifier.parse("minecraft:music.nether")));
+        for(String key:new String[]{"othermod:zombie_pigman","minecraft:unrecognised","minecraft:zombified_piglin"})assertNull(LegacyRegistryMappings.entityReplacement(Identifier.parse(key)));
+        assertNull(LegacyRegistryMappings.soundReplacement(Identifier.parse("othermod:music.nether")));
     }
     @Test void nativeBiomesUseTheirOwnDynamicRegistry() {
-        assertEquals(ResourceLocation.parse("minecraft:worldgen/biome"),net.minecraftforge.registries.ForgeRegistries.Keys.BIOMES.location());
+        assertEquals(Identifier.parse("minecraft:worldgen/biome"),net.minecraftforge.registries.ForgeRegistries.Keys.BIOMES.identifier());
     }
     @Test void failedMappingsEscapeTheNativeLevelReaderFallback() {
         Error absent=assertThrows(Error.class,()->LegacyRegistryMappings.requireMappingTarget(()->null));

@@ -1,5 +1,10 @@
 package cyano.lootable.contracts;
 
+import static cyano.lootable.buildtest.TestNativeNbt.hasType;
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
+import static cyano.lootable.buildtest.TestNativeNbt.readUuid;
+import static cyano.lootable.buildtest.TestNativeNbt.writeUuid;
+
 import cyano.lootable.upgrade.UpgradePreservation;
 import com.mojang.datafixers.DataFixer;
 import java.io.*;
@@ -28,7 +33,7 @@ class NativeUpgradeBoundaryTest {
         CompoundTag tag=new CompoundTag();tag.putString("keepsake","slot-"+slot);item.put("tag",tag);return item;
     }
     private CompoundTag corpse() {
-        CompoundTag body=new CompoundTag();body.putString("id","lootablebodies.Corpse");body.putUUID("UUID",ID);body.putString("Name","Saved owner");body.putString("CustomName","Saved owner");body.putLong("DeathTime",700);
+        CompoundTag body=new CompoundTag();body.putString("id","lootablebodies.Corpse");writeUuid(body, "UUID", ID);body.putString("Name","Saved owner");body.putString("CustomName","Saved owner");body.putLong("DeathTime",700);
         ListTag equipment=new ListTag();for(int i=0;i<48;i++)equipment.add(item("minecraft:stone",i+1,1,i));body.put("Equipment",equipment);
         ListTag aux=new ListTag();aux.add(item("minecraft:gold_ingot",17,0,-1));body.put("Aux",aux);body.putDouble("FallDistance",Double.NaN);return body;
     }
@@ -45,62 +50,62 @@ class NativeUpgradeBoundaryTest {
     }
     private CompoundTag update(CompoundTag chunk)throws Exception {
         preserve(chunk);DataFixer safe=UpgradePreservation.wrapper(VANILLA);
-        CompoundTag first=cyano.lootable.upgrade.NativeNbt.update(safe,References.CHUNK,chunk.copy(),chunk.getInt("DataVersion"),1493);
+        CompoundTag first=cyano.lootable.upgrade.NativeNbt.update(safe,References.CHUNK,chunk.copy(),chunk.getIntOr("DataVersion", 0),1493);
         return cyano.lootable.upgrade.NativeNbt.update(safe,References.CHUNK,first,1493,1976);
     }
     private CompoundTag findCorpse(CompoundTag root) {
         CompoundTag found=find(root);assertNotNull(found,"The original corpse must remain present");return found;
     }
     private CompoundTag find(Tag value) {
-        if(value instanceof CompoundTag){CompoundTag nbt=(CompoundTag)value;if(nbt.getString("id").equals("lootablebodies:corpse") || nbt.getString("id").equals("lootablebodies.Corpse"))return nbt;for(String key:nbt.getAllKeys()){CompoundTag found=find(nbt.get(key));if(found!=null)return found;}}
+        if(value instanceof CompoundTag){CompoundTag nbt=(CompoundTag)value;if(nbt.getStringOr("id", "").equals("lootablebodies:corpse") || nbt.getStringOr("id", "").equals("lootablebodies.Corpse"))return nbt;for(String key:nbt.keySet()){CompoundTag found=find(nbt.get(key));if(found!=null)return found;}}
         if(value instanceof ListTag){for(Tag entry:(ListTag)value){CompoundTag found=find(entry);if(found!=null)return found;}}return null;
     }
     @Test void legacyIdentityAndEveryRawInventoryEntrySurviveBothAnvilPasses()throws Exception {
         CompoundTag body=corpse(),source=chunk(body,true);byte[] before=encoded(source);CompoundTag result=update(source),saved=findCorpse(result);
-        assertEquals("lootablebodies:corpse",saved.getString("id"));assertEquals(12,saved.getInt("LootableBodiesDataVersion"));assertEquals(ID,saved.getUUID("UUID"));
-        ListTag records=saved.getList("LootableBodiesUnresolved",10);assertEquals(49,records.size());
-        for(int i=0;i<48;i++){CompoundTag record=records.getCompound(i);assertEquals("Equipment",record.getString("Source"));assertArrayEquals(encoded(body.getList("Equipment",10).getCompound(i)),encoded(record.getCompound("Data")));assertEquals(512,record.getCompound("SourceVersions").getInt("DataVersion"));}
-        assertEquals("Aux",records.getCompound(48).getString("Source"));assertArrayEquals(before,encoded(source));assertFalse(saved.contains("LootableBodiesUpgradePayload"));assertFalse(saved.contains("LootableBodiesInventorySource"));
+        assertEquals("lootablebodies:corpse",saved.getStringOr("id", ""));assertEquals(13,saved.getIntOr("LootableBodiesDataVersion", 0));assertEquals(ID,readUuid(saved, "UUID"));
+        ListTag records=typedList(saved, "LootableBodiesUnresolved", 10);assertEquals(49,records.size());
+        for(int i=0;i<48;i++){CompoundTag record=records.getCompoundOrEmpty(i);assertEquals("Equipment",record.getStringOr("Source", ""));assertArrayEquals(encoded(typedList(body, "Equipment", 10).getCompoundOrEmpty(i)),encoded(record.getCompoundOrEmpty("Data")));assertEquals(512,record.getCompoundOrEmpty("SourceVersions").getIntOr("DataVersion", 0));}
+        assertEquals("Aux",records.getCompoundOrEmpty(48).getStringOr("Source", ""));assertArrayEquals(before,encoded(source));assertFalse(saved.contains("LootableBodiesUpgradePayload"));assertFalse(saved.contains("LootableBodiesInventorySource"));
     }
     @Test void occupiedPartlyGeneratedChunksKeepTerrainAndVanillaContainers()throws Exception {
-        CompoundTag result=update(chunk(corpse(),false)),level=result.getCompound("Level");
-        assertEquals(1,level.getList("Sections",10).size());assertTrue(level.getList("Sections",10).getCompound(0).contains("Palette",9));
-        ListTag tiles=level.getList("TileEntities",10);assertEquals(1,tiles.size());CompoundTag contents=tiles.getCompound(0).getList("Items",10).getCompound(0);assertEquals("minecraft:granite",contents.getString("id"));assertEquals(23,contents.getByte("Count"));assertNotEquals("empty",level.getString("Status"));
+        CompoundTag result=update(chunk(corpse(),false)),level=result.getCompoundOrEmpty("Level");
+        assertEquals(1,typedList(level, "Sections", 10).size());assertTrue(hasType(level.getListOrEmpty("Sections").getCompoundOrEmpty(0), "Palette", 9));
+        ListTag tiles=typedList(level, "TileEntities", 10);assertEquals(1,tiles.size());CompoundTag contents=typedList(tiles.getCompoundOrEmpty(0), "Items", 10).getCompoundOrEmpty(0);assertEquals("minecraft:granite",contents.getStringOr("id", ""));assertEquals(23,contents.getByteOr("Count", (byte) 0));assertNotEquals("empty",level.getStringOr("Status", ""));
     }
     @Test void vanillaContainersAreProtectedEvenWithoutACorpseInTheirChunk()throws Exception {
-        CompoundTag result=update(chunk(null,false));assertEquals(1,result.getCompound("Level").getList("Sections",10).size());assertEquals(1,result.getCompound("Level").getList("TileEntities",10).size());
+        CompoundTag result=update(chunk(null,false));assertEquals(1,typedList(result.getCompoundOrEmpty("Level"), "Sections", 10).size());assertEquals(1,typedList(result.getCompoundOrEmpty("Level"), "TileEntities", 10).size());
     }
     @Test void storedTerrainSurvivesAnIncompleteChunkWithoutEntitiesOrContainers()throws Exception {
-        CompoundTag source=chunk(null,false);source.getCompound("Level").put("TileEntities",new ListTag());
-        CompoundTag level=update(source).getCompound("Level");
-        assertEquals(1,level.getList("Sections",10).size());
-        assertTrue(level.getList("Sections",10).getCompound(0).contains("Palette",9));
+        CompoundTag source=chunk(null,false);source.getCompoundOrEmpty("Level").put("TileEntities",new ListTag());
+        CompoundTag level=update(source).getCompoundOrEmpty("Level");
+        assertEquals(1,typedList(level, "Sections", 10).size());
+        assertTrue(hasType(level.getListOrEmpty("Sections").getCompoundOrEmpty(0), "Palette", 9));
     }
     @Test void repeatedConversionCannotDuplicateOrResurrectRemovedCorpses()throws Exception {
         CompoundTag result=update(chunk(corpse(),true));DataFixer safe=UpgradePreservation.wrapper(VANILLA);CompoundTag again=cyano.lootable.upgrade.NativeNbt.update(safe,References.CHUNK,result.copy(),1976,1976);
-        assertEquals(49,findCorpse(again).getList("LootableBodiesUnresolved",10).size());
-        again.getCompound("Level").put("Entities",new ListTag());assertNull(find(cyano.lootable.upgrade.NativeNbt.update(safe,References.CHUNK,again,1976,1976)));
+        assertEquals(49,findCorpse(again).getListOrEmpty("LootableBodiesUnresolved").size());
+        again.getCompoundOrEmpty("Level").put("Entities",new ListTag());assertNull(find(cyano.lootable.upgrade.NativeNbt.update(safe,References.CHUNK,again,1976,1976)));
     }
     @Test void vanillaMinecartParentsAndNestedCorpsesBothUpgrade()throws Exception {
-        CompoundTag cart=new CompoundTag();cart.putString("id","MinecartRideable");cart.putUUID("UUID",UUID.fromString("00000000-3333-4333-8333-000000000099"));ListTag riders=new ListTag();riders.add(corpse());cart.put("Passengers",riders);
-        CompoundTag result=update(chunk(cart,true));assertEquals("minecraft:minecart",result.getCompound("Level").getList("Entities",10).getCompound(0).getString("id"));assertEquals(49,findCorpse(result).getList("LootableBodiesUnresolved",10).size());
+        CompoundTag cart=new CompoundTag();cart.putString("id","MinecartRideable");writeUuid(cart, "UUID", UUID.fromString("00000000-3333-4333-8333-000000000099"));ListTag riders=new ListTag();riders.add(corpse());cart.put("Passengers",riders);
+        CompoundTag result=update(chunk(cart,true));assertEquals("minecraft:minecart",typedList(result.getCompoundOrEmpty("Level"), "Entities", 10).getCompoundOrEmpty(0).getStringOr("id", ""));assertEquals(49,findCorpse(result).getListOrEmpty("LootableBodiesUnresolved").size());
     }
     @Test void corpseEggsKeepTheirTypeCountAndEntityPayload()throws Exception {
         for(String id:new String[]{"lootablebodies.Corpse","lootablebodies:corpse"}){
-            CompoundTag egg=item("minecraft:spawn_egg",7,0,4),entity=new CompoundTag();entity.putString("id",id);entity.putString("Name","Egg owner");egg.getCompound("tag").put("EntityTag",entity);byte[] before=encoded(egg);
+            CompoundTag egg=item("minecraft:spawn_egg",7,0,4),entity=new CompoundTag();entity.putString("id",id);entity.putString("Name","Egg owner");egg.getCompoundOrEmpty("tag").put("EntityTag",entity);byte[] before=encoded(egg);
             CompoundTag fixed=cyano.lootable.upgrade.NativeNbt.update(UpgradePreservation.wrapper(VANILLA),References.ITEM_STACK,egg.copy(),512,1976);
-            assertEquals("lootablebodies:corpse_spawn_egg",fixed.getString("id"));assertEquals(7,fixed.getByte("Count"));assertEquals("lootablebodies:corpse",fixed.getCompound("tag").getCompound("EntityTag").getString("id"));assertEquals("Egg owner",fixed.getCompound("tag").getCompound("EntityTag").getString("Name"));assertEquals(4,fixed.getByte("Slot"));assertArrayEquals(before,encoded(egg));
+            assertEquals("lootablebodies:corpse_spawn_egg",fixed.getStringOr("id", ""));assertEquals(7,fixed.getByteOr("Count", (byte) 0));assertEquals("lootablebodies:corpse",fixed.getCompoundOrEmpty("tag").getCompoundOrEmpty("EntityTag").getStringOr("id", ""));assertEquals("Egg owner",fixed.getCompoundOrEmpty("tag").getCompoundOrEmpty("EntityTag").getStringOr("Name", ""));assertEquals(4,fixed.getByteOr("Slot", (byte) 0));assertArrayEquals(before,encoded(egg));
         }
     }
     @Test void corpseEggsInsideVanillaPlayerInventoriesAlsoUpgrade()throws Exception {
-        CompoundTag egg=item("minecraft:spawn_egg",11,0,0),entity=new CompoundTag();entity.putString("id","lootablebodies.Corpse");egg.getCompound("tag").put("EntityTag",entity);ListTag items=new ListTag();items.add(egg);CompoundTag player=new CompoundTag();player.put("Inventory",items);
-        CompoundTag result=cyano.lootable.upgrade.NativeNbt.update(UpgradePreservation.wrapper(VANILLA),References.PLAYER,player.copy(),512,1976);CompoundTag fixed=result.getList("Inventory",10).getCompound(0);assertEquals("lootablebodies:corpse_spawn_egg",fixed.getString("id"));assertEquals(11,fixed.getByte("Count"));
+        CompoundTag egg=item("minecraft:spawn_egg",11,0,0),entity=new CompoundTag();entity.putString("id","lootablebodies.Corpse");egg.getCompoundOrEmpty("tag").put("EntityTag",entity);ListTag items=new ListTag();items.add(egg);CompoundTag player=new CompoundTag();player.put("Inventory",items);
+        CompoundTag result=cyano.lootable.upgrade.NativeNbt.update(UpgradePreservation.wrapper(VANILLA),References.PLAYER,player.copy(),512,1976);CompoundTag fixed=typedList(result, "Inventory", 10).getCompoundOrEmpty(0);assertEquals("lootablebodies:corpse_spawn_egg",fixed.getStringOr("id", ""));assertEquals(11,fixed.getByteOr("Count", (byte) 0));
     }
     @Test void aFalseCurrentMarkerCannotBypassLegacyIdentityConversion()throws Exception {
         CompoundTag body=corpse();body.putInt("LootableBodiesDataVersion",3);
         CompoundTag result=update(chunk(body,true));
-        assertEquals(49,findCorpse(result).getList("LootableBodiesUnresolved",10).size());
-        assertEquals(512,findCorpse(result).getCompound("LootableBodiesSourceVersions").getInt("DataVersion"));
+        assertEquals(49,findCorpse(result).getListOrEmpty("LootableBodiesUnresolved").size());
+        assertEquals(512,findCorpse(result).getCompoundOrEmpty("LootableBodiesSourceVersions").getIntOr("DataVersion", 0));
     }
     @Test void futureCorpseFormatsAreNeverOverwritten() {
         CompoundTag body=corpse();body.putString("id","lootablebodies:corpse");body.putInt("LootableBodiesDataVersion",99);
@@ -112,9 +117,9 @@ class NativeUpgradeBoundaryTest {
     }
     @Test void aPlausibleFalseStampCannotSkipVanillaBannerConversion()throws Exception {
         CompoundTag source=chunk(corpse(),true);source.putInt("DataVersion",922);
-        CompoundTag banner=item("minecraft:banner",2,0,0),block=new CompoundTag();block.putInt("Base",5);banner.getCompound("tag").put("BlockEntityTag",block);
-        ListTag items=new ListTag();items.add(banner);source.getCompound("Level").getList("TileEntities",10).getCompound(0).put("Items",items);
-        CompoundTag converted=update(source).getCompound("Level").getList("TileEntities",10).getCompound(0).getList("Items",10).getCompound(0);
-        assertEquals("minecraft:purple_banner",converted.getString("id"));assertEquals(2,converted.getByte("Count"));
+        CompoundTag banner=item("minecraft:banner",2,0,0),block=new CompoundTag();block.putInt("Base",5);banner.getCompoundOrEmpty("tag").put("BlockEntityTag",block);
+        ListTag items=new ListTag();items.add(banner);typedList(source.getCompoundOrEmpty("Level"), "TileEntities", 10).getCompoundOrEmpty(0).put("Items",items);
+        CompoundTag converted=update(source).getCompoundOrEmpty("Level").getListOrEmpty("TileEntities").getCompoundOrEmpty(0).getListOrEmpty("Items").getCompoundOrEmpty(0);
+        assertEquals("minecraft:purple_banner",converted.getStringOr("id", ""));assertEquals(2,converted.getByteOr("Count", (byte) 0));
     }
 }

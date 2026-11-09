@@ -1,4 +1,7 @@
 package cyano.lootable.buildtest;
+
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
+import static cyano.lootable.buildtest.TestNativeNbt.writeUuid;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.StringTag;
@@ -108,7 +111,7 @@ final class HealthAttributeChecks {
         finally{LootableBodies.corpseHP=hp;for(Entity e:new ArrayList<Entity>(FixtureApi.entities(world)))if(!before.contains(e))e.discard();}
     }
     static CompoundTag base(){EntityLootableBody b=new EntityLootableBody(world);b.setPos(160.5,80,160.5);b.setNoGravity(true);b.setUserName("HealthFixture");b.setItem(6,NbtRecoveryChecks.item(120,17));RuntimeChecks.disableVacuum(b);CompoundTag legacy=NameLifetimeChecks.saved(b);legacy.remove("attributes");return legacy;}
-    static EntityLootableBody read(CompoundTag n){CompoundTag before=n.copy();EntityLootableBody b=new EntityLootableBody(world);b.load(n);RuntimeChecks.require(NameLifetimeChecks.same(before,n),"Input NBT mutated");return b;}
+    static EntityLootableBody read(CompoundTag n){CompoundTag before=n.copy();EntityLootableBody b=new EntityLootableBody(world);FixtureApi.loadEntityData(b,n);RuntimeChecks.require(NameLifetimeChecks.same(before,n),"Input NBT mutated");return b;}
     static CompoundTag attribute(String name,double base){CompoundTag n=new CompoundTag();n.putString("Name",name);n.putDouble("Base",base);return n;}
     private static void legacyUuid(CompoundTag n,UUID id){n.remove("UUID");n.putLong("UUIDMost",id.getMostSignificantBits());n.putLong("UUIDLeast",id.getLeastSignificantBits());}
     static CompoundTag modifier(double amount,int operation){CompoundTag n=new CompoundTag();n.putString("Name","Fixture modifier");n.putDouble("Amount",amount);n.putInt("Operation",operation);legacyUuid(n,MOD);return n;}
@@ -137,17 +140,17 @@ final class HealthAttributeChecks {
     private static void overflow(){CompoundTag a=attribute("generic.maxHealth",30);a.put("Modifiers",NbtRecoveryChecks.list(modifier(Double.MAX_VALUE,2)));EntityLootableBody b=read(with(a));value(b.getMaxHealth(),30,"Overflowing modifier activated");retained(b,"Attribute",a);stable(b);}
     private static void validModifiers(){CompoundTag a=attribute("generic.maxHealth",30);CompoundTag m0=modifier(-2,0),m1=modifier(.5,1),m2=modifier(.25,2);legacyUuid(m1,new UUID(0,142));legacyUuid(m2,new UUID(0,143));a.put("Modifiers",NbtRecoveryChecks.list(m0,m1,m2));EntityLootableBody b=read(with(a));value(b.getMaxHealth(),52.5,"Valid signed/three-operation modifiers changed");RuntimeChecks.require(!NameLifetimeChecks.saved(b).contains(NameLifetimeChecks.RECOVERY),"Valid modifiers quarantined");stable(b);}
     private static void zeroUuid(){CompoundTag a=attribute("generic.maxHealth",30),m=modifier(5,0);m.putLong("UUIDMost",0);m.putLong("UUIDLeast",0);m.putByte("Operation",(byte)0);m.putInt("Amount",5);a.put("Modifiers",NbtRecoveryChecks.list(m));EntityLootableBody b=read(with(a));value(b.getMaxHealth(),35,"Zero UUID or lossless numbers rejected");stable(b);}
-    private static void validBases(){for(Tag raw:new Tag[]{ByteTag.valueOf((byte)30),ShortTag.valueOf((short)30),IntTag.valueOf(30),LongTag.valueOf(30),FloatTag.valueOf(30.5F),DoubleTag.valueOf(30.5)}){CompoundTag a=attribute("generic.maxHealth",30);a.put("Base",raw);CompoundTag n=with(a);n.putDouble("Health",12.5);EntityLootableBody b=read(n);value(b.getMaxHealth(),((NumericTag)raw).getAsDouble(),"Valid base changed");value(b.getHealth(),12.5,"Fractional Health changed");stable(b);}}
-    private static void repeated(){EntityLootableBody b=read(with(attribute("generic.maxHealth",30)));CompoundTag n=base();n.remove("Attributes");n.remove("Health");n.remove("AbsorptionAmount");b.setAbsorptionAmount(5);b.load(n);value(b.getMaxHealth(),20,"Missing Attributes retained previous max");value(b.getHealth(),20,"Missing Health retained previous value");value(b.getAbsorptionAmount(),0,"Missing absorption retained previous value");stable(b);}
-    private static void repeatedModifiers(){CompoundTag a=attribute("generic.maxHealth",30);a.put("Modifiers",NbtRecoveryChecks.list(modifier(5,0)));EntityLootableBody b=read(with(a));b.load(with(attribute("generic.maxHealth",20)));value(b.getMaxHealth(),20,"Repeated read kept obsolete modifier");stable(b);}
-    private static void pendingRemoval(){CompoundTag n=base();n.putFloat("Health",0);EntityLootableBody b=read(n);b.baseTick();n=base();n.putDouble("Health",Double.NaN);b.load(n);b.baseTick();RuntimeChecks.require(b.isAlive(),"Repaired owner still dead");inventoryKept(b);stable(b);n=base();n.putFloat("Health",3.5F);b.discard();RuntimeChecks.require(b.isRemoved(),"Native removal fixture was not applied");b.load(n);RuntimeChecks.require(b.isAlive(),"Reused entity kept stale dead flag");value(b.getHealth(),3.5,"Reset healed valid wounded corpse");}
-    private static void inventory(){CompoundTag n=base(),raw=NbtRecoveryChecks.entry(121,11,7);raw.putString("id","absentfixture:missing");n.getList("Equipment",10).add(raw);n.putDouble("Health",Double.NaN);CompoundTag a=attribute("generic.maxHealth",Double.NaN);n.put("Attributes",NbtRecoveryChecks.list(a,attribute("generic.followRange",24)));EntityLootableBody b=read(n);RuntimeChecks.require(b.isAlive(),"Invalid health made recoverable inventory inaccessible");NbtRecoveryChecks.retained(b,raw);retained(b,"Attribute",a);retained(b,"Health",n.get("Health"));stable(b);stable(read(NameLifetimeChecks.saved(b)));}
+    private static void validBases(){for(Tag raw:new Tag[]{ByteTag.valueOf((byte)30),ShortTag.valueOf((short)30),IntTag.valueOf(30),LongTag.valueOf(30),FloatTag.valueOf(30.5F),DoubleTag.valueOf(30.5)}){CompoundTag a=attribute("generic.maxHealth",30);a.put("Base",raw);CompoundTag n=with(a);n.putDouble("Health",12.5);EntityLootableBody b=read(n);value(b.getMaxHealth(),((NumericTag)raw).doubleValue(),"Valid base changed");value(b.getHealth(),12.5,"Fractional Health changed");stable(b);}}
+    private static void repeated(){EntityLootableBody b=read(with(attribute("generic.maxHealth",30)));CompoundTag n=base();n.remove("Attributes");n.remove("Health");n.remove("AbsorptionAmount");b.setAbsorptionAmount(5);FixtureApi.loadEntityData(b,n);value(b.getMaxHealth(),20,"Missing Attributes retained previous max");value(b.getHealth(),20,"Missing Health retained previous value");value(b.getAbsorptionAmount(),0,"Missing absorption retained previous value");stable(b);}
+    private static void repeatedModifiers(){CompoundTag a=attribute("generic.maxHealth",30);a.put("Modifiers",NbtRecoveryChecks.list(modifier(5,0)));EntityLootableBody b=read(with(a));FixtureApi.loadEntityData(b,with(attribute("generic.maxHealth",20)));value(b.getMaxHealth(),20,"Repeated read kept obsolete modifier");stable(b);}
+    private static void pendingRemoval(){CompoundTag n=base();n.putFloat("Health",0);EntityLootableBody b=read(n);b.baseTick();n=base();n.putDouble("Health",Double.NaN);FixtureApi.loadEntityData(b,n);b.baseTick();RuntimeChecks.require(b.isAlive(),"Repaired owner still dead");inventoryKept(b);stable(b);n=base();n.putFloat("Health",3.5F);b.discard();RuntimeChecks.require(b.isRemoved(),"Native removal fixture was not applied");FixtureApi.loadEntityData(b,n);RuntimeChecks.require(b.isAlive(),"Reused entity kept stale dead flag");value(b.getHealth(),3.5,"Reset healed valid wounded corpse");}
+    private static void inventory(){CompoundTag n=base(),raw=NbtRecoveryChecks.entry(121,11,7);raw.putString("id","absentfixture:missing");typedList(n, "Equipment", 10).add(raw);n.putDouble("Health",Double.NaN);CompoundTag a=attribute("generic.maxHealth",Double.NaN);n.put("Attributes",NbtRecoveryChecks.list(a,attribute("generic.followRange",24)));EntityLootableBody b=read(n);RuntimeChecks.require(b.isAlive(),"Invalid health made recoverable inventory inaccessible");NbtRecoveryChecks.retained(b,raw);retained(b,"Attribute",a);retained(b,"Health",n.get("Health"));stable(b);stable(read(NameLifetimeChecks.saved(b)));}
     private static void empty(){CompoundTag n=base();n.put("Equipment",new ListTag());n.putDouble("Health",Double.NaN);EntityLootableBody b=read(n);RuntimeChecks.require(b.isEmpty(),"Health evidence counted as inventory");retained(b,"Health",n.get("Health"));}
     private static void healthy(){CompoundTag nativeSave=NameLifetimeChecks.saved(read(base()));EntityLootableBody b=read(nativeSave);RuntimeChecks.require(!NameLifetimeChecks.saved(b).contains(NameLifetimeChecks.RECOVERY),"Healthy save gained recovery records");stable(b);}
 
     private static void nativeUuid(boolean conflict,boolean malformed){
         CompoundTag modifier=modifier(5,0);modifier.remove("UUIDMost");modifier.remove("UUIDLeast");
-        modifier.putUUID("UUID",MOD);
+        writeUuid(modifier, "UUID", MOD);
         if(conflict){modifier.putLong("UUIDMost",3);modifier.putLong("UUIDLeast",4);}
         if(malformed)modifier.putIntArray("UUID",new int[]{1,2,3});
         CompoundTag attribute=attribute("minecraft:generic.max_health",30);attribute.put("Modifiers",NbtRecoveryChecks.list(modifier));
@@ -157,11 +160,11 @@ final class HealthAttributeChecks {
         stable(body);
     }
     private static void legacyForgeAttributes(){
-        String[][] names={{"forge.swimSpeed","forge:swim_speed"},{"forge.nameTagDistance","forge:nametag_distance"},{"forge.entity_gravity","minecraft:generic.gravity"}};
+        String[][] names={{"forge.swimSpeed","forge:swim_speed"},{"forge.nameTagDistance","forge:nametag_distance"},{"forge.entity_gravity","minecraft:gravity"}};
         double[] bases={1.75D,70D,.12D};ListTag list=new ListTag();for(int i=0;i<names.length;i++)list.add(attribute(names[i][0],bases[i]));
         CompoundTag source=base();source.put("Attributes",list);source.putFloat("Health",7.5F);CompoundTag before=source.copy();EntityLootableBody body=read(source);
         value(body.getHealth(),7.5D,"Legacy Forge attributes healed a wounded corpse");
-        for(int i=0;i<names.length;i++)value(body.getAttribute(net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getHolder(net.minecraft.resources.ResourceLocation.parse(names[i][1])).orElseThrow()).getBaseValue(),bases[i],"Legacy Forge attribute changed");
+        for(int i=0;i<names.length;i++)value(body.getAttribute(net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getHolder(net.minecraft.resources.Identifier.parse(names[i][1])).orElseThrow()).getBaseValue(),bases[i],"Legacy Forge attribute changed");
         RuntimeChecks.require(!NameLifetimeChecks.saved(body).contains(NameLifetimeChecks.RECOVERY),"Known legacy Forge attributes were quarantined");
         EntityLootableBody priorRelease=read(with(attribute("forge:entity_gravity",.11D)));
         value(priorRelease.getAttribute(Attributes.GRAVITY).getBaseValue(),.11D,"Released Forge gravity did not migrate");
@@ -192,6 +195,6 @@ final class HealthAttributeChecks {
         value(b.getHealth(),20,"Disk health unsafe");value(b.getMaxHealth(),20,"Disk max health unsafe");value(b.getAbsorptionAmount(),0,"Disk absorption unsafe");
         value(b.getAttribute(Attributes.FOLLOW_RANGE).getValue(),26,"Valid attribute/modifier tail lost on disk");
         CompoundTag raw=malformedFields();retained(b,"Health",raw.get("Health"));retained(b,"AbsorptionAmount",raw.get("AbsorptionAmount"));
-        ListTag entries=raw.getList("Attributes",10);for(int i=0;i<entries.size();i++)retained(b,"Attribute",entries.getCompound(i));
+        ListTag entries=typedList(raw, "Attributes", 10);for(int i=0;i<entries.size();i++)retained(b,"Attribute",entries.getCompoundOrEmpty(i));
     }
 }

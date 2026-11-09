@@ -1,6 +1,6 @@
 package cyano.lootable.upgrade;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraftforge.registries.NewRegistryEvent;
 import net.minecraftforge.registries.IForgeRegistry;
 import net.minecraftforge.registries.RegistryBuilder;
@@ -11,14 +11,14 @@ public final class LegacyProfessionRegistry {
 
     public static void create(NewRegistryEvent event) {
         RegistryBuilder<Entry> builder = new RegistryBuilder<Entry>()
-                .setName(ResourceLocation.parse("minecraft:villagerprofessions"))
+                .setName(Identifier.parse("minecraft:villagerprofessions"))
                 .setIDRange(0, 32767)
                 .disableSaving().disableSync();
         // These are the six actual 1.10-1.13 vanilla entries, in original ID order.
         // Unknown mod professions remain missing and retain Forge's normal gate.
         event.create(builder, registry -> {
             for (String name : new String[]{"farmer", "librarian", "priest", "smith", "butcher", "nitwit"})
-                registry.register(ResourceLocation.fromNamespaceAndPath("minecraft", name),new Entry());
+                registry.register(Identifier.fromNamespaceAndPath("minecraft", name),new Entry());
         });
     }
 

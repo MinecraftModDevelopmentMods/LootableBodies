@@ -1,5 +1,7 @@
 package cyano.lootable.upgrade;
 
+import static cyano.lootable.buildtest.TestNativeNbt.writeUuid;
+
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.file.*;
@@ -17,7 +19,7 @@ class Native117EntityRegionTest {
     @TempDir(cleanup=org.junit.jupiter.api.io.CleanupMode.ON_SUCCESS) Path world;
     private static final UUID ID=UUID.fromString("00000000-1171-4171-8171-000000000001");
     private CompoundTag body(UUID id) {
-        CompoundTag body=new CompoundTag();body.putString("id","lootablebodies:corpse");body.putUUID("UUID",id);
+        CompoundTag body=new CompoundTag();body.putString("id","lootablebodies:corpse");writeUuid(body, "UUID", id);
         body.putInt(UpgradePreservation.VERSION,7);body.putString("Name","Native 17 owner");
         ListTag inventory=new ListTag();
         for(int slot=0;slot<48;slot++) {
@@ -51,9 +53,9 @@ class Native117EntityRegionTest {
         UpgradeJournal journal=UpgradeJournal.scan(world);assertEquals(4,journal.size());
         for(int i=0;i<dimensions.length;i++) {
             CompoundTag saved=original(journal,ids.get(i),-1,33);
-            assertEquals(body(ids.get(i)),saved.getCompound("Entity"));assertEquals(dimensions[i],saved.getString("Dimension"));
-            assertTrue(saved.getString("Region").endsWith("entities/r.-1.1.mca"));
-            assertEquals(2730,saved.getCompound("SourceVersions").getInt("DataVersion"));
+            assertEquals(body(ids.get(i)),saved.getCompoundOrEmpty("Entity"));assertEquals(dimensions[i],saved.getStringOr("Dimension", ""));
+            assertTrue(saved.getStringOr("Region", "").endsWith("entities/r.-1.1.mca"));
+            assertEquals(2730,saved.getCompoundOrEmpty("SourceVersions").getIntOr("DataVersion", 0));
         }
         for(Map.Entry<Path,byte[]> file:before.entrySet())assertArrayEquals(file.getValue(),Files.readAllBytes(file.getKey()));
     }
@@ -62,7 +64,7 @@ class Native117EntityRegionTest {
         CompoundTag saved=original(UpgradeJournal.scan(world),ID,0,0);
         int offset=ByteBuffer.wrap(before).getInt()>>>8,base=offset*4096,size=ByteBuffer.wrap(before,base,4).getInt();
         byte[] original=Arrays.copyOfRange(before,base+5,base+4+size);
-        assertArrayEquals(original,Files.readAllBytes(world.resolve("data/lootablebodies-upgrade/chunks/"+saved.getString("OriginalChunk")+".bin")));
+        assertArrayEquals(original,Files.readAllBytes(world.resolve("data/lootablebodies-upgrade/chunks/"+saved.getStringOr("OriginalChunk", "")+".bin")));
         try(DataInputStream input=new DataInputStream(new InflaterInputStream(new ByteArrayInputStream(original)))) {
             assertEquals(root,NbtIo.read(input,NbtAccounter.create(64L*1024*1024)));
         }
@@ -94,10 +96,10 @@ class Native117EntityRegionTest {
         try(java.util.stream.Stream<Path> saved=Files.list(world.resolve("data/lootablebodies-upgrade/snapshots"))) {assertTrue(saved.findAny().isPresent());}
     }
     @Test void nestedPassengersArePreservedBeforeConstruction() throws Exception {
-        CompoundTag cart=new CompoundTag();cart.putString("id","minecraft:chest_minecart");cart.putUUID("UUID",new UUID(7,8));
+        CompoundTag cart=new CompoundTag();cart.putString("id","minecraft:chest_minecart");writeUuid(cart, "UUID", new UUID(7,8));
         ListTag passengers=new ListTag();passengers.add(body(ID));cart.put("Passengers",passengers);
         write("","entities",0,0,chunk(0,0,cart));CompoundTag saved=original(UpgradeJournal.scan(world),ID,0,0);
-        assertEquals(body(ID),saved.getCompound("Entity"));assertArrayEquals(new int[]{0},saved.getIntArray("PassengerPath"));
+        assertEquals(body(ID),saved.getCompoundOrEmpty("Entity"));assertArrayEquals(new int[]{0},saved.getIntArray("PassengerPath").orElseGet(() -> new int[0]));
     }
     @Test void unsupportedExternalStreamsRefuseSafelyAndRetainTheSidecar() throws Exception {
         Path file=write("","entities",0,0,chunk(0,0,body(ID)));byte[] raw=Files.readAllBytes(file);

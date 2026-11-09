@@ -1,5 +1,7 @@
 package cyano.lootable.upgrade;
 
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
+
 import java.io.DataInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,17 +18,29 @@ class Native120TargetTest {
     @AfterEach void closeJournal() { UpgradePreservation.close(); }
     private static int targetDataVersion() {
         net.minecraft.SharedConstants.tryDetectVersion();
-        return net.minecraft.SharedConstants.getCurrentVersion().getDataVersion().getVersion();
+        return net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version();
     }
     @Test void targetMatchesTheActualNativeWorldVersion() {
         net.minecraft.SharedConstants.tryDetectVersion();
-        assertEquals("1.21.1",net.minecraft.SharedConstants.getCurrentVersion().getName());
-        assertEquals(34,net.minecraft.SharedConstants.getCurrentVersion().getPackVersion(net.minecraft.server.packs.PackType.CLIENT_RESOURCES));
-        assertEquals(48,net.minecraft.SharedConstants.getCurrentVersion().getPackVersion(net.minecraft.server.packs.PackType.SERVER_DATA));
-        assertEquals(3955,targetDataVersion());
+        assertEquals("1.21.11",net.minecraft.SharedConstants.getCurrentVersion().name());
+        assertEquals(net.minecraft.server.packs.metadata.pack.PackFormat.of(75,0),
+                net.minecraft.SharedConstants.getCurrentVersion().packVersion(net.minecraft.server.packs.PackType.CLIENT_RESOURCES));
+        assertEquals(net.minecraft.server.packs.metadata.pack.PackFormat.of(94,1),
+                net.minecraft.SharedConstants.getCurrentVersion().packVersion(net.minecraft.server.packs.PackType.SERVER_DATA));
+        assertEquals(4671,targetDataVersion());
         assertEquals(targetDataVersion(),UpgradePreservation.MINECRAFT_VERSION);
-        assertEquals(12,UpgradePreservation.DATA_VERSION);
+        assertEquals(13,UpgradePreservation.DATA_VERSION);
     }
+    @Test void unstampedEmptyLegacyCapabilityDataGetsTheCurrentEnvelope() {
+        CompoundTag legacy = new CompoundTag();
+        legacy.put("data", new CompoundTag());
+        CompoundTag before = legacy.copy();
+        CompoundTag current = UpgradePreservation.upgradeLevelCapabilities(legacy);
+        assertEquals(before, legacy);
+        assertEquals(before, current.getCompoundOrEmpty("data"));
+        assertSame(current, UpgradePreservation.upgradeLevelCapabilities(current));
+    }
+
     @Test void released16MarkerIsMigratedWithAllSlotsAndOriginalsRetained() {
         assertEquals(2586,cyano.lootable.buildtest.HistoricalVersions.dataVersion("1.16.5"));
         CompoundTag body=new CompoundTag();body.putString("id","lootablebodies:corpse");
@@ -39,13 +53,13 @@ class Native120TargetTest {
         body.put("Equipment",items);CompoundTag before=body.copy();
         CompoundTag source=new CompoundTag();source.putInt("DataVersion",2586);
         CompoundTag staged=NativeSafeFixer.stageCorpse(body,source);
-        assertEquals(12,staged.getInt(UpgradePreservation.VERSION));
-        assertEquals(48,staged.getList("LootableBodiesUnresolved",10).size());
+        assertEquals(13,staged.getIntOr(UpgradePreservation.VERSION, 0));
+        assertEquals(48,typedList(staged, "LootableBodiesUnresolved", 10).size());
         for(int slot=0;slot<48;slot++) {
-            CompoundTag record=staged.getList("LootableBodiesUnresolved",10).getCompound(slot);
-            assertEquals(items.getCompound(slot),record.getCompound("Data"));
-            assertEquals("Equipment",record.getString("Source"));
-            assertEquals(2586,record.getCompound("SourceVersions").getInt("DataVersion"));
+            CompoundTag record=typedList(staged, "LootableBodiesUnresolved", 10).getCompoundOrEmpty(slot);
+            assertEquals(items.getCompoundOrEmpty(slot),record.getCompoundOrEmpty("Data"));
+            assertEquals("Equipment",record.getStringOr("Source", ""));
+            assertEquals(2586,record.getCompoundOrEmpty("SourceVersions").getIntOr("DataVersion", 0));
         }
         assertEquals(before,body);
     }
@@ -63,19 +77,19 @@ class Native120TargetTest {
         };
         CompoundTag staged=NativeNbt.update(UpgradePreservation.wrapper(identity),
                 net.minecraft.util.datafix.fixes.References.ENTITY_TREE,body,512,targetDataVersion());
-        assertEquals(2586,staged.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
-        assertEquals(6,body.getInt(UpgradePreservation.VERSION));
+        assertEquals(2586,staged.getCompoundOrEmpty(UpgradePreservation.SOURCES).getIntOr("DataVersion", 0));
+        assertEquals(6,body.getIntOr(UpgradePreservation.VERSION, 0));
     }
     @Test void released17MarkerRetainsItsSourceAndEveryIndexedOriginal() {
         CompoundTag body=Native117RegionFixtures.body(java.util.UUID.randomUUID(),7),before=body.copy();
         CompoundTag source=new CompoundTag();source.putInt("DataVersion",2730);
         CompoundTag staged=NativeSafeFixer.stageCorpse(body,source);
-        assertEquals(12,staged.getInt(UpgradePreservation.VERSION));
-        assertEquals(2730,staged.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
-        ListTag records=staged.getList("LootableBodiesUnresolved",10);assertEquals(50,records.size());
+        assertEquals(13,staged.getIntOr(UpgradePreservation.VERSION, 0));
+        assertEquals(2730,staged.getCompoundOrEmpty(UpgradePreservation.SOURCES).getIntOr("DataVersion", 0));
+        ListTag records=typedList(staged, "LootableBodiesUnresolved", 10);assertEquals(50,records.size());
         for(int slot=0;slot<48;slot++) {
-            assertEquals("Equipment",records.getCompound(slot).getString("Source"));
-            assertEquals(before.getList("Equipment",10).getCompound(slot),records.getCompound(slot).getCompound("Data"));
+            assertEquals("Equipment",records.getCompoundOrEmpty(slot).getStringOr("Source", ""));
+            assertEquals(typedList(before, "Equipment", 10).getCompoundOrEmpty(slot),records.getCompoundOrEmpty(slot).getCompoundOrEmpty("Data"));
         }
         assertEquals(before,body);
     }
@@ -86,7 +100,7 @@ class Native120TargetTest {
             public <T> com.mojang.serialization.Dynamic<T> update(com.mojang.datafixers.DSL.TypeReference type,com.mojang.serialization.Dynamic<T> value,int from,int to){return value;}
         };
         CompoundTag staged=NativeNbt.update(UpgradePreservation.wrapper(identity),net.minecraft.util.datafix.fixes.References.ENTITY_TREE,body,512,targetDataVersion());
-        assertEquals(2730,staged.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
+        assertEquals(2730,staged.getCompoundOrEmpty(UpgradePreservation.SOURCES).getIntOr("DataVersion", 0));
         assertEquals(before,body);
     }
     @Test void released18MarkerRetainsItsSourceAndEveryIndexedOriginal() {
@@ -94,12 +108,12 @@ class Native120TargetTest {
         CompoundTag body=Native117RegionFixtures.body(java.util.UUID.randomUUID(),8),before=body.copy();
         CompoundTag source=new CompoundTag();source.putInt("DataVersion",2975);
         CompoundTag staged=NativeSafeFixer.stageCorpse(body,source);
-        assertEquals(12,staged.getInt(UpgradePreservation.VERSION));
-        assertEquals(2975,staged.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
-        ListTag records=staged.getList("LootableBodiesUnresolved",10);assertEquals(50,records.size());
+        assertEquals(13,staged.getIntOr(UpgradePreservation.VERSION, 0));
+        assertEquals(2975,staged.getCompoundOrEmpty(UpgradePreservation.SOURCES).getIntOr("DataVersion", 0));
+        ListTag records=typedList(staged, "LootableBodiesUnresolved", 10);assertEquals(50,records.size());
         for(int slot=0;slot<48;slot++) {
-            assertEquals("Equipment",records.getCompound(slot).getString("Source"));
-            assertEquals(before.getList("Equipment",10).getCompound(slot),records.getCompound(slot).getCompound("Data"));
+            assertEquals("Equipment",records.getCompoundOrEmpty(slot).getStringOr("Source", ""));
+            assertEquals(typedList(before, "Equipment", 10).getCompoundOrEmpty(slot),records.getCompoundOrEmpty(slot).getCompoundOrEmpty("Data"));
         }
         assertEquals(before,body);
     }
@@ -110,7 +124,7 @@ class Native120TargetTest {
             public <T> com.mojang.serialization.Dynamic<T> update(com.mojang.datafixers.DSL.TypeReference type,com.mojang.serialization.Dynamic<T> value,int from,int to){return value;}
         };
         CompoundTag staged=NativeNbt.update(UpgradePreservation.wrapper(identity),net.minecraft.util.datafix.fixes.References.ENTITY_TREE,body,512,targetDataVersion());
-        assertEquals(2975,staged.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
+        assertEquals(2975,staged.getCompoundOrEmpty(UpgradePreservation.SOURCES).getIntOr("DataVersion", 0));
         assertEquals(before,body);
     }
 
@@ -123,19 +137,19 @@ class Native120TargetTest {
         UpgradePreservation.prepare(world);
         CompoundTag fixed=NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),
                 net.minecraft.util.datafix.fixes.References.ENTITY_CHUNK,root,512,targetDataVersion());
-        CompoundTag staged=fixed.getList("Entities",10).getCompound(0);
-        assertEquals(12,staged.getInt(UpgradePreservation.VERSION));
-        assertEquals(3337,staged.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
+        CompoundTag staged=typedList(fixed, "Entities", 10).getCompoundOrEmpty(0);
+        assertEquals(13,staged.getIntOr(UpgradePreservation.VERSION, 0));
+        assertEquals(3337,staged.getCompoundOrEmpty(UpgradePreservation.SOURCES).getIntOr("DataVersion", 0));
         CompoundTag detached=NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),
                 net.minecraft.util.datafix.fixes.References.ENTITY_TREE,body,512,targetDataVersion());
-        assertEquals(3337,detached.getCompound(UpgradePreservation.SOURCES).getInt("DataVersion"));
+        assertEquals(3337,detached.getCompoundOrEmpty(UpgradePreservation.SOURCES).getIntOr("DataVersion", 0));
         assertArrayEquals(original,Files.readAllBytes(region));
-        ListTag records=staged.getList("LootableBodiesUnresolved",10);
+        ListTag records=typedList(staged, "LootableBodiesUnresolved", 10);
         assertEquals(50,records.size());
         for(int slot=0;slot<48;slot++) {
-            CompoundTag record=records.getCompound(slot);
-            assertEquals("Equipment",record.getString("Source"));
-            assertEquals(before.getList("Equipment",10).getCompound(slot),record.getCompound("Data"));
+            CompoundTag record=records.getCompoundOrEmpty(slot);
+            assertEquals("Equipment",record.getStringOr("Source", ""));
+            assertEquals(typedList(before, "Equipment", 10).getCompoundOrEmpty(slot),record.getCompoundOrEmpty("Data"));
         }
         assertEquals(before,body);
     }

@@ -10,7 +10,8 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.util.datafix.fixes.References;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.chunk.storage.ChunkStorage;
+import net.minecraft.world.level.chunk.storage.SimpleRegionStorage;
+import net.minecraft.util.datafix.DataFixTypes;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.io.CleanupMode;
@@ -35,7 +36,7 @@ class Native116DamagedStampTest {
         try(OutputStream output=Files.newOutputStream(world.resolve("level.dat"))){NbtIo.writeCompressed(header,output);}
         ByteArrayOutputStream bytes=new ByteArrayOutputStream();try(DataOutputStream output=new DataOutputStream(new DeflaterOutputStream(bytes))){NbtIo.write(chunk,output);}
         int sectors=(bytes.size()+5+4095)/4096;ByteBuffer region=ByteBuffer.allocate(8192+sectors*4096);
-        CompoundTag level=chunk.getCompound("Level");int index=(level.getInt("xPos")&31)+(level.getInt("zPos")&31)*32;
+        CompoundTag level=chunk.getCompoundOrEmpty("Level");int index=(level.getIntOr("xPos", 0)&31)+(level.getIntOr("zPos", 0)&31)*32;
         region.putInt(index*4,(2<<8)|sectors);region.position(8192);region.putInt(bytes.size()+1);region.put((byte)2);region.put(bytes.toByteArray());
         Path file=world.resolve("region/r.0.0.mca");Files.createDirectories(file.getParent());Files.write(file,region.array());UpgradePreservation.prepare(world);
     }
@@ -49,17 +50,24 @@ class Native116DamagedStampTest {
         context.putInt("VerifiedChunkDataVersion",2586);assertEquals(2586,UpgradePreservation.chunkSourceVersion(context));
     }
     @Test void bothNativeAnvilPassesRetainNestedChestDataWithMissingChunkStamps()throws Exception {
-        CompoundTag source=original();assertEquals(2230,source.getInt("DataVersion"));
-        CompoundTag nativeInput=source.copy();ChunkStorage.injectDatafixingContext(nativeInput,Level.OVERWORLD,java.util.Optional.empty());
-        CompoundTag expected=NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,nativeInput,2230,3955);
+        CompoundTag source=original();assertEquals(2230,source.getIntOr("DataVersion", 0));
+        CompoundTag context = new CompoundTag();
+        context.putString("dimension", Level.OVERWORLD.identifier().toString());
+        CompoundTag nativeInput = source.copy();
+        SimpleRegionStorage.injectDatafixingContext(nativeInput, context);
+        CompoundTag expected=NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,nativeInput,2230,4671);
         CompoundTag damaged=source.copy();damaged.remove("DataVersion");preserve(damaged);
         byte[] originalRegion=Files.readAllBytes(world.resolve("region/r.0.0.mca"));
-        try(ChunkStorage loader=new ChunkStorage(new net.minecraft.world.level.chunk.storage.RegionStorageInfo("fixture",net.minecraft.world.level.Level.OVERWORLD,"chunk"),world.resolve("reader"),UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),false)) {
-            CompoundTag actual=loader.upgradeChunkTag(Level.OVERWORLD,()->{throw new AssertionError("Current source must not replay legacy structure conversion");},damaged.copy(),java.util.Optional.empty());
+        try(SimpleRegionStorage loader = new SimpleRegionStorage(
+                new net.minecraft.world.level.chunk.storage.RegionStorageInfo("fixture", Level.OVERWORLD, "chunk"),
+                world.resolve("reader"), NativeVanillaDataFixer.get(), false, DataFixTypes.CHUNK)) {
+            CompoundTag actual = UpgradePreservation.upgradeRegion(NativeVanillaDataFixer.get(), DataFixTypes.CHUNK,
+                    damaged, 512, context, input -> { throw new AssertionError("Current source must not replay legacy structure conversion"); });
+            assertEquals(expected.get("block_entities"),loader.upgradeChunkTag(source.copy(), 2230, context).get("block_entities"));
             assertNotNull(expected.get("block_entities"));assertFalse(actual.contains("Level"));
             assertEquals(expected.get("block_entities"),actual.get("block_entities"));
             assertArrayEquals(originalRegion,Files.readAllBytes(world.resolve("region/r.0.0.mca")));
-            assertEquals(source.getCompound("Level").get("TileEntities"),original().getCompound("Level").get("TileEntities"));
+            assertEquals(source.getCompoundOrEmpty("Level").get("TileEntities"),original().getCompoundOrEmpty("Level").get("TileEntities"));
         }
     }
 }

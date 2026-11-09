@@ -9,15 +9,13 @@ import net.minecraft.network.ConnectionProtocol;
 import net.minecraft.network.Connection;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
 import net.minecraftforge.event.TickEvent;
 
 /** Repairs the pinned Netty's stale read-clear task during client login. */
 @OnlyIn(Dist.CLIENT)
 public final class ClientLoginReadGuard {
-    @SubscribeEvent public void tick(TickEvent.ClientTickEvent event) {
-        if(event.phase!=TickEvent.Phase.END)return;
+    public void tick(TickEvent.ClientTickEvent.Post event) {
         Minecraft minecraft=Minecraft.getInstance();
         if(!(minecraft.screen instanceof ConnectScreen))return;
         Connection manager=ObfuscationReflectionHelper.getPrivateValue(

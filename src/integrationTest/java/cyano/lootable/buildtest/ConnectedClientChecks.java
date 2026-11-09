@@ -1,4 +1,6 @@
 package cyano.lootable.buildtest;
+
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.SimpleContainer;
@@ -79,7 +81,7 @@ final class ConnectedClientChecks {
         } else if(stage==8 && ready(mc) && frames>30) {
             schedule(mc,() -> {
                 verifyReload(mc,"connected-after-recovery","connected-player-after-recovery");
-                RuntimeChecks.require(player(mc).getInventory().items.get(9).isEmpty(),"Normal-click destination not empty");
+                RuntimeChecks.require(player(mc).getInventory().getNonEquipmentItems().get(9).isEmpty(),"Normal-click destination not empty");
                 mark("first_save_reload_corpse_and_player");
             }); next(9);
         } else if(stage==9 && done()) {
@@ -127,23 +129,23 @@ final class ConnectedClientChecks {
         MinecraftServer server=mc.getSingleplayerServer(); ServerPlayer player=player(mc);
         for(int x=21;x<=27;x++) for(int z=5;z<=11;z++)
             player.level().setBlockAndUpdate(new BlockPos(x,79,z),Blocks.STONE.defaultBlockState());
-        player.level().getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);
-        player.level().getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBSPAWNING).set(false,null);
-        player.setGameMode(GameType.SURVIVAL); player.getInventory().clearContent();player.getInventory().selected=0;
+        player.level().getGameRules().set(net.minecraft.world.level.gamerules.GameRules.KEEP_INVENTORY,false,null);
+        player.level().getGameRules().set(net.minecraft.world.level.gamerules.GameRules.SPAWN_MOBS,false,null);
+        player.setGameMode(GameType.SURVIVAL); player.getInventory().clearContent();player.getInventory().setSelectedSlot(0);
         for(int slot=0;slot<6;slot++)player.setItemSlot(EntityLootableBody.EQUIPMENT_SLOTS[slot],RuntimeChecks.stack(slot));
-        for(int slot=9;slot<=11;slot++)player.getInventory().items.set(slot,RuntimeChecks.stack(slot+10));
+        for(int slot=9;slot<=11;slot++)player.getInventory().getNonEquipmentItems().set(slot,RuntimeChecks.stack(slot+10));
         player.connection.teleport(24.5,80,8.5,0,0);
-        player.containerMenu.broadcastChanges(); player.kill();
+        player.containerMenu.broadcastChanges(); player.kill(player.level());
         RuntimeChecks.require(!player.isAlive(),"Connected player did not die");
         EntityLootableBody corpse=null;
         for(Entity entity:FixtureApi.entities(player.level()))
-            if(entity instanceof EntityLootableBody && player.getGameProfile().getName().equals(((EntityLootableBody)entity).getCustomNameTag())) corpse=(EntityLootableBody)entity;
+            if(entity instanceof EntityLootableBody && player.getGameProfile().name().equals(((EntityLootableBody)entity).getCustomNameTag())) corpse=(EntityLootableBody)entity;
         RuntimeChecks.require(corpse!=null,"Connected death did not create a corpse");
         corpseId=corpse.getUUID();corpse.setNoGravity(true);corpse.setNoAi(true);corpse.setDeltaMovement(0,corpse.getDeltaMovement().y,corpse.getDeltaMovement().z);corpse.setDeltaMovement(corpse.getDeltaMovement().x,0,corpse.getDeltaMovement().z);corpse.setDeltaMovement(corpse.getDeltaMovement().x,corpse.getDeltaMovement().y,0);
         RuntimeChecks.disableVacuum(corpse);
         for(int slot=0;slot<6;slot++)RuntimeChecks.require(RuntimeChecks.sameStack(corpse.getItem(slot),RuntimeChecks.stack(slot)),"Connected death equipment slot "+slot);
         for(int slot=6;slot<=8;slot++)RuntimeChecks.require(RuntimeChecks.sameStack(corpse.getItem(slot),RuntimeChecks.stack(slot+13)),"Connected death main slot "+slot);
-        RuntimeChecks.require(player.getInventory().save(new ListTag()).size()==0,"Death retained player inventory alongside corpse");
+        RuntimeChecks.require(FixtureApi.saveInventory(player).size()==0,"Death retained player inventory alongside corpse");
         System.out.println("CONNECTED_CORPSE_UUID "+corpseId);
     }
     private void verifyRecovery(Minecraft mc,String before,int slot,int item,String after) throws Exception {
@@ -151,9 +153,9 @@ final class ConnectedClientChecks {
         RuntimeChecks.require((corpse.getItem(slot)).isEmpty(),"Network recovery left source stack");
         checkPlayer(player(mc).getInventory(),item);
         CompoundTag expected=read(folder(mc),before),actual=new CompoundTag();
-        ListTag equipment=expected.getList("Equipment",10);
-        for(int i=equipment.size()-1;i>=0;i--)if(equipment.getCompound(i).getByte("Slot")==slot)equipment.remove(i);
-        corpse.saveAsPassenger(actual);RuntimeChecks.compare(expected,actual);
+        ListTag equipment=typedList(expected, "Equipment", 10);
+        for(int i=equipment.size()-1;i>=0;i--)if(equipment.getCompoundOrEmpty(i).getByteOr("Slot", (byte) 0)==slot)equipment.remove(i);
+        FixtureApi.saveEntity(corpse,actual);RuntimeChecks.compare(expected,actual);
         RuntimeChecks.saveExpected(folder(mc),after,corpse);visibleExpected=actual.copy();
     }
     private void verifyReload(Minecraft mc,String corpseName,String playerName) throws Exception {
@@ -161,19 +163,19 @@ final class ConnectedClientChecks {
         EntityLootableBody corpse=corpse(mc);RuntimeChecks.require(corpse.isAlive(),"Saved corpse is no longer accessible");
         corpse.baseTick();RuntimeChecks.verifyExpected(folder(mc),corpseName,corpse);
         CompoundTag expected=read(folder(mc),playerName);
-        RuntimeChecks.require(expected.get("Inventory").equals(player(mc).getInventory().save(new ListTag())),"Recovered player inventory changed on disk reload");
+        RuntimeChecks.require(expected.get("Inventory").equals(FixtureApi.saveInventory(player(mc))),"Recovered player inventory changed on disk reload");
         player(mc).connection.teleport(24.5,80,7.5,0,0);
         visibleExpected=read(folder(mc),corpseName);
     }
     private void savePlayer(Minecraft mc,String name) throws Exception {
-        CompoundTag expected=new CompoundTag();expected.put("Inventory",player(mc).getInventory().save(new ListTag()));
+        CompoundTag expected=new CompoundTag();expected.put("Inventory",FixtureApi.saveInventory(player(mc)));
         try(FileOutputStream out=new FileOutputStream(new File(folder(mc),name+".nbt"))){NbtIo.writeCompressed(expected,out);}
         mc.getSingleplayerServer().getPlayerList().saveAll();mc.getSingleplayerServer().saveAllChunks(false,true,false);
     }
     private void verifyGui(Minecraft mc) {
         RuntimeChecks.require(gui(mc) && mc.player.containerMenu.slots.size()==84,"Connected GUI missing slots");
-        ItemStack[] expected=new ItemStack[48];ListTag list=visibleExpected.getList("Equipment",10);
-        for(int i=0;i<list.size();i++){CompoundTag tag=list.getCompound(i);expected[tag.getByte("Slot")]=FixtureStackData.load(tag);}
+        ItemStack[] expected=new ItemStack[48];ListTag list=typedList(visibleExpected, "Equipment", 10);
+        for(int i=0;i<list.size();i++){CompoundTag tag=list.getCompoundOrEmpty(i);expected[tag.getByteOr("Slot", (byte) 0)]=FixtureStackData.load(tag);}
         for(int i=0;i<48;i++)RuntimeChecks.require(RuntimeChecks.sameStack(expected[i],mc.player.containerMenu.getSlot(i).getItem()),"Client GUI slot differs "+i);
     }
     private static void checkPlayer(net.minecraft.world.entity.player.Inventory inventory,int index) {
@@ -203,7 +205,7 @@ final class ConnectedClientChecks {
         }
         return false;
     }
-    private static void screenshot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),message->System.out.println(message.getString()));}
+    private static void screenshot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));}
     private static void quit(Minecraft mc){mc.player.closeContainer();FixtureConnections.disconnect(mc);}
     private void mark(String name) throws Exception {
         try(FileWriter out=new FileWriter(report,true)){out.write("PASS "+name+"\n");}

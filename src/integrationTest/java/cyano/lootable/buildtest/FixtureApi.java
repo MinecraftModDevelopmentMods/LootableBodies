@@ -1,12 +1,16 @@
 package cyano.lootable.buildtest;
 
+import static cyano.lootable.buildtest.TestNativeNbt.readUuid;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -15,7 +19,8 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 final class FixtureApi {
     private FixtureApi() { }
     static void spawn(net.minecraft.server.level.ServerPlayer player,net.minecraft.core.BlockPos position,boolean forced,boolean notify,net.minecraft.resources.ResourceKey<Level> dimension) {
-        player.setRespawnPosition(dimension,position,0F,forced,notify);
+        var spawn = net.minecraft.world.level.storage.LevelData.RespawnData.of(dimension, position, 0F, 0F);
+        player.setRespawnPosition(new net.minecraft.server.level.ServerPlayer.RespawnConfig(spawn, forced), notify);
     }
     static net.minecraft.resources.ResourceKey<Level> dimensionKey(int id) {
         if(id==0)return Level.OVERWORLD;if(id==-1)return Level.NETHER;if(id==1)return Level.END;
@@ -40,10 +45,10 @@ final class FixtureApi {
         static void create(net.minecraft.client.Minecraft client,String folder,String title,net.minecraft.world.level.GameType mode,boolean commands) {
             client.createWorldOpenFlows().createFreshLevel(folder,
                 new net.minecraft.world.level.LevelSettings(title,mode,false,net.minecraft.world.Difficulty.NORMAL,commands,
-                    new net.minecraft.world.level.GameRules(),net.minecraft.world.level.WorldDataConfiguration.DEFAULT),
+                    new net.minecraft.world.level.gamerules.GameRules(net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS),net.minecraft.world.level.WorldDataConfiguration.DEFAULT),
                 new net.minecraft.world.level.levelgen.WorldOptions(4267321L,false,false),
-                access->access.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET)
-                    .getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions(),new net.minecraft.client.gui.screens.TitleScreen());
+                access->access.lookupOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET)
+                    .getOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions(),new net.minecraft.client.gui.screens.TitleScreen());
         }
     }
     static List<Entity> entities(Level world) {
@@ -53,32 +58,101 @@ final class FixtureApi {
         return ClientEntities.read(world);
     }
     static Entity loadEntity(CompoundTag data, Level world) {
-        return net.minecraft.world.entity.EntityType.loadEntityRecursive(data, world, entity -> entity);
+        return net.minecraft.world.entity.EntityType.loadEntityRecursive(data, world, net.minecraft.world.entity.EntitySpawnReason.LOAD, entity -> entity);
     }
+    static boolean saveEntity(Entity entity, CompoundTag data) {
+        var output = net.minecraft.world.level.storage.TagValueOutput.createWithContext(
+                net.minecraft.util.ProblemReporter.DISCARDING, entity.registryAccess());
+        output.buildResult().merge(data.copy());
+        boolean saved = entity.saveAsPassenger(output);
+        for (String key : java.util.Set.copyOf(data.keySet())) data.remove(key);
+        data.merge(output.buildResult());
+        return saved;
+    }
+
+    static void loadEntityData(Entity entity, CompoundTag data) {
+        entity.load(TestNativeNbt.input(entity, data));
+    }
+
+    static net.minecraft.nbt.ListTag saveInventory(net.minecraft.world.entity.player.Player player) {
+        var output = net.minecraft.world.level.storage.TagValueOutput.createWithContext(
+                net.minecraft.util.ProblemReporter.DISCARDING, player.registryAccess());
+        player.getInventory().save(output.list("Inventory", net.minecraft.world.ItemStackWithSlot.CODEC));
+        ListTag inventory = output.buildResult().getListOrEmpty("Inventory");
+        var slots = new net.minecraft.world.entity.EquipmentSlot[]{
+                net.minecraft.world.entity.EquipmentSlot.FEET, net.minecraft.world.entity.EquipmentSlot.LEGS,
+                net.minecraft.world.entity.EquipmentSlot.CHEST, net.minecraft.world.entity.EquipmentSlot.HEAD,
+                net.minecraft.world.entity.EquipmentSlot.OFFHAND};
+        for (int index = 0; index < slots.length; index++) {
+            var stack = player.getItemBySlot(slots[index]);
+            if (stack.isEmpty()) continue;
+            CompoundTag item = FixtureStackData.save(stack);
+            item.putByte("Slot", (byte) (index == 4 ? 150 : 100 + index));
+            inventory.add(item);
+        }
+        return inventory;
+    }
+
+    static net.minecraft.nbt.ListTag saveEnderInventory(ServerPlayer player) {
+        var output = net.minecraft.world.level.storage.TagValueOutput.createWithContext(
+                net.minecraft.util.ProblemReporter.DISCARDING, player.registryAccess());
+        player.getEnderChestInventory().storeAsSlots(output.list("EnderItems", net.minecraft.world.ItemStackWithSlot.CODEC));
+        return output.buildResult().getListOrEmpty("EnderItems");
+    }
+
+    static net.minecraft.network.protocol.game.ServerboundContainerClickPacket clickPacket(
+            ServerPlayer player, int stateId, int slot, int button,
+            net.minecraft.world.inventory.ClickType type, net.minecraft.world.item.ItemStack predicted) {
+        var ops = player.registryAccess().createSerializationContext(net.minecraft.util.HashOps.CRC32C_INSTANCE);
+        net.minecraft.network.HashedPatchMap.HashGenerator hash = component -> component.encodeValue(ops).getOrThrow().asInt();
+        var changed = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<net.minecraft.network.HashedStack>();
+        if (predicted != null && slot >= 0) changed.put(slot, net.minecraft.network.HashedStack.create(predicted, hash));
+        return new net.minecraft.network.protocol.game.ServerboundContainerClickPacket(
+                player.containerMenu.containerId, stateId, (short)slot, (byte)button, type, changed,
+                net.minecraft.network.HashedStack.create(player.containerMenu.getCarried(), hash));
+    }
+
+    static void readAdditional(cyano.lootable.entities.EntityLootableBody body, CompoundTag data) {
+        body.readAdditionalSaveData(TestNativeNbt.input(body, data));
+    }
+
+    static void writeAdditional(cyano.lootable.entities.EntityLootableBody body, CompoundTag data) {
+        var output = net.minecraft.world.level.storage.TagValueOutput.createWithContext(
+                net.minecraft.util.ProblemReporter.DISCARDING, body.registryAccess());
+        output.buildResult().merge(data.copy());
+        body.addAdditionalSaveData(output);
+        for (String key : java.util.Set.copyOf(data.keySet())) data.remove(key);
+        data.merge(output.buildResult());
+    }
+
     static Entity readChunkEntity(CompoundTag data, ServerLevel world, net.minecraft.world.level.chunk.LevelChunk chunk) {
         // Invoke the actual native chunk serializer; do not replace its admission callback.
         CompoundTag root=new CompoundTag();net.minecraft.nbt.ListTag list=new net.minecraft.nbt.ListTag();list.add(data.copy());root.put("entities",list);
-        root.putInt("xPos",chunk.getPos().x);root.putInt("zPos",chunk.getPos().z);root.put("sections",new net.minecraft.nbt.ListTag());root.putInt("DataVersion",3955);
+        root.putInt("xPos",chunk.getPos().x);root.putInt("zPos",chunk.getPos().z);root.put("sections",new net.minecraft.nbt.ListTag());root.putInt("DataVersion",4671);
         // Current fixture NBT follows the real native conversion boundary too.
         // The post-load admission callback remains Minecraft's own method.
         CompoundTag fixed=cyano.lootable.upgrade.NativeNbt.update(
                 cyano.lootable.upgrade.UpgradePreservation.wrapper(net.minecraft.util.datafix.DataFixers.getDataFixer()),
-                net.minecraft.util.datafix.fixes.References.CHUNK,root,3955,3955);
+                net.minecraft.util.datafix.fixes.References.CHUNK,root,4671,4671);
         try {
             java.lang.reflect.Method nativeRead=null;
-            for(java.lang.reflect.Method method:net.minecraft.world.level.chunk.storage.ChunkSerializer.class.getDeclaredMethods())
-                if(java.lang.reflect.Modifier.isStatic(method.getModifiers()) && !method.isSynthetic() && method.getReturnType()==net.minecraft.world.level.chunk.LevelChunk.PostLoadProcessor.class && java.util.Arrays.equals(method.getParameterTypes(),new Class<?>[]{ServerLevel.class,CompoundTag.class})) {
+            for(java.lang.reflect.Method method:net.minecraft.world.level.chunk.storage.SerializableChunkData.class.getDeclaredMethods())
+                if(java.lang.reflect.Modifier.isStatic(method.getModifiers()) && !method.isSynthetic() && method.getReturnType()==net.minecraft.world.level.chunk.LevelChunk.PostLoadProcessor.class && java.util.Arrays.equals(method.getParameterTypes(),new Class<?>[]{ServerLevel.class,java.util.List.class,java.util.List.class})) {
                     if(nativeRead!=null)throw new IllegalStateException("Ambiguous native entity admission");nativeRead=method;
                 }
             if(nativeRead==null)throw new IllegalStateException("Missing native entity admission");
             nativeRead.setAccessible(true);
-            net.minecraft.world.level.chunk.LevelChunk.PostLoadProcessor processor=(net.minecraft.world.level.chunk.LevelChunk.PostLoadProcessor)nativeRead.invoke(null,world,fixed);
+            net.minecraft.world.level.chunk.LevelChunk.PostLoadProcessor processor=(net.minecraft.world.level.chunk.LevelChunk.PostLoadProcessor)nativeRead.invoke(null,world, compounds(fixed, "entities"), compounds(fixed, "block_entities"));
             if(processor==null)throw new IllegalStateException("Native entity admission returned no processor");
             processor.run(chunk);
-            java.util.UUID id=fixed.getList("entities",10).getCompound(0).getUUID("UUID");
+            java.util.UUID id=readUuid(TestNativeNbt.typedList(fixed, "entities", 10).getCompoundOrEmpty(0), "UUID");
             return sectionEntities(world,chunk.getPos().toLong()).filter(entity->entity.getUUID().equals(id)).findFirst().orElse(null);
         }catch(ReflectiveOperationException failure){throw new IllegalStateException("Native chunk admission failed",failure);}
     }
+    private static List<CompoundTag> compounds(CompoundTag data, String key) {
+        return TestNativeNbt.typedList(data, key, 10).stream().map(CompoundTag.class::cast).toList();
+    }
+
     static List<Entity> entities(ServerLevel world,int chunkX,int chunkZ) {
         // Forge 50 may have admitted a drop to the native section before its
         // chunk is tracked. Count both stores, once per actual entity.

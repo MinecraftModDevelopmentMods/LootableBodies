@@ -6,20 +6,19 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.*;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.datafix.fixes.References;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.registries.MissingMappingsEvent;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Actual Forge45 mapping actions and native PoI data fixes, without a world. */
 class Native119RegistrySnapshotTest {
+    @org.junit.jupiter.api.BeforeAll static void register() { LegacyRegistryMappings.register(); }
     private MissingMappingsEvent.Action action(ResourceKey<? extends Registry<?>> registry,String name)throws Exception {
-        MissingMappingsEvent.Mapping<Object> mapping=new MissingMappingsEvent.Mapping<>(null,null,ResourceLocation.parse(name),17);
+        MissingMappingsEvent.Mapping<Object> mapping=new MissingMappingsEvent.Mapping<>(null,null,Identifier.parse(name),17);
         MissingMappingsEvent event=new MissingMappingsEvent(registry,null,List.of(mapping));
-        for(java.lang.reflect.Method method:LegacyRegistryMappings.class.getDeclaredMethods())
-            if(method.isAnnotationPresent(SubscribeEvent.class) && Arrays.equals(method.getParameterTypes(),new Class<?>[]{MissingMappingsEvent.class}))method.invoke(null,event);
+        MissingMappingsEvent.BUS.post(event);
         java.lang.reflect.Field field=mapping.getClass().getDeclaredField("action");field.setAccessible(true);
         return (MissingMappingsEvent.Action)field.get(mapping);
     }
@@ -27,7 +26,7 @@ class Native119RegistrySnapshotTest {
         List<ResourceKey<net.minecraft.world.level.biome.Biome>> keys=cyano.lootable.buildtest.Native119Registries.lookup()
                 .lookupOrThrow(Registries.BIOME).listElements().map(net.minecraft.core.Holder.Reference::key).toList();
         assertTrue(keys.size()>50);
-        for(ResourceKey<?> key:keys)assertEquals(MissingMappingsEvent.Action.IGNORE,action(Registries.BIOME,key.location().toString()),key.location().toString());
+        for(ResourceKey<?> key:keys)assertEquals(MissingMappingsEvent.Action.IGNORE,action(Registries.BIOME,key.identifier().toString()),key.identifier().toString());
         for(String old:net.minecraft.util.datafix.fixes.CavesAndCliffsRenames.RENAMES.keySet())
             assertEquals(MissingMappingsEvent.Action.IGNORE,action(Registries.BIOME,old),old);
     }
@@ -50,7 +49,7 @@ class Native119RegistrySnapshotTest {
         section.put("Records",records);sections.put("0",section);root.put("Sections",sections);CompoundTag before=root.copy();
         Tag fixed=net.minecraft.util.datafix.DataFixers.getDataFixer().update(References.POI_CHUNK,new Dynamic<>(NbtOps.INSTANCE,root),2975,3465).getValue();
         assertEquals(before,root,"Native conversion must operate on copies");
-        ListTag result=((CompoundTag)fixed).getCompound("Sections").getCompound("0").getList("Records",10);
-        assertEquals(1,result.size());assertEquals("minecraft:farmer",result.getCompound(0).getString("type"));
+        ListTag result=((CompoundTag)fixed).getCompoundOrEmpty("Sections").getCompoundOrEmpty("0").getListOrEmpty("Records");
+        assertEquals(1,result.size());assertEquals("minecraft:farmer",result.getCompoundOrEmpty(0).getStringOr("type", ""));
     }
 }

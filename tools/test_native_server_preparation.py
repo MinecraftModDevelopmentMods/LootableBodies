@@ -25,7 +25,7 @@ class VanillaServerPreparationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             home=Path(directory)/'new-sdk';pins,installed=self.fixture(home,b'changed bytes')
             with patch('prepare_migration_inputs.fetch'),patch.object(runtime,'_download') as prefetch,patch.object(runtime,'run_logged',side_effect=installed) as installer,patch.object(runtime,'SERVER_INPUTS',pins):
-                with self.assertRaisesRegex(RuntimeError,'Incorrect official Forge 52 server input'):runtime.install(Path('fixture-java'),home)
+                with self.assertRaisesRegex(RuntimeError,'Incorrect official Forge 61 server input'):runtime.install(Path('fixture-java'),home)
                 prefetch.assert_not_called();self.assertEqual(1,installer.call_count)
                 self.assertFalse((home/'runtime-inputs.json').exists())
     def test_missing_installed_input_is_fatal(self):

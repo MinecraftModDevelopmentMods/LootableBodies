@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.*;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 
 /** Deterministic service faults; no real account or authentication service required. */
@@ -24,14 +24,15 @@ final class VisibilitySkinChecks {
         SkinManager original=(SkinManager)skinField.get(mc);
         GameProfile profile=new GameProfile(UUID.fromString("00000000-0000-4000-8000-000000000201"),"VisibilityFault");
         try {
-            skinField.set(mc,new SkinManager(mc.getTextureManager(),new File(mc.gameDirectory,"skin-fixture").toPath(),mc.getMinecraftSessionService(),mc) {
-                @Override public PlayerSkin getInsecureSkin(GameProfile p) {
+            skinField.set(mc,new SkinManager(new File(mc.gameDirectory,"skin-fixture").toPath(),mc.services(),
+                    new net.minecraft.client.renderer.texture.SkinTextureDownloader(mc.getProxy(),mc.getTextureManager(),mc),mc) {
+                @Override public java.util.function.Supplier<net.minecraft.world.entity.player.PlayerSkin> createLookup(GameProfile p, boolean secure) {
                     throw new IllegalStateException("injected skin cache failure");
                 }
             });
             try {
-                ResourceLocation texture=CorpseRenderer.getSkin(profile);
-                RuntimeChecks.require(DefaultPlayerSkin.get(profile).texture().equals(texture),"Failed skin lookup did not use vanilla fallback");
+                Identifier texture=CorpseRenderer.getSkin(profile);
+                RuntimeChecks.require(DefaultPlayerSkin.get(profile).body().texturePath().equals(texture),"Failed skin lookup did not use vanilla fallback");
                 mark(report,"skin_cache_failure_has_visible_default",true);
             } catch(Throwable failure) {failures.add("skin cache: "+failure);mark(report,"skin_cache_failure_has_visible_default",false);}
         } finally {skinField.set(mc,original);}
@@ -73,9 +74,9 @@ final class VisibilitySkinChecks {
             } finally {
                 LootableBodies.useLocalSkin=local;
             }
-            delayed.complete(Optional.of(new GameProfile(profile.getId(),"VisibilitySlow")));
+            delayed.complete(Optional.of(new GameProfile(profile.id(),"VisibilitySlow")));
             RuntimeChecks.require(requests.get()==2,"Faults did not exercise the native profile lookup");
-            RuntimeChecks.require(slow.getGameProfile().getName().equals("VisibilityRenamed"),"Late skin result overwrote renamed corpse");
+            RuntimeChecks.require(slow.getGameProfile().name().equals("VisibilityRenamed"),"Late skin result overwrote renamed corpse");
             mark(report,"late_profile_result_preserves_new_name",true);
         }
         if(!failures.isEmpty())throw new AssertionError("VISIBILITY_SKIN_FAILURES "+failures);

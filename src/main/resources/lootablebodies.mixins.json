@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8.7",
+  "package": "cyano.lootable.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["DataFixersMixin", "SaveAccessMixin", "RegionStorageMixin", "LegacyStructuresMixin", "CapabilityDataMixin"],
+  "server": ["DedicatedWorldMixin"],
+  "client": ["CorpseRenderDispatcherMixin"],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

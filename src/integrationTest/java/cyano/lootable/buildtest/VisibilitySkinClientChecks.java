@@ -29,12 +29,13 @@ final class VisibilitySkinClientChecks {
             VisibilitySkinChecks.run(mc);
             for(Field field:Minecraft.class.getDeclaredFields())if(field.getType()==SkinManager.class){skinField=field;skinField.setAccessible(true);}
             original=(SkinManager)skinField.get(mc);
-            skinField.set(mc,new SkinManager(mc.getTextureManager(),new File(mc.gameDirectory,"skin-fixture").toPath(),mc.getMinecraftSessionService(),mc) {
-                @Override public net.minecraft.client.resources.PlayerSkin getInsecureSkin(GameProfile p){throw new IllegalStateException("injected render skin cache failure");}
+            skinField.set(mc,new SkinManager(new File(mc.gameDirectory,"skin-fixture").toPath(),mc.services(),
+                    new net.minecraft.client.renderer.texture.SkinTextureDownloader(mc.getProxy(),mc.getTextureManager(),mc),mc) {
+                @Override public java.util.function.Supplier<net.minecraft.world.entity.player.PlayerSkin> createLookup(GameProfile p, boolean secure){throw new IllegalStateException("injected render skin cache failure");}
             });
             mc.setScreen(new Panel(mc));stage=2;frames=0;
         } else if(stage==2 && ++frames>30) {
-            Screenshot.grab(mc.gameDirectory,"skin-fallback-models.png",mc.getMainRenderTarget(),message->System.out.println(message.getString()));
+            Screenshot.grab(mc.gameDirectory,"skin-fallback-models.png",mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));
             skinField.set(mc,original);new File(mc.gameDirectory,"client.pass").createNewFile();
             System.out.println("LOOTABLE_BODIES_VISIBILITY_SKIN_PASS");mc.stop();stage=3;
         }

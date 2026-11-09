@@ -27,14 +27,14 @@ import net.minecraft.util.profiling.ActiveProfiler;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkSource;
 
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.living.*;
-import net.minecraftforge.eventbus.api.*;
+import net.minecraftforge.eventbus.api.listener.Priority;
 
 /** Conservation regressions executed in real Forge, never an ordinary runtime. */
 public final class InventorySafetyChecks {
@@ -72,11 +72,11 @@ public final class InventorySafetyChecks {
     }
     private static void check(String name,Check check) {
         List<Entity> before=new ArrayList<>(FixtureApi.entities(world));
-        String keep=world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).toString();
-        String mobLoot=world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBLOOT).toString();
+        String keep=world.getGameRules().get(net.minecraft.world.level.gamerules.GameRules.KEEP_INVENTORY).toString();
+        String mobLoot=world.getGameRules().get(net.minecraft.world.level.gamerules.GameRules.MOB_DROPS).toString();
         try {
-            world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);
-            world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBLOOT).set(false,null);
+            world.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.KEEP_INVENTORY,false,null);
+            world.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.MOB_DROPS,false,null);
             check.run(); results.add("PASS "+name);
             System.out.println("INVENTORY_CHECK_PASS "+name);
         } catch(Throwable error) {
@@ -84,8 +84,8 @@ public final class InventorySafetyChecks {
             System.out.println("INVENTORY_CHECK_FAIL "+name+": "+error);
             error.printStackTrace();
         } finally {
-            world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(Boolean.parseBoolean(keep),null);
-            world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBLOOT).set(Boolean.parseBoolean(mobLoot),null);
+            world.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.KEEP_INVENTORY,Boolean.parseBoolean(keep),null);
+            world.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.MOB_DROPS,Boolean.parseBoolean(mobLoot),null);
             for(Entity entity:new ArrayList<Entity>(FixtureApi.entities(world)))
                 if(!before.contains(entity)) entity.discard();
         }
@@ -109,21 +109,21 @@ public final class InventorySafetyChecks {
     }
     private static List<ItemEntity> drops(ServerPlayer player,ItemStack... stacks) {
         List<ItemEntity> result=new ArrayList<>();
-        for(ItemStack stack:stacks) result.add(new ItemEntity(player.getCommandSenderWorld(),player.getX(),player.getY(),player.getZ(),stack));
+        for(ItemStack stack:stacks) result.add(new ItemEntity(player.level(),player.getX(),player.getY(),player.getZ(),stack));
         return result;
     }
     private static void handle(PlayerDeathEventHandler handler,ServerPlayer player,List<ItemEntity> drops) {
         handler.entityDropEvent(new LivingDropsEvent(player,player.damageSources().fellOutOfWorld(),drops,false));
     }
     private static CompoundTag data(EntityLootableBody body) {
-        CompoundTag result=new CompoundTag(); body.addAdditionalSaveData(result); return result;
+        CompoundTag result=new CompoundTag(); FixtureApi.writeAdditional(body,result); return result;
     }
     private static CompoundTag encoded(ItemStack stack) { return FixtureStackData.save(stack); }
     private static Map<String,Integer> inventory(EntityLootableBody body) {
         Map<String,Integer> result=new TreeMap<>();
         for(int i=0;i<body.getContainerSize();i++) add(result,body.getItem(i));
-        ListTag aux=data(body).getList("Aux",10);
-        for(int i=0;i<aux.size();i++) add(result,FixtureStackData.load(aux.getCompound(i)));
+        ListTag aux=data(body).getListOrEmpty("Aux");
+        for(int i=0;i<aux.size();i++) add(result,FixtureStackData.load(aux.getCompoundOrEmpty(i)));
         return result;
     }
     private static void add(Map<String,Integer> result,ItemStack stack) {
@@ -141,30 +141,33 @@ public final class InventorySafetyChecks {
         throw new AssertionError("No corpse spawned");
     }
     private static void failedSpawn() {
-        InventoryTestPlayer player=player(); RejectingWorld rejected=new RejectingWorld(world);
-        player.setFixtureLevel(rejected);
+        InventoryTestPlayer player=player(); RejectCorpse rejected=new RejectCorpse();
         ItemStack bones=new ItemStack(Items.BONE,9); bones.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,net.minecraft.network.chat.Component.literal("Saved bones"));
         List<ItemEntity> drops=drops(player,bones,item(19,23));
         List<CompoundTag> before=new ArrayList<>(); for(ItemEntity e:drops) before.add(encoded(e.getItem()));
         PlayerDeathEventHandler handler=new PlayerDeathEventHandler();
         handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().fellOutOfWorld()));
-        handle(handler,player,drops);
+        var veto=EntityJoinLevelEvent.BUS.addListener(rejected::join);
+        try { handle(handler,player,drops); }
+        finally { EntityJoinLevelEvent.BUS.removeListener(veto); }
         RuntimeChecks.require(rejected.attempts==1,"Failed spawn branch was not reached");
         RuntimeChecks.require(drops.size()==before.size(),"Rejected corpse consumed vanilla death drops");
         for(int i=0;i<before.size();i++) RuntimeChecks.require(before.get(i).equals(encoded(drops.get(i).getItem())),"Rejected spawn mutated drop NBT/count");
     }
     public static final class RejectCorpse {
         int attempts;
-        @SubscribeEvent public void join(EntityJoinLevelEvent event) {
-            if(event.getEntity() instanceof EntityLootableBody) { attempts++; event.setCanceled(true); }
+        boolean join(EntityJoinLevelEvent event) {
+            if (!(event.getEntity() instanceof EntityLootableBody)) return false;
+            attempts++;
+            return true;
         }
     }
     private static void cancelledSpawn() {
-        ServerPlayer player=player(); player.getInventory().items.set(0,item(4,1)); player.getInventory().items.set(9,item(19,23));
-        Map<String,Integer> expected=new TreeMap<>(); add(expected,player.getInventory().items.get(0));add(expected,player.getInventory().items.get(9));
+        ServerPlayer player=player(); player.getInventory().getNonEquipmentItems().set(0,item(4,1)); player.getInventory().getNonEquipmentItems().set(9,item(19,23));
+        Map<String,Integer> expected=new TreeMap<>(); add(expected,player.getInventory().getNonEquipmentItems().get(0));add(expected,player.getInventory().getNonEquipmentItems().get(9));
         Set<Entity> before=new HashSet<>(FixtureApi.entities(world));
-        RejectCorpse reject=new RejectCorpse(); MinecraftForge.EVENT_BUS.register(reject);
-        try { player.die(player.damageSources().fellOutOfWorld()); } finally { MinecraftForge.EVENT_BUS.unregister(reject); }
+        RejectCorpse reject=new RejectCorpse(); var listener=EntityJoinLevelEvent.BUS.addListener(reject::join);
+        try { player.die(player.damageSources().fellOutOfWorld()); } finally { EntityJoinLevelEvent.BUS.removeListener(listener); }
         RuntimeChecks.require(reject.attempts==1,"Corpse cancellation not exercised");
         for(Entity entity:FixtureApi.entities(world)) RuntimeChecks.require(before.contains(entity) || !(entity instanceof EntityLootableBody),"Cancelled corpse spawn bypassed Forge cancellation");
         RuntimeChecks.require(expected.equals(dropped()),"Cancelled corpse did not fall back to exact vanilla drops");
@@ -195,63 +198,82 @@ public final class InventorySafetyChecks {
         handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().fellOutOfWorld()));
         handle(handler,player,drops(player,player.getItemBySlot(EquipmentSlot.HEAD)));
         RuntimeChecks.require(!cache(handler).containsKey(player),"Equipment cache retains completed death");
-        world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(true,null);
+        world.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.KEEP_INVENTORY,true,null);
         handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().fellOutOfWorld()));
         RuntimeChecks.require(!cache(handler).containsKey(player),"keepInventory death cached equipment");
-        world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_KEEPINVENTORY).set(false,null);
-        LivingDeathEvent canceled=new LivingDeathEvent(player,player.damageSources().fellOutOfWorld()); canceled.setCanceled(true);
-        handler.entityDeathEvent(canceled);
-        RuntimeChecks.require(!cache(handler).containsKey(player),"Cancelled death cached equipment");
-        handler.entityDeathEvent(new LivingDeathEvent(player,player.damageSources().fellOutOfWorld()));
-        List<ItemEntity> original=drops(player,item(19,23));
-        LivingDropsEvent canceledDrops=new LivingDropsEvent(player,player.damageSources().fellOutOfWorld(),original,false);
-        canceledDrops.setCanceled(true);handler.entityDropEvent(canceledDrops);
-        RuntimeChecks.require(!cache(handler).containsKey(player) && original.size()==1
-                && RuntimeChecks.sameStack(original.get(0).getItem(),item(19,23)),"Cancelled drops retained stale cache or changed inventory");
+        world.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.KEEP_INVENTORY,false,null);
+        Runnable unregister = handler.register();
+        try {
+            var source = player.damageSources().fellOutOfWorld();
+            RuntimeChecks.require(!LivingDeathEvent.BUS.post(new LivingDeathEvent(player, source)),
+                    "Ordinary death was cancelled by an equipment-cache listener");
+            RuntimeChecks.require(cache(handler).containsKey(player), "Ordinary death did not cache equipment");
+            var vetoDeath = LivingDeathEvent.BUS.addListener(Priority.HIGHEST, event -> event.getEntity() == player);
+            try {
+                RuntimeChecks.require(LivingDeathEvent.BUS.post(new LivingDeathEvent(player, player.damageSources().fellOutOfWorld())),
+                        "Native death was not cancelled");
+            } finally {
+                LivingDeathEvent.BUS.removeListener(vetoDeath);
+            }
+            RuntimeChecks.require(!cache(handler).containsKey(player), "Cancelled death cached equipment");
+            handler.entityDeathEvent(new LivingDeathEvent(player, player.damageSources().fellOutOfWorld()));
+            List<ItemEntity> original = drops(player, item(19,23));
+            var vetoDrops = LivingDropsEvent.BUS.addListener(Priority.HIGHEST, event -> event.getEntity() == player);
+            try {
+                RuntimeChecks.require(LivingDropsEvent.BUS.post(new LivingDropsEvent(player, player.damageSources().fellOutOfWorld(), original, false)),
+                        "Native drops were not cancelled");
+            } finally {
+                LivingDropsEvent.BUS.removeListener(vetoDrops);
+            }
+            RuntimeChecks.require(!cache(handler).containsKey(player) && original.size()==1
+                    && RuntimeChecks.sameStack(original.get(0).getItem(),item(19,23)), "Cancelled drops retained stale cache or changed inventory");
+        } finally {
+            unregister.run();
+        }
     }
     public static final class RejectItems {
         boolean rejectAll;
         String rejectFixture;
-        @SubscribeEvent public void join(EntityJoinLevelEvent event) {
-            if(event.getEntity() instanceof ItemEntity) {
-                ItemStack stack=((ItemEntity)event.getEntity()).getItem();
-                if(rejectAll || FixtureStackData.hasCustom(stack) && rejectFixture.equals(FixtureStackData.custom(stack).getString("fixture"))) event.setCanceled(true);
-            }
+        boolean join(EntityJoinLevelEvent event) {
+            if (!(event.getEntity() instanceof ItemEntity item)) return false;
+            ItemStack stack = item.getItem();
+            return rejectAll || FixtureStackData.hasCustom(stack)
+                    && rejectFixture.equals(FixtureStackData.custom(stack).getStringOr("fixture", ""));
         }
     }
     private static void failedRelease() throws Exception {
         EntityLootableBody corpse=body(); corpse.setItem(6,item(19,23));
         RuntimeChecks.require(world.addFreshEntity(corpse),"Rejected-release owner spawn");
         Map<String,Integer> expected=inventory(corpse);
-        RejectItems reject=new RejectItems(); reject.rejectAll=true; MinecraftForge.EVENT_BUS.register(reject);
-        try { corpse.kill(); for(int i=0;i<25;i++) corpse.baseTick(); }
-        finally { MinecraftForge.EVENT_BUS.unregister(reject); }
+        RejectItems reject=new RejectItems(); reject.rejectAll=true; var listener=EntityJoinLevelEvent.BUS.addListener(reject::join);
+        try { corpse.kill(world); for(int i=0;i<25;i++) corpse.baseTick(); }
+        finally { EntityJoinLevelEvent.BUS.removeListener(listener); }
         RuntimeChecks.require(expected.equals(inventory(corpse)),"Rejected item spawn erased corpse inventory");
         RuntimeChecks.require(corpse.isAlive() && FixtureApi.entities(world).contains(corpse),"Rejected release removed the only inventory owner");
-        CompoundTag saved=data(corpse); EntityLootableBody loaded=body();loaded.readAdditionalSaveData(saved);
+        CompoundTag saved=data(corpse); EntityLootableBody loaded=body();FixtureApi.readAdditional(loaded,saved);
         RuntimeChecks.require(expected.equals(inventory(loaded)),"Rejected items do not survive NBT reload");
-        corpse.kill();for(int i=0;i<12;i++)corpse.baseTick();
+        corpse.kill(world);for(int i=0;i<12;i++)corpse.baseTick();
         RuntimeChecks.require(expected.equals(dropped()),"Retry did not drop exact saved stacks once");
     }
     private static void partialRelease() {
         EntityLootableBody corpse=body();corpse.setItem(6,item(19,23));corpse.setItem(7,item(20,11));
         RuntimeChecks.require(world.addFreshEntity(corpse),"Partial-release owner spawn");
         Map<String,Integer> expected=inventory(corpse);
-        RejectItems reject=new RejectItems();reject.rejectFixture="slot-20";MinecraftForge.EVENT_BUS.register(reject);
-        try { corpse.kill();for(int i=0;i<12;i++)corpse.baseTick(); }
-        finally { MinecraftForge.EVENT_BUS.unregister(reject); }
+        RejectItems reject=new RejectItems();reject.rejectFixture="slot-20";var listener=EntityJoinLevelEvent.BUS.addListener(reject::join);
+        try { corpse.kill(world);for(int i=0;i<12;i++)corpse.baseTick(); }
+        finally { EntityJoinLevelEvent.BUS.removeListener(listener); }
         Map<String,Integer> combined=new TreeMap<>(dropped());inventory(corpse).forEach((k,v)->combined.put(k,combined.getOrDefault(k,0)+v));
         RuntimeChecks.require(expected.equals(combined),"Partial release lost/duplicated a stack");
         RuntimeChecks.require((corpse.getItem(6)).isEmpty() && RuntimeChecks.sameStack(corpse.getItem(7),item(20,11)),"Partial release did not retain only rejected slot");
-        corpse.kill();for(int i=0;i<12;i++)corpse.baseTick();
+        corpse.kill(world);for(int i=0;i<12;i++)corpse.baseTick();
         RuntimeChecks.require(expected.equals(dropped()),"Partial retry duplicated previously accepted drops");
     }
     private static void vanillaEquipment() {
-        world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBLOOT).set(true,null);
+        world.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.MOB_DROPS,true,null);
         EntityLootableBody corpse=body();corpse.setItem(0,item(0,1));corpse.setDropChance(EquipmentSlot.HEAD,2F);
         RuntimeChecks.require(world.addFreshEntity(corpse),"Equipment-release owner spawn");
         Map<String,Integer> expected=inventory(corpse);
-        corpse.kill();for(int i=0;i<12;i++)corpse.baseTick();
+        corpse.kill(world);for(int i=0;i<12;i++)corpse.baseTick();
         RuntimeChecks.require(expected.equals(dropped()),"Vanilla mob equipment path duplicates corpse inventory");
     }
     private static void vacuumOnce() {
@@ -276,10 +298,10 @@ public final class InventorySafetyChecks {
     private static void repeatedRead() {
         EntityLootableBody source=body();for(int i=6;i<48;i++)source.setItem(i,item(i,1));source.addItem(item(70,7));
         CompoundTag input=data(source),immutable=input.copy();
-        EntityLootableBody target=body(); target.readAdditionalSaveData(input); target.readAdditionalSaveData(input);
+        EntityLootableBody target=body(); FixtureApi.readAdditional(target,input); FixtureApi.readAdditional(target,input);
         RuntimeChecks.require(data(target).get("Equipment").equals(input.get("Equipment")) && data(target).get("Aux").equals(input.get("Aux")),"Repeated read appended overflow or changed slots");
         CompoundTag sparse=new CompoundTag();ListTag list=new ListTag();CompoundTag slot=encoded(item(19,23));slot.putByte("Slot",(byte)47);list.add(slot);sparse.put("Equipment",list);
-        target.readAdditionalSaveData(sparse);
+        FixtureApi.readAdditional(target,sparse);
         RuntimeChecks.require((target.getItem(6)).isEmpty() && RuntimeChecks.sameStack(target.getItem(47),item(19,23)) && !data(target).contains("Aux"),"Sparse reread kept stale inventory/overflow");
         RuntimeChecks.require(immutable.equals(input),"Reader mutated source NBT");
     }
@@ -288,11 +310,11 @@ public final class InventorySafetyChecks {
         RuntimeChecks.require(container.stillValid(player),"Near living access failed");
         player.setPos(100,80,100);RuntimeChecks.require(!container.stillValid(player),"Distant container remained accessible");
         player.setPos(64.5,80,64.5);corpse.discard();RuntimeChecks.require(!container.stillValid(player),"Removed corpse remained accessible");
-        corpse=body();container=new CorpseContainer(player.getInventory(),corpse);player.setFixtureLevel(new RejectingWorld(world));
+        corpse=body();container=new CorpseContainer(player.getInventory(),corpse);player.setServerLevel(server.getLevel(Level.NETHER));
         RuntimeChecks.require(!container.stillValid(player),"Cross-world container remained accessible");
-        player.setFixtureLevel(world);player.setHealth(0);
+        player.setServerLevel(world);player.setHealth(0);
         RuntimeChecks.require(!container.stillValid(player),"Dead player retained container access");
-        player.setHealth(player.getMaxHealth());corpse.kill();corpse.baseTick();
+        player.setHealth(player.getMaxHealth());corpse.kill(world);corpse.baseTick();
         RuntimeChecks.require(!container.stillValid(player),"Dying corpse remained accessible");
     }
     private static void overflow() {
@@ -316,7 +338,7 @@ public final class InventorySafetyChecks {
         CorpseContainer ca=new CorpseContainer(a.getInventory(),corpse),cb=new CorpseContainer(b.getInventory(),corpse);
         RuntimeChecks.require(RuntimeChecks.sameStack(ca.quickMoveStack(a,6),item(19,23)),"First recovery failed");
         RuntimeChecks.require((cb.quickMoveStack(b,6)).isEmpty(),"Second viewer recovered the same stack");
-        Map<String,Integer> all=inventory(corpse);for(ItemStack s:a.getInventory().items)add(all,s);for(ItemStack s:b.getInventory().items)add(all,s);
+        Map<String,Integer> all=inventory(corpse);for(ItemStack s:a.getInventory().getNonEquipmentItems())add(all,s);for(ItemStack s:b.getInventory().getNonEquipmentItems())add(all,s);
         Map<String,Integer> expected=new TreeMap<>();add(expected,item(19,23));RuntimeChecks.require(expected.equals(all),"Two viewer recovery changed inventory/NBT");
     }
     private static void emptyValidation() {
@@ -326,7 +348,7 @@ public final class InventorySafetyChecks {
     }
     private static net.minecraft.world.level.chunk.LevelChunk cleanChunk(EntityLootableBody corpse) {
         net.minecraft.world.level.chunk.LevelChunk chunk=world.getChunkAt(corpse.blockPosition());
-        chunk.setUnsaved(false);
+        chunk.tryMarkSaved();
         RuntimeChecks.require(!chunk.isUnsaved(),"Dirty-chunk test precondition");
         return chunk;
     }
@@ -355,9 +377,9 @@ public final class InventorySafetyChecks {
         corpse.addItem(RuntimeChecks.stack(70));corpse.addItem(RuntimeChecks.stack(71));RuntimeChecks.disableVacuum(corpse);
         RuntimeChecks.require(target.addFreshEntity(corpse),"Blocked-release fixture spawn");
         Map<String,Integer> expected=inventory(corpse);
-        RejectItems reject=new RejectItems();reject.rejectAll=true;MinecraftForge.EVENT_BUS.register(reject);
-        try {corpse.kill();for(int i=0;i<25;i++)corpse.baseTick();}
-        finally {MinecraftForge.EVENT_BUS.unregister(reject);}
+        RejectItems reject=new RejectItems();reject.rejectAll=true;var listener=EntityJoinLevelEvent.BUS.addListener(reject::join);
+        try {corpse.kill(world);for(int i=0;i<25;i++)corpse.baseTick();}
+        finally {EntityJoinLevelEvent.BUS.removeListener(listener);}
         RuntimeChecks.require(corpse.isAlive() && FixtureApi.entities(target).contains(corpse) && expected.equals(inventory(corpse)),"Blocked-release fixture lost inventory/owner");
         RuntimeChecks.saveExpected(folder,"rejected-release",corpse);
     }
@@ -367,48 +389,5 @@ public final class InventorySafetyChecks {
             super(server,world,profile,net.minecraft.server.level.ClientInformation.createDefault());
         }
 
-        void setFixtureLevel(Level world) {
-            setLevel(world);
-        }
-    }
-
-    private static final class RejectingWorld extends Level {
-        private final ServerLevel delegate; int attempts;
-        RejectingWorld(ServerLevel target) {
-            super((net.minecraft.world.level.storage.WritableLevelData)target.getLevelData(),target.dimension(),target.registryAccess(),target.dimensionTypeRegistration(),()->net.minecraft.util.profiling.InactiveProfiler.INSTANCE,false,false,target.getSeed(),target.getServer().getMaxChainedNeighborUpdates());
-            delegate=target;
-        }
-        @Override public net.minecraft.core.RegistryAccess registryAccess(){return delegate.registryAccess();}
-        @Override public net.minecraft.world.flag.FeatureFlagSet enabledFeatures(){return delegate.enabledFeatures();}
-        @Override public float getShade(net.minecraft.core.Direction direction,boolean shade){return delegate.getShade(direction,shade);}
-        @Override public ChunkSource getChunkSource(){return delegate.getChunkSource();}
-        @Override public net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> getUncachedNoiseBiome(int x,int y,int z){return delegate.getUncachedNoiseBiome(x,y,z);}
-
-        @Override public net.minecraft.world.ticks.LevelTickAccess<net.minecraft.world.level.block.Block> getBlockTicks(){return delegate.getBlockTicks();}
-        @Override public net.minecraft.world.ticks.LevelTickAccess<net.minecraft.world.level.material.Fluid> getFluidTicks(){return delegate.getFluidTicks();}
-        @Override public net.minecraft.world.TickRateManager tickRateManager(){return delegate.tickRateManager();}
-        @Override public net.minecraft.world.item.alchemy.PotionBrewing potionBrewing(){return delegate.potionBrewing();}
-        @Override public net.minecraft.world.item.crafting.RecipeManager getRecipeManager(){return delegate.getRecipeManager();}
-        @Override public net.minecraft.world.scores.Scoreboard getScoreboard(){return delegate.getScoreboard();}
-        @Override public net.minecraft.server.MinecraftServer getServer(){return delegate.getServer();}
-        @Override public long getGameTime(){return delegate==null?0:delegate.getGameTime();}
-
-        @Override public void sendBlockUpdated(net.minecraft.core.BlockPos pos,net.minecraft.world.level.block.state.BlockState oldState,net.minecraft.world.level.block.state.BlockState state,int flags){delegate.sendBlockUpdated(pos,oldState,state,flags);}
-        @Override public void playSound(net.minecraft.world.entity.player.Player player,double x,double y,double z,net.minecraft.sounds.SoundEvent sound,net.minecraft.sounds.SoundSource category,float volume,float pitch){delegate.playSound(player,x,y,z,sound,category,volume,pitch);}
-        @Override public void playSound(net.minecraft.world.entity.player.Player player,Entity entity,net.minecraft.sounds.SoundEvent sound,net.minecraft.sounds.SoundSource category,float volume,float pitch){delegate.playSound(player,entity,sound,category,volume,pitch);}
-        @Override public void playSeededSound(net.minecraft.world.entity.player.Player player,double x,double y,double z,net.minecraft.core.Holder<net.minecraft.sounds.SoundEvent> sound,net.minecraft.sounds.SoundSource category,float volume,float pitch,long seed){delegate.playSeededSound(player,x,y,z,sound,category,volume,pitch,seed);}
-        @Override public void playSeededSound(net.minecraft.world.entity.player.Player player,Entity entity,net.minecraft.core.Holder<net.minecraft.sounds.SoundEvent> sound,net.minecraft.sounds.SoundSource category,float volume,float pitch,long seed){delegate.playSeededSound(player,entity,sound,category,volume,pitch,seed);}
-        @Override public Entity getEntity(int id){return delegate.getEntity(id);}
-        @Override public net.minecraft.world.level.saveddata.maps.MapItemSavedData getMapData(net.minecraft.world.level.saveddata.maps.MapId id){return delegate.getMapData(id);}
-        @Override public void setMapData(net.minecraft.world.level.saveddata.maps.MapId id,net.minecraft.world.level.saveddata.maps.MapItemSavedData data){delegate.setMapData(id,data);}
-        @Override public net.minecraft.world.level.saveddata.maps.MapId getFreeMapId(){return delegate.getFreeMapId();}
-        @Override public void destroyBlockProgress(int id,net.minecraft.core.BlockPos pos,int progress){delegate.destroyBlockProgress(id,pos,progress);}
-        @Override public void levelEvent(net.minecraft.world.entity.player.Player player,int type,net.minecraft.core.BlockPos pos,int data){delegate.levelEvent(player,type,pos,data);}
-        @Override public void gameEvent(Entity source,net.minecraft.core.Holder<net.minecraft.world.level.gameevent.GameEvent> event,net.minecraft.core.BlockPos pos){delegate.gameEvent(source,event,pos);}
-        @Override public void gameEvent(net.minecraft.core.Holder<net.minecraft.world.level.gameevent.GameEvent> event,net.minecraft.world.phys.Vec3 position,net.minecraft.world.level.gameevent.GameEvent.Context context){delegate.gameEvent(event,position,context);}
-        @Override public java.util.List<? extends net.minecraft.world.entity.player.Player> players(){return delegate.players();}
-        @Override public String gatherChunkSourceStats(){return delegate.gatherChunkSourceStats();}
-        @Override public net.minecraft.world.level.entity.LevelEntityGetter<Entity> getEntities(){return delegate.getEntities();}
-        @Override public boolean addFreshEntity(Entity entity){attempts++;return false;}
     }
 }

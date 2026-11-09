@@ -1,5 +1,7 @@
 package cyano.lootable.buildtest;
 
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
+
 import net.minecraft.nbt.ByteTag;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
@@ -68,9 +70,9 @@ class TypedNbtTest {
     @Test void native121AttributeOrderMayChangeButTypedValuesMayNot() {
         CompoundTag left=entity(false),right=entity(true);
         for(CompoundTag body : new CompoundTag[]{left,right}) {
-            ListTag attributes=body.getList("Attributes",10);
+            ListTag attributes=typedList(body, "Attributes", 10);
             for(int i=0;i<attributes.size();i++) {
-                CompoundTag entry=attributes.getCompound(i);
+                CompoundTag entry=attributes.getCompoundOrEmpty(i);
                 entry.put("id",entry.get("Name"));
                 entry.put("base",entry.get("Base"));
                 entry.remove("Name");
@@ -81,12 +83,12 @@ class TypedNbtTest {
         }
         assertFalse(TypedNbt.same(left,right));
         assertTrue(TypedNbt.sameEntity(left,right));
-        right.getList("attributes",10).getCompound(0).putFloat("base",.7F);
+        typedList(right, "attributes", 10).getCompoundOrEmpty(0).putFloat("base",.7F);
         assertFalse(TypedNbt.sameEntity(left,right));
     }
     @Test void entityComparisonStillRequiresEveryTypedAttributeAndDuplicate() {
-        CompoundTag left=entity(false),right=entity(true);right.getList("Attributes",10).getCompound(0).putFloat("Base",.7F);
-        assertFalse(TypedNbt.sameEntity(left,right));right=entity(true);right.getList("Attributes",10).add(right.getList("Attributes",10).getCompound(0).copy());
+        CompoundTag left=entity(false),right=entity(true);typedList(right, "Attributes", 10).getCompoundOrEmpty(0).putFloat("Base",.7F);
+        assertFalse(TypedNbt.sameEntity(left,right));right=entity(true);typedList(right, "Attributes", 10).add(typedList(right, "Attributes", 10).getCompoundOrEmpty(0).copy());
         assertFalse(TypedNbt.sameEntity(left,right));
     }
     @Test void inventoryAndRecoveryListOrderRemainStrictInsideEntityComparison() {

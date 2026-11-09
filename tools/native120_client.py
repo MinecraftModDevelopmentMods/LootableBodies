@@ -1,4 +1,4 @@
-"""Pinned Forge 52 client preparation and descriptor-driven Java 21 launch."""
+"""Pinned Forge 61 client preparation and descriptor-driven Java 21 launch."""
 import hashlib
 import json
 import os
@@ -8,10 +8,10 @@ import re
 import struct
 import zipfile
 
-BASE_VERSION = '1.21.1'
-VERSION = '1.21.1-forge-52.1.20'
-BASE_SHA1 = '82ba6501da174a665c1787775f946487422f2432'
-FORGE_SHA256 = '359AF0F59286C8680B64CED0C830BBCF5F66A0DAB2CE6A27BB6C2030AC2D5193'
+BASE_VERSION = '1.21.11'
+VERSION = '1.21.11-forge-61.2.4'
+BASE_SHA1 = '35f8a9bc4874e2c95e51b3ad21e043a33776f7c2'
+FORGE_SHA256 = '999897CC245CB4ADAD06B2178DBD7A298E24579D521F739BF17D884FB6660EEB'
 
 
 def native_for_platform(library,system,architecture):
@@ -43,9 +43,9 @@ def descriptors(runtime):
     base = runtime/'versions'/BASE_VERSION/(BASE_VERSION+'.json')
     forge = runtime/'versions'/VERSION/(VERSION+'.json')
     if not base.is_file() or hashlib.sha1(base.read_bytes()).hexdigest() != BASE_SHA1:
-        raise RuntimeError('Incorrect official native 1.21.1 client descriptor')
+        raise RuntimeError('Incorrect official native 1.21.11 client descriptor')
     if not forge.is_file() or hashlib.sha256(forge.read_bytes()).hexdigest().upper() != FORGE_SHA256:
-        raise RuntimeError('Incorrect installed Forge 52 client descriptor')
+        raise RuntimeError('Incorrect installed Forge 61 client descriptor')
     return json.loads(base.read_text()), json.loads(forge.read_text())
 
 
@@ -175,7 +175,7 @@ def command(java, home, runtime, assets, prepared, *, username, extra=()):
     base, forge, record = load(runtime,prepared)
     index = assets/'indexes'/(base['assetIndex']['id']+'.json')
     if not index.is_file() or hashlib.sha1(index.read_bytes()).hexdigest() != base['assetIndex']['sha1']:
-        raise RuntimeError('Incorrect official native 1.21.1 asset index')
+        raise RuntimeError('Incorrect official native 1.21.11 asset index')
     values = {'version_name':VERSION,'library_directory':record['library_directory'],
               'classpath_separator':os.pathsep,'classpath':os.pathsep.join(record['classpath']),
               'natives_directory':record['natives'],'launcher_name':'LootableBodiesTests','launcher_version':'1',
@@ -196,5 +196,8 @@ def command(java, home, runtime, assets, prepared, *, username, extra=()):
         if match is None or int(match[1]) > 65535:
             raise ValueError('An owned client fixture endpoint must be loopback HTTP')
         auth = ['-Dminecraft.api.session.host='+session, '-Dminecraft.api.services.host='+session]
+    # The native offline mode avoids calling Realms with a disposable token.
+    # A deliberately owned session endpoint retains the native auth path.
+    offline = ['--offlineDeveloperMode'] if session is None else []
     return [str(java),'-Dfile.encoding=UTF-8','-Dstdout.encoding=UTF-8','-Dstderr.encoding=UTF-8',
-            '-Xmx2G',*jvm,*auth,*extra,forge['mainClass'],*game]
+            '-Xmx2G',*jvm,*auth,*extra,forge['mainClass'],*game,*offline]

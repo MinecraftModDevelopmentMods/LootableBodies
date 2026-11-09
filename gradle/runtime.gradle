@@ -18,6 +18,7 @@ def probeJar = tasks.register('integrationTestModJar', Jar) {
     group = 'verification'
     dependsOn 'compileIntegrationTestMod'
     archiveFileName = 'lootablebodies-build-tests.jar'
+    manifest.attributes('MixinConfigs': 'lootablebodies-build-tests.mixins.json')
     destinationDirectory = layout.buildDirectory.dir('integration-test-mod')
     from probeClasses
     from 'src/integrationTest/resources'
@@ -70,10 +71,10 @@ def prepareOwnedLoaderConfig = { File root ->
     }
 }
 
-// Use an actual Forge 52 codec header in each newly owned flat fixture world.
+// Use an actual Forge 61 codec header in each newly owned flat fixture world.
 def prepareOwnedFlatWorld = { File root ->
-    File header = file('tools/fixtures/native121-flat-level.dat')
-    if (!header.isFile() || releaseDigest(header) != 'C85D57B04D1309304A2B28992E5B45B4E695039BE162682255A0CCCCB3EE30CD')
+    File header = file('tools/fixtures/native12111-flat-level.dat')
+    if (!header.isFile() || releaseDigest(header) != '33DBE405659FB4EF57D23A07485EBC9AFA57694D7B54357C5B534A3E8963F86F')
         throw new GradleException('Missing or changed native flat fixture header')
     File world = new File(root,'world')
     if (world.exists()) throw new GradleException('Refusing to replace an existing fixture world')
@@ -108,7 +109,7 @@ spawn-animals=false
 spawn-monsters=false
 spawn-protection=0
 max-tick-time=120000
-'''
+''' + (System.getProperty('os.name').startsWith('Windows') ? 'use-native-transport=false\n' : '')
     }
 }
 

@@ -1,21 +1,30 @@
 package buildcontrol;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.event.lifecycle.FMLLoadCompleteEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.loading.FMLEnvironment;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.EventLoopGroupHolder;
+import net.minecraft.world.level.gamerules.GameRules;
+import net.minecraft.world.level.storage.LevelData;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.TickEvent;
 /** Independent native Forge control, without a Lootable Bodies dependency. */
 @Mod("forgeplatformcontrol")
 public final class ForgeControl {
-    public ForgeControl() {
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);
-        net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus().addListener(this::loadComplete);
-        net.minecraftforge.fml.DistExecutor.runWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,()->()->net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ClientControl()));
+    public ForgeControl(FMLJavaModLoadingContext context) {
+        ServerStartedEvent.BUS.addListener(this::started);
+        TickEvent.ServerTickEvent.Post.BUS.addListener(this::deathTick);
+        FMLLoadCompleteEvent.getBus(context.getModBusGroup()).addListener(this::loadComplete);
+        if (FMLEnvironment.dist == Dist.CLIENT) TickEvent.ClientTickEvent.Post.BUS.addListener(new ClientControl()::tick);
     }
     private void loadComplete(net.minecraftforge.fml.event.lifecycle.FMLLoadCompleteEvent event) {
         int rounds=Integer.getInteger("lootablebodies.control.resourceReloads",0);
         if(rounds>0)event.enqueueWork(()->ResourceControl.run(rounds));
     }
-    @SubscribeEvent public void started(ServerStartedEvent event) {
+    public void started(ServerStartedEvent event) {
         if(net.minecraftforge.fml.ModList.get().getModContainerById("lootablebodies").isPresent())throw new AssertionError("Independent Forge control contains Lootable Bodies");
         if(net.minecraftforge.fml.loading.FMLEnvironment.dist==net.minecraftforge.api.distmarker.Dist.DEDICATED_SERVER) {
             if(Boolean.getBoolean("lootablebodies.control.tcpServer"))System.out.println("FORGE_PLATFORM_CONTROL_READY");
@@ -23,16 +32,18 @@ public final class ForgeControl {
         }
     }
     private int checkTicks,checkDeaths;
-    @SubscribeEvent public void deathTick(TickEvent.ServerTickEvent event) {
-        if(event.phase!=TickEvent.Phase.END || !Boolean.getBoolean("lootablebodies.control.deaths"))return;
+    public void deathTick(TickEvent.ServerTickEvent.Post event) {
+        if(!Boolean.getBoolean("lootablebodies.control.deaths"))return;
         net.minecraft.server.MinecraftServer server=net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
         net.minecraft.server.level.ServerPlayer p=server.getPlayerList().getPlayerByName("ControlOnly");
-        if(p==null || !p.isAlive())return;
+        if (p == null || !p.isAlive() || !p.connection.hasClientLoaded() || checkDeaths == 8) return;
         if(++checkTicks==1) {
             p.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
             double x=checkDeaths%2==0?96.5:-.4,z=checkDeaths%2==0?96.5:-.4;
             for(int a=-6;a<=6;a++)for(int b=-6;b<=6;b++)p.level().setBlockAndUpdate(net.minecraft.core.BlockPos.containing(x+a,80,z+b),net.minecraft.world.level.block.Blocks.OBSIDIAN.defaultBlockState());
-            p.setRespawnPosition(p.level().dimension(),new net.minecraft.core.BlockPos((int)Math.floor(x),80,(int)Math.floor(z)-3),0F,true,false);
+            var spawn = LevelData.RespawnData.of(p.level().dimension(),
+                    new net.minecraft.core.BlockPos((int)Math.floor(x), 80, (int)Math.floor(z)-3), 0F, 0F);
+            p.setRespawnPosition(new ServerPlayer.RespawnConfig(spawn, true), false);
             p.connection.teleport(x,81,z,0,0);
         }
         if(checkTicks==50){
@@ -42,12 +53,15 @@ public final class ForgeControl {
                 p.level().removeBlock(new net.minecraft.core.BlockPos(px+ax,79,pz+az),false);
                 p.level().removeBlock(new net.minecraft.core.BlockPos(px+ax,80,pz+az),false);
             }
-            p.kill();checkTicks=0;System.out.println("NATIVE_DEATH "+(++checkDeaths));}
+            p.kill(p.level());
+            if (p.isAlive()) throw new AssertionError("Native Forge control kill did not take effect");
+            checkTicks = 0;
+            System.out.println("NATIVE_DEATH " + (++checkDeaths));
+        }
     }
     public static final class ClientControl {
         private int stage,ticks;
-        @SubscribeEvent public void tick(TickEvent.ClientTickEvent event) {
-            if(event.phase!=TickEvent.Phase.END)return;
+        public void tick(TickEvent.ClientTickEvent.Post event) {
             net.minecraft.client.Minecraft mc=net.minecraft.client.Minecraft.getInstance();
             if(Integer.getInteger("lootablebodies.control.port",0)>0) {tcp(mc);return;}
             if(stage==0 && mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen) {
@@ -61,7 +75,7 @@ public final class ForgeControl {
                 }catch(java.io.IOException failure){throw new IllegalStateException(failure);}
                 stage=4;
             }else if(stage==4 && ++ticks>=80) {
-                mc.level.disconnect();mc.disconnect();stage=2;
+                mc.disconnectFromWorld(Component.empty());stage=2;
             }else if(stage==2 && mc.level==null && !mc.hasSingleplayerServer())finish(mc);
         }
         private int connections,wait,deathTicks,respawns;
@@ -110,7 +124,7 @@ public final class ForgeControl {
                 destination=new net.minecraft.client.multiplayer.ServerData("Owned native control","127.0.0.1:"+Integer.getInteger("lootablebodies.control.port"),net.minecraft.client.multiplayer.ServerData.Type.OTHER);
                 if(Boolean.getBoolean("lootablebodies.control.ping")) {
                     pinger=new net.minecraft.client.multiplayer.ServerStatusPinger();
-                    try{pinger.pingServer(destination,()->{},()->{});}catch(java.net.UnknownHostException failure){throw new IllegalStateException(failure);}
+                    try{pinger.pingServer(destination, () -> {}, () -> {}, EventLoopGroupHolder.remote(false));}catch(java.net.UnknownHostException failure){throw new IllegalStateException(failure);}
                     stage=5;
                 }else {net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new net.minecraft.client.gui.screens.TitleScreen(),mc,net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(destination.ip),destination,false,null);stage=1;}
                 wait=0;
@@ -127,7 +141,7 @@ public final class ForgeControl {
                     wait=0;return;
                 }
                 System.out.println("NATIVE_FORGE_TCP_JOIN "+(++connections));
-                mc.level.disconnect();mc.disconnect();mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen());stage=0;wait=0;
+                mc.disconnectFromWorld(Component.empty());mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen());stage=0;wait=0;
             }else if(stage==1 && mc.screen instanceof net.minecraft.client.gui.screens.DisconnectedScreen) {
                 throw new AssertionError("NATIVE_FORGE_TCP_LOGIN_FAILURE joins="+connections);
             }
@@ -138,10 +152,10 @@ public final class ForgeControl {
         private void createWorld(net.minecraft.client.Minecraft client) {
             client.createWorldOpenFlows().createFreshLevel("platform-fixture",
                 new net.minecraft.world.level.LevelSettings("Platform fixture",net.minecraft.world.level.GameType.CREATIVE,false,
-                    net.minecraft.world.Difficulty.NORMAL,false,new net.minecraft.world.level.GameRules(),net.minecraft.world.level.WorldDataConfiguration.DEFAULT),
+                    net.minecraft.world.Difficulty.NORMAL,false,new GameRules(net.minecraft.world.level.WorldDataConfiguration.DEFAULT.enabledFeatures()),net.minecraft.world.level.WorldDataConfiguration.DEFAULT),
                 new net.minecraft.world.level.levelgen.WorldOptions(4267321L,false,false),
-                access->access.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET)
-                    .getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions(),new net.minecraft.client.gui.screens.TitleScreen());
+                access->access.lookupOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET)
+                    .getOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions(),new net.minecraft.client.gui.screens.TitleScreen());
         }
     }
 }

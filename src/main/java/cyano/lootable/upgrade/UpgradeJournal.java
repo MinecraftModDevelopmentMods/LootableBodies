@@ -1,5 +1,9 @@
 package cyano.lootable.upgrade;
 
+import static cyano.lootable.upgrade.NativeNbt.hasType;
+import static cyano.lootable.upgrade.NativeNbt.typedList;
+import static cyano.lootable.upgrade.NativeNbt.isListOf;
+
 import java.io.*;
 import java.nio.channels.FileChannel;
 import java.nio.file.*;
@@ -48,8 +52,8 @@ public final class UpgradeJournal {
         UpgradeJournal journal=new UpgradeJournal(world,levelHeader);
         journal.inspect();
         for(Path original:journal.active.values()) {
-            CompoundTag corpse=journal.readSnapshot(original).getCompound("Entity");
-            if(corpse.contains(UpgradePreservation.VERSION,3) && corpse.getInt(UpgradePreservation.VERSION)>UpgradePreservation.DATA_VERSION)
+            CompoundTag corpse=journal.readSnapshot(original).getCompoundOrEmpty("Entity");
+            if(hasType(corpse, UpgradePreservation.VERSION, 3) && corpse.getIntOr(UpgradePreservation.VERSION, 0)>UpgradePreservation.DATA_VERSION)
                 throw new IOException("This world contains a newer Lootable Bodies corpse format; originals have been preserved");
         }
         return journal;
@@ -64,22 +68,22 @@ public final class UpgradeJournal {
         List<Path> originals=new ArrayList<>(active.values());originals.sort(Comparator.comparing(Path::toString));
         for(Path original:originals) {
             CompoundTag snapshot=readSnapshot(original);
-            Path relative=Paths.get(snapshot.getString("Region"));
+            Path relative=Paths.get(snapshot.getStringOr("Region", ""));
             if(relative.getParent()==null || !relative.getParent().getFileName().toString().equals("entities"))continue;
-            String key=relative.toString()+":"+snapshot.getString("OriginalChunk");
+            String key=relative.toString()+":"+snapshot.getStringOr("OriginalChunk", "");
             if(!checked.add(key))continue;
             Path region=world.resolve(relative).normalize();
             if(relative.isAbsolute() || !region.startsWith(world))throw new IOException("Entity region is outside the world");
-            String expected=snapshot.getString("RegionDigest");
+            String expected=snapshot.getStringOr("RegionDigest", "");
             if(!expected.equals(fileDigest(region)))throw new IOException("Entity region changed before conversion validation: "+relative);
-            byte[] bytes=Files.readAllBytes(chunks.resolve(snapshot.getString("OriginalChunk")+".bin"));
-            InputStream stream=snapshot.getByte("OriginalCompression")==1?new GZIPInputStream(new ByteArrayInputStream(bytes)):
+            byte[] bytes=Files.readAllBytes(chunks.resolve(snapshot.getStringOr("OriginalChunk", "")+".bin"));
+            InputStream stream=snapshot.getByteOr("OriginalCompression", (byte) 0)==1?new GZIPInputStream(new ByteArrayInputStream(bytes)):
                     new InflaterInputStream(new ByteArrayInputStream(bytes));
             CompoundTag root;
             try(DataInputStream input=new DataInputStream(stream)){root=NbtIo.read(input,NbtAccounter.create(MAX_NBT));}
             try {
                 NativeNbt.update(fixer,net.minecraft.util.datafix.fixes.References.ENTITY_CHUNK,root,
-                        root.contains("DataVersion",3)?root.getInt("DataVersion"):-1,UpgradePreservation.MINECRAFT_VERSION);
+                        hasType(root, "DataVersion", 3)?root.getIntOr("DataVersion", 0):-1,UpgradePreservation.MINECRAFT_VERSION);
             } catch(RuntimeException unsafe) {
                 throw new IOException("Cannot safely convert preserved entity chunk before world loading: "+relative,unsafe);
             }
@@ -92,7 +96,7 @@ public final class UpgradeJournal {
         Path path=active.get(id);
         if(path==null) return null;
         CompoundTag original=readSnapshot(path);
-        return original.getInt("ChunkX")==chunkX && original.getInt("ChunkZ")==chunkZ ? original : null;
+        return original.getIntOr("ChunkX", 0)==chunkX && original.getIntOr("ChunkZ", 0)==chunkZ ? original : null;
     }
 
     CompoundTag originalFor(UUID id) throws IOException {
@@ -101,7 +105,7 @@ public final class UpgradeJournal {
     }
 
     static boolean corpse(CompoundTag entity) {
-        String id=entity.getString("id");
+        String id=entity.getStringOr("id", "");
         return id.equals("lootablebodies:corpse") || id.equals("lootablebodies.Corpse");
     }
 
@@ -111,14 +115,14 @@ public final class UpgradeJournal {
     }
     static List<LocatedCorpse> corpses(ListTag roots) {
         List<LocatedCorpse> result=new ArrayList<>();
-        for(int root=0;root<roots.size();root++)collect(roots.getCompound(root),root,new int[0],result);
+        for(int root=0;root<roots.size();root++)collect(roots.getCompoundOrEmpty(root),root,new int[0],result);
         return result;
     }
     private static void collect(CompoundTag entity,int root,int[] path,List<LocatedCorpse> result) {
         if(path.length>512)throw new IllegalArgumentException("Corpse passenger tree is too deep");
         if(corpse(entity))result.add(new LocatedCorpse(entity,root,path));
-        ListTag passengers=entity.getList("Passengers",10);
-        for(int i=0;i<passengers.size();i++){int[] nested=Arrays.copyOf(path,path.length+1);nested[path.length]=i;collect(passengers.getCompound(i),root,nested,result);}
+        ListTag passengers=typedList(entity, "Passengers", 10);
+        for(int i=0;i<passengers.size();i++){int[] nested=Arrays.copyOf(path,path.length+1);nested[path.length]=i;collect(passengers.getCompoundOrEmpty(i),root,nested,result);}
     }
 
     private void inspect() throws IOException {
@@ -151,16 +155,16 @@ public final class UpgradeJournal {
             String relative=world.relativize(region).toString().replace('\\','/');
             String hash=fileDigest(region);
             CompoundTag record=previous.get(relative);
-            if(record==null || !hash.equals(record.getString("Digest")))
+            if(record==null || !hash.equals(record.getStringOr("Digest", "")))
                 record=scanRegion(region,relative,hash,worldVersions,record);
             else record=record.copy();
-            ListTag originals=record.getList("Snapshots",8);
+            ListTag originals=typedList(record, "Snapshots", 8);
             for(int i=0;i<originals.size();i++) {
-                Path path=snapshotPath(originals.getString(i));
+                Path path=snapshotPath(originals.getStringOr(i, ""));
                 CompoundTag original=readSnapshot(path);
-                if(!relative.equals(original.getString("Region")) || !hash.equals(original.getString("RegionDigest")))
+                if(!relative.equals(original.getStringOr("Region", "")) || !hash.equals(original.getStringOr("RegionDigest", "")))
                     throw new IOException("Recovery index does not match its source region");
-                CompoundTag entity=original.getCompound("Entity");
+                CompoundTag entity=original.getCompoundOrEmpty("Entity");
                 UUID uuid=uuid(entity);
                 if(active.put(uuid,path)!=null) throw new IOException("Duplicate corpse UUID across saved chunks: "+uuid);
             }
@@ -180,26 +184,26 @@ public final class UpgradeJournal {
         Path index=directory.resolve("index.nbt");
         if(!Files.exists(index)) return records;
         CompoundTag envelope=readCompressed(index);
-        byte[] payload=envelope.getByteArray("Payload");
-        if(!envelope.contains("Format",3) || envelope.getInt("Format")!=FORMAT
-                || !envelope.contains("Digest",8) || !envelope.contains("Payload",7)
-                || !digest(payload).equals(envelope.getString("Digest")))
+        byte[] payload=envelope.getByteArray("Payload").orElseGet(() -> new byte[0]);
+        if(!hasType(envelope, "Format", 3) || envelope.getIntOr("Format", 0)!=FORMAT
+                || !hasType(envelope, "Digest", 8) || !hasType(envelope, "Payload", 7)
+                || !digest(payload).equals(envelope.getStringOr("Digest", "")))
             throw new IOException("Lootable Bodies upgrade index checksum mismatch");
         CompoundTag nbt;
         try(DataInputStream input=new DataInputStream(new GZIPInputStream(new ByteArrayInputStream(payload)))) {
             nbt=NbtIo.read(input,NbtAccounter.create(MAX_NBT));
         }
-        if(!nbt.contains("Format",3) || nbt.getInt("Format")!=FORMAT || !compoundList(nbt.get("Regions")))
+        if(!hasType(nbt, "Format", 3) || nbt.getIntOr("Format", 0)!=FORMAT || !compoundList(nbt.get("Regions")))
             throw new IOException("Invalid Lootable Bodies upgrade index");
-        ListTag regions=nbt.getList("Regions",10);
+        ListTag regions=typedList(nbt, "Regions", 10);
         for(int i=0;i<regions.size();i++) {
-            CompoundTag record=regions.getCompound(i);
-            if(!record.contains("Path",8) || !record.contains("Digest",8) || !record.getString("Digest").matches("[a-f0-9]{64}")
+            CompoundTag record=regions.getCompoundOrEmpty(i);
+            if(!hasType(record, "Path", 8) || !hasType(record, "Digest", 8) || !record.getStringOr("Digest", "").matches("[a-f0-9]{64}")
                     || !(record.get("Snapshots") instanceof ListTag)) throw new IOException("Invalid recovery region record");
             ListTag list=(ListTag)record.get("Snapshots");
-            if(list.size()>0 && list.getElementType()!=8) throw new IOException("Invalid recovery snapshot list");
-            if(records.put(record.getString("Path"),record)!=null) throw new IOException("Duplicate recovery region record");
-            for(int j=0;j<list.size();j++) readSnapshot(snapshotPath(list.getString(j)));
+            if(!isListOf(list, 8)) throw new IOException("Invalid recovery snapshot list");
+            if(records.put(record.getStringOr("Path", ""),record)!=null) throw new IOException("Duplicate recovery region record");
+            for(int j=0;j<list.size();j++) readSnapshot(snapshotPath(list.getStringOr(j, "")));
         }
         return records;
     }
@@ -216,13 +220,13 @@ public final class UpgradeJournal {
         Map<String,CompoundTag> priorLevels=new HashMap<>();
         Map<Long,Boolean> matchingChunks=new HashMap<>();
         if(previous!=null) {
-            ListTag originals=previous.getList("Snapshots",8);
+            ListTag originals=typedList(previous, "Snapshots", 8);
             for(int i=0;i<originals.size();i++) {
-                CompoundTag original=readSnapshot(snapshotPath(originals.getString(i))),versions=original.getCompound("SourceVersions");
-                if(versions.getBoolean("Ambiguous"))continue;
-                long key=chunkKey(original.getInt("ChunkX"),original.getInt("ChunkZ"));
+                CompoundTag original=readSnapshot(snapshotPath(originals.getStringOr(i, ""))),versions=original.getCompoundOrEmpty("SourceVersions");
+                if(versions.getBooleanOr("Ambiguous", false))continue;
+                long key=chunkKey(original.getIntOr("ChunkX", 0),original.getIntOr("ChunkZ", 0));
                 CompoundTag selected=prior.get(key);
-                if(selected==null || UpgradePreservation.chunkSourceVersion(versions)>UpgradePreservation.chunkSourceVersion(selected.getCompound("SourceVersions")))prior.put(key,original);
+                if(selected==null || UpgradePreservation.chunkSourceVersion(versions)>UpgradePreservation.chunkSourceVersion(selected.getCompoundOrEmpty("SourceVersions")))prior.put(key,original);
             }
         }
         try(RandomAccessFile input=new RandomAccessFile(file.toFile(),"r")) {
@@ -250,20 +254,20 @@ public final class UpgradeJournal {
                 int x=(int)rx*32+(i%32),z=(int)rz*32+(i/32);
                 CompoundTag level;
                 if(entityRegion) {
-                    int[] position=chunk.getIntArray("Position");
-                    if(!chunk.contains("Position",11) || position.length!=2 || position[0]!=x || position[1]!=z)
+                    int[] position=chunk.getIntArray("Position").orElseGet(() -> new int[0]);
+                    if(!hasType(chunk, "Position", 11) || position.length!=2 || position[0]!=x || position[1]!=z)
                         throw new IOException("Entity chunk Position mismatch in "+relative);
                     level=chunk;
                 } else {
                     level=TerrainChunkData.payload(chunk);
-                    if(!level.contains("xPos",3) || !level.contains("zPos",3) || level.getInt("xPos")!=x || level.getInt("zPos")!=z)
+                    if(!hasType(level, "xPos", 3) || !hasType(level, "zPos", 3) || level.getIntOr("xPos", 0)!=x || level.getIntOr("zPos", 0)!=z)
                         throw new IOException("Chunk coordinate mismatch in "+relative);
                 }
                 String entityKey=entityRegion?"Entities":TerrainChunkData.entityKey(chunk);
                 if(entityRegion && !level.contains(entityKey))throw new IOException("Missing native entity list in "+relative);
                 if(!level.contains(entityKey)) continue;
                 if(!compoundList(level.get(entityKey))) throw new IOException("Unreadable entity list in "+relative);
-                ListTag entities=level.getList(entityKey,10);
+                ListTag entities=typedList(level, entityKey, 10);
                 String originalChunk=digest(payload);
                 for(LocatedCorpse located:corpses(entities)) {
                     CompoundTag entity=located.entity;int e=located.root;
@@ -278,11 +282,11 @@ public final class UpgradeJournal {
                     snapshot.putInt("ChunkX",x);snapshot.putInt("ChunkZ",z);snapshot.put("Entity",entity.copy());
                     CompoundTag versions=sourceVersions(chunk,worldVersions,entity),priorSnapshot=prior.get(chunkKey(x,z));
                     if(priorSnapshot!=null) {
-                        String savedChunk=priorSnapshot.getString("OriginalChunk");
+                        String savedChunk=priorSnapshot.getStringOr("OriginalChunk", "");
                         CompoundTag oldLevel=priorLevels.get(savedChunk);
                         if(oldLevel==null) {
                             byte[] originalBytes=Files.readAllBytes(chunks.resolve(savedChunk+".bin"));
-                            InputStream originalStream=priorSnapshot.getByte("OriginalCompression")==1?new GZIPInputStream(new ByteArrayInputStream(originalBytes)):new InflaterInputStream(new ByteArrayInputStream(originalBytes));
+                            InputStream originalStream=priorSnapshot.getByteOr("OriginalCompression", (byte) 0)==1?new GZIPInputStream(new ByteArrayInputStream(originalBytes)):new InflaterInputStream(new ByteArrayInputStream(originalBytes));
                             try(DataInputStream originalInput=new DataInputStream(originalStream)){oldLevel=comparisonPayload(NbtIo.read(originalInput,NbtAccounter.create(MAX_NBT)),entityRegion);}
                             priorLevels.put(savedChunk,oldLevel);
                         }
@@ -290,7 +294,7 @@ public final class UpgradeJournal {
                         // Never substitute old entities, Position or unknown payloads.
                         long key=chunkKey(x,z);Boolean same=matchingChunks.get(key);
                         if(same==null){same=sameNbt(oldLevel,comparisonPayload(chunk,entityRegion));matchingChunks.put(key,same);}
-                        if(same)versions.putInt("VerifiedChunkDataVersion",UpgradePreservation.chunkSourceVersion(priorSnapshot.getCompound("SourceVersions")));
+                        if(same)versions.putInt("VerifiedChunkDataVersion",UpgradePreservation.chunkSourceVersion(priorSnapshot.getCompoundOrEmpty("SourceVersions")));
                     }
                     snapshot.put("SourceVersions",versions);
                     byte[] original=compressed(snapshot);String filename=digest(original)+".nbt";Path destination=snapshotPath(filename);
@@ -318,7 +322,7 @@ public final class UpgradeJournal {
     private CompoundTag readWorldVersions() throws IOException {
         CompoundTag context=new CompoundTag();
         if(Files.isRegularFile(levelHeader)) {
-            CompoundTag root=readCompressed(levelHeader),data=root.getCompound("Data");
+            CompoundTag root=readCompressed(levelHeader),data=root.getCompoundOrEmpty("Data");
             if(data.contains("DataVersion")) context.put("WorldDataVersion",data.get("DataVersion").copy());
             if(data.contains("Version"))context.put("WorldVersion",data.get("Version").copy());
             if(root.contains("FML")) context.put("WorldFML",root.get("FML").copy());
@@ -333,12 +337,12 @@ public final class UpgradeJournal {
         CompoundTag context=world.copy();
         if(chunk.contains("DataVersion")) context.put("ChunkDataVersion",chunk.get("DataVersion").copy());
         if(chunk.contains("ForgeDataVersion")) context.put("ForgeDataVersion",chunk.get("ForgeDataVersion").copy());
-        int version=chunk.contains("DataVersion",3) ? chunk.getInt("DataVersion") : -1;
-        if(version<512 || version>UpgradePreservation.MINECRAFT_VERSION) version=world.contains("WorldDataVersion",3) ? world.getInt("WorldDataVersion") : -1;
+        int version=hasType(chunk, "DataVersion", 3) ? chunk.getIntOr("DataVersion", 0) : -1;
+        if(version<512 || version>UpgradePreservation.MINECRAFT_VERSION) version=hasType(world, "WorldDataVersion", 3) ? world.getIntOr("WorldDataVersion", 0) : -1;
         // Dotted IDs and our own per-corpse markers identify known source families.
         // A lowercase ID alone cannot distinguish original 1.11 and 1.12 saves.
-        boolean legacy=entity.getString("id").equals("lootablebodies.Corpse");
-        int marker=entity.contains(UpgradePreservation.VERSION,3) ? entity.getInt(UpgradePreservation.VERSION) : 0;
+        boolean legacy=entity.getStringOr("id", "").equals("lootablebodies.Corpse");
+        int marker=hasType(entity, UpgradePreservation.VERSION, 3) ? entity.getIntOr(UpgradePreservation.VERSION, 0) : 0;
         if(marker==1) version=922;
         else if(marker==2)version=1343;
         else if(marker==3)version=1631;
@@ -350,16 +354,18 @@ public final class UpgradeJournal {
         else if(marker==9)version=3337;
         else if(marker==10)version=3465;
         else if(marker==11)version=3839;
-        else if(marker==12)version=UpgradePreservation.MINECRAFT_VERSION;
+        else if(marker==12)version=3955;
+        else if(marker==13)version=UpgradePreservation.MINECRAFT_VERSION;
         if(legacy) {if(version!=512)context.putBoolean("Inferred",true);version=512;}
         if(legacy || (marker>=1 && marker<=UpgradePreservation.DATA_VERSION))
             context.putInt("CorpseWriterDataVersion",version);
         int family=-1;
-        ListTag mods=UpgradePreservation.modList(world.getCompound("WorldFML"));
+        ListTag mods=UpgradePreservation.modList(world.getCompoundOrEmpty("WorldFML"));
         for(int i=0;i<mods.size();i++) {
-            CompoundTag mod=mods.getCompound(i);if(!mod.getString("ModId").equals("lootablebodies"))continue;
-            String release=mod.getString("ModVersion");
-            if(release.endsWith(".121011"))family=UpgradePreservation.MINECRAFT_VERSION;
+            CompoundTag mod=mods.getCompoundOrEmpty(i);if(!mod.getStringOr("ModId", "").equals("lootablebodies"))continue;
+            String release=mod.getStringOr("ModVersion", "");
+            if(release.endsWith(".121111"))family=UpgradePreservation.MINECRAFT_VERSION;
+            else if(release.endsWith(".121011"))family=3955;
             else if(release.endsWith(".120061"))family=3839;
             else if(release.endsWith(".120011"))family=3465;
             else if(release.endsWith(".119041"))family=3337;
@@ -393,17 +399,17 @@ public final class UpgradeJournal {
     private static boolean sameNbt(Tag a,Tag b) {
         if(a==null || b==null)return a==b;
         if(a.getId()!=b.getId())return false;
-        if(a instanceof DoubleTag)return Double.doubleToRawLongBits(((DoubleTag)a).getAsDouble())==Double.doubleToRawLongBits(((DoubleTag)b).getAsDouble());
-        if(a instanceof FloatTag)return Float.floatToRawIntBits(((FloatTag)a).getAsFloat())==Float.floatToRawIntBits(((FloatTag)b).getAsFloat());
+        if(a instanceof DoubleTag)return Double.doubleToRawLongBits(((DoubleTag)a).doubleValue())==Double.doubleToRawLongBits(((DoubleTag)b).doubleValue());
+        if(a instanceof FloatTag)return Float.floatToRawIntBits(((FloatTag)a).floatValue())==Float.floatToRawIntBits(((FloatTag)b).floatValue());
         if(a instanceof CompoundTag) {
             CompoundTag x=(CompoundTag)a,y=(CompoundTag)b;
-            if(!x.getAllKeys().equals(y.getAllKeys()))return false;
-            for(String key:x.getAllKeys())if(!sameNbt(x.get(key),y.get(key)))return false;
+            if(!x.keySet().equals(y.keySet()))return false;
+            for(String key:x.keySet())if(!sameNbt(x.get(key),y.get(key)))return false;
             return true;
         }
         if(a instanceof ListTag) {
             ListTag x=(ListTag)a,y=(ListTag)b;
-            if(x.getElementType()!=y.getElementType() || x.size()!=y.size())return false;
+            if(x.size()!=y.size())return false;
             for(int i=0;i<x.size();i++)if(!sameNbt(x.get(i),y.get(i)))return false;
             return true;
         }
@@ -417,15 +423,15 @@ public final class UpgradeJournal {
     private CompoundTag readSnapshot(Path path) throws IOException {
         if(!path.getFileName().toString().equals(digest(Files.readAllBytes(path))+".nbt")) throw new IOException("Corpse recovery checksum mismatch");
         CompoundTag nbt=readCompressed(path);
-        if(!nbt.contains("Format",3) || nbt.getInt("Format")!=FORMAT || !nbt.contains("Entity",10) || !nbt.contains("SourceVersions",10)
-                || !nbt.contains("ChunkX",3) || !nbt.contains("ChunkZ",3) || !nbt.contains("Region",8) || !nbt.contains("RegionDigest",8)
-                || !nbt.contains("Dimension",8) || !nbt.contains("OriginalChunk",8) || !nbt.contains("OriginalCompression",1) || !nbt.contains("EntityIndex",3)
-                || !corpse(nbt.getCompound("Entity"))) throw new IOException("Invalid original corpse snapshot");
-        String original=nbt.getString("OriginalChunk");
-        if(!original.matches("[a-f0-9]{64}") || (nbt.getByte("OriginalCompression")!=1 && nbt.getByte("OriginalCompression")!=2)
-                || nbt.getInt("EntityIndex")<0 || !original.equals(fileDigest(chunks.resolve(original+".bin"))))
+        if(!hasType(nbt, "Format", 3) || nbt.getIntOr("Format", 0)!=FORMAT || !hasType(nbt, "Entity", 10) || !hasType(nbt, "SourceVersions", 10)
+                || !hasType(nbt, "ChunkX", 3) || !hasType(nbt, "ChunkZ", 3) || !hasType(nbt, "Region", 8) || !hasType(nbt, "RegionDigest", 8)
+                || !hasType(nbt, "Dimension", 8) || !hasType(nbt, "OriginalChunk", 8) || !hasType(nbt, "OriginalCompression", 1) || !hasType(nbt, "EntityIndex", 3)
+                || !corpse(nbt.getCompoundOrEmpty("Entity"))) throw new IOException("Invalid original corpse snapshot");
+        String original=nbt.getStringOr("OriginalChunk", "");
+        if(!original.matches("[a-f0-9]{64}") || (nbt.getByteOr("OriginalCompression", (byte) 0)!=1 && nbt.getByteOr("OriginalCompression", (byte) 0)!=2)
+                || nbt.getIntOr("EntityIndex", 0)<0 || !original.equals(fileDigest(chunks.resolve(original+".bin"))))
             throw new IOException("Original compressed chunk checksum mismatch");
-        uuid(nbt.getCompound("Entity"));return nbt;
+        uuid(nbt.getCompoundOrEmpty("Entity"));return nbt;
     }
     private static UUID uuid(CompoundTag entity) throws IOException {
         try {return CorpseIdentity.read(entity);}
@@ -433,7 +439,7 @@ public final class UpgradeJournal {
             throw new IOException("Corpse UUID is missing, conflicting or malformed; original region has not been changed",invalid);
         }
     }
-    private static boolean compoundList(Tag value) {return value instanceof ListTag && (((ListTag)value).size()==0 || ((ListTag)value).getElementType()==10);}
+    private static boolean compoundList(Tag value) {return isListOf(value, 10);}
     private static CompoundTag readCompressed(Path path) throws IOException {
         try(DataInputStream input=new DataInputStream(new GZIPInputStream(Files.newInputStream(path)))) {return NbtIo.read(input,NbtAccounter.create(MAX_NBT));}
         catch(RuntimeException damaged) {throw new IOException("Unreadable preservation data: "+path.getFileName(),damaged);}
@@ -464,15 +470,15 @@ public final class UpgradeJournal {
 
     private static boolean hasOriginal1122Writer(CompoundTag world,ListTag mods) {
         // The original 2.4.0 mod version alone cannot identify the native writer.
-        CompoundTag saved=world.getCompound("WorldVersion");
-        if(!saved.contains("Id",3) || saved.getInt("Id")!=1343 || !saved.getString("Name").equals("1.12.2")
-                || !saved.contains("Snapshot",1) || saved.getBoolean("Snapshot"))return false;
+        CompoundTag saved=world.getCompoundOrEmpty("WorldVersion");
+        if(!hasType(saved, "Id", 3) || saved.getIntOr("Id", 0)!=1343 || !saved.getStringOr("Name", "").equals("1.12.2")
+                || !hasType(saved, "Snapshot", 1) || saved.getBooleanOr("Snapshot", false))return false;
         String minecraft=null;
         for(int i=0;i<mods.size();i++) {
-            CompoundTag mod=mods.getCompound(i);
-            if(!mod.getString("ModId").equals("minecraft"))continue;
+            CompoundTag mod=mods.getCompoundOrEmpty(i);
+            if(!mod.getStringOr("ModId", "").equals("minecraft"))continue;
             if(minecraft!=null)return false;
-            minecraft=mod.getString("ModVersion");
+            minecraft=mod.getStringOr("ModVersion", "");
         }
         return "1.12.2".equals(minecraft);
     }

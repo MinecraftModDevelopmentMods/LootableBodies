@@ -21,14 +21,13 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.client.Screenshot;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.GameType;
 import net.minecraftforge.client.event.RenderLivingEvent;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /** Exercise the actual client locale, entity label, spawn egg and saved name. */
 final class NamelessCorpseClientChecks {
@@ -41,8 +40,13 @@ final class NamelessCorpseClientChecks {
     private boolean originalUnicode, originalBidi;
     private boolean renderedBody;
 
-    @SubscribeEvent public void rendered(RenderLivingEvent.Post<?,?> event) {
-        if(event.getEntity().getUUID().equals(BODY)) renderedBody=true;
+    private void rendered(RenderLivingEvent.Post<?,?,?> event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level != null && event.getRenderer() instanceof cyano.lootable.graphics.CorpseRenderer
+                && event.getState() instanceof net.minecraft.client.renderer.entity.state.AvatarRenderState state
+                && mc.level.getEntity(state.id) instanceof EntityLootableBody body && body.getUUID().equals(BODY)) {
+            renderedBody = true;
+        }
     }
 
     static void englishContract(Minecraft mc) throws Exception {
@@ -51,7 +55,7 @@ final class NamelessCorpseClientChecks {
 
     private static String translation(Minecraft mc, String code) throws Exception {
         com.google.gson.JsonObject values;
-        try(Reader in=new InputStreamReader(mc.getResourceManager().getResource(ResourceLocation.fromNamespaceAndPath("lootablebodies","lang/"+code+".json")).orElseThrow().open(),StandardCharsets.UTF_8)) {
+        try(Reader in=new InputStreamReader(mc.getResourceManager().getResource(Identifier.fromNamespaceAndPath("lootablebodies","lang/"+code+".json")).orElseThrow().open(),StandardCharsets.UTF_8)) {
             values=new com.google.gson.JsonParser().parse(in).getAsJsonObject();
         }
         String expected=values.get("entity.lootablebodies.Corpse.name").getAsString();
@@ -71,7 +75,7 @@ final class NamelessCorpseClientChecks {
         retained.putString("Source","FutureFixture"); retained.putString("Data","retain verbatim");
         data.put("LootableBodiesUnresolved",NbtRecoveryChecks.list(retained));
         body = (EntityLootableBody)FixtureApi.loadEntity(data,mc.level);
-        RuntimeChecks.require(body != null && ResourceLocation.parse("lootablebodies:corpse").equals(net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(body.getType())), "Registry/display identity changed");
+        RuntimeChecks.require(body != null && Identifier.parse("lootablebodies:corpse").equals(net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(body.getType())), "Registry/display identity changed");
         CompoundTag before = NameLifetimeChecks.saved(body);
         RuntimeChecks.require(expected.equals(body.getName().getString()), "Untranslated nameless corpse in "+code+": "+body.getName().getString());
         RuntimeChecks.require(expected.equals(body.getDisplayName().getString()), "Wrong rendered name in "+code);
@@ -100,12 +104,14 @@ final class NamelessCorpseClientChecks {
             mc.options.pauseOnLostFocus=false;mc.options.framerateLimit().set(30);mc.options.renderDistance().set(4);
             originalLanguage=mc.getLanguageManager().getSelected();
             originalUnicode=mc.options.forceUnicodeFont().get(); originalBidi=mc.font.isBidirectional();
-            MinecraftForge.EVENT_BUS.register(this);
+            RenderLivingEvent.Post.BUS.addListener(this::rendered);
             FixtureApi.ClientWorlds.create(mc,"name-fixture","Name fixture",net.minecraft.world.level.GameType.CREATIVE,false);stage=1;
-        } else if(stage==1 && mc.level!=null && mc.player!=null && mc.getSingleplayerServer()!=null) {
+        } else if (stage == 1 && mc.level != null && mc.player != null && mc.getSingleplayerServer() != null
+                && !(mc.screen instanceof net.minecraft.client.gui.screens.LevelLoadingScreen)) {
             pending=mc.getSingleplayerServer().submitAsync(() -> {
                 ServerLevel world=mc.getSingleplayerServer().getLevel(FixtureApi.dimensionKey(0));
-                world.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOMOBSPAWNING).set(false,null);
+                RuntimeChecks.awaitChunk(world, 1, 1);
+                world.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.SPAWN_MOBS,false,null);
                 for(int x=12;x<=24;x++)for(int z=12;z<=24;z++)world.setBlockAndUpdate(new BlockPos(x,79,z),Blocks.STONE.defaultBlockState());
                 EntityLootableBody body=new EntityLootableBody(world);body.setUUID(BODY);body.setPos(18.5,80,18.5);body.setNoGravity(true);RuntimeChecks.disableVacuum(body);
                 for(int i=0;i<48;i++)body.setItem(i,RuntimeChecks.stack(i));
@@ -114,7 +120,8 @@ final class NamelessCorpseClientChecks {
                 net.minecraft.server.level.ServerPlayer player=mc.getSingleplayerServer().getPlayerList().getPlayer(mc.player.getUUID());
                 player.getAbilities().flying=true;player.onUpdateAbilities();player.connection.teleport(18.5,80,14.5,0,12);
             });stage=2;frames=0;
-        } else if(stage==2 && pending.isDone() && ++frames>30) {
+        } else if (stage == 2 && pending.isDone() && ++frames > 30
+                && FixtureApi.entities(mc.level).stream().anyMatch(entity -> entity.getUUID().equals(BODY))) {
             pending.get();stage=3;frames=0;
         } else if(stage==3) {
             // Keep the disposable view attached to the current network player.
@@ -135,7 +142,7 @@ final class NamelessCorpseClientChecks {
             if(frames==15 && Arrays.asList("en_us","de_de","en_pt","es_es","zh_cn").contains(code)) {
                 System.out.println("NAME_CAMERA player="+mc.player.blockPosition()+" view="+mc.getCameraEntity().blockPosition()+" yaw="+mc.player.getYRot()+" pitch="+mc.player.getXRot()+" rendered="+renderedBody);
                 RuntimeChecks.require(renderedBody,"No corpse rendered for label screenshot "+code);
-                Screenshot.grab(mc.gameDirectory,"name-"+code+".png",mc.getMainRenderTarget(),message->System.out.println(message.getString()));
+                Screenshot.grab(mc.gameDirectory,"name-"+code+".png",mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));
             }
             if(frames>20) {frames=0;locale++;if(locale==LOCALES.length) {
                 mc.getLanguageManager().setSelected(originalLanguage);mc.getLanguageManager().onResourceManagerReload(mc.getResourceManager());
@@ -148,7 +155,7 @@ final class NamelessCorpseClientChecks {
             }
         } else if(stage==5 && mc.screen instanceof CorpseGUIContainer && ++frames>20) {
             for(int slot=0;slot<48;slot++)RuntimeChecks.require(RuntimeChecks.sameStack(mc.player.containerMenu.getSlot(slot).getItem(),RuntimeChecks.stack(slot)),"Name fix changed network inventory slot "+slot);
-            Screenshot.grab(mc.gameDirectory,"name-english-inventory.png",mc.getMainRenderTarget(),message->System.out.println(message.getString()));
+            Screenshot.grab(mc.gameDirectory,"name-english-inventory.png",mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));
             new File(mc.gameDirectory,"client.pass").createNewFile();System.out.println("LOOTABLE_BODIES_NAME_TRANSLATION_PASS locales="+LOCALES.length);
             mc.player.closeContainer();FixtureConnections.disconnect(mc);stage=6;
         } else if(stage==6 && FixtureConnections.stopped(mc)) {mc.stop();stage=7;}

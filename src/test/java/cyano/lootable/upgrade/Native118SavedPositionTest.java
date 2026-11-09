@@ -1,5 +1,7 @@
 package cyano.lootable.upgrade;
 
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
+
 import java.util.UUID;
 import net.minecraft.nbt.*;
 import net.minecraft.util.datafix.fixes.References;
@@ -28,13 +30,13 @@ class Native118SavedPositionTest {
         }
         return root;
     }
-    private CompoundTag first(CompoundTag root,boolean separate){return root.getList(separate?"Entities":"entities",10).getCompound(0);}
+    private CompoundTag first(CompoundTag root,boolean separate){return typedList(root, separate?"Entities":"entities", 10).getCompoundOrEmpty(0);}
     @Test void malformedAxisUsesContainingRegionBeforeEitherNativeLoaderConstructsAnEntity() {
         for(boolean separate:new boolean[]{false,true}) {
             CompoundTag body=body(ID,UpgradePreservation.DATA_VERSION);body.put("Pos",pos(Double.NaN,80,160.5));
             CompoundTag raw=root(body,separate,-11,10),before=raw.copy();CompoundTag converted=fixed(raw,separate),actual=first(converted,separate);
             assertEquals(pos(-167.5,80,160.5),actual.get("Pos"));assertEquals(before,raw);
-            CompoundTag record=actual.getList(RECOVERY,10).getCompound(0);assertEquals("Pos",record.getString("Source"));assertEquals(body.get("Pos"),record.get("Data"));
+            CompoundTag record=typedList(actual, RECOVERY, 10).getCompoundOrEmpty(0);assertEquals("Pos",record.getStringOr("Source", ""));assertEquals(body.get("Pos"),record.get("Data"));
             for(String key:new String[]{"UUID","Name","Equipment","Aux","LootableBodiesUnresolved"})assertEquals(body.get(key),actual.get(key),key);
             assertEquals(converted,fixed(converted,separate),"Conversion accumulated records or moved an already repaired body");
         }
@@ -52,10 +54,10 @@ class Native118SavedPositionTest {
     }
     @Test void rawRecoveryTagSurvivesPositionRepairExactlyOnce() {
         CompoundTag body=body(ID,UpgradePreservation.DATA_VERSION);body.putString("Pos","opaque position");body.putString(RECOVERY,"future raw recovery");
-        CompoundTag result=fixed(root(body,true,0,0),true),actual=first(result,true);ListTag records=actual.getList(RECOVERY,10);
-        assertEquals(2,records.size());assertEquals("Recovery",records.getCompound(0).getString("Source"));
-        assertEquals(StringTag.valueOf("future raw recovery"),records.getCompound(0).get("Data"));
-        assertEquals("Pos",records.getCompound(1).getString("Source"));assertEquals(StringTag.valueOf("opaque position"),records.getCompound(1).get("Data"));
+        CompoundTag result=fixed(root(body,true,0,0),true),actual=first(result,true);ListTag records=typedList(actual, RECOVERY, 10);
+        assertEquals(2,records.size());assertEquals("Recovery",records.getCompoundOrEmpty(0).getStringOr("Source", ""));
+        assertEquals(StringTag.valueOf("future raw recovery"),records.getCompoundOrEmpty(0).get("Data"));
+        assertEquals("Pos",records.getCompoundOrEmpty(1).getStringOr("Source", ""));assertEquals(StringTag.valueOf("opaque position"),records.getCompoundOrEmpty(1).get("Data"));
         assertEquals(result,fixed(result,true));
     }
     @Test void impossibleContainingCoordinatesRefuseBeforeNativeConstruction() {
@@ -67,7 +69,7 @@ class Native118SavedPositionTest {
             CompoundTag body=body(ID,UpgradePreservation.DATA_VERSION);body.put("Pos",pos(8.5,y,8.5));CompoundTag raw=root(body,separate,0,0),before=raw.copy();
             CompoundTag actual=first(fixed(raw,separate),separate);
             assertEquals(pos(8.5,64,8.5),actual.get("Pos"));assertEquals(before,raw);
-            assertEquals(body.get("Pos"),actual.getList(RECOVERY,10).getCompound(0).get("Data"));
+            assertEquals(body.get("Pos"),typedList(actual, RECOVERY, 10).getCompoundOrEmpty(0).get("Data"));
             for(String key:new String[]{"UUID","Equipment","Aux","LootableBodiesUnresolved"})assertEquals(body.get(key),actual.get(key));
         }
     }

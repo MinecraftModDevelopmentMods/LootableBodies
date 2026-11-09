@@ -71,7 +71,7 @@ class HistoricalRuntimeBudgetTests(unittest.TestCase):
         import json
         with tempfile.TemporaryDirectory() as directory:
             policy=Path(directory)/'policy.json'
-            base={'minecraft':'1.21.1','forge':'52.1.20','reloads':200,'jvms':4,'qualified':True,'jvm_args':[]}
+            base={'minecraft':'1.21.11','forge':'61.2.4','reloads':200,'jvms':4,'qualified':True,'jvm_args':[]}
             for fields in ({'jvm_args':['-Dmax.bg.threads=1']},{'controller_sha256':'0'*64}):
                 policy.write_text(json.dumps(dict(base,**fields)))
                 with patch.object(native_runtime,'WORKER_BUDGET_PATH',policy),patch.object(native_runtime,'run_monitored') as launch:

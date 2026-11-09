@@ -1,4 +1,6 @@
 package cyano.lootable.buildtest;
+
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.nbt.ListTag;
@@ -14,7 +16,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.Level;
 
 /** Raw malformed data written into real disposable region files, then read in later JVMs. */
@@ -22,7 +24,7 @@ final class NbtWorldChecks {
     static final int GRAPHICAL_COORDINATE=8192;
     static int graphicalAdmissions;
     static void verifyGraphicalAdmission(Entity entity){
-        if(!Boolean.getBoolean("lootablebodies.clientCheck") || entity.level().isClientSide
+        if(!Boolean.getBoolean("lootablebodies.clientCheck") || entity.level().isClientSide()
                 || entity.getClass()!=EntityLootableBody.class || !entity.getUUID().equals(NEAR))return;
         EntityLootableBody body=(EntityLootableBody)entity;
         PositionMotionChecks.verifyWorldFields(body);
@@ -37,7 +39,10 @@ final class NbtWorldChecks {
     static void registerItem(){
         String phase=System.getProperty("lootablebodies.phase","");
         if(phase.startsWith("nbt-return") || phase.startsWith("upgrade-return") || phase.startsWith("upgrade-final")) {
-            returning=new Item(new Item.Properties());net.minecraftforge.registries.ForgeRegistries.ITEMS.register(ResourceLocation.parse(RETURNING),returning);
+            Identifier id = Identifier.parse(RETURNING);
+            returning = new Item(new Item.Properties().setId(net.minecraft.resources.ResourceKey.create(
+                    net.minecraft.core.registries.Registries.ITEM, id)));
+            net.minecraftforge.registries.ForgeRegistries.ITEMS.register(id, returning);
         }
     }
     static void run(MinecraftServer server,String phase) throws Exception {
@@ -66,7 +71,7 @@ final class NbtWorldChecks {
     static void seed(ServerLevel w,UUID id,int coordinate,File folder,String name) throws Exception {
         RuntimeChecks.awaitChunk(w,coordinate>>4,coordinate>>4);RawBody b=new RawBody(w);b.setUUID(id);b.setPos(coordinate+.5,80,coordinate+.5);b.setNoGravity(true);b.setUserName("NbtFixture");b.setRotation(37);RuntimeChecks.disableVacuum(b);
         for(int i=0;i<48;i++)b.setItem(i,known(i));RuntimeChecks.require(w.addFreshEntity(b),"Raw fixture spawn");
-        CompoundTag n=new CompoundTag();RuntimeChecks.require(b.saveAsPassenger(n),"Raw fixture serialization");
+        CompoundTag n=new CompoundTag();RuntimeChecks.require(FixtureApi.saveEntity(b,n),"Raw fixture serialization");
         try(FileOutputStream out=new FileOutputStream(new File(folder,"raw-"+name+".nbt"))){NbtIo.writeCompressed(n,out);}
     }
     private static ItemStack known(int i){return i==6?NbtRecoveryChecks.item(120,17):NbtRecoveryChecks.item(i,i<6?1:64);}
@@ -86,24 +91,25 @@ final class NbtWorldChecks {
         n.putLong("DeathTime",Long.MIN_VALUE);
         n.putDouble("DecayTime",Double.NaN);
         CompoundTag name=new CompoundTag();name.putString("Opaque","saved malformed attribution");n.put("Name",name);
-        CompoundTag health=HealthAttributeChecks.malformedFields();for(String key:health.getAllKeys())n.put(key,health.get(key).copy());
-        CompoundTag effects=EffectHurtChecks.malformedFields();for(String key:effects.getAllKeys())n.put(key,effects.get(key).copy());
-        CompoundTag rotation=RotationFallChecks.malformedFields();for(String key:rotation.getAllKeys())n.put(key,rotation.get(key).copy());
+        CompoundTag health=HealthAttributeChecks.malformedFields();for(String key:health.keySet())n.put(key,health.get(key).copy());
+        CompoundTag effects=EffectHurtChecks.malformedFields();for(String key:effects.keySet())n.put(key,effects.get(key).copy());
+        n.remove("fall_distance");CompoundTag rotation=RotationFallChecks.malformedFields();for(String key:rotation.keySet())n.put(key,rotation.get(key).copy());
         return n;
     }
     private static CompoundTag missing(int index,int count,int slot){CompoundTag n=NbtRecoveryChecks.entry(index,count,slot);n.putString("id","absentfixture:missing");return n;}
     private static final class RawBody extends EntityLootableBody {
         RawBody(Level w){super(w);}
-        @Override public boolean saveAsPassenger(CompoundTag n){if(isRemoved())return false;n.putString("id","lootablebodies:corpse");saveWithoutId(n);return true;}
-        @Override public void addAdditionalSaveData(CompoundTag n){
-            super.addAdditionalSaveData(n);
+        @Override public boolean saveAsPassenger(net.minecraft.world.level.storage.ValueOutput output){if(isRemoved())return false;output.putString("id","lootablebodies:corpse");saveWithoutId(output);return true;}
+        @Override public void addAdditionalSaveData(net.minecraft.world.level.storage.ValueOutput output){
+            super.addAdditionalSaveData(output);
             // Replace the native fields so the synthetic legacy records are the records read from disk.
-            n.remove("attributes");
-            n.remove("active_effects");
-            CompoundTag raw=rawEquipment();
-            for(String key:raw.getAllKeys())n.put(key,raw.get(key).copy());
+            output.discard("attributes");
+            output.discard("active_effects");
+            output.discard("fall_distance");
+            CompoundTag n=rawEquipment();
             n.put("Pos",PositionMotionChecks.vector(Double.NaN,80,getZ()));
             n.put("Motion",PositionMotionChecks.vector(Double.NaN,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY));
+            cyano.lootable.upgrade.NativeNbt.writeRawTags(output, n);
         }
     }
     private static void settle(EntityLootableBody b){for(int i=0;i<8;i++)b.baseTick();}
@@ -116,11 +122,11 @@ final class NbtWorldChecks {
         if(restored){CompoundTag raw=NbtRecoveryChecks.entry(123,9,7);raw.putString("id",RETURNING);ItemStack s=FixtureStackData.load(raw);RuntimeChecks.require((s != null && !s.isEmpty()) && s.getItem()==returning,"Returning fixture item not registered");add(expected,s);}
         RuntimeChecks.require(expected.equals(NbtRecoveryChecks.items(b)),"Disk recovery item/count/damage/custom NBT lost or duplicated");
         CompoundTag source=rawEquipment();int rawCount=0;
-        for(String list:new String[]{"Equipment","Aux"}){ListTag entries=source.getList(list,10);for(int i=0;i<entries.size();i++){
-            CompoundTag raw=entries.getCompound(i);boolean unresolved=raw.getString("id").equals("absentfixture:missing") || raw.getInt("count")==0 || raw.contains("ForgeCaps") || (!restored && raw.getString("id").equals(RETURNING));
+        for(String list:new String[]{"Equipment","Aux"}){ListTag entries=typedList(source, list, 10);for(int i=0;i<entries.size();i++){
+            CompoundTag raw=entries.getCompoundOrEmpty(i);boolean unresolved=raw.getStringOr("id", "").equals("absentfixture:missing") || raw.getIntOr("count", 0)==0 || raw.contains("ForgeCaps") || (!restored && raw.getStringOr("id", "").equals(RETURNING));
             if(unresolved){NbtRecoveryChecks.retained(b,raw);rawCount++;}
         }}
-        RuntimeChecks.require(NbtRecoveryChecks.saved(b).getList(NbtRecoveryChecks.RECOVERY,10).size()==rawCount && rawCount==(restored?4:5),"Raw recovery records lost/duplicated or resolved twice");
+        RuntimeChecks.require(typedList(NbtRecoveryChecks.saved(b), NbtRecoveryChecks.RECOVERY, 10).size()==rawCount && rawCount==(restored?4:5),"Raw recovery records lost/duplicated or resolved twice");
     }
     static void verifyMetadata(EntityLootableBody b){
         HealthAttributeChecks.verifyWorldFields(b);
@@ -128,10 +134,10 @@ final class NbtWorldChecks {
         PositionMotionChecks.verifyWorldFields(b);
         RotationFallChecks.verifyWorldFields(b);
         CompoundTag raw=rawEquipment(),saved=NameLifetimeChecks.saved(b);
-        RuntimeChecks.require(b.getCustomNameTag().equals("NbtFixture") && saved.getString("Name").equals("NbtFixture"),"Malformed Name erased vanilla fallback attribution");
-        RuntimeChecks.require(!saved.contains("Vac") && saved.getLong("DeathTime")>=0 && saved.getLong("DeathTime")<=b.level().getGameTime() && saved.getLong("DecayTime")>=0 && saved.getLong("DecayTime")<=b.level().getGameTime(),"Malformed disk timers entered active state");
+        RuntimeChecks.require(b.getCustomNameTag().equals("NbtFixture") && saved.getStringOr("Name", "").equals("NbtFixture"),"Malformed Name erased vanilla fallback attribution");
+        RuntimeChecks.require(!saved.contains("Vac") && saved.getLongOr("DeathTime", 0L)>=0 && saved.getLongOr("DeathTime", 0L)<=b.level().getGameTime() && saved.getLongOr("DecayTime", 0L)>=0 && saved.getLongOr("DecayTime", 0L)<=b.level().getGameTime(),"Malformed disk timers entered active state");
         for(String key:new String[]{"Name","Vac","DeathTime","DecayTime"})NameLifetimeChecks.retained(b,key,raw.get(key));
-        RuntimeChecks.require(saved.getList(NameLifetimeChecks.RECOVERY,10).size()==16,"Disk metadata evidence grew or disappeared");
+        RuntimeChecks.require(typedList(saved, NameLifetimeChecks.RECOVERY, 10).size()==16,"Disk metadata evidence grew or disappeared");
     }
     private static void snapshot(File folder,String name,EntityLootableBody b) throws Exception {RuntimeChecks.saveExpected(folder,"nbt-"+name,b);}
     private static void verifySnapshot(File folder,String name,EntityLootableBody b) throws Exception {

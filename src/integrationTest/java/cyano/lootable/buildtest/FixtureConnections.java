@@ -16,8 +16,8 @@ final class FixtureConnections {
     static void disconnect(Minecraft mc) {
         if(mc.getSingleplayerServer()!=null)retiringServer=mc.getSingleplayerServer().getRunningThread();
         if(mc.player!=null)mc.player.closeContainer();
-        if(mc.level!=null)mc.level.disconnect();
-        mc.disconnect();mc.setScreen(new TitleScreen());
+        mc.disconnectFromWorld(net.minecraft.network.chat.Component.translatable("menu.disconnect"));
+        mc.setScreen(new TitleScreen());
     }
     static boolean stopped(Minecraft mc) {
         return ServerStopGate.ready(mc.level==null,mc.hasSingleplayerServer(),retiringServer);

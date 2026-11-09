@@ -35,7 +35,7 @@ class HookRegistrationOrderTest {
             for(int round=0;round<1000;round++){EarlyWorldPreservation.install();EarlyWorldPreservation.install();}
             EarlyWorldPreservation.beforeRead(save,false);
             CompoundTag saved=new CompoundTag();EarlyWorldPreservation.beforeWrite(save,saved);
-            assertEquals(owned,saved.getCompound("lootablebodies"));
+            assertEquals(owned,saved.getCompound("lootablebodies").orElseThrow());
         } finally {UpgradePreservation.close();installed.setBoolean(null,wasInstalled);}
     }
     @Test void theProductionConstructorMustDeferHookRegistrationToSerialLifecycleWork() throws Exception {

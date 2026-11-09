@@ -1,4 +1,7 @@
 package cyano.lootable.buildtest;
+
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
+import static cyano.lootable.buildtest.TestNativeNbt.readUuid;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.CompoundTag;
@@ -213,17 +216,17 @@ final class WallEscapeChecks {
         for (boolean trapped : new boolean[]{false,true}) {
             CompoundTag expected;
             try (InputStream in = new FileInputStream(new File(folder,"wall-escape-"+trapped+".nbt"))) { expected = NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024)); }
-            ListTag pos = expected.getList("Pos",6);
-            BlockPos savedPosition=BlockPos.containing(pos.getDouble(0),pos.getDouble(1),pos.getDouble(2));
+            ListTag pos = typedList(expected, "Pos", 6);
+            BlockPos savedPosition=BlockPos.containing(pos.getDoubleOr(0, 0D),pos.getDoubleOr(1, 0D),pos.getDoubleOr(2, 0D));
             // Terrain admission completes before the native entity-storage inbox.
             RuntimeChecks.awaitChunk(world,savedPosition.getX()>>4,savedPosition.getZ()>>4);
-            EntityLootableBody body = RuntimeChecks.find(world, expected.getUUID("UUID"));
+            EntityLootableBody body = RuntimeChecks.find(world, readUuid(expected, "UUID"));
             CompoundTag actual=NameLifetimeChecks.saved(body);
             if(!TypedNbt.sameEntity(expected,actual)) {
                 try(OutputStream out=new FileOutputStream(new File(folder,"wall-reload-actual-"+trapped+".nbt"))){NbtIo.writeCompressed(actual,out);}
-                for(String key:expected.getAllKeys())if(!NameLifetimeChecks.same(expected.get(key),actual.get(key)))
+                for(String key:expected.keySet())if(!NameLifetimeChecks.same(expected.get(key),actual.get(key)))
                     System.out.println("WALL_RELOAD_DIFF key="+key+" expected="+expected.get(key)+" actual="+actual.get(key));
-                for(String key:actual.getAllKeys())if(!expected.contains(key))System.out.println("WALL_RELOAD_EXTRA key="+key+" value="+actual.get(key));
+                for(String key:actual.keySet())if(!expected.contains(key))System.out.println("WALL_RELOAD_EXTRA key="+key+" value="+actual.get(key));
             }
             RuntimeChecks.require(TypedNbt.sameEntity(expected,NameLifetimeChecks.saved(body)), "Cold reload changed wall fixture NBT");
             body.jumpOutOfWall();

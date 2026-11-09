@@ -9,7 +9,7 @@ import net.minecraftforge.common.ForgeConfigSpec;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Execute the pinned native45 spec; config corrections precede mod world hooks. */
+/** Execute the pinned Forge 61 spec; config corrections precede mod world hooks. */
 class Native117ForgeConfigTest {
     private ForgeConfigSpec spec() throws Exception {
         java.lang.reflect.Field field=ForgeConfig.class.getDeclaredField("serverSpec");
@@ -30,7 +30,7 @@ class Native117ForgeConfigTest {
             "fixAdvancementLoading","treatEmptyTagsAsAir","zombieBaseSummonChance","zombieBabyChance")),removed);
         assertEquals(new HashSet<>(Arrays.asList("removeErroringBlockEntities","fullBoundingBoxLadders",
             "advertiseDedicatedServerToLan",
-            "removeErroringEntities","permissionHandler","useItemWithDurationZero")),keys(config));
+            "removeErroringEntities","permissionHandler")),keys(config));
         assertEquals(false,config.get("server.removeErroringBlockEntities"));
         assertEquals(0,spec().correct(config),"Native correction must be stable");
     }
@@ -45,12 +45,12 @@ class Native117ForgeConfigTest {
         assertEquals(true,config.get("server.fullBoundingBoxLadders"));assertNull(config.get("server.zombieBaseSummonChance"));
         assertNull(config.get("server.zombieBabyChance"));assertNull(config.get("server.treatEmptyTagsAsAir"));
         assertNull(config.get("server.fixAdvancementLoading"));assertEquals(true,config.get("server.removeErroringBlockEntities"));
-        assertEquals(true,config.get("server.removeErroringEntities"));assertEquals(true,config.get("server.useItemWithDurationZero"));
+        assertEquals(true,config.get("server.removeErroringEntities"));assertNull(config.get("server.useItemWithDurationZero"));
         assertEquals(false,config.get("server.advertiseDedicatedServerToLan"));assertNull(config.get("server.skipEmptyShapelessCheck"));
     }
     @Test void actualNativeDefaultMatchesTheTargetSpecBaseline() throws Exception {
         CommentedConfig config=CommentedConfig.inMemory();spec().correct(config);
-        CommentedConfig expected=new TomlParser().parse(Files.readString(Paths.get("tools/fixtures/forge50-server-default.toml")));
+        CommentedConfig expected=new TomlParser().parse(Files.readString(Paths.get("tools/fixtures/forge61-server-default.toml")));
         assertEquals(expected,config);
     }
 }

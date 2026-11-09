@@ -1,5 +1,7 @@
 package cyano.lootable.upgrade;
 
+import static cyano.lootable.buildtest.TestNativeNbt.writeUuid;
+
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.file.*;
@@ -25,7 +27,7 @@ class Native117ExternalSidecarTest {
         assertEquals("358E4B91F290AFB219D85B09435B4A641035412686E31A09CF5C69F5A28515CB",headerHash);
         Files.copy(header,world.resolve("level.dat"));
         CompoundTag body=new CompoundTag();body.putString("id","lootablebodies:corpse");
-        UUID identity=UUID.fromString("00000000-1171-4171-8171-000000000099");body.putUUID("UUID",identity);
+        UUID identity=UUID.fromString("00000000-1171-4171-8171-000000000099");writeUuid(body, "UUID", identity);
         body.putInt(UpgradePreservation.VERSION,7);body.putString("Name","Native external control");
         ListTag equipment=new ListTag();
         for(int slot=0;slot<48;slot++) {

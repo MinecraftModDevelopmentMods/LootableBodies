@@ -12,11 +12,9 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.Container;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.inventory.ClickType;
-import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.item.ItemTossEvent;
 
 /**
@@ -186,9 +184,9 @@ public class CorpseContainer extends net.minecraft.world.inventory.AbstractConta
         while(remainder.getCount() > 0) {
             int destination = -1;
             if(!remainder.isDamaged()) {
-                if(canStore(inventory,inventory.selected,remainder)) destination = inventory.selected;
+                if(canStore(inventory,inventory.getSelectedSlot(),remainder)) destination = inventory.getSelectedSlot();
                 else if(canStore(inventory,40,remainder)) destination = 40;
-                else for(int i = 0; i < inventory.items.size(); i++) {
+                else for(int i = 0; i < inventory.getNonEquipmentItems().size(); i++) {
                     if(canStore(inventory,i,remainder)) { destination = i; break; }
                 }
             }
@@ -218,7 +216,7 @@ public class CorpseContainer extends net.minecraft.world.inventory.AbstractConta
 
 	private boolean tryRelease(Player player, ItemStack stack, boolean includeName) {
 		if(emptyStack(stack) || stack.getCount() <= 0) return false;
-		if(player.level().isClientSide) {
+		if (!(player.level() instanceof net.minecraft.server.level.ServerLevel world)) {
 			player.drop(stack.copy(),includeName);
 			return true;
 		}
@@ -234,12 +232,12 @@ public class CorpseContainer extends net.minecraft.world.inventory.AbstractConta
 		}
 		if(dropped == null) return false;
 		ItemTossEvent event = new ItemTossEvent(dropped,player);
-		if(MinecraftForge.EVENT_BUS.post(event)) return false;
+		if(ItemTossEvent.BUS.post(event)) return false;
 		if(capturing != null) {
 			capturing.add(event.getEntity());
 			return true;
 		}
-		return player.level().addFreshEntity(event.getEntity());
+		return world.addFreshEntity(event.getEntity());
 	}
 
 	@Override

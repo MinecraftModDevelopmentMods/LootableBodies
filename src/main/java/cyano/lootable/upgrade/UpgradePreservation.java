@@ -1,13 +1,22 @@
 package cyano.lootable.upgrade;
+
+import static cyano.lootable.upgrade.NativeNbt.hasType;
+import static cyano.lootable.upgrade.NativeNbt.typedList;
 import java.io.IOException;
 import java.nio.file.Path;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import com.mojang.datafixers.DataFixer;
+import java.util.function.UnaryOperator;
+import net.minecraft.nbt.NbtUtils;
+import net.minecraft.util.datafix.DataFixTypes;
+import net.minecraft.util.datafix.fixes.References;
+import net.minecraft.world.level.chunk.storage.SimpleRegionStorage;
+import net.minecraft.world.level.storage.ValueOutput;
 /** World-local originals and the native conversion boundary. */
 public final class UpgradePreservation {
-    public static final int DATA_VERSION=12;
-    public static final int MINECRAFT_VERSION=3955;
+    public static final int DATA_VERSION=13;
+    public static final int MINECRAFT_VERSION=4671;
     public static final String VERSION="LootableBodiesDataVersion";
     public static final String SOURCES="LootableBodiesSourceVersions";
     public static final String ITEMS_PENDING="LootableBodiesInventorySource";
@@ -59,23 +68,61 @@ public final class UpgradePreservation {
             nativeWrapper=new NativeSafeFixer(delegate,null);
         return nativeWrapper;
     }
+    /** Attests that the region read seam is installed before any world opens. */
+    public interface RegionAttached { }
+
+    public static CompoundTag upgradeRegion(DataFixer fixer, DataFixTypes kind, CompoundTag input,
+            int fallback, CompoundTag context, UnaryOperator<CompoundTag> structures) {
+        CompoundTag copy = input.copy();
+        SimpleRegionStorage.injectDatafixingContext(copy, context);
+        DataFixer delegate = fixer instanceof NativeSafeFixer safe ? safe.delegate : fixer;
+        boolean terrain = kind == DataFixTypes.CHUNK;
+        CompoundTag converted = NativeNbt.update(new NativeSafeFixer(delegate, terrain ? structures : null),
+                terrain ? References.CHUNK : References.ENTITY_CHUNK, copy,
+                NbtUtils.getDataVersion(copy, fallback), MINECRAFT_VERSION);
+        converted.remove("__context");
+        return converted;
+    }
+
+    /** Adapt the old Forge capability payload to the extra codec field. */
+    public static CompoundTag upgradeLevelCapabilities(CompoundTag input) {
+        if (!hasType(input, "data", 10)) return input;
+        if (input.contains("DataVersion")) {
+            if (!hasType(input, "DataVersion", 3)) return input;
+            int source = input.getIntOr("DataVersion", -1);
+            if (source < 512 || source >= MINECRAFT_VERSION) return input;
+        } else if (!input.keySet().equals(java.util.Set.of("data")) || !input.getCompoundOrEmpty("data").isEmpty()) {
+            // The original Forge writer emitted an unstamped empty capability
+            // record. Leave other unversioned shapes to the native codec.
+            return input;
+        }
+        CompoundTag result = input.copy();
+        CompoundTag wrapper = new CompoundTag();
+        wrapper.put("data", result.getCompoundOrEmpty("data"));
+        result.put("data", wrapper);
+        return result;
+    }
+
     public static CompoundTag chunkContext(CompoundTag chunk){return chunk;}
     public static void clearChunkContext(CompoundTag chunk){chunk.remove("LootableBodiesChunkContext");}
     public static CompoundTag restore(CompoundTag input) {
-        if(input.contains(PAYLOAD,10))return input.getCompound(PAYLOAD).copy();return input;
+        if(hasType(input, PAYLOAD, 10))return input.getCompoundOrEmpty(PAYLOAD).copy();return input;
     }
-    public static void clearTransient(CompoundTag output){output.remove(PAYLOAD);output.remove(ITEMS_PENDING);}
+    public static void clearTransient(ValueOutput output) {
+        output.discard(PAYLOAD);
+        output.discard(ITEMS_PENDING);
+    }
     static int chunkSourceVersion(CompoundTag versions) {
-        if(versions.contains("VerifiedChunkDataVersion",3))return versions.getInt("VerifiedChunkDataVersion");
-        int version=versions.getInt("DataVersion"),family=-1;
-        ListTag mods=modList(versions.getCompound("WorldFML"));
+        if(hasType(versions, "VerifiedChunkDataVersion", 3))return versions.getIntOr("VerifiedChunkDataVersion", 0);
+        int version=versions.getIntOr("DataVersion", 0),family=-1;
+        ListTag mods=modList(versions.getCompoundOrEmpty("WorldFML"));
         for(int m=0;m<mods.size();m++) {
-            CompoundTag mod=mods.getCompound(m);if(!mod.getString("ModId").equals("minecraft"))continue;
-            String release=mod.getString("ModVersion");
-            family=release.equals("1.21.1")?MINECRAFT_VERSION:release.equals("1.20.6")?3839:release.equals("1.20.1")?3465:release.equals("1.19.4")?3337:release.equals("1.18.2")?2975:release.equals("1.17.1")?2730:release.equals("1.16.5")?2586:release.equals("1.15.2")?2230:release.equals("1.14.4")?1976:release.equals("1.13.2")?1631:release.equals("1.12.2")?1343:release.equals("1.11.2")?922:release.equals("1.10.2")?512:-1;
+            CompoundTag mod=mods.getCompoundOrEmpty(m);if(!mod.getStringOr("ModId", "").equals("minecraft"))continue;
+            String release=mod.getStringOr("ModVersion", "");
+            family=release.equals("1.21.11")?MINECRAFT_VERSION:release.equals("1.21.1")?3955:release.equals("1.20.6")?3839:release.equals("1.20.1")?3465:release.equals("1.19.4")?3337:release.equals("1.18.2")?2975:release.equals("1.17.1")?2730:release.equals("1.16.5")?2586:release.equals("1.15.2")?2230:release.equals("1.14.4")?1976:release.equals("1.13.2")?1631:release.equals("1.12.2")?1343:release.equals("1.11.2")?922:release.equals("1.10.2")?512:-1;
         }
-        int stamped=versions.contains("ChunkDataVersion",3)?versions.getInt("ChunkDataVersion"):-1;
-        int writer=versions.contains("CorpseWriterDataVersion",3)?versions.getInt("CorpseWriterDataVersion"):-1;
+        int stamped=hasType(versions, "ChunkDataVersion", 3)?versions.getIntOr("ChunkDataVersion", 0):-1;
+        int writer=hasType(versions, "CorpseWriterDataVersion", 3)?versions.getIntOr("CorpseWriterDataVersion", 0):-1;
         if(writer>=512 && writer<=MINECRAFT_VERSION) {
             // Forge can save the current level header before scanning old chunks.
             // A preserved owned writer marker proves this chunk is at least that
@@ -93,7 +140,7 @@ public final class UpgradePreservation {
         // retained header intact and do not select a conflicting duplicate.
         if(fml.contains("ModList") && fml.contains("LoadingModList")
                 && !fml.get("ModList").equals(fml.get("LoadingModList")))return new ListTag();
-        return fml.getList(fml.contains("ModList")?"ModList":"LoadingModList",10);
+        return typedList(fml, fml.contains("ModList")?"ModList":"LoadingModList", 10);
     }
 
 }

@@ -2,7 +2,6 @@ package cyano.lootable.buildtest;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.entity.boss.enderdragon.phases.AbstractDragonPhaseInstance;
 import net.minecraft.network.chat.Component;
 
 import cyano.lootable.entities.EntityLootableBody;
@@ -22,12 +21,10 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.client.Screenshot;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.server.players.GameProfileCache;
 import net.minecraft.world.level.block.entity.SkullBlockEntity;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.common.MinecraftForge;
 
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.event.TickEvent;
 
 /** Respawns on the death notification, without waiting for a corpse spawn. */
@@ -40,9 +37,12 @@ final class RespawnPacketClientChecks {
     private final Set<String> completed=new HashSet<>();
     private File observations;
     private Level profileWorld;
-    void register(){if(Boolean.getBoolean("lootablebodies.respawn")&&role!=null){net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);MinecraftForge.EVENT_BUS.register(this);}}
-    @SubscribeEvent public void mouse(net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre e){e.setCanceled(true);}
-    @SubscribeEvent public void key(net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre e){e.setCanceled(true);}
+    void register(){if(Boolean.getBoolean("lootablebodies.respawn")&&role!=null){
+            net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre.BUS.addListener(event -> true);
+            net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre.BUS.addListener(event -> true);
+            TickEvent.ClientTickEvent.Pre.BUS.addListener(event -> tick(true));
+            TickEvent.ClientTickEvent.Post.BUS.addListener(event -> tick(false));
+        }}
     private void respawn(Minecraft mc) {
         if((!role.equals("A")&&!Boolean.getBoolean("lootablebodies.respawn.simultaneous"))||mc.player==null)return;
         if(mc.screen instanceof DeathScreen) {
@@ -66,9 +66,9 @@ final class RespawnPacketClientChecks {
             }
         } else if(mc.player.isAlive()){requested=false;deathTicks=0;}
     }
-    @SubscribeEvent public void tick(TickEvent.ClientTickEvent e) {
+    private void tick(boolean beforeClientTick) {
         Minecraft mc=Minecraft.getInstance();
-        if(e.phase==TickEvent.Phase.START) {
+        if(beforeClientTick) {
             if(mc.level!=null&&mc.level!=profileWorld) {
                 profileWorld=mc.level;
                 // IPacket tests use cached synthetic profiles, never real accounts or
@@ -76,10 +76,9 @@ final class RespawnPacketClientChecks {
                 FixtureProfileCache.install(name->{
                     RuntimeChecks.require(name.matches("Container[AB]"),"Unexpected offline fixture profile");
                     UUID id=UUID.nameUUIDFromBytes(("OfflinePlayer:"+name).getBytes(StandardCharsets.UTF_8));
-                    var profile=new com.mojang.authlib.GameProfile(id,name);
                     String texture="{\"timestamp\":0,\"profileId\":\""+id.toString().replace("-","")+"\",\"profileName\":\""+name+"\",\"textures\":{}}";
-                    profile.getProperties().put("textures",new com.mojang.authlib.properties.Property("textures",Base64.getEncoder().encodeToString(texture.getBytes(StandardCharsets.UTF_8))));
-                    return java.util.concurrent.CompletableFuture.completedFuture(java.util.Optional.of(profile));
+                    return java.util.concurrent.CompletableFuture.completedFuture(java.util.Optional.of(
+                            FixtureProfileCache.withTexture(id, name, Base64.getEncoder().encodeToString(texture.getBytes(StandardCharsets.UTF_8)))));
                 });
             }
             return;
@@ -125,7 +124,7 @@ final class RespawnPacketClientChecks {
                     if(!found||++guiFrames<10)return;
                 }
                 observe(mc,"VERIFIED owner_or_observer exact_uuid_loaded_after_respawn");
-                if(index%8==0||index%8==7)Screenshot.grab(mc.gameDirectory,"respawn-case-"+index+".png",mc.getMainRenderTarget(),message->System.out.println(message.getString()));
+                if(index%8==0||index%8==7)Screenshot.grab(mc.gameDirectory,"respawn-case-"+index+".png",mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));
                 ack(key);
             } else if(phase==9) {
                 new File(mc.gameDirectory,"respawn-client.pass").createNewFile();System.out.println("LOOTABLE_BODIES_RESPAWN_CLIENT_PASS "+role);

@@ -1,4 +1,6 @@
 package cyano.lootable.buildtest;
+
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.SimpleContainer;
@@ -44,16 +46,18 @@ final class NbtClientChecks {
         frames++;RuntimeChecks.require(frames<300,"NBT graphical stage timeout "+stage);
         if(stage==0){schedule(mc,()->{
             ServerPlayer p=player(mc);p.getInventory().clearContent();p.containerMenu.setCarried(ItemStack.EMPTY);p.setGameMode(GameType.SURVIVAL);
-            RuntimeChecks.awaitChunk(p.serverLevel(),COORDINATE>>4,COORDINATE>>4);
+            RuntimeChecks.awaitChunk(p.level(),COORDINATE>>4,COORDINATE>>4);
             for(int x=COORDINATE-3;x<=COORDINATE+11;x++)for(int z=COORDINATE-3;z<=COORDINATE+3;z++)p.level().setBlockAndUpdate(new BlockPos(x,79,z),Blocks.STONE.defaultBlockState());
-            RuntimeChecks.require(p.serverLevel().getEntities(null,new net.minecraft.world.phys.AABB(COORDINATE,79,COORDINATE-2,COORDINATE+16,83,COORDINATE+4)).isEmpty(),"Graphical malformed fixture chunk is not isolated");
-            NbtWorldChecks.seed(p.serverLevel(),bodyId,COORDINATE,folder(mc),"graphical");
+            RuntimeChecks.require(p.level().getEntities(null,new net.minecraft.world.phys.AABB(COORDINATE,79,COORDINATE-2,COORDINATE+16,83,COORDINATE+4)).isEmpty(),"Graphical malformed fixture chunk is not isolated");
+            NbtWorldChecks.seed(p.level(),bodyId,COORDINATE,folder(mc),"graphical");
         });next(1);}
         else if(stage==1 && done() && frames>20){quit(mc);next(2);}
         else if(stage==2 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(3);}
         else if(stage==3 && ready(mc) && frames>20){schedule(mc,()->player(mc).connection.teleport(COORDINATE+8.5,80,COORDINATE-.5,0,0));next(30);}
-        else if(stage==30 && done() && frames>20){schedule(mc,()->{
-            RuntimeChecks.require(NbtWorldChecks.graphicalAdmissions==1,"Missing exact first native graphical disk admission");
+        else if(stage==30 && done() && frames>20 && trackedOnClient(mc)){schedule(mc,()->{
+            RuntimeChecks.awaitChunk(player(mc).level(), COORDINATE >> 4, COORDINATE >> 4);
+            RuntimeChecks.require(NbtWorldChecks.graphicalAdmissions == 1,
+                    "Missing exact first native graphical disk admission: " + NbtWorldChecks.graphicalAdmissions);
             EntityLootableBody b=body(mc);for(int i=0;i<8;i++)b.baseTick();NbtWorldChecks.verify(b,false);
             before=NbtRecoveryChecks.items(b);visible=full(b);RuntimeChecks.saveExpected(folder(mc),"nbt-client-before",b);
         });next(4);}
@@ -63,19 +67,21 @@ final class NbtClientChecks {
             Map<String,Integer> after=NbtRecoveryChecks.items(body(mc));for(int i=0;i<player(mc).getInventory().getContainerSize();i++)add(after,player(mc).getInventory().getItem(i));RuntimeChecks.require(before.equals(after),"Network recovery lost/duplicated malformed corpse contents");
             checkPlayer(player(mc).getInventory());RuntimeChecks.require(Objects.equals(visible.get(NbtRecoveryChecks.RECOVERY),NbtRecoveryChecks.saved(body(mc)).get(NbtRecoveryChecks.RECOVERY)),"Network extraction changed unresolved raw NBT");
             NbtWorldChecks.verifyMetadata(body(mc));
-            for(int i=0;i<8;i++)body(mc).baseTick();visible=full(body(mc));expectedPlayer=player(mc).getInventory().save(new ListTag());RuntimeChecks.saveExpected(folder(mc),"nbt-client-after",body(mc));
+            for(int i=0;i<8;i++)body(mc).baseTick();visible=full(body(mc));expectedPlayer=FixtureApi.saveInventory(player(mc));RuntimeChecks.saveExpected(folder(mc),"nbt-client-after",body(mc));
             CompoundTag n=new CompoundTag();n.put("Inventory",expectedPlayer.copy());try(FileOutputStream out=new FileOutputStream(new File(folder(mc),"nbt-client-player.nbt"))){NbtIo.writeCompressed(n,out);}
             mc.getSingleplayerServer().getPlayerList().saveAll();mc.getSingleplayerServer().saveAllChunks(false,true,false);mark(mc,"malformed_network_recovery_preserves_raw_records");
         });next(7);}
         else if(stage==7 && done()){checkPlayer(mc.player.getInventory());quit(mc);next(8);}
         else if(stage==8 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(9);}
         else if(stage==9 && ready(mc) && frames>20){schedule(mc,()->player(mc).connection.teleport(COORDINATE+8.5,80,COORDINATE-.5,0,0));next(90);}
-        else if(stage==90 && done() && frames>20){schedule(mc,()->{
-            RuntimeChecks.require(NbtWorldChecks.graphicalAdmissions==2,"Missing exact second native graphical disk admission");
+        else if(stage==90 && done() && frames>20 && trackedOnClient(mc)){schedule(mc,()->{
+            RuntimeChecks.awaitChunk(player(mc).level(), COORDINATE >> 4, COORDINATE >> 4);
+            RuntimeChecks.require(NbtWorldChecks.graphicalAdmissions == 2,
+                    "Missing exact second native graphical disk admission: " + NbtWorldChecks.graphicalAdmissions);
             body(mc).baseTick();RuntimeChecks.verifyExpected(folder(mc),"nbt-client-after",body(mc));
             RuntimeChecks.require(Objects.equals(visible.get(NbtRecoveryChecks.RECOVERY),NbtRecoveryChecks.saved(body(mc)).get(NbtRecoveryChecks.RECOVERY)),"Unresolved raw data changed on graphical disk reload");
             NbtWorldChecks.verifyMetadata(body(mc));RuntimeChecks.require(NameLifetimeChecks.same(visible.get(NameLifetimeChecks.RECOVERY),full(body(mc)).get(NameLifetimeChecks.RECOVERY)),"Raw scalar evidence changed on graphical reload");
-            RuntimeChecks.require(expectedPlayer.equals(player(mc).getInventory().save(new ListTag())),"Recovered player NBT changed on graphical disk reload");checkPlayer(player(mc).getInventory());mark(mc,"malformed_corpse_and_player_disk_reload");
+            RuntimeChecks.require(expectedPlayer.equals(FixtureApi.saveInventory(player(mc))),"Recovered player NBT changed on graphical disk reload");checkPlayer(player(mc).getInventory());mark(mc,"malformed_corpse_and_player_disk_reload");
         });next(10);}
         else if(stage==10 && done() && frames>20){if(open(mc))next(11);}
         else if(stage==11 && gui(mc) && frames>20){verifyGui(mc);checkPlayer(mc.player.getInventory());screenshot(mc,"nbt-after-recovery-reload.png");System.out.println("LOOTABLE_BODIES_NBT_CLIENT_PASS");return true;}
@@ -89,21 +95,29 @@ final class NbtClientChecks {
         }
         return false;
     }
-    private void verifyGui(Minecraft mc){ItemStack[] expected=new ItemStack[48];ListTag list=visible.getList("Equipment",10);for(int i=0;i<list.size();i++){CompoundTag n=list.getCompound(i);expected[n.getByte("Slot")]=FixtureStackData.load(n);}for(int i=0;i<48;i++)equal(mc.player.containerMenu.getSlot(i).getItem(),expected[i],"Malformed corpse GUI slot "+i);}
+    private void verifyGui(Minecraft mc){ItemStack[] expected=new ItemStack[48];ListTag list=typedList(visible, "Equipment", 10);for(int i=0;i<list.size();i++){CompoundTag n=list.getCompoundOrEmpty(i);expected[n.getByteOr("Slot", (byte) 0)]=FixtureStackData.load(n);}for(int i=0;i<48;i++)equal(mc.player.containerMenu.getSlot(i).getItem(),expected[i],"Malformed corpse GUI slot "+i);}
     private static void checkPlayer(net.minecraft.world.entity.player.Inventory p){Map<String,Integer> actual=new TreeMap<>();for(int i=0;i<p.getContainerSize();i++)add(actual,p.getItem(i));Map<String,Integer> expected=new TreeMap<>();add(expected,NbtRecoveryChecks.item(120,17));RuntimeChecks.require(actual.equals(expected),"Malformed GUI recovered player stack changed");}
     private static void add(Map<String,Integer> map,ItemStack s){if((s == null || s.isEmpty()) || s.getCount()<=0)return;CompoundTag n=FixtureStackData.save(s);n.remove("count");String key=n.toString();map.put(key,map.getOrDefault(key,0)+s.getCount());}
     private static void equal(ItemStack a,ItemStack b,String why){RuntimeChecks.require(RuntimeChecks.sameStack(a == null ? ItemStack.EMPTY : a,b == null ? ItemStack.EMPTY : b),why);}
-    private static CompoundTag full(EntityLootableBody b){CompoundTag n=new CompoundTag();b.saveAsPassenger(n);return n;}
+    private static CompoundTag full(EntityLootableBody b){CompoundTag n=new CompoundTag();FixtureApi.saveEntity(b,n);return n;}
     private ServerPlayer player(Minecraft mc){return mc.getSingleplayerServer().getPlayerList().getPlayer(playerId);}
     private EntityLootableBody body(Minecraft mc){return RuntimeChecks.find(mc.getSingleplayerServer().getLevel(FixtureApi.dimensionKey(0)),bodyId);}
-    private File folder(Minecraft mc){return player(mc).getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();}
-    private static boolean ready(Minecraft mc){return mc.level!=null && mc.player!=null && mc.getSingleplayerServer()!=null;}
+    private File folder(Minecraft mc){return player(mc).level().getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();}
+    private static boolean ready(Minecraft mc) {
+        return mc.level != null && mc.player != null && mc.getSingleplayerServer() != null
+                && !(mc.screen instanceof net.minecraft.client.gui.screens.LevelLoadingScreen);
+    }
     private static boolean gui(Minecraft mc){return mc.screen instanceof CorpseGUIContainer;}
+    private boolean trackedOnClient(Minecraft mc) {
+        if (mc.level == null || mc.screen instanceof net.minecraft.client.gui.screens.LevelLoadingScreen) return false;
+        return FixtureApi.entities(mc.level).stream().anyMatch(entity -> entity.getUUID().equals(bodyId));
+    }
+
     private boolean open(Minecraft mc){for(Entity e:FixtureApi.entities(mc.level))if(e.getUUID().equals(bodyId)){RuntimeChecks.require(((EntityLootableBody)e).getCustomNameTag().equals("NbtFixture"),"Malformed name reached tracked client entity");RuntimeChecks.require(e instanceof EntityLootableBody && Float.isFinite(((EntityLootableBody)e).getHealth()) && ((EntityLootableBody)e).getHealth()>0,"Malformed health reached tracked client entity");RuntimeChecks.require(((EntityLootableBody)e).getActiveEffects().isEmpty() && ((EntityLootableBody)e).hurtTime==0,"Malformed effect/hurt state reached tracked client entity");PositionMotionChecks.finite((EntityLootableBody)e);RotationFallChecks.finite((EntityLootableBody)e);mc.gameMode.interact(mc.player,e,InteractionHand.MAIN_HAND);return true;}return false;}
     private void schedule(Minecraft mc,Action action){pending=mc.getSingleplayerServer().submitAsync(()->{try{action.run();}catch(Exception e){throw new RuntimeException(e);}});}
     private boolean done() throws Exception{if(!pending.isDone())return false;pending.get();return true;}
     private void next(int value){stage=value;frames=0;System.out.println("NBT_CLIENT_STAGE "+stage);}
-    private static void screenshot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),message->System.out.println(message.getString()));}
+    private static void screenshot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));}
     private static void quit(Minecraft mc){mc.player.closeContainer();FixtureConnections.disconnect(mc);}
     private static void mark(Minecraft mc,String name) throws Exception{try(FileWriter out=new FileWriter(new File(mc.gameDirectory,"nbt-client-checks.txt"),true)){out.write("PASS "+name+"\n");}System.out.println("NBT_CLIENT_CHECK_PASS "+name);}
 }

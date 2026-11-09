@@ -10,11 +10,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class Native117ProfileLookupTest {
     private final GameProfile placeholder=CorpseProfiles.placeholder("TestName");
-    private final GameProfile found=new GameProfile(new UUID(1,2),"TestName");
+    private final GameProfile found=new GameProfile(new UUID(1,2),"TestName",new com.mojang.authlib.properties.PropertyMap(
+            com.google.common.collect.ImmutableMultimap.of("textures",new Property("textures","fixture-native-texture"))));
 
     @Test void unresolvedProfileUsesAValidAuthlibIdentity() {
-        assertEquals("TestName",placeholder.getName());
-        assertNotNull(placeholder.getId());
+        assertEquals("TestName",placeholder.name());
+        assertNotNull(placeholder.id());
         assertFalse(CorpseProfiles.isResolved(placeholder));
     }
 
@@ -37,10 +38,9 @@ class Native117ProfileLookupTest {
             return pending;
         });
         assertFalse(result.isDone());
-        found.getProperties().put("textures",new Property("textures","fixture-native-texture"));
         pending.complete(Optional.of(found));
         assertSame(found,result.join());
         assertTrue(CorpseProfiles.isResolved(result.join()));
-        assertEquals("fixture-native-texture",result.join().getProperties().get("textures").iterator().next().value());
+        assertEquals("fixture-native-texture",result.join().properties().get("textures").iterator().next().value());
     }
 }

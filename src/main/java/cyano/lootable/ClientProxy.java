@@ -4,19 +4,25 @@ import cyano.lootable.graphics.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraftforge.api.distmarker.*;
-import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.client.ConfigScreenHandler;
 import net.minecraftforge.client.event.EntityRenderersEvent;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 @OnlyIn(Dist.CLIENT)
 public final class ClientProxy {
     private ClientProxy() { }
-    public static void register() {
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new cyano.lootable.network.ClientLoginReadGuard());
-        ModLoadingContext.get().registerExtensionPoint(ConfigScreenHandler.ConfigScreenFactory.class,
+    public static void register(FMLJavaModLoadingContext context) {
+        TickEvent.ClientTickEvent.Post.BUS.addListener(new cyano.lootable.network.ClientLoginReadGuard()::tick);
+        context.registerExtensionPoint(ConfigScreenHandler.ConfigScreenFactory.class,
                 ()->new ConfigScreenHandler.ConfigScreenFactory(new CorpseConfigGuiFactory()));
-        FMLJavaModLoadingContext.get().getModEventBus().addListener(ClientProxy::setup);
-        FMLJavaModLoadingContext.get().getModEventBus().addListener(ClientProxy::renderers);
+        FMLClientSetupEvent.getBus(context.getModBusGroup()).addListener(ClientProxy::setup);
+        EntityRenderersEvent.RegisterRenderers.BUS.addListener(ClientProxy::renderers);
+    }
+    public static java.util.concurrent.CompletableFuture<java.util.Optional<com.mojang.authlib.GameProfile>> fetchProfile(String name) {
+        var partial = net.minecraft.world.item.component.ResolvableProfile.createUnresolved(name);
+        return partial.resolveProfile(Minecraft.getInstance().services().profileResolver())
+                .thenApply(profile -> profile.equals(partial.partialProfile()) ? java.util.Optional.empty() : java.util.Optional.of(profile));
     }
     private static void setup(net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent event) {
         // The client creates these readers before mod construction. Replace

@@ -16,7 +16,10 @@ from owned_process import native_process
 def prepare_development_home(home):
     home.mkdir(exist_ok=True);(home/'eula.txt').write_text('eula=true\n')
     seed_loader_defaults(home)
-    (home/'server.properties').write_text('level-name=world\nlevel-type=DEFAULT\nserver-ip=127.0.0.1\nserver-port=0\nonline-mode=false\n')
+    properties = 'level-name=world\nlevel-type=DEFAULT\nserver-ip=127.0.0.1\nserver-port=0\nonline-mode=false\n'
+    if os.name == 'nt':
+        properties += 'use-native-transport=false\n'
+    (home/'server.properties').write_text(properties)
     for name in ['ops','whitelist','banned-players','banned-ips']: (home/(name+'.json')).write_text('[]\n')
 
 

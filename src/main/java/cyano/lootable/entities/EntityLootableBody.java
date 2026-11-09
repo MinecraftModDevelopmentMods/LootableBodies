@@ -1,5 +1,10 @@
 package cyano.lootable.entities;
 
+import static cyano.lootable.upgrade.NativeNbt.hasType;
+import static cyano.lootable.upgrade.NativeNbt.isListOf;
+import static cyano.lootable.upgrade.NativeNbt.readUuid;
+import static cyano.lootable.upgrade.NativeNbt.hasUuid;
+
 import static cyano.lootable.ItemStacks.emptyStack;
 import cyano.lootable.upgrade.UpgradePreservation;
 import cyano.lootable.upgrade.ItemMigration;
@@ -22,8 +27,17 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.NumericTag;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.entity.ContainerUser;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
+import cyano.lootable.upgrade.NativeNbt;
 import net.minecraft.world.effect.MobEffect;
-import net.minecraft.world.level.block.entity.SkullBlockEntity;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.InteractionHand;
@@ -33,7 +47,7 @@ import net.minecraft.world.entity.ai.attributes.Attribute;
 import cyano.lootable.network.CorpseProfiles;
 import net.minecraft.core.NonNullList;
 import net.minecraft.sounds.SoundEvent;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -99,7 +113,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	}
 
 	public EntityLootableBody(Player player){
-		this(player.getCommandSenderWorld());
+		this(player.level());
 		this.setPos(player.getX(), player.getY()+0.5,  player.getZ());
 
 		this.setDeltaMovement(player.getDeltaMovement().add(0D,0.0784000015258789D,0D));
@@ -123,7 +137,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	private String oldName = null;
 	@Override
 	public void tick() {
-		if(!getCommandSenderWorld().isClientSide) {
+		if(!level().isClientSide()) {
 			// A Forge ticket can tick our centre chunk while neighbouring support
 			// terrain is absent. Never treat those missing collision boxes as air.
 			AABB bounds = getBoundingBox();
@@ -131,7 +145,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 					bounds.minZ + Math.min(0D,getDeltaMovement().z));
 			BlockPos to = BlockPos.containing(bounds.maxX + Math.max(0D,getDeltaMovement().x), 0,
 					bounds.maxZ + Math.max(0D,getDeltaMovement().z));
-			if(!getCommandSenderWorld().hasChunksAt(from,to)) return;
+			if(!level().hasChunksAt(from,to)) return;
 		}
 		super.tick();
 	}
@@ -140,7 +154,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	public void baseTick(){
 		//log("position=%s; terminate=%s; time=%s; age=%s; deathTimestamp=%s; decayTimestamp=%s; Health=%s; isDead=%s" ,getPosition(),terminate,getEntityWorld().getTotalWorldTime(),getEntityWorld().getTotalWorldTime() - deathTimestamp, deathTimestamp, decayTimestamp, getHealth(), isDead);
 		super.baseTick();
-		final boolean isClient = getCommandSenderWorld().isClientSide;
+		final boolean isClient = level().isClientSide();
 		final boolean isServer = !isClient;
 
 		if(isServer && terminate >= 0){
@@ -178,7 +192,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		}
 
 		// handle decay time
-		final long currentTime = Math.max(0L,getCommandSenderWorld().getGameTime());
+		final long currentTime = Math.max(0L,level().getGameTime());
 		if(isServer) {
 			// A clock rollback must not suspend decay indefinitely or overflow age.
 			deathTimestamp = checkedTimestamp("DeathTime",deathTimestamp,currentTime);
@@ -190,7 +204,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 			}
 			long age = currentTime - deathTimestamp;
 			if(age > LootableBodies.corpseDecayTime){
-				this.kill();
+				this.kill((ServerLevel) level());
 			}
 		}
 
@@ -220,7 +234,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		// handle item vacuuming
 		if(isServer && vacuumTime < VACUUM_TIMELIMIT){
 			vacuumTime++;
-			List<ItemEntity> items = getCommandSenderWorld().getEntitiesOfClass(ItemEntity.class, new AABB(
+			List<ItemEntity> items = level().getEntitiesOfClass(ItemEntity.class, new AABB(
 					getX() - VACUUM_RADIUS, getY() - VACUUM_RADIUS, getZ() - VACUUM_RADIUS,
 					getX() + VACUUM_RADIUS, getY() + VACUUM_RADIUS, getZ() + VACUUM_RADIUS));
 			for(ItemEntity item : items){
@@ -363,17 +377,17 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 
 
 	@Override
-	protected void actuallyHurt(DamageSource src, float amount){
+	protected void actuallyHurt(ServerLevel world, DamageSource src, float amount){
         if(CorpseDamageRules.kind(src)==CorpseDamageRules.Kind.ATTACK && src.getEntity() instanceof Player){
             Player player=(Player)src.getEntity();
             ItemStack item=player.getItemInHand(InteractionHand.MAIN_HAND);
             if(!emptyStack(item) && (item.getItem() instanceof ShovelItem || item.canPerformAction(net.minecraftforge.common.ToolActions.SHOVEL_DIG)))
-                this.kill();
+                this.kill(world);
         }
         if(CorpseDamageRules.isWall(src))this.jumpOutOfWall();
         if(CorpseDamageRules.allows(src,LootableBodies.completelyInvulnerable,
                 LootableBodies.hurtByAttacks,LootableBodies.hurtByEnvironment,LootableBodies.hurtByMisc))
-            super.actuallyHurt(src,amount);
+            super.actuallyHurt(world, src, amount);
     }
 
 
@@ -390,11 +404,11 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 
     public void refreshClientSkin() {
         GameProfile profile = gpSwap.get();
-        if (getCommandSenderWorld().isClientSide && !LootableBodies.useLocalSkin && profile != null && !CorpseProfiles.isResolved(profile))
+        if (level().isClientSide() && !LootableBodies.useLocalSkin && profile != null && !CorpseProfiles.isResolved(profile))
             resolveProfile(profile);
     }
 	private void resolveProfile(GameProfile initial) {
-        CorpseProfiles.resolve(initial,SkullBlockEntity::fetchGameProfile)
+        CorpseProfiles.resolve(initial,cyano.lootable.ClientProxy::fetchProfile)
                 .thenAccept(resolved->gpSwap.compareAndSet(initial,resolved));
 	}
 	public void setUserName(String name){
@@ -414,7 +428,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
     }
     private java.util.List<AttributeInstance> corpseAttributes() {
         java.util.List<AttributeInstance> result=new java.util.ArrayList<>();
-        for(ResourceLocation name:net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getKeys()) {
+        for(Identifier name:net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getKeys()) {
             Holder<Attribute> key=net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getHolder(name).orElse(null);
             if(key!=null && getAttributes().hasAttribute(key))result.add(getAttribute(key));
         }
@@ -440,7 +454,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
         case "forge:step_height_addition":name="minecraft:generic.step_height";break;
         default:break;
         }
-        net.minecraft.resources.ResourceLocation id=net.minecraft.resources.ResourceLocation.tryParse(name);
+        Identifier id=cyano.lootable.upgrade.LegacyRegistryMappings.canonicalAttributeId(Identifier.tryParse(name));
         Holder<Attribute> key=id==null?null:net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getHolder(id).orElse(null);
         return key!=null && getAttributes().hasAttribute(key)?getAttribute(key):null;
     }
@@ -460,7 +474,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	}
 
 	public void jumpOutOfWall(){
-		if(level().isClientSide) return;
+		if(level().isClientSide()) return;
 		AABB bounds = getBoundingBox();
 		// Collision queries omit unloaded chunks. They cannot establish an exit
 		// until the complete local terrain (including tall neighbour shapes) exists.
@@ -498,7 +512,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 
 
 	@Override
-	public void kill() {
+	public void kill(ServerLevel world) {
 		if(terminate < 0) terminate = DEATH_COUNTDOWN;
 		this.hurt(damageSources().fellOutOfWorld(), this.getMaxHealth());
 		this.setChanged();
@@ -517,12 +531,12 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 
 
 	@Override
-	protected int getBaseExperienceReward() {
+	protected int getBaseExperienceReward(ServerLevel world) {
 		return 0;
 	}
 
 	@Override
-	protected void dropExperience(net.minecraft.world.entity.Entity attacker) {
+	protected void dropExperience(ServerLevel world, net.minecraft.world.entity.Entity attacker) {
 		// Enchantments can add experience even when the base reward is zero.
 	}
 
@@ -532,13 +546,8 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		return null;
 	}
 
-	@Override
-	protected net.minecraft.resources.ResourceKey<net.minecraft.world.level.storage.loot.LootTable> getDefaultLootTable() {
-		return net.minecraft.world.level.storage.loot.BuiltInLootTables.EMPTY;
-	}
-
     @Override
-    protected void dropFromLootTable(DamageSource source,boolean recentlyHit) {
+    protected void dropFromLootTable(ServerLevel world, DamageSource source, boolean recentlyHit) {
         // Native Mob.getLootTable is final and can select a saved LootTable.
         // Corpse contents are released only by the inventory recovery path.
     }
@@ -657,8 +666,8 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	@Override
 	public void setChanged() {
 		Level level = level();
-		if(level != null && !level.isClientSide && isAddedToWorld() && level.hasChunkAt(blockPosition())) {
-			level.getChunkAt(blockPosition()).setUnsaved(true);
+		if(level != null && !level.isClientSide() && isAddedToWorld() && level.hasChunkAt(blockPosition())) {
+			level.getChunkAt(blockPosition()).markUnsaved();
 		}
 	}
 
@@ -670,7 +679,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	@Override
 	public boolean stillValid(Player player) {
 		return player != null && player.isAlive() && this.isAlive()
-				&& terminate < 0 && player.getCommandSenderWorld() == getCommandSenderWorld()
+				&& terminate < 0 && player.level() == level()
 				&& player.blockPosition().distSqr(this.blockPosition()) < 25;
 	}
 
@@ -687,11 +696,11 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
     public String getGuiID(){return "lootablebodies:corpse";}
 
 	@Override
-	public void startOpen(Player player) {
+	public void startOpen(ContainerUser user) {
 	}
 
 	@Override
-	public void stopOpen(Player player) {
+	public void stopOpen(ContainerUser user) {
 	}
 
 	/**
@@ -743,18 +752,19 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	}
 
 	private boolean dropAllItems(){
+        if (!(level() instanceof ServerLevel world)) return false;
 		for(int slot = 0; slot < getContainerSize(); slot++){
 			ItemStack stack = getItem(slot);
-			if(!emptyStack(stack) && getCommandSenderWorld().addFreshEntity(
-					new ItemEntity(getCommandSenderWorld(),getX(),getY(),getZ(),stack.copy()))) {
+			if(!emptyStack(stack) && world.addFreshEntity(
+					new ItemEntity(level(),getX(),getY(),getZ(),stack.copy()))) {
 				setItem(slot,null);
 			}
 		}
 		Iterator<ItemStack> iterator = auxInventory.iterator();
 		while(iterator.hasNext()) {
 			ItemStack stack = iterator.next();
-			if(emptyStack(stack) || getCommandSenderWorld().addFreshEntity(
-					new ItemEntity(getCommandSenderWorld(),getX(),getY(),getZ(),stack.copy()))) iterator.remove();
+			if(emptyStack(stack) || world.addFreshEntity(
+					new ItemEntity(level(),getX(),getY(),getZ(),stack.copy()))) iterator.remove();
 		}
 		setChanged();
 		return isEmpty();
@@ -764,62 +774,69 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 
 
 	@Override
-	public void addAdditionalSaveData(final CompoundTag root) {
-		UpgradePreservation.clearTransient(root);
+	public void addAdditionalSaveData(ValueOutput output) {
+		output.discard("ActiveEffects");
+		output.discard("active_effects");
+		super.addAdditionalSaveData(output);
+		final CompoundTag root = new CompoundTag();
 		root.putInt(UpgradePreservation.VERSION,UpgradePreservation.DATA_VERSION);
-		if(sourceVersions.isEmpty()) root.remove(UpgradePreservation.SOURCES);
+		UpgradePreservation.clearTransient(output);
+		if(sourceVersions.isEmpty()) output.discard(UpgradePreservation.SOURCES);
 		else root.put(UpgradePreservation.SOURCES,sourceVersions.copy());
-		root.remove("ActiveEffects");
-		root.remove("active_effects");
-		super.addAdditionalSaveData(root);
 		final ListTag equipmentListTag = new ListTag();
 		for (int i = 0; i < this.getContainerSize(); i++) {
 			ItemStack item = this.getItem(i);
 			if (!emptyStack(item)) {
-				CompoundTag slotTag = (CompoundTag)item.save(registryAccess());
+				CompoundTag slotTag = encodeItem(item);
 				slotTag.putByte("Slot", (byte)i);
 				equipmentListTag.add(slotTag);
 			}
 		}
 		root.put("Equipment", equipmentListTag);
 
-		root.remove("Aux");
+		output.discard("Aux");
 		if(!this.auxInventory.isEmpty()){
 			final ListTag nbtauxtaglist = new ListTag();
 			Iterator<ItemStack> iter = this.auxInventory.iterator();
 			while (iter.hasNext()) {
 				ItemStack i = iter.next();
 				if(emptyStack(i)) continue;
-				nbtauxtaglist.add(i.save(registryAccess()));
+				nbtauxtaglist.add(encodeItem(i));
 			}
 			root.put("Aux", nbtauxtaglist);
 		}
-		root.remove(UNRESOLVED_ITEMS_TAG);
+		output.discard(UNRESOLVED_ITEMS_TAG);
 		if(!unresolvedInventory.isEmpty()) {
 			ListTag retained = new ListTag();
 			for(CompoundTag record : unresolvedInventory) retained.add(record.copy());
 			root.put(UNRESOLVED_ITEMS_TAG,retained);
 		}
-		root.remove(INVALID_FIELDS_TAG);
+		output.discard(INVALID_FIELDS_TAG);
 		if(!invalidFields.isEmpty()) {
 			ListTag retained = new ListTag();
 			for(CompoundTag record : invalidFields) retained.add(record.copy());
 			root.put(INVALID_FIELDS_TAG,retained);
 		}
-		root.remove("Vac");
+		output.discard("Vac");
 		if(vacuumTime < VACUUM_TIMELIMIT)root.putByte("Vac", vacuumTime);
-		root.remove("Name");
+		output.discard("Name");
 		String name = getCustomNameTag();
 		if(name != null && !name.trim().isEmpty()) root.putString("Name",name);
-		else root.remove("CustomName");
+		else output.discard("CustomName");
 		root.putLong("DeathTime", this.getDeathTimestamp());
 		root.putLong("DecayTime",this.decayTimestamp);
+		NativeNbt.writeRawTags(output, root);
 	}
 
 
+    private CompoundTag encodeItem(ItemStack stack) {
+        var ops = registryAccess().createSerializationContext(NbtOps.INSTANCE);
+        return (CompoundTag) ItemStack.CODEC.encodeStart(ops, stack).getOrThrow();
+    }
+
 	@Override
-	public void load(final CompoundTag supplied) {
-		final CompoundTag root=UpgradePreservation.restore(supplied);
+	public void load(final ValueInput supplied) {
+		final CompoundTag root=UpgradePreservation.restore(NativeNbt.rawTags(supplied));
 		// Entity reads geometry before our inventory helper. Sanitize a copy
 		// before it builds bounding boxes or derives previous-tick positions.
 		CompoundTag clean = root.copy();
@@ -828,13 +845,23 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		clean.put("Pos",readVector(root.get("Pos"),false,badPosition));
 		clean.put("Motion",readVector(root.get("Motion"),true,badMotion));
 		clean.put("Rotation",readRotation(root.get("Rotation"),badRotation));
-		Float distance = finiteFloat(root.get("FallDistance"));
-		boolean badFall = root.contains("FallDistance") && (distance == null || distance < 0F);
-        clean.putFloat("FallDistance",distance != null && distance >= 0F ? distance : 0F);
+        boolean legacyFall = !root.contains("fall_distance");
+        String fallKey = legacyFall ? "FallDistance" : "fall_distance";
+        Double distance = finiteNumber(root.get(fallKey));
+        boolean validFall = distance != null && distance >= 0D;
+        if (validFall && legacyFall) {
+            float oldDistance = distance.floatValue();
+            validFall = Float.isFinite(oldDistance) && (distance == 0D || oldDistance > 0F);
+            if (validFall) distance = (double) oldDistance;
+        }
+        boolean badFall = root.contains(fallKey) && !validFall;
+        clean.putDouble("fall_distance", validFall ? distance : 0D);
         // Vanilla expects JSON here. Our attribution reader owns compatibility
         // and retains malformed input without sending it to vanilla's parser.
         clean.remove("CustomName");
-        super.load(clean);
+        try (var problems = new ProblemReporter.ScopedCollector(com.mojang.logging.LogUtils.getLogger())) {
+            super.load(TagValueInput.create(problems, registryAccess(), clean));
+        }
         String fallback=readName(root,"CustomName"),owner=readName(root,"Name");
         setUserName(owner!=null?owner:fallback!=null?fallback:"");
 		// A repeated load must not interpolate from obsolete head/body angles.
@@ -844,7 +871,8 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		if(hasInvalidComponent(badPosition) && root.contains("Pos")) retainInvalid("Pos",root.get("Pos"));
 		if(hasInvalidComponent(badMotion) && root.contains("Motion")) retainInvalid("Motion",root.get("Motion"));
 		if(hasInvalidComponent(badRotation) && root.contains("Rotation")) retainInvalid("Rotation",root.get("Rotation"));
-		if(badFall) retainInvalid("FallDistance",root.get("FallDistance"));
+		if(badFall) retainInvalid(fallKey, root.get(fallKey));
+        if (!legacyFall && root.contains("FallDistance")) retainInvalid("FallDistance", root.get("FallDistance"));
 	}
 
 	private static Float finiteFloat(Tag raw) {
@@ -856,7 +884,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 
 	private static ListTag readRotation(Tag raw, boolean[] invalid) {
 		ListTag list = raw instanceof ListTag ? (ListTag)raw : null;
-		invalid[2] = list == null || list.size() != 2 || list.getElementType() < 1 || list.getElementType() > 6;
+		invalid[2] = list == null || list.size() != 2 || list.stream().anyMatch(tag -> !(tag instanceof NumericTag));
 		ListTag clean = new ListTag();
 		for(int axis = 0; axis < 2; axis++) {
 			Float angle = list != null && axis < list.size() ? finiteFloat(list.get(axis)) : null;
@@ -875,7 +903,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 
 	private static ListTag readVector(Tag raw, boolean motion, boolean[] invalid) {
 		ListTag list = raw instanceof ListTag ? (ListTag)raw : null;
-		invalid[3] = list == null || list.size() != 3 || list.getElementType() < 1 || list.getElementType() > 6;
+		invalid[3] = list == null || list.size() != 3 || list.stream().anyMatch(tag -> !(tag instanceof NumericTag));
 		ListTag clean = new ListTag();
 		for(int axis = 0; axis < 3; axis++) {
 			Double value = list != null && axis < list.size() ? finiteNumber(list.get(axis)) : null;
@@ -890,12 +918,12 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	}
 
 	@Override
-	public void readAdditionalSaveData(final CompoundTag supplied) {
-		final CompoundTag root=UpgradePreservation.restore(supplied);
-		sourceVersions=root.contains(UpgradePreservation.SOURCES,10) ? root.getCompound(UpgradePreservation.SOURCES).copy() : new CompoundTag();
+	public void readAdditionalSaveData(final ValueInput supplied) {
+		final CompoundTag root=UpgradePreservation.restore(NativeNbt.rawTags(supplied));
+		sourceVersions=hasType(root, UpgradePreservation.SOURCES, 10) ? root.getCompoundOrEmpty(UpgradePreservation.SOURCES).copy() : new CompoundTag();
 		// Persisted Equipment/Aux are already current after the first save.
 		// Only the transient protected original and retained raw records use old versions.
-		inventoryVersions=root.getBoolean(UpgradePreservation.ITEMS_PENDING) ? sourceVersions : new CompoundTag();
+		inventoryVersions=root.getBooleanOr(UpgradePreservation.ITEMS_PENDING, false) ? sourceVersions : new CompoundTag();
 		// Replace, rather than append to, an existing inventory on a repeated load.
 		this.clearContent();
 		// These flags are not saved. A reused entity must behave like a fresh
@@ -911,7 +939,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		Tag metadata = root.get(INVALID_FIELDS_TAG);
 		if(isInventoryList(metadata)) {
 			ListTag records = (ListTag)metadata;
-			for(int i = 0; i < records.size(); i++) invalidFields.add(records.getCompound(i).copy());
+			for(int i = 0; i < records.size(); i++) invalidFields.add(records.getCompoundOrEmpty(i).copy());
 		} else if(metadata != null) retainInvalid("Recovery",metadata);
 		// NBT replaces state. Clear the old map without effect callbacks: saved
 		// attributes and absorption are restored below, just as on a fresh entity.
@@ -931,7 +959,9 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		// Health must be checked against the loaded, validated effective maximum.
 		vanilla.remove("Health");
 		vanilla.putFloat("AbsorptionAmount",readLivingFloat(root,"AbsorptionAmount",0F,Float.MAX_VALUE));
-		super.readAdditionalSaveData(vanilla);
+		try (var problems = new ProblemReporter.ScopedCollector(com.mojang.logging.LogUtils.getLogger())) {
+            super.readAdditionalSaveData(TagValueInput.create(problems, registryAccess(), vanilla));
+        }
 		updateInvisibilityStatus();
 		for(AttributeInstance attribute : corpseAttributes()) {
 			if(!Double.isFinite(attribute.getValue())) {
@@ -953,19 +983,19 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		if(isInventoryList(recovery)) {
 			ListTag records = (ListTag)recovery;
 			for(int i = 0; i < records.size(); i++) {
-				CompoundTag record = records.getCompound(i);
-				String source = record.getString("Source");
-				if((record.getAllKeys().size() == 2 || (record.getAllKeys().size() == 3 && record.contains("SourceVersions",10)))
-						&& record.contains("Source",8) && record.contains("Data",10)
+				CompoundTag record = records.getCompoundOrEmpty(i);
+				String source = record.getStringOr("Source", "");
+				if((record.keySet().size() == 2 || (record.keySet().size() == 3 && hasType(record, "SourceVersions", 10)))
+						&& hasType(record, "Source", 8) && hasType(record, "Data", 10)
 						&& (source.equals("Equipment") || source.equals("Aux"))) {
-					readInventoryEntry(source,record.getCompound("Data"),record);
+					readInventoryEntry(source,record.getCompoundOrEmpty("Data"),record);
 				} else unresolvedInventory.add(record.copy());
 			}
 		} else if(recovery != null) retainRaw("Recovery",recovery);
 		if(!unresolvedInventory.isEmpty()) ModLog.warning(
 				"Lootable Bodies retained %s unreadable inventory records for later recovery",unresolvedInventory.size());
 
-		long now = Math.max(0L,getCommandSenderWorld().getGameTime());
+		long now = Math.max(0L,level().getGameTime());
 		this.vacuumTime = (byte)readTimer(root,"Vac",VACUUM_TIMELIMIT,VACUUM_TIMELIMIT);
 		this.setDeathTimestamp(readTimer(root,"DeathTime",now,now));
 		this.decayTimestamp = readTimer(root,"DecayTime",now,now);
@@ -1008,7 +1038,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
             Holder<MobEffect> effect=SavedEffectIdentity.resolve(record,id);
             boolean legacy=!record.contains("id");
             boolean[] changed={legacy && record.contains("forge:id")
-                    && (record.getString("forge:id").isEmpty() || id==null || id<1 || id>255)};
+                    && (record.getStringOr("forge:id", "").isEmpty() || id==null || id<1 || id>255)};
             CompoundTag accepted=effect==null?null:effectDetails(record,legacy,changed,0);
             if(accepted==null || !seen.add(effect)) {
                 retainInvalid("ActiveEffect",record);
@@ -1028,7 +1058,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
         String iconKey=legacy?"ShowIcon":"show_icon", hiddenKey=legacy?"HiddenEffect":"hidden_effect";
         Long duration=raw.contains(durationKey)?integral(raw.get(durationKey)):Long.valueOf(0);
         Long amplifier=raw.contains(amplifierKey)?integral(raw.get(amplifierKey)):Long.valueOf(0);
-        if(legacy && amplifier!=null && raw.contains(amplifierKey,1))amplifier=Math.max(0L,amplifier);
+        if(legacy && amplifier!=null && hasType(raw, amplifierKey, 1))amplifier=Math.max(0L,amplifier);
         int minimumDuration=legacy?0:-1;
         int maximumAmplifier=legacy?127:255;
         if(duration==null || duration<minimumDuration || duration>Integer.MAX_VALUE
@@ -1041,14 +1071,14 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
         result.putBoolean("show_particles",particles);
         result.putBoolean("show_icon",effectFlag(raw,iconKey,particles,changed));
         if(raw.contains(hiddenKey)) {
-            CompoundTag hidden=raw.contains(hiddenKey,10)?effectDetails(raw.getCompound(hiddenKey),legacy,changed,depth+1):null;
+            CompoundTag hidden=hasType(raw, hiddenKey, 10)?effectDetails(raw.getCompoundOrEmpty(hiddenKey),legacy,changed,depth+1):null;
             if(hidden==null)return null;
             result.put("hidden_effect",hidden);
         }
         // The Forge 50 effect codec has no CurativeItems field. Retain that
         // legacy payload with its original effect record for recovery.
         if(!Set.of("id","Id","forge:id",durationKey,amplifierKey,ambientKey,particlesKey,iconKey,hiddenKey)
-                .containsAll(raw.getAllKeys()))changed[0]=true;
+                .containsAll(raw.keySet()))changed[0]=true;
         return result;
     }
 
@@ -1062,7 +1092,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 
 	private static Double finiteNumber(Tag raw) {
 		if(!(raw instanceof NumericTag) || raw.getId() < 1 || raw.getId() > 6) return null;
-		double value = ((NumericTag)raw).getAsDouble();
+		double value = ((NumericTag)raw).doubleValue();
 		return Double.isFinite(value) ? value : null;
 	}
 
@@ -1086,14 +1116,14 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		String nameKey=legacy?"Name":"id", baseKey=legacy?"Base":"base", modifiersKey=legacy?"Modifiers":"modifiers";
 		ListTag list = (ListTag)raw;
 		for(int i = 0; i < list.size(); i++) {
-			CompoundTag record = list.getCompound(i);
-			AttributeInstance attribute = record.contains(nameKey,8)
-					? attributeNamed(record.getString(nameKey)) : null;
+			CompoundTag record = list.getCompoundOrEmpty(i);
+			AttributeInstance attribute = hasType(record, nameKey, 8)
+					? attributeNamed(record.getStringOr(nameKey, "")) : null;
 			Double base = finiteNumber(record.get(baseKey));
 			if(attribute == null || base == null) { retainInvalid("Attribute",record); continue; }
-            if(legacy && record.getString(nameKey).equals("forge:step_height_addition")) {
+            if(legacy && record.getStringOr(nameKey, "").equals("forge:step_height_addition")) {
                 Tag modifiers=record.get(modifiersKey);
-                if(base < -512D || base > 512D || !Set.of(nameKey,baseKey,modifiersKey).containsAll(record.getAllKeys())
+                if(base < -512D || base > 512D || !Set.of(nameKey,baseKey,modifiersKey).containsAll(record.keySet())
                         || (modifiers!=null && (!(modifiers instanceof ListTag listValue) || !listValue.isEmpty()))) {
                     retainInvalid("Attribute",record);continue;
                 }
@@ -1115,7 +1145,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 					&& !configuredHealth && !legacyNameDistance && !base.equals(defaultAttributeBases.get(name))) || !seen.add(name)) {
 				retainInvalid("Attribute",record); continue;
 			}
-			boolean changed = !Set.of(nameKey,baseKey,modifiersKey).containsAll(record.getAllKeys());
+			boolean changed = !Set.of(nameKey,baseKey,modifiersKey).containsAll(record.keySet());
 			CompoundTag accepted = new CompoundTag();
 			accepted.putString("id",name); accepted.putDouble("base",base);
 			Tag rawModifiers = record.get(modifiersKey);
@@ -1123,13 +1153,13 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 				ListTag modifiers = new ListTag();
 				if(!isInventoryList(rawModifiers)) changed = true;
 				else {
-					Set<ResourceLocation> ids = new HashSet<>();
+					Set<Identifier> ids = new HashSet<>();
 					ListTag entries = (ListTag)rawModifiers;
 					for(int m = 0; m < entries.size(); m++) {
-						CompoundTag entry = entries.getCompound(m);
-						String operation=legacy?legacyOperation(entry):entry.getString("operation");
-						ResourceLocation id=legacy?legacyModifier(entry):
-								entry.contains("id",8)?ResourceLocation.tryParse(entry.getString("id")):null;
+						CompoundTag entry = entries.getCompoundOrEmpty(m);
+						String operation=legacy?legacyOperation(entry):entry.getStringOr("operation", "");
+						Identifier id=legacy?legacyModifier(entry):
+								hasType(entry, "id", 8)?Identifier.tryParse(entry.getStringOr("id", "")):null;
 						Double amount = finiteNumber(entry.get(legacy?"Amount":"amount"));
 						if(operation==null || !Set.of("add_value","add_multiplied_base","add_multiplied_total").contains(operation)
 								|| id == null || id.getPath().isEmpty() || amount == null) {
@@ -1144,7 +1174,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 						ids.add(id); modifiers.add(modifier);
 						Set<String> fields=legacy?Set.of("Name","Amount","Operation","UUIDMost","UUIDLeast","UUID"):
 								Set.of("id","amount","operation");
-						if(!fields.containsAll(entry.getAllKeys())) changed = true;
+						if(!fields.containsAll(entry.keySet())) changed = true;
 					}
 				}
 				accepted.put("modifiers",modifiers);
@@ -1155,10 +1185,10 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		return clean;
 	}
 
-	private static ResourceLocation legacyModifier(CompoundTag entry) {
+	private static Identifier legacyModifier(CompoundTag entry) {
 		UUID uuid=attributeUuid(entry);
-		String name=entry.getString("Name");
-		return uuid==null || !entry.contains("Name",8) || name.isEmpty()?null:ItemMigration.legacyModifierId(uuid,name);
+		String name=entry.getStringOr("Name", "");
+		return uuid==null || !hasType(entry, "Name", 8) || name.isEmpty()?null:ItemMigration.legacyModifierId(uuid,name);
 	}
 
 	private static String legacyOperation(CompoundTag entry) {
@@ -1174,8 +1204,8 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	private static UUID attributeUuid(CompoundTag entry) {
         UUID current=null,legacy=null;
         if(entry.contains("UUID")) {
-            if(!entry.hasUUID("UUID"))return null;
-            current=entry.getUUID("UUID");
+            if(!hasUuid(entry, "UUID"))return null;
+            current=readUuid(entry, "UUID");
         }
         if(entry.contains("UUIDMost") || entry.contains("UUIDLeast")) {
             Long most=integral(entry.get("UUIDMost")),least=integral(entry.get("UUIDLeast"));
@@ -1187,19 +1217,19 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	private static boolean finiteAttributeValue(double base, ListTag modifiers) {
 		double value = base;
 		for(int i = 0; i < modifiers.size(); i++) {
-			CompoundTag m = modifiers.getCompound(i);
-			if(m.getString("operation").equals("add_value")) value += m.getDouble("amount");
+			CompoundTag m = modifiers.getCompoundOrEmpty(i);
+			if(m.getStringOr("operation", "").equals("add_value")) value += m.getDoubleOr("amount", 0D);
 		}
 		if(!Double.isFinite(value)) return false;
 		double additive = value;
 		for(int i = 0; i < modifiers.size(); i++) {
-			CompoundTag m = modifiers.getCompound(i);
-			if(m.getString("operation").equals("add_multiplied_base")) value += additive * m.getDouble("amount");
+			CompoundTag m = modifiers.getCompoundOrEmpty(i);
+			if(m.getStringOr("operation", "").equals("add_multiplied_base")) value += additive * m.getDoubleOr("amount", 0D);
 		}
 		if(!Double.isFinite(value)) return false;
 		for(int i = 0; i < modifiers.size(); i++) {
-			CompoundTag m = modifiers.getCompound(i);
-			if(m.getString("operation").equals("add_multiplied_total")) value *= 1D + m.getDouble("amount");
+			CompoundTag m = modifiers.getCompoundOrEmpty(i);
+			if(m.getStringOr("operation", "").equals("add_multiplied_total")) value *= 1D + m.getDoubleOr("amount", 0D);
 		}
 		return Double.isFinite(value);
 	}
@@ -1220,27 +1250,44 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		return now;
 	}
 
-    private String readName(CompoundTag root,String key) {
-        Tag raw=root.get(key);if(raw==null)return null;
-        if(raw.getId()==8) {
-            String name=root.getString(key);
-            if(key.equals("CustomName") && root.getInt(UpgradePreservation.VERSION)>=3) {
-                try {
-                    net.minecraft.network.chat.Component text=net.minecraft.network.chat.Component.Serializer.fromJson(name,registryAccess());
-                    if(text==null){retainInvalid(key,raw);return null;}name=text.getString();
-                }catch(RuntimeException malformed){retainInvalid(key,raw);return null;}
+    private String readName(CompoundTag root, String key) {
+        Tag raw = root.get(key);
+        if (raw == null) return null;
+        String name;
+        try {
+            if (key.equals("CustomName")) {
+                var json = registryAccess().createSerializationContext(com.mojang.serialization.JsonOps.INSTANCE);
+                var nbt = registryAccess().createSerializationContext(NbtOps.INSTANCE);
+                String saved = raw.asString().orElse("");
+                int marker = root.getIntOr(UpgradePreservation.VERSION, 0);
+                boolean legacyJson = marker >= 3 && marker < UpgradePreservation.DATA_VERSION;
+                // Staged copies can already carry the current marker while
+                // retaining a historical JSON component until the first save.
+                boolean stagedJson = !root.getCompoundOrEmpty(UpgradePreservation.SOURCES).isEmpty()
+                        && !saved.isEmpty() && (saved.startsWith("\"") || saved.startsWith("{") || saved.startsWith("["));
+                if (raw.getId() == Tag.TAG_STRING && (legacyJson || stagedJson)) {
+                    name = ComponentSerialization.CODEC.parse(json, com.google.gson.JsonParser.parseString(saved))
+                            .getOrThrow().getString();
+                } else {
+                    name = ComponentSerialization.CODEC.parse(nbt, raw).getOrThrow().getString();
+                }
+            } else {
+                name = raw.asString().orElseThrow();
             }
-            String packet=net.minecraft.network.chat.Component.Serializer.toJson(net.minecraft.network.chat.Component.literal(name),registryAccess());
-            if(name.length()<=32767 && name.getBytes(StandardCharsets.UTF_8).length<=32767
-                    && packet.getBytes(StandardCharsets.UTF_8).length<=32767)return name.trim().isEmpty()?"":name;
+            String packet = ComponentSerialization.CODEC.encodeStart(com.mojang.serialization.JsonOps.INSTANCE,
+                    Component.literal(name)).getOrThrow().toString();
+            if (name.length() <= 32767 && name.getBytes(StandardCharsets.UTF_8).length <= 32767
+                    && packet.getBytes(StandardCharsets.UTF_8).length <= 32767) return name.trim().isEmpty() ? "" : name;
+        } catch (RuntimeException malformed) {
+            // Keep original raw attribution for recovery.
         }
-        retainInvalid(key,raw);return null;
+        retainInvalid(key, raw);
+        return null;
     }
 
 
-
 	private static boolean isInventoryList(Tag data) {
-		return data instanceof ListTag && (((ListTag)data).size() == 0 || ((ListTag)data).getElementType() == 10);
+		return isListOf(data, 10);
 	}
 
 	private void retainRaw(String source, Tag data) {
@@ -1255,21 +1302,21 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 		if(data == null) return;
 		if(!isInventoryList(data)) { retainRaw(source + "List",data); return; }
 		ListTag list = (ListTag)data;
-		for(int i = 0; i < list.size(); i++) readInventoryEntry(source,list.getCompound(i),null);
+		for(int i = 0; i < list.size(); i++) readInventoryEntry(source,list.getCompoundOrEmpty(i),null);
 	}
 
 	private static Long integral(Tag data) {
-		return data instanceof NumericTag && data.getId() >= 1 && data.getId() <= 4 ? ((NumericTag)data).getAsLong() : null;
+		return data instanceof NumericTag && data.getId() >= 1 && data.getId() <= 4 ? ((NumericTag)data).longValue() : null;
 	}
 
     private ItemStack decodeInventoryItem(CompoundTag raw) {
         // Only restore a component stack that the live registry can round-trip.
         // Unsupported components, legacy capability data and malformed counts
         // remain byte-for-byte in the existing Source/Data recovery records.
-        if(!Set.of("id","count","components","Slot").containsAll(raw.getAllKeys())
-                || !raw.contains("id",8) || (raw.contains("components") && !raw.contains("components",10)))return null;
+        if(!Set.of("id","count","components","Slot").containsAll(raw.keySet())
+                || !hasType(raw, "id", 8) || (raw.contains("components") && !hasType(raw, "components", 10)))return null;
         Long count=raw.contains("count")?integral(raw.get("count")):Long.valueOf(1);
-        ResourceLocation id=ResourceLocation.tryParse(raw.getString("id"));
+        Identifier id=Identifier.tryParse(raw.getStringOr("id", ""));
         if(id==null || count==null || count<=0 || count>127)return null;
         try {
             CompoundTag input=raw.copy();
@@ -1285,10 +1332,10 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
             // accessor silently clamps. Keep that original stack recoverable.
             Integer damage=stack.get(net.minecraft.core.component.DataComponents.DAMAGE);
             if(damage!=null && damage!=stack.getDamageValue())return null;
-            CompoundTag encoded=(CompoundTag)stack.save(registryAccess());
-            if(!id.toString().equals(encoded.getString("id"))
-                    || encoded.getInt("count")!=1
-                    || !ItemMigration.sameSavedComponents(input.getCompound("components"),encoded.getCompound("components")))return null;
+            CompoundTag encoded=encodeItem(stack);
+            if(!id.toString().equals(encoded.getStringOr("id", ""))
+                    || encoded.getIntOr("count", 0)!=1
+                    || !ItemMigration.sameSavedComponents(input.getCompoundOrEmpty("components"),encoded.getCompoundOrEmpty("components")))return null;
             stack.setCount(count.intValue());
             return stack;
         } catch(RuntimeException unreadable) {
@@ -1297,7 +1344,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
     }
 
 	private void readInventoryEntry(String source, CompoundTag raw, CompoundTag retained) {
-		CompoundTag context=retained!=null && retained.contains("SourceVersions",10) ? retained.getCompound("SourceVersions") : inventoryVersions;
+		CompoundTag context=retained!=null && hasType(retained, "SourceVersions", 10) ? retained.getCompoundOrEmpty("SourceVersions") : inventoryVersions;
 		CompoundTag converted=ItemMigration.convert(raw,context);
 		ItemStack stack = converted==null ? null : decodeInventoryItem(converted);
 		if(emptyStack(stack)) {

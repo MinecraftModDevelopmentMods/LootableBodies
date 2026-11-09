@@ -8,6 +8,6 @@ final class NativeRespawnDescription {
 
     static String describe(ClientboundRespawnPacket packet) {
         var spawn=packet.commonPlayerSpawnInfo();
-        return "RESPAWN dimension="+spawn.dimension().location()+" hashedSeed="+spawn.seed();
+        return "RESPAWN dimension="+spawn.dimension().identifier()+" hashedSeed="+spawn.seed();
     }
 }

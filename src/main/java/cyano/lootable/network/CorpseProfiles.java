@@ -17,13 +17,13 @@ public final class CorpseProfiles {
     }
 
     public static boolean isResolved(GameProfile profile) {
-        return profile!=null && !UNRESOLVED.equals(profile.getId());
+        return profile!=null && !UNRESOLVED.equals(profile.id());
     }
 
     public static CompletableFuture<GameProfile> resolve(GameProfile initial,
             Function<String,CompletableFuture<Optional<GameProfile>>> lookup) {
         try {
-            return lookup.apply(initial.getName()).handle((value,failure) ->
+            return lookup.apply(initial.name()).handle((value,failure) ->
                     failure==null?value.filter(CorpseProfiles::isResolved).orElse(initial):initial);
         } catch (RuntimeException unavailable) {
             return CompletableFuture.completedFuture(initial);

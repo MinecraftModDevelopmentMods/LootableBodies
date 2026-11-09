@@ -1,8 +1,10 @@
 package cyano.lootable.entities;
 
+import static cyano.lootable.upgrade.NativeNbt.hasType;
+
 import net.minecraft.core.Holder;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraftforge.registries.ForgeRegistries;
 
@@ -25,18 +27,18 @@ final class SavedEffectIdentity {
             return named(record,"id");
         }
         if(record.contains("forge:id")) {
-            if(!record.contains("forge:id",8))return null;
-            if(!record.getString("forge:id").isEmpty())return named(record,"forge:id");
+            if(!hasType(record, "forge:id", 8))return null;
+            if(!record.getStringOr("forge:id", "").isEmpty())return named(record,"forge:id");
         }
         if(legacyId==null || legacyId<=0 || legacyId>=LEGACY_NAMES.length)return null;
-        return holder(ResourceLocation.withDefaultNamespace(LEGACY_NAMES[legacyId.intValue()]));
+        return holder(Identifier.withDefaultNamespace(LEGACY_NAMES[legacyId.intValue()]));
     }
 
     private static Holder<MobEffect> named(CompoundTag record,String field) {
-        return record.contains(field,8)?holder(ResourceLocation.tryParse(record.getString(field))):null;
+        return hasType(record, field, 8)?holder(Identifier.tryParse(record.getStringOr(field, ""))):null;
     }
 
-    private static Holder<MobEffect> holder(ResourceLocation id) {
+    private static Holder<MobEffect> holder(Identifier id) {
         return id==null?null:ForgeRegistries.MOB_EFFECTS.getHolder(id).orElse(null);
     }
 }

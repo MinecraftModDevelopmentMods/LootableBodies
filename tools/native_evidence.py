@@ -1,7 +1,7 @@
-"""Independently audit Forge 52 local receipts, complete logs and diagnostic bytes.
+"""Independently audit Forge 61 local receipts, complete logs and diagnostic bytes.
 
 Default auditing binds the recorded cwd to the actual owned process home.
-Relocated auditing is a separately tested download contract; hosted Forge 52
+Relocated auditing is a separately tested download contract; hosted Forge 61
 execution and promotion remain disabled and have not been exercised.
 """
 from pathlib import Path,PurePosixPath
@@ -18,10 +18,10 @@ def audit_phase(home,phase,*,refusal=False,relocated=False):
     if receipt['timeout']!=(180 if refusal else 240):raise ValueError('Changed native deadline')
     if receipt['returncode']!=(1 if refusal else 0):raise ValueError('Unexpected native JVM exit')
     command=receipt['command']
-    # Forge 52 was qualified with its default worker and GC settings.
+    # Forge 61 was qualified with its default worker and GC settings.
     if any(s.startswith(('-XX:ActiveProcessorCount','-XX:ParallelGCThreads','-XX:ConcGCThreads','-Dmax.bg.threads'))
             or (s.startswith(('-XX:+Use','-XX:-Use')) and s.endswith('GC')) for s in command):
-        raise ValueError('Unqualified Forge 52 worker or GC override')
+        raise ValueError('Unqualified Forge 61 worker or GC override')
     if relocated:
         # Downloaded artifacts retain their original machine cwd. Require the
         # complete case/condition suffix; all bytes are read only under home.
@@ -34,7 +34,7 @@ def audit_phase(home,phase,*,refusal=False,relocated=False):
     version=FORGE.removeprefix('forge-')
     expected={prefix+version+'/'+name for name in ('win_args.txt','unix_args.txt')} if relocated else {
         prefix+version+'/'+('win_args.txt' if __import__('os').name=='nt' else 'unix_args.txt')}
-    if len(arguments)!=1 or arguments[0] not in expected or '--nogui' not in command:raise ValueError('Receipt did not launch Forge 52 modules')
+    if len(arguments)!=1 or arguments[0] not in expected or '--nogui' not in command:raise ValueError('Receipt did not launch Forge 61 modules')
     if not any(item.startswith('-Xlog:gc*,safepoint:file=') for item in command):raise ValueError('Missing Java 21 unified GC evidence')
     if not refusal and '-Dlootablebodies.phase='+phase not in command:raise ValueError('Receipt belongs to another phase')
     for name in ('gc.txt','initial-threads.txt','initial-heap-gc.txt'):

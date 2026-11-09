@@ -1,5 +1,7 @@
 package cyano.lootable.buildtest;
 
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
+
 import com.mojang.datafixers.*;
 import com.mojang.datafixers.schemas.Schema;
 import com.mojang.serialization.Dynamic;
@@ -7,7 +9,7 @@ import java.nio.file.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.nbt.*;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.eventbus.api.bus.BusGroup;
 
 /** Controlled packaged pre-world conversion/refusal; separate from old writers. */
 public final class NativePreflightChecks {
@@ -15,16 +17,18 @@ public final class NativePreflightChecks {
     private static final AtomicInteger early=new AtomicInteger(),worlds=new AtomicInteger(),starts=new AtomicInteger();
     private static String mode;
     private static boolean installed;
-    static void install(net.minecraftforge.eventbus.api.IEventBus bus) {
+    static void install(BusGroup bus) {
         mode=System.getProperty("lootablebodies.nativePreflight","");
         if(mode.isEmpty())return;
         if(!mode.equals("refuse") && !mode.equals("convert"))throw new IllegalArgumentException("Unknown preflight control");
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new NativePreflightChecks());
+        var check = new NativePreflightChecks();
+        net.minecraftforge.event.level.LevelEvent.Load.BUS.addListener(check::loaded);
+        net.minecraftforge.event.server.ServerAboutToStartEvent.BUS.addListener(check::starting);
         Runtime.getRuntime().addShutdownHook(new Thread(()->{
             try {Files.writeString(Path.of("preflight-control.receipt"),"mode="+mode+" earlyConversions="+early.get()+" worldLoads="+worlds.get()+" serverStarts="+starts.get()+"\n",StandardOpenOption.CREATE_NEW);}
             catch(Exception failure){failure.printStackTrace();}
         },"PreflightControlReceipt"));
-        bus.addListener((net.minecraftforge.fml.event.lifecycle.FMLLoadCompleteEvent event)->event.enqueueWork(()->{
+        net.minecraftforge.fml.event.lifecycle.FMLLoadCompleteEvent.getBus(bus).addListener(event->event.enqueueWork(()->{
             installed=true;
             System.out.println("NATIVE121_PREFLIGHT_CONTROL_INSTALLED mode="+mode);
         }));
@@ -48,8 +52,8 @@ public final class NativePreflightChecks {
                 }
         };
     }
-    @SubscribeEvent public void loaded(net.minecraftforge.event.level.LevelEvent.Load event){worlds.incrementAndGet();}
-    @SubscribeEvent public void starting(net.minecraftforge.event.server.ServerAboutToStartEvent event){starts.incrementAndGet();}
+    public void loaded(net.minecraftforge.event.level.LevelEvent.Load event){worlds.incrementAndGet();}
+    public void starting(net.minecraftforge.event.server.ServerAboutToStartEvent event){starts.incrementAndGet();}
     static void verify(MinecraftServer server) throws Exception {
         RuntimeChecks.require(mode.equals("convert") && early.get()>0,"No actual pre-world entity conversion observed");
         net.minecraft.server.level.ServerLevel world=server.overworld();RuntimeChecks.awaitChunk(world,0,0);
@@ -62,22 +66,22 @@ public final class NativePreflightChecks {
             // Existing placement rules preserve those invalid records in Aux.
             if(slot<4){RuntimeChecks.require(item.isEmpty(),"Invalid diamond entered an armour slot");continue;}
             RuntimeChecks.require(item.getItem()==net.minecraft.world.item.Items.DIAMOND && item.getCount()==slot+1
-                    && FixtureStackData.hasCustom(item) && FixtureStackData.custom(item).getString("keep").equals("slot-"+slot),"Preflight inventory changed at slot"+slot);
+                    && FixtureStackData.hasCustom(item) && FixtureStackData.custom(item).getStringOr("keep", "").equals("slot-"+slot),"Preflight inventory changed at slot"+slot);
         }
-        CompoundTag saved=new CompoundTag();body.saveAsPassenger(saved);
-        RuntimeChecks.require(saved.getInt("LootableBodiesDataVersion")==cyano.lootable.upgrade.UpgradePreservation.DATA_VERSION,"Preflight corpse marker was not advanced");
-        ListTag aux=saved.getList("Aux",10);RuntimeChecks.require(aux.size()==5,"Preflight Aux record count changed");
+        CompoundTag saved=new CompoundTag();FixtureApi.saveEntity(body,saved);
+        RuntimeChecks.require(saved.getIntOr("LootableBodiesDataVersion", 0)==cyano.lootable.upgrade.UpgradePreservation.DATA_VERSION,"Preflight corpse marker was not advanced");
+        ListTag aux=typedList(saved, "Aux", 10);RuntimeChecks.require(aux.size()==5,"Preflight Aux record count changed");
         for(int index=0;index<5;index++) {
-            int sourceSlot=index<4?index:47;CompoundTag item=aux.getCompound(index);
-            RuntimeChecks.require(item.getString("id").equals("minecraft:diamond") && item.getInt("count")==sourceSlot+1
-                    && item.getCompound("components").getCompound("minecraft:custom_data").getString("keep").equals("slot-"+sourceSlot),"Preflight Aux changed at record"+index);
+            int sourceSlot=index<4?index:47;CompoundTag item=aux.getCompoundOrEmpty(index);
+            RuntimeChecks.require(item.getStringOr("id", "").equals("minecraft:diamond") && item.getIntOr("count", 0)==sourceSlot+1
+                    && item.getCompoundOrEmpty("components").getCompoundOrEmpty("minecraft:custom_data").getStringOr("keep", "").equals("slot-"+sourceSlot),"Preflight Aux changed at record"+index);
         }
-        RuntimeChecks.require(saved.getList("LootableBodiesUnresolved",10).stream().anyMatch(value->value instanceof CompoundTag
-                && ((CompoundTag)value).getString("Source").equals("FixtureUnknown")
-                && ((CompoundTag)value).getCompound("Data").getString("id").equals("minecraft:diamond")
-                && ((CompoundTag)value).getCompound("Data").getByte("Count")==47
-                && ((CompoundTag)value).getCompound("Data").getByte("Slot")==46
-                && ((CompoundTag)value).getCompound("Data").getCompound("tag").getString("keep").equals("slot-46")),"Raw Source/Data recovery evidence changed");
+        RuntimeChecks.require(typedList(saved, "LootableBodiesUnresolved", 10).stream().anyMatch(value->value instanceof CompoundTag
+                && ((CompoundTag)value).getStringOr("Source", "").equals("FixtureUnknown")
+                && ((CompoundTag)value).getCompoundOrEmpty("Data").getStringOr("id", "").equals("minecraft:diamond")
+                && ((CompoundTag)value).getCompoundOrEmpty("Data").getByteOr("Count", (byte) 0)==47
+                && ((CompoundTag)value).getCompoundOrEmpty("Data").getByteOr("Slot", (byte) 0)==46
+                && ((CompoundTag)value).getCompoundOrEmpty("Data").getCompoundOrEmpty("tag").getStringOr("keep", "").equals("slot-46")),"Raw Source/Data recovery evidence changed");
         Files.writeString(Path.of("preflight-conversion.pass"),"48inputEquipmentRecords/Aux/Source/Data/entityStorage conserved\n",StandardOpenOption.CREATE_NEW);
         System.out.println("NATIVE121_PACKAGED_PREFLIGHT_CONVERSION_PASS");
     }

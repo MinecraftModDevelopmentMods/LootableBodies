@@ -1,0 +1,7 @@
+# Native Forge 61 server defaults. Preserve retired Forge 36 inputs separately.
+[server]
+removeErroringBlockEntities = false
+removeErroringEntities = false
+fullBoundingBoxLadders = false
+permissionHandler = "forge:default_handler"
+advertiseDedicatedServerToLan = true

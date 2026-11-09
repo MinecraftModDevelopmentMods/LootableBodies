@@ -58,6 +58,10 @@ tasks.register('configureEclipseBuildship') {
         localJavaSetup.withOutputStream { toolchains.store(it, 'Local production Java toolchain') }
     }
 }
+def eclipseRunLibraries = { String run ->
+    (tasks.named(run, JavaExec).get().classpath - sourceSets.main.output).files
+}
+
 tasks.register('isolateEclipseProductionRuns') {
     group = 'ide'
     dependsOn 'prepareEclipseResources', 'configureEclipseBuildship', 'prepareMinecraftAssets', 'prepareProductionRunDirectory'
@@ -67,7 +71,7 @@ tasks.register('isolateEclipseProductionRuns') {
             if (!launch.isFile()) throw new GradleException("Generate ${name} with genEclipseRuns first")
             String contents = launch.getText('UTF-8')
             File nativeRoot=minecraftNatives.asFile
-            if(!nativeRoot.isDirectory())throw new GradleException('Prepare the official native 1.21.1 client inputs before generating Eclipse launches')
+            if(!nativeRoot.isDirectory())throw new GradleException('Prepare the official native 1.21.11 client inputs before generating Eclipse launches')
             contents=contents.replace('{asset_index}',minecraftAssetIndex)
                 .replace('{assets_root}',minecraftAssets.asFile.absolutePath)
                 .replace('{natives}',nativeRoot.absolutePath)
@@ -87,7 +91,20 @@ tasks.register('isolateEclipseProductionRuns') {
                     }
                 }
             }
-            launch.setText(contents.replace('\r\n', '\n'), 'UTF-8')
+            // Buildship combines compile and runtime dependencies. Forge's runtime
+            // already embeds MixinExtras, so the compile-only common jar clashes.
+            def model = new groovy.xml.XmlParser().parseText(contents)
+            def classpath = model.listAttribute.find { it.@key == 'org.eclipse.jdt.launching.CLASSPATH' }
+            classpath.listEntry.findAll { entry ->
+                def memento = new groovy.xml.XmlParser().parseText(entry.@value)
+                !memento.@projectName && !memento.@containerPath?.startsWith('org.eclipse.jdt.launching.JRE_CONTAINER')
+            }.each { classpath.remove(it) }
+            eclipseRunLibraries(name - '.launch').each { library ->
+                def memento = new groovy.util.Node(null, 'runtimeClasspathEntry',
+                        [externalArchive: library.absolutePath, type: '2', path: '5'])
+                classpath.appendNode('listEntry', [value: groovy.xml.XmlUtil.serialize(memento).trim()])
+            }
+            launch.setText(groovy.xml.XmlUtil.serialize(model), 'UTF-8')
         }
     }
 }
@@ -138,7 +155,7 @@ tasks.register('verifyEclipseProductionClasspath') {
                     !arguments.contains(metadataJar) || (side == 'client' && !arguments.contains("--assetIndex ${minecraftAssetIndex}")) ||
                     xml.contains('{asset_index}') || xml.contains('{assets_root}') || xml.contains('{natives}'))
                 throw new GradleException("Eclipse Forge metadata, target or client assets are unresolved for ${name}")
-            // Forge 52 discovers the processed mods.toml directly on the
+            // Forge discovers the processed mods.toml directly on the
             // project classpath. The launcher no longer reads MOD_CLASSES.
             def entries = launchModel.listAttribute.find {
                 it.@key.text() == 'org.eclipse.jdt.launching.CLASSPATH'
@@ -147,6 +164,11 @@ tasks.register('verifyEclipseProductionClasspath') {
                     !entries.any { it.@containerPath.text().endsWith('/JavaSE-21') } ||
                     launchModel.mapAttribute.mapEntry.any { it.@key.text() == 'MOD_CLASSES' })
                 throw new GradleException("${name} must launch the production Eclipse project on Java 21")
+            def libraries = entries.findAll { it.@externalArchive.text() }.collect { file(it.@externalArchive.text()).canonicalFile }
+            if (entries.size() != libraries.size() + 2 ||
+                    libraries != eclipseRunLibraries(name - '.launch').collect { it.canonicalFile } ||
+                    libraries.any { it.name.startsWith('mixinextras-common-') })
+                throw new GradleException("${name} must use the Forge runtime classpath without compile-only MixinExtras")
             String directory = launchModel.stringAttribute.find {
                 it.@key.text() == 'org.eclipse.jdt.launching.WORKING_DIRECTORY'
             }.@value.text()

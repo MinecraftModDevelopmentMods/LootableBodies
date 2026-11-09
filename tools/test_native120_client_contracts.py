@@ -34,7 +34,7 @@ class Native120ClientContractTests(unittest.TestCase):
             index=root/'assets/indexes/16.json';index.parent.mkdir(parents=True);index.write_bytes(b'{}')
             base={'assetIndex':{'id':'16','sha1':hashlib.sha1(b'{}').hexdigest()},'arguments':{'jvm':['-cp','${classpath}'],'game':['--version','${version_name}','--accessToken','${auth_access_token}','--clientId','${clientid}','--xuid','${auth_xuid}']}}
             forge={'arguments':{'jvm':['-Djava.net.preferIPv6Addresses=system'],'game':['--launchTarget','forge_client']},'mainClass':'net.minecraftforge.bootstrap.ForgeBootstrap'}
-            record={'library_directory':str(root/'sdk/libraries'),'classpath':[str(root/'1.21.1.jar')],'natives':str(root/'natives'),'system':'windows','architecture':'amd64'}
+            record={'library_directory':str(root/'sdk/libraries'),'classpath':[str(root/'1.21.11.jar')],'natives':str(root/'natives'),'system':'windows','architecture':'amd64'}
             with patch('native120_client.load',return_value=(base,forge,record)):
                 result=native120_client.command(java,root/'home',root/'sdk',root/'assets',root/'prepared',username='Fixture')
                 with patch.dict('os.environ',{'LOOTABLEBODIES_TEST_SESSION_ENDPOINT':'http://127.0.0.1:51927'}):
@@ -42,16 +42,18 @@ class Native120ClientContractTests(unittest.TestCase):
                 with patch.dict('os.environ',{'LOOTABLEBODIES_TEST_SESSION_ENDPOINT':'https://example.invalid'}), self.assertRaisesRegex(ValueError,'loopback'):
                     native120_client.command(java,root/'home',root/'sdk',root/'assets',root/'prepared',username='Fixture')
             self.assertIn('-Djava.net.preferIPv6Addresses=system',result)
-            self.assertIn(str(root/'1.21.1.jar'),result)
+            self.assertIn(str(root/'1.21.11.jar'),result)
+            self.assertIn('--offlineDeveloperMode',result)
             self.assertIn('net.minecraftforge.bootstrap.ForgeBootstrap',result)
             self.assertEqual('forge_client',result[result.index('--launchTarget')+1])
             self.assertFalse(any('ignoreList' in arg for arg in result))
             self.assertIn('-Dstdout.encoding=UTF-8',result)
             self.assertIn('-Dstderr.encoding=UTF-8',result)
-            self.assertEqual('1.21.1-forge-52.1.20',result[result.index('--version')+1])
+            self.assertEqual('1.21.11-forge-61.2.4',result[result.index('--version')+1])
             self.assertEqual('0',result[result.index('--accessToken')+1])
             self.assertEqual('',result[result.index('--clientId')+1]);self.assertEqual('',result[result.index('--xuid')+1])
             self.assertIn('-Dminecraft.api.session.host=http://127.0.0.1:51927',owned)
+            self.assertNotIn('--offlineDeveloperMode',owned)
             self.assertIn('-Dminecraft.api.services.host=http://127.0.0.1:51927',owned)
 
     def test_unsealed_classpath_and_changed_native_bytes_are_rejected(self):

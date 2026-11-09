@@ -55,29 +55,31 @@ ext.auditReleaseArchives = { File directory ->
                 throw new GradleException("Incorrect release manifest in ${name}")
             if (index == 0) {
                 ['META-INF/mods.toml', 'pack.mcmeta', 'cyano/lootable/LootableBodies.class',
-                 'META-INF/coremods.json', 'coremods/early-world-preservation.js',
+                 'lootablebodies.mixins.json', 'cyano/lootable/mixin/DataFixersMixin.class',
+                 'cyano/lootable/mixin/SaveAccessMixin.class', 'cyano/lootable/mixin/DedicatedWorldMixin.class',
+                 'cyano/lootable/mixin/RegionStorageMixin.class', 'cyano/lootable/mixin/LegacyStructuresMixin.class',
+                 'cyano/lootable/mixin/CapabilityDataMixin.class', 'cyano/lootable/mixin/CorpseRenderDispatcherMixin.class',
                  'cyano/lootable/upgrade/EarlyWorldPreservation.class',
                  'assets/lootablebodies/textures/gui/corpse.png',
                  'assets/lootablebodies/textures/entity/corpse/corpse.png'].each {
                     if (!names.contains(it)) throw new GradleException("Missing production entry ${it}")
                 }
                 String info=zip.getInputStream(zip.getEntry('META-INF/mods.toml')).getText('UTF-8')
-                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.21.1]"'].each {
+                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.21.11]"'].each {
                     if(!info.contains(it))throw new GradleException("Incorrect production metadata: ${it}")
                 }
                 def pack=new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack
-                if(pack.pack_format!=34 || pack.supported_formats!=[min_inclusive:34,max_inclusive:48] || pack.containsKey('forge:server_data_pack_format') ||
+                if(pack.min_format!=[94,1] || pack.max_format!=[94,1] || pack.containsKey('pack_format') || pack.containsKey('supported_formats') || pack.containsKey('forge:server_data_pack_format') ||
                         pack.containsKey('forge:resource_pack_format') || pack.containsKey('forge:data_pack_format'))
-                    throw new GradleException('Native pack formats must be resource34/server-data48')
-                def coremods=new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('META-INF/coremods.json')).getText('UTF-8'))
-                if(coremods!=[lootablebodies_preservation:'coremods/early-world-preservation.js'])
-                    throw new GradleException('Missing or changed early native save attachment')
-                String hooks=zip.getInputStream(zip.getEntry('coremods/early-world-preservation.js')).getText('UTF-8')
-                if (!hooks.contains('lootablebodies_fixer') || !hooks.contains('getDataFixer') ||
-                        manifest.getValue('FMLAT')!=null)
-                    throw new GradleException('Missing or changed native data fixer attachment')
-                if (!hooks.contains('lootablebodies_dedicated_read') || !hooks.contains('readDedicatedWorld'))
-                    throw new GradleException('Missing dedicated world refusal guard')
+                    throw new GradleException('Forge mod pack metadata must use data format 94.1')
+                def mixins = new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('lootablebodies.mixins.json')).getText('UTF-8'))
+                if (mixins.required != true || mixins.compatibilityLevel != 'JAVA_21' ||
+                        mixins.package != 'cyano.lootable.mixin' || mixins.injectors != [defaultRequire: 1] ||
+                        mixins.mixins != ['DataFixersMixin', 'SaveAccessMixin', 'RegionStorageMixin', 'LegacyStructuresMixin', 'CapabilityDataMixin'] || mixins.server != ['DedicatedWorldMixin'] ||
+                        mixins.client != ['CorpseRenderDispatcherMixin'] ||
+                        manifest.getValue('MixinConfigs') != 'lootablebodies.mixins.json' || manifest.getValue('FMLAT') != null ||
+                        names.contains('META-INF/coremods.json') || names.any { it.startsWith('coremods/') && !it.endsWith('/') })
+                    throw new GradleException('Missing or changed native world preservation mixins')
                 def languages=names.findAll {it.startsWith('assets/lootablebodies/lang/') && !it.endsWith('/')}
                 if(languages.size()!=14 || languages.any {!it.endsWith('.json') || it!=it.toLowerCase(Locale.ROOT)})
                     throw new GradleException('Incorrect native language resources')

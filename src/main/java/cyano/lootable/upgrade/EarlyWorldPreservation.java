@@ -27,23 +27,20 @@ public final class EarlyWorldPreservation {
     public static synchronized void install() {
         if(installed)return;
         verifyAttachment(LevelStorageSource.LevelStorageAccess.class);
+        if (!UpgradePreservation.RegionAttached.class.isAssignableFrom(net.minecraft.world.level.chunk.storage.SimpleRegionStorage.class))
+            throw new IllegalStateException("Native region preservation could not be attached. World loading has been stopped.");
         if(!(net.minecraft.util.datafix.DataFixers.getDataFixer() instanceof NativeSafeFixer))
             throw new IllegalStateException("Native data fixer preservation could not be attached. World loading has been stopped.");
         installed=true;
     }
+    /** Implemented only by the transformed native save access. */
+    public interface Attached { }
+
     private static void verifyAttachment(Class<?> reader) {
-        try {
-            if(!reader.getName().equals(LevelStorageSource.LevelStorageAccess.class.getName()))
-                throw new IllegalStateException("Unexpected native save reader");
-            java.lang.reflect.Method marker=reader.getDeclaredMethod("lootablebodies$preservationAttached");
-            if(marker.getReturnType()!=boolean.class || !marker.isSynthetic() ||
-                    !java.lang.reflect.Modifier.isStatic(marker.getModifiers()) ||
-                    !java.lang.reflect.Modifier.isPublic(marker.getModifiers()) || !Boolean.TRUE.equals(marker.invoke(null)))
-                throw new IllegalStateException("Native save preservation attachment is invalid");
-        } catch(ReflectiveOperationException missing) {
-            throw new IllegalStateException("Native save preservation could not be attached. World loading has been stopped before reading or rewriting a world.",missing);
-        }
+        if (reader != LevelStorageSource.LevelStorageAccess.class || !Attached.class.isAssignableFrom(reader))
+            throw new IllegalStateException("Native save preservation could not be attached. World loading has been stopped before reading or rewriting a world.");
     }
+
     /** Called before Forge reads extra data or native level conversion. */
     public static void beforeRead(LevelStorageSource.LevelStorageAccess save,boolean fallback) {
         try {
@@ -64,9 +61,14 @@ public final class EarlyWorldPreservation {
         } catch(IOException | RuntimeException unsafe){throw new UnsafeWorldUpgrade(unsafe);}
     }
     /** The dedicated startup entry point has no shutdown hook before world construction. */
-    public static Dynamic<?> readDedicatedWorld(LevelStorageSource.LevelStorageAccess save,boolean fallback) throws IOException {
+    @FunctionalInterface
+    public interface WorldReader {
+        Dynamic<?> read() throws IOException;
+    }
+
+    public static Dynamic<?> readDedicatedWorld(LevelStorageSource.LevelStorageAccess save, WorldReader reader) throws IOException {
         try {
-            return fallback ? save.getDataTagFallback() : save.getDataTag();
+            return reader.read();
         } catch(UnsafeWorldUpgrade unsafe) {
             metadata.remove(save);
             try {

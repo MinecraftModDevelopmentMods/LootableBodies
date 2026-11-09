@@ -1,5 +1,7 @@
 package cyano.lootable.upgrade;
 
+import static cyano.lootable.buildtest.TestNativeNbt.typedList;
+
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.IntTag;
 import net.minecraft.nbt.ListTag;
@@ -33,22 +35,22 @@ class Native115UpgradeTest {
         return values;
     }
     @Test void currentFormatUsesThe119SchemaAndItsOwnMarker() {
-        assertEquals(3955, UpgradePreservation.MINECRAFT_VERSION);
-        assertEquals(12,UpgradePreservation.DATA_VERSION);
+        assertEquals(4671, UpgradePreservation.MINECRAFT_VERSION);
+        assertEquals(13,UpgradePreservation.DATA_VERSION);
     }
     @Test void currentBiomeValuesSurvivePlausibleOlderStampsAndRepeatedConversion() {
         int[] values = currentBiomes(); CompoundTag original = chunk(values), before = original.copy();
         CompoundTag first = convert(original, 1976);
-        assertArrayEquals(values, first.getCompound("Level").getIntArray("Biomes"));
+        assertArrayEquals(values, first.getCompoundOrEmpty("Level").getIntArray("Biomes").orElseGet(() -> new int[0]));
         assertEquals(before, original);
         CompoundTag restamped = first.copy(); restamped.putInt("DataVersion", 1976);
-        assertArrayEquals(values, convert(restamped, 1976).getCompound("Level").getIntArray("Biomes"));
+        assertArrayEquals(values, convert(restamped, 1976).getCompoundOrEmpty("Level").getIntArray("Biomes").orElseGet(() -> new int[0]));
     }
     @Test void currentBiomeValuesSurviveMissingAndWronglyTypedStamps() {
         for (Tag stamp : new Tag[]{null, StringTag.valueOf("damaged"), IntTag.valueOf(-1)}) {
             int[] values = currentBiomes(); CompoundTag original = chunk(values);
             if (stamp == null) original.remove("DataVersion"); else original.put("DataVersion", stamp);
-            assertArrayEquals(values, convert(original, 1631).getCompound("Level").getIntArray("Biomes"));
+            assertArrayEquals(values, convert(original, 1631).getCompoundOrEmpty("Level").getIntArray("Biomes").orElseGet(() -> new int[0]));
         }
     }
     @Test void biomeProtectionStillRunsOlderVanillaEntityFixes() {
@@ -56,16 +58,16 @@ class Native115UpgradeTest {
         original.putInt("DataVersion", 1631);
         CompoundTag villager = new CompoundTag(); villager.putString("id", "minecraft:villager");
         villager.putInt("Profession", 1); villager.putInt("Career", 1); villager.putInt("CareerLevel", 3);
-        original.getCompound("Level").getList("Entities", 10).add(villager);
+        typedList(original.getCompoundOrEmpty("Level"), "Entities", 10).add(villager);
         CompoundTag before = original.copy(), fixed = convert(original, 1631);
-        assertArrayEquals(values, fixed.getCompound("Level").getIntArray("Biomes"));
-        assertEquals("minecraft:librarian", fixed.getCompound("Level").getList("Entities", 10)
-                .getCompound(0).getCompound("VillagerData").getString("profession"));
+        assertArrayEquals(values, fixed.getCompoundOrEmpty("Level").getIntArray("Biomes").orElseGet(() -> new int[0]));
+        assertEquals("minecraft:librarian", typedList(fixed.getCompoundOrEmpty("Level"), "Entities", 10)
+                .getCompoundOrEmpty(0).getCompoundOrEmpty("VillagerData").getStringOr("profession", ""));
         assertEquals(before, original);
     }
     @Test void historical256BiomeValuesStillUseNativeSampling() {
         int[] values = new int[256]; for (int i=0; i<values.length; i++) values[i]=i%17;
-        int[] fixed = convert(chunk(values), 1976).getCompound("Level").getIntArray("Biomes");
+        int[] fixed = convert(chunk(values), 1976).getCompoundOrEmpty("Level").getIntArray("Biomes").orElseGet(() -> new int[0]);
         assertEquals(1024, fixed.length);
         for (int y=0; y<64; y++) for (int z=0; z<4; z++) for (int x=0; x<4; x++)
             assertEquals(values[(z*4+2)*16+x*4+2], fixed[y*16+z*4+x]);
@@ -78,10 +80,10 @@ class Native115UpgradeTest {
         ListTag items = new ListTag(); items.add(item); raw.put("Equipment", items);
         context.putInt("DataVersion", 1976); CompoundTag before = raw.copy();
         CompoundTag staged = NativeSafeFixer.stageCorpse(raw, context);
-        assertEquals(12,staged.getInt(UpgradePreservation.VERSION));
-        CompoundTag record = staged.getList("LootableBodiesUnresolved", 10).getCompound(0);
-        assertEquals(item, record.get("Data")); assertEquals("Equipment", record.getString("Source"));
-        assertEquals(1976, record.getCompound("SourceVersions").getInt("DataVersion"));
+        assertEquals(13,staged.getIntOr(UpgradePreservation.VERSION, 0));
+        CompoundTag record = typedList(staged, "LootableBodiesUnresolved", 10).getCompoundOrEmpty(0);
+        assertEquals(item, record.get("Data")); assertEquals("Equipment", record.getStringOr("Source", ""));
+        assertEquals(1976, record.getCompoundOrEmpty("SourceVersions").getIntOr("DataVersion", 0));
         assertEquals(before, raw);
     }
     @Test void released114MarkerWinsOverAnOlderOuterEntityContext() {
@@ -92,8 +94,8 @@ class Native115UpgradeTest {
         raw.put("Equipment", equipment); CompoundTag before = raw.copy();
         CompoundTag fixed = NativeNbt.update(UpgradePreservation.wrapper(DataFixers.getDataFixer()),
                 net.minecraft.util.datafix.fixes.References.ENTITY_TREE, raw, 1631, 2586);
-        assertEquals(1976, fixed.getList("LootableBodiesUnresolved", 10).getCompound(0)
-                .getCompound("SourceVersions").getInt("DataVersion"));
+        assertEquals(1976, typedList(fixed, "LootableBodiesUnresolved", 10).getCompoundOrEmpty(0)
+                .getCompoundOrEmpty("SourceVersions").getIntOr("DataVersion", 0));
         assertEquals(before, raw);
     }
 }

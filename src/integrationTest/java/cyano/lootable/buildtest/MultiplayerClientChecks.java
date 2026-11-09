@@ -1,5 +1,4 @@
 package cyano.lootable.buildtest;
-import net.minecraft.world.entity.boss.enderdragon.phases.AbstractDragonPhaseInstance;
 
 import cyano.lootable.entities.EntityLootableBody;
 import cyano.lootable.graphics.CorpseGUIContainer;
@@ -16,7 +15,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.client.Screenshot;
 import net.minecraftforge.common.MinecraftForge;
 
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.event.TickEvent;
 
 /** Two independent real Forge clients; no native desktop input or control. */
@@ -26,11 +24,13 @@ final class MultiplayerClientChecks {
     private boolean connecting;
     private boolean finished;
     private int lastPhase=-1,frames,ticks;
-    void register(){if(role!=null&&!Boolean.getBoolean("lootablebodies.visibility")&&!Boolean.getBoolean("lootablebodies.respawn")){net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);MinecraftForge.EVENT_BUS.register(this);}}
-    @SubscribeEvent public void mouse(net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre e){e.setCanceled(true);}
-    @SubscribeEvent public void key(net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre e){e.setCanceled(true);}
-    @SubscribeEvent public void tick(TickEvent.ClientTickEvent e){
-        if(e.phase!=TickEvent.Phase.END)return;Minecraft mc=Minecraft.getInstance();
+    void register(){if(role!=null&&!Boolean.getBoolean("lootablebodies.visibility")&&!Boolean.getBoolean("lootablebodies.respawn")){
+            net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre.BUS.addListener(event -> true);
+            net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre.BUS.addListener(event -> true);
+            TickEvent.ClientTickEvent.Post.BUS.addListener(this::tick);
+        }}
+    private void tick(TickEvent.ClientTickEvent.Post event){
+        Minecraft mc=Minecraft.getInstance();
         if(mc.isWindowActive())mc.mouseHandler.releaseMouse();net.minecraft.client.KeyMapping.releaseAll();
         try{
             if(finished){mc.stop();return;}
@@ -47,7 +47,7 @@ final class MultiplayerClientChecks {
             if(phase==8){
                 try(FileWriter out=new FileWriter(new File(mc.gameDirectory,"multiplayer-client.pass"))){out.write("two-client packet/GUI checks passed\n");}
                 System.out.println("LOOTABLE_BODIES_MULTIPLAYER_CLIENT_PASS role="+role);
-                finished=true;mc.player.closeContainer();mc.level.disconnect();mc.disconnect();mc.setScreen(new TitleScreen());return;
+                finished=true;mc.player.closeContainer();FixtureConnections.disconnect(mc);return;
             }
             if(frames%100==0)System.out.println("TCP_CLIENT_STATE role="+role+" phase="+phase+" screen="+(mc.screen==null?"world":mc.screen.getClass().getSimpleName())+" container="+mc.player.containerMenu.getClass().getSimpleName()+" window="+mc.player.containerMenu.containerId+" position="+mc.player.blockPosition()+" completed="+completed);
             if(!(mc.screen instanceof CorpseGUIContainer)){
@@ -63,7 +63,7 @@ final class MultiplayerClientChecks {
                 if(!RuntimeChecks.sameStack(mc.player.containerMenu.getCarried(),MultiplayerChecks.stack(19,10)))return;
                 mc.gameMode.handleInventoryMouseClick(window,-999,0,ClickType.QUICK_CRAFT,mc.player);mc.gameMode.handleInventoryMouseClick(window,6,1,ClickType.QUICK_CRAFT,mc.player);mc.gameMode.handleInventoryMouseClick(window,7,1,ClickType.QUICK_CRAFT,mc.player);ack(3);
             }else if(phase==4 && role.equals("B")){
-                if(!RuntimeChecks.sameStack(mc.player.getInventory().items.get(0),MultiplayerChecks.stack(20,7)))return;
+                if(!RuntimeChecks.sameStack(mc.player.getInventory().getNonEquipmentItems().get(0),MultiplayerChecks.stack(20,7)))return;
                 mc.gameMode.handleInventoryMouseClick(window,6,0,ClickType.SWAP,mc.player);ack(4);
             }else if(phase==5 && role.equals("A")){mc.gameMode.handleInventoryMouseClick(window,-999,2,ClickType.QUICK_CRAFT,mc.player);ack(5);}
             else if(phase==6 && role.equals("A")){
@@ -76,5 +76,5 @@ final class MultiplayerClientChecks {
         }catch(Throwable error){error.printStackTrace();mc.stop();}
     }
     private void ack(int phase){completed.add(phase);MultiplayerChecks.CHANNEL.send(new MultiplayerChecks.Step(phase),net.minecraftforge.network.PacketDistributor.SERVER.noArg());}
-    private void shot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),message->System.out.println(message.getString()));}
+    private void shot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));}
 }
