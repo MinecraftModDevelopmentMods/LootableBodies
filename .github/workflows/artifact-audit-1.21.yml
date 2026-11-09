@@ -1,17 +1,22 @@
 name: Audit LootableBodies 1.21 artifacts
-run-name: Audit 1.21.1 artifacts from ${{ github.event.workflow_run.head_sha || inputs.source_sha }}
+run-name: Audit ${{ github.event.workflow_run.head_branch == 'master-1.21.11' && '1.21.11' || inputs.minecraft_version || '1.21.1' }} artifacts from ${{ github.event.workflow_run.head_sha || inputs.source_sha }}
 on:
   workflow_run:
-    workflows: [LootableBodies 1.20 CI, LootableBodies 1.20.6 CI, LootableBodies 1.21.1 CI]
+    workflows: [LootableBodies 1.20 CI, LootableBodies 1.20.6 CI, LootableBodies 1.21.1 CI, LootableBodies 1.21.11 CI]
     types: [completed]
   workflow_dispatch:
     inputs:
+      minecraft_version:
+        description: Minecraft version of the merged archive build
+        type: choice
+        default: '1.21.1'
+        options: ['1.21.1', '1.21.11']
       source_run:
         description: Successful archive build run ID
         required: true
         type: string
       source_sha:
-        description: Exact merged 1.21.1 source SHA
+        description: Exact merged source SHA
         required: true
         type: string
 permissions:
@@ -24,7 +29,8 @@ jobs:
       github.ref == 'refs/heads/master-1.12' &&
       (github.event_name == 'workflow_dispatch' ||
        (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' &&
-        github.event.workflow_run.head_branch == 'master-1.21.1' && github.event.workflow_run.name == 'LootableBodies 1.21.1 CI'))
+        ((github.event.workflow_run.head_branch == 'master-1.21.1' && github.event.workflow_run.name == 'LootableBodies 1.21.1 CI') ||
+         (github.event.workflow_run.head_branch == 'master-1.21.11' && github.event.workflow_run.name == 'LootableBodies 1.21.11 CI'))))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -32,6 +38,7 @@ jobs:
         id: source
         env:
           GH_TOKEN: ${{ github.token }}
+          TARGET_VERSION: ${{ github.event.workflow_run.head_branch == 'master-1.21.11' && '1.21.11' || inputs.minecraft_version || '1.21.1' }}
           SOURCE_RUN: ${{ github.event.workflow_run.id || inputs.source_run }}
           SOURCE_SHA: ${{ github.event.workflow_run.head_sha || inputs.source_sha }}
         run: |
@@ -48,14 +55,18 @@ jobs:
               return json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/{path}']))
 
           run = api(f'actions/runs/{run_id}')
-          branch = api('git/ref/heads/master-1.21.1')
+          target = os.environ.get('TARGET_VERSION', '1.21.1')
+          if target not in ('1.21.1', '1.21.11'):
+              raise SystemExit('Unsupported archive audit target')
+          source_branch = 'master-' + target
+          branch = api('git/ref/heads/' + source_branch)
           if (str(run['id']) != run_id or run['head_repository']['full_name'] != repo or
-              run['event'] != 'push' or run['head_branch'] != 'master-1.21.1' or run['head_sha'] != source or
+              run['event'] != 'push' or run['head_branch'] != source_branch or run['head_sha'] != source or
               run['path'] != '.github/workflows/native120.yml' or run['status'] != 'completed' or
               run['conclusion'] != 'success' or branch['object']['sha'] != source):
-              raise SystemExit('The selected run is not the successful build of the current merged 1.21.1 source')
+              raise SystemExit('The selected run is not the successful build of the current merged source')
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
-              out.write(f'run={run_id}\nsha={source}\n')
+              out.write(f'run={run_id}\nsha={source}\nversion={target}\n')
           PY
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -63,7 +74,7 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: LootableBodies-1.21.1-${{ steps.source.outputs.sha }}
+          name: LootableBodies-${{ steps.source.outputs.version }}-${{ steps.source.outputs.sha }}
           run-id: ${{ steps.source.outputs.run }}
           github-token: ${{ github.token }}
           path: audited
