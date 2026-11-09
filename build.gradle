@@ -216,6 +216,8 @@ dependencies {
 }
 
 tasks.named('processResources', ProcessResources) {
+    // Keep the empty directory present in the qualified 1.21.11 archives.
+    exclude 'coremods/.gitkeep'
     filteringCharset = 'UTF-8'
     inputs.properties(version: project.version, mcversion: project.minecraft_version,
             mod_url: project.mod_url, mod_license: project.mod_license)
@@ -238,6 +240,7 @@ tasks.named('jar', Jar) {
 ext.releaseJar = tasks.named('jar', Jar)
 ['sourcesJar', 'javadocJar'].each { name ->
     tasks.named(name, Jar) {
+        if (name == 'sourcesJar') exclude 'coremods/.gitkeep'
         from(['LICENSE', 'LICENSE-CC0', 'NOTICE']) { into 'META-INF' }
         manifest.attributes('Implementation-Title': project.mod_name,
                 'Implementation-Version': project.version, 'Implementation-Vendor': project.mod_vendor,
