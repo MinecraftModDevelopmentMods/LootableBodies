@@ -233,8 +233,8 @@ ext.releaseJar = tasks.named('jar', Jar)
 // Javadoc writes the index and its bundled SVG icons with the host line
 // separator. Keep the documentation bytes identical on Windows and Linux.
 tasks.named('javadocJar', Jar) {
-    inputs.property('javadocLineEndings', 'crlf-index-and-icons')
-    filesMatching(['element-list', 'copy.svg', 'link.svg']) {
+    inputs.property('javadocLineEndings', 'crlf-index-and-java25-icons')
+    filesMatching(['element-list', '**/copy.svg', '**/link.svg', '**/left.svg', '**/right.svg']) {
         filter(FixCrLfFilter, eol: FixCrLfFilter.CrLf.newInstance('crlf'),
                 eof: FixCrLfFilter.AddAsisRemove.newInstance('asis'))
     }
