@@ -7,6 +7,10 @@ class ReleaseScopeTest(unittest.TestCase):
         self.assertFalse(runtime_required(['.github/workflows/deploy-release.yml','.github/scripts/test_release_workflow.py']))
     def test_new_target_audit_uses_the_small_checks(self):
         self.assertFalse(runtime_required(['.github/workflows/artifact-audit-1.16.yml']))
+    def test_native26_artifact_audit_changes_do_not_launch_old_games(self):
+        self.assertFalse(runtime_required(['.github/workflows/artifact-audit-26.1.yml']))
+        for path in ['.github/workflows/artifact-audit-26.1.yml.bak', '.github/workflows/unreviewed-26.1.yml']:
+            with self.subTest(path=path):self.assertTrue(runtime_required([path]))
     def test_source_build_and_unknown_files_require_runtime(self):
         for name in ['src/main/java/Corpse.java','src/test/java/CorpseTest.java','tools/fixture_login.py','gradle/release.gradle','gradle.properties','build.gradle','README.md','settings.gradle','.github/workflows/codeql-analysis.yml','other.txt']:
             with self.subTest(name=name):self.assertTrue(runtime_required([name]))
