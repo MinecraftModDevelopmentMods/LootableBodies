@@ -167,7 +167,7 @@ def inject_future_entity_version(world):
     before=digest(path);original=world.parent/'future-entity-original.mca'
     if original.exists():raise ValueError('Future fixture original already exists')
     shutil.copy2(path,original)
-    future_version = 4672  # Immediately beyond Minecraft 1.21.11's 4671.
+    future_version = 4791  # Immediately beyond Minecraft 26.1.2's 4790.
     root['DataVersion'] = Tag(3, future_version)
     write_disposable_region(path, chunks)
     return {'region':path.relative_to(world).as_posix(),'chunk_index':index,'source_version':2975,
@@ -233,12 +233,18 @@ def main():
     parser.add_argument('--forge-home', type=Path, required=True)
     parser.add_argument('--source-world', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--runtime-inputs',type=Path,help='Use one sealed local candidate and probe bundle')
     parser.add_argument('--conditions',nargs='+',choices=['damaged-index','blocked-journal','future-entity-version'],
                         default=['damaged-index','blocked-journal'])
     args = parser.parse_args()
     project = Path(__file__).resolve().parents[1]
-    candidate = project / 'build/libs' / MAIN_JAR
-    probe = project / 'build/integration-test-mod/lootablebodies-build-tests.jar'
+    inputs=getattr(args,'runtime_inputs',None)
+    if inputs is None:
+        candidate = project / 'build/libs' / MAIN_JAR
+        probe = project / 'build/integration-test-mod/lootablebodies-build-tests.jar'
+    else:
+        from native_runtime import sealed_runtime_jars
+        candidate,probe=sealed_runtime_jars(inputs,project/'src/integrationTest/resources/log4j2.xml')
     source = args.source_world.resolve()
     sealed = fingerprint(source)
     root = args.output.resolve()

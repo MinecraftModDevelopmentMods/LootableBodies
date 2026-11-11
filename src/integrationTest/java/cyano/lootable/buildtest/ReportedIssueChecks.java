@@ -22,7 +22,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -142,7 +142,7 @@ final class ReportedIssueChecks {
         acknowledgeNativeLoad(replacement);
         replacement.setPos(32.5,80,0.5);return replacement;
     }
-    private static void click(ServerPlayer p,int slot,int button,ClickType type) throws IOException {
+    private static void click(ServerPlayer p,int slot,int button,ContainerInput type) throws IOException {
         QuietConnection observed=(QuietConnection)p.connection;int before=observed.menuEvents;
         // Server-side conservation fixture: omit predicted slots and require
         // native authoritative corrections. Real clients test normal prediction.
@@ -184,9 +184,9 @@ final class ReportedIssueChecks {
             Map<String,Integer> expected=tagged(p);
             EntityLootableBody first=death(p);RuntimeChecks.require(expected.equals(tagged(first)),"First death lost inventory");
             p=respawn(p);CorpseContainer gui=new CorpseContainer(17,p.getInventory(),first);p.containerMenu=gui;p.initMenu(gui);
-            click(p,4,0,ClickType.SWAP);
+            click(p,4,0,ContainerInput.SWAP);
             RuntimeChecks.require(RuntimeChecks.sameStack(p.getInventory().getNonEquipmentItems().get(0),shovel()),"Key1 did not recover original main hand");
-            for(int slot=0;slot<48;slot++)if(gui.getSlot(slot).hasItem())click(p,slot,0,ClickType.QUICK_MOVE);
+            for(int slot=0;slot<48;slot++)if(gui.getSlot(slot).hasItem())click(p,slot,0,ContainerInput.QUICK_MOVE);
             RuntimeChecks.require(first.isEmpty() && expected.equals(tagged(p)),"First recovery lost or duplicated tagged inventory: remaining="+inventory(first)+" expected="+expected+" player="+tagged(p)+" state="+gui.getStateId());
             FriendlyByteBuf close=new FriendlyByteBuf(Unpooled.buffer());
             try {ServerboundContainerClosePacket.STREAM_CODEC.encode(close,new ServerboundContainerClosePacket(gui.containerId));p.connection.handleContainerClose(ServerboundContainerClosePacket.STREAM_CODEC.decode(close));RuntimeChecks.require(!close.isReadable(),"Native issue close left undecoded fields");}
@@ -245,10 +245,10 @@ final class ReportedIssueChecks {
         EntityLootableBody body; int cx,cz,nx,nz; BlockPos platform;
         boolean forced;
         Map<String,Integer> expected;
-        void unload(){world.setChunkForced(cx,cz,false);net.minecraft.world.level.ChunkPos pos=new net.minecraft.world.level.ChunkPos(cx,cz);world.getChunkSource().addRegionTicket(net.minecraft.server.level.TicketType.FORCED,pos,0,true);unloadChunk(nx,nz);RuntimeChecks.require(!world.getChunkSource().hasChunk(nx,nz),"Support chunk did not unload");}
+        void unload(){world.setChunkForced(cx,cz,false);net.minecraft.world.level.ChunkPos pos=new net.minecraft.world.level.ChunkPos(cx,cz);world.getChunkSource().addTicketWithRadius(net.minecraft.server.level.TicketType.FORCED,pos,0);unloadChunk(nx,nz);RuntimeChecks.require(!world.getChunkSource().hasChunk(nx,nz),"Support chunk did not unload");}
         void frozen(){for(int i=0;i<100;i++)body.tick();System.out.println("ISSUE17_UNLOADED_SUPPORT y="+body.getY()+" alive="+body.isAlive()+" inventory="+inventory(body).size()+" supportLoaded="+world.getChunkSource().hasChunk(nx,nz));RuntimeChecks.require(body.isAlive() && body.getY()==80 && expected.equals(inventory(body)),"Corpse fell through unloaded neighbour support and lost recoverable inventory");}
         void resume(){RuntimeChecks.awaitChunk(world,nx,nz);FixtureApi.awaitTicking(body);for(int i=0;i<10;i++)world.tickNonPassenger(body);RuntimeChecks.require(body.onGround() && body.getY()==80 && FixtureApi.sectionContains(body,cx,cz) && expected.equals(inventory(body)),"Corpse failed to resume safely after support terrain loaded");}
-        @Override public void close(){if(forced)world.setChunkForced(cx,cz,false);net.minecraft.world.level.ChunkPos pos=new net.minecraft.world.level.ChunkPos(cx,cz);world.getChunkSource().removeRegionTicket(net.minecraft.server.level.TicketType.FORCED,pos,0,true);}
+        @Override public void close(){if(forced)world.setChunkForced(cx,cz,false);net.minecraft.world.level.ChunkPos pos=new net.minecraft.world.level.ChunkPos(cx,cz);world.getChunkSource().removeTicketWithRadius(net.minecraft.server.level.TicketType.FORCED,pos,0);}
     }
     private static Support support(int axis,int direction) {return support(axis,direction,null);}
     private static Support support(int axis,int direction,UUID savedId) {

@@ -12,7 +12,7 @@ class Native120ClientDiagnosticTests(unittest.TestCase):
     def check(self,text):
         with tempfile.TemporaryDirectory() as directory:
             p=Path(directory)/'client.log';p.write_text(text,encoding='utf-8')
-            with patch.object(logs,'validated_baseline',return_value={'events':EVENTS,'proof_sha256':'A'*64}):return logs.audit_client(p)
+            with patch.object(logs,'validated_baseline',return_value={'events':EVENTS,'proof_sha256':'A'*64}):return logs.audit_client(p,minecraft="1.21.11")
     def test_complete_proved_native_batch_is_explicitly_classified(self):
         for text in [lines(),lines().replace('[12:00:00]','[12:00:00.123]')]:
             report=self.check(text+'[12:00:01] [Render thread/INFO] Completed synthetic fixture\n')
@@ -21,7 +21,7 @@ class Native120ClientDiagnosticTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             p=Path(directory)/'client.log';p.write_text(lines(),encoding='utf-8')
             with patch.object(logs,'validated_baseline',side_effect=RuntimeError('Unqualified native client diagnostic proof')):
-                with self.assertRaisesRegex(RuntimeError,'Unqualified'):logs.audit_client(p)
+                with self.assertRaisesRegex(RuntimeError,'Unqualified'):logs.audit_client(p,minecraft="1.21.11")
     def test_unknown_mutated_partial_or_extra_native_warning_is_fatal(self):
         for text in [lines(EVENTS[:-1]),lines()+lines(EVENTS[:1]),lines().replace('Render thread/WARN','Worker-Main-1/WARN'),lines().replace('minecraft:item.goat_horn.play','anothermod:missing_sound')]:
             with self.subTest(text=text),self.assertRaises(RuntimeError):self.check(text)
@@ -29,6 +29,12 @@ class Native120ClientDiagnosticTests(unittest.TestCase):
         for failure in ['[12:00:01] [Render thread/WARN] Missing texture: anothermod:lost\n','[12:00:01] [Render thread/WARN] File minecraft:sounds/missing.ogg does not exist, cannot add it to event anothermod:lost\n','[12:00:01] [Render thread/ERROR] actual failure\n','Caused by: java.lang.IllegalStateException: failed inventory\n','AL lib: (EE) alc_cleanup: 1 device not closed\n']:
             for text in [failure,lines()+failure]:
                 with self.subTest(failure=failure,text=text),self.assertRaises(RuntimeError):self.check(text)
+    def test_new_target_cannot_reuse_the_previous_sound_control(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log=Path(directory)/'client.log';log.write_text(lines(),encoding='utf-8')
+            with patch.object(logs,'validated_baseline') as old, self.assertRaisesRegex(RuntimeError,'26.1.2'):
+                logs.audit_client(log)
+            old.assert_not_called()
     def test_generic_and_server_auditors_still_reject_this_raw_baseline(self):
         with tempfile.TemporaryDirectory() as directory:
             p=Path(directory)/'server.log';p.write_text(lines(),encoding='utf-8')

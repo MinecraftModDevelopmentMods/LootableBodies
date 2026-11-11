@@ -11,7 +11,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.*;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.*;
 import org.junit.jupiter.api.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -55,13 +55,13 @@ class Native117MenuProtocolTest {
         changed.put(6, HashedStack.create(stack(13), hash));
         changed.put(47, HashedStack.EMPTY);
         ServerboundContainerClickPacket outgoing = new ServerboundContainerClickPacket(
-                7, 32766, (short)6, (byte)1, ClickType.PICKUP, changed, HashedStack.create(stack(9), hash));
+                7, 32766, (short)6, (byte)1, ContainerInput.PICKUP, changed, HashedStack.create(stack(9), hash));
         RegistryFriendlyByteBuf buffer=wire();
         try {
             ServerboundContainerClickPacket.STREAM_CODEC.encode(buffer,outgoing);byte[] before=new byte[buffer.readableBytes()];buffer.getBytes(0,before);
             ServerboundContainerClickPacket decoded=ServerboundContainerClickPacket.STREAM_CODEC.decode(buffer);
             assertEquals(7,decoded.containerId());assertEquals(32766,decoded.stateId());assertEquals(6,decoded.slotNum());assertEquals(1,decoded.buttonNum());
-            assertEquals(ClickType.PICKUP,decoded.clickType());assertTrue(decoded.carriedItem().matches(stack(9), hash));
+            assertEquals(ContainerInput.PICKUP,decoded.containerInput());assertTrue(decoded.carriedItem().matches(stack(9), hash));
             assertEquals(changed.keySet(),decoded.changedSlots().keySet());assertTrue(decoded.changedSlots().get(6).matches(stack(13), hash));assertTrue(decoded.changedSlots().get(47).matches(ItemStack.EMPTY, hash));
             assertEquals(before.length,buffer.readerIndex());byte[] after=new byte[before.length];buffer.getBytes(0,after);assertArrayEquals(before,after);
         }finally{buffer.release();}

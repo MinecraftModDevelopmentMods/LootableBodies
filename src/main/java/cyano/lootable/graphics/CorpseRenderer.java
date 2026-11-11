@@ -19,19 +19,20 @@ import net.minecraft.client.renderer.entity.layers.CustomHeadLayer;
 import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
 import net.minecraft.client.renderer.entity.layers.ItemInHandLayer;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
-import net.minecraft.client.renderer.state.CameraRenderState;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.PlayerModelType;
 import net.minecraft.world.entity.player.PlayerSkin;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
 
 /** Corpse renderer, originally created by Chris on 4/10/2016. */
-@OnlyIn(Dist.CLIENT)
 public class CorpseRenderer extends LivingEntityRenderer<EntityLootableBody, AvatarRenderState, PlayerModel> {
     private static final Identifier LOCAL_SKIN = Identifier.fromNamespaceAndPath(LootableBodies.MODID,
             "textures/entity/corpse/corpse.png");
+
+    private static final class CorpseRenderState extends AvatarRenderState {
+        private boolean localSkin;
+    }
 
     private final PlayerModel thickArmsModel;
     private final PlayerModel thinArmsModel;
@@ -49,14 +50,16 @@ public class CorpseRenderer extends LivingEntityRenderer<EntityLootableBody, Ava
 
     @Override
     public AvatarRenderState createRenderState() {
-        return new AvatarRenderState();
+        return new CorpseRenderState();
     }
 
     @Override
     public void extractRenderState(EntityLootableBody body, AvatarRenderState state, float partialTicks) {
         super.extractRenderState(body, state, partialTicks);
         HumanoidMobRenderer.extractHumanoidRenderState(body, state, partialTicks, itemModelResolver);
-        state.skin = LootableBodies.useLocalSkin ? DefaultPlayerSkin.getDefaultSkin() : playerSkin(body.getGameProfile());
+        CorpseRenderState corpseState = (CorpseRenderState) state;
+        corpseState.localSkin = LootableBodies.useLocalSkin;
+        state.skin = corpseState.localSkin ? DefaultPlayerSkin.getDefaultSkin() : playerSkin(body.getGameProfile());
         state.id = body.getId();
         state.arrowCount = body.getArrowCount();
         state.bodyRot = body.getRotation();
@@ -69,7 +72,7 @@ public class CorpseRenderer extends LivingEntityRenderer<EntityLootableBody, Ava
 
     @Override
     public Identifier getTextureLocation(AvatarRenderState state) {
-        return LootableBodies.useLocalSkin ? LOCAL_SKIN : state.skin.body().texturePath();
+        return ((CorpseRenderState) state).localSkin ? LOCAL_SKIN : state.skin.body().texturePath();
     }
 
     public static Identifier getSkin(GameProfile profile) {
@@ -87,7 +90,7 @@ public class CorpseRenderer extends LivingEntityRenderer<EntityLootableBody, Ava
 
     @Override
     public void submit(AvatarRenderState state, PoseStack matrices, SubmitNodeCollector collector, CameraRenderState camera) {
-        model = !LootableBodies.useLocalSkin && state.skin.model() == PlayerModelType.SLIM ? thinArmsModel : thickArmsModel;
+        model = !((CorpseRenderState) state).localSkin && state.skin.model() == PlayerModelType.SLIM ? thinArmsModel : thickArmsModel;
         try {
             super.submit(state, matrices, collector, camera);
         } finally {
@@ -109,8 +112,8 @@ public class CorpseRenderer extends LivingEntityRenderer<EntityLootableBody, Ava
     }
 
     @Override
-    protected void submitNameTag(AvatarRenderState state, PoseStack matrices,
+    protected void submitNameDisplay(AvatarRenderState state, PoseStack matrices,
             SubmitNodeCollector collector, CameraRenderState camera) {
-        if (LootableBodies.displayNameTag) super.submitNameTag(state, matrices, collector, camera);
+        if (LootableBodies.displayNameTag) super.submitNameDisplay(state, matrices, collector, camera);
     }
 }

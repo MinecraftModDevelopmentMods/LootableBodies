@@ -16,7 +16,7 @@ class Native117ProbeIsolationTest {
                 java.util.zip.ZipEntry entry=entries.nextElement();String path=entry.getName();
                 if(!path.endsWith(".class"))continue;
                 byte[] code=zip.getInputStream(entry).readAllBytes();
-                assertEquals(65,((code[6]&255)<<8)|(code[7]&255),path);
+                assertEquals(69,((code[6]&255)<<8)|(code[7]&255),path);
                 result.add(path.substring(0,path.lastIndexOf('/')));
             }
         }

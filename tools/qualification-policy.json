@@ -1,20 +1,20 @@
 {
   "schema": 1,
-  "target": "1.21.11",
-  "status": "Forge 1.21.11 stays local until qualification and manual testing are complete.",
+  "target": "26.1.2",
+  "status": "Manual testing accepted; expensive qualification stays local. Hosted work checks the exact release archives and security.",
   "hosted": {
     "allowed": [
-      "policy",
-      "production_archive",
+      "compile",
+      "archive",
       "security",
-      "release_contracts",
-      "wrapper_validation"
+      "lightweight contracts"
     ],
     "fork_gradle_build": false,
     "full_java_suite": false,
     "full_python_suite": false,
     "gameplay_or_migration": false,
-    "runtime_sdk_or_asset_install": false
+    "runtime_sdk_or_asset_install": false,
+    "local_only": false
   },
   "local": {
     "development": "Focused changed-behaviour regression first; batch cheap Java/Python checks. Full runtime matrix is not an edit/commit hook.",

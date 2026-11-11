@@ -57,35 +57,36 @@ class Native117EntityInboxTest {
     @Test void completedReadRequiresActualNativeInboxAdmission() {
         Fixture f = new Fixture(); Saved entity = new Saved();
         f.storage.read.complete(new ChunkEntities<>(POS, Collections.singletonList(entity)));
-        assertFalse(f.manager.areEntitiesLoaded(POS.toLong()));
-        NativeEntityInbox.await(f.manager, POS.toLong(), () -> false, () -> 0, 10);
-        assertTrue(f.manager.areEntitiesLoaded(POS.toLong()));
+        assertFalse(f.manager.areEntitiesLoaded(POS.pack()));
+        NativeEntityInbox.await(f.manager, POS.pack(), () -> false, () -> 0, 10);
+        assertTrue(f.manager.areEntitiesLoaded(POS.pack()));
         assertEquals(1, f.tracked.get()); assertEquals(1, f.storage.loads); assertEquals(0, f.storage.stores);
     }
     @Test void delayedReadProcessesNativeInboxAfterPollingTasks() {
         Fixture f = new Fixture(); AtomicInteger polls = new AtomicInteger(); AtomicLong clock = new AtomicLong();
-        NativeEntityInbox.await(f.manager, POS.toLong(), () -> {
+        NativeEntityInbox.await(f.manager, POS.pack(), () -> {
             polls.incrementAndGet(); f.storage.read.complete(new ChunkEntities<>(POS, Collections.singletonList(new Saved()))); return true;
         }, clock::getAndIncrement, 10);
-        assertEquals(1, polls.get()); assertEquals(1, f.tracked.get()); assertTrue(f.manager.areEntitiesLoaded(POS.toLong()));
+        assertEquals(1, polls.get()); assertEquals(1, f.tracked.get()); assertTrue(f.manager.areEntitiesLoaded(POS.pack()));
     }
     @Test void pendingReadRefusesAtDeadlineWithoutInventingEmptySuccessOrSaving() {
         Fixture f = new Fixture(); AtomicLong clock = new AtomicLong();
         IllegalStateException failure = assertThrows(IllegalStateException.class, () ->
-                NativeEntityInbox.await(f.manager, POS.toLong(), () -> false, clock::getAndIncrement, 3));
+                NativeEntityInbox.await(f.manager, POS.pack(), () -> false, clock::getAndIncrement, 3));
         assertTrue(failure.getMessage().contains("deadline"));
-        assertFalse(f.manager.areEntitiesLoaded(POS.toLong())); assertFalse(f.storage.read.isDone());
+        assertFalse(f.manager.areEntitiesLoaded(POS.pack())); assertFalse(f.storage.read.isDone());
         assertEquals(1, f.storage.loads); assertEquals(0, f.storage.stores); assertEquals(0, f.tracked.get());
     }
     @Test void genuineEmptyStorageStillPassesThroughNativeInbox() {
         Fixture f = new Fixture(); f.storage.read.complete(new ChunkEntities<>(POS, Collections.emptyList()));
-        assertFalse(f.manager.areEntitiesLoaded(POS.toLong()));
-        NativeEntityInbox.await(f.manager, POS.toLong(), () -> false, () -> 0, 10);
-        assertTrue(f.manager.areEntitiesLoaded(POS.toLong())); assertEquals(0, f.tracked.get()); assertEquals(0, f.storage.stores);
+        assertFalse(f.manager.areEntitiesLoaded(POS.pack()));
+        NativeEntityInbox.await(f.manager, POS.pack(), () -> false, () -> 0, 10);
+        assertTrue(f.manager.areEntitiesLoaded(POS.pack())); assertEquals(0, f.tracked.get()); assertEquals(0, f.storage.stores);
     }
     private static final class BeforeGameLoop extends net.minecraft.util.thread.BlockableEventLoop<Runnable> {
         private final Thread owner=Thread.currentThread();
-        BeforeGameLoop(){super("NativeFixtureBeforeGameLoop");}
+        BeforeGameLoop(){super("NativeFixtureBeforeGameLoop",false);}
+        @Override public boolean pollTask(){return super.pollTask();}
         public Runnable wrapRunnable(Runnable task){return task;}
         protected boolean shouldRun(Runnable task){return false;}
         protected Thread getRunningThread(){return owner;}
@@ -94,14 +95,14 @@ class Native117EntityInboxTest {
         Fixture f=new Fixture();BeforeGameLoop loop=new BeforeGameLoop();AtomicLong clock=new AtomicLong();
         loop.schedule(()->f.storage.read.complete(new ChunkEntities<>(POS,Collections.singletonList(new Saved()))));
         assertFalse(loop.pollTask(),"Native event-loop gate must reproduce the pre-loop condition");
-        NativeEntityInbox.await(f.manager,POS.toLong(),loop::pollTask,clock::getAndIncrement,10,loop::managedBlock);
-        assertTrue(f.manager.areEntitiesLoaded(POS.toLong()));assertEquals(1,f.tracked.get());assertEquals(0,loop.getPendingTasksCount());
+        NativeEntityInbox.await(f.manager,POS.pack(),loop::pollTask,clock::getAndIncrement,10,loop::managedBlock);
+        assertTrue(f.manager.areEntitiesLoaded(POS.pack()));assertEquals(1,f.tracked.get());assertEquals(0,loop.getPendingTasksCount());
         loop.schedule(()->{});assertFalse(loop.pollTask(),"Managed blocking must not leave the native task gate bypassed");
     }
     @Test void nativeManagedBlockRestoresItsGateAfterAPendingDeadline() {
         Fixture f=new Fixture();BeforeGameLoop loop=new BeforeGameLoop();AtomicLong clock=new AtomicLong();
-        assertThrows(IllegalStateException.class,()->NativeEntityInbox.await(f.manager,POS.toLong(),loop::pollTask,
+        assertThrows(IllegalStateException.class,()->NativeEntityInbox.await(f.manager,POS.pack(),loop::pollTask,
                 clock::getAndIncrement,3,loop::managedBlock));
-        loop.schedule(()->{});assertFalse(loop.pollTask());assertFalse(f.manager.areEntitiesLoaded(POS.toLong()));assertEquals(0,f.storage.stores);
+        loop.schedule(()->{});assertFalse(loop.pollTask());assertFalse(f.manager.areEntitiesLoaded(POS.pack()));assertEquals(0,f.storage.stores);
     }
 }

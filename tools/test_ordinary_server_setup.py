@@ -8,7 +8,9 @@ class OrdinaryServerSetupTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             home=Path(folder)/'server';prepare_development_home(home)
             self.assertEqual({'versionCheck':True,'splashscreen':True,'maxThreads':-1,
-                'defaultConfigPath':'defaultconfigs'},tomllib.loads((home/'config/fml.toml').read_text()))
+                'defaultConfigPath':'defaultconfigs',
+                              'earlyWindowSkipGLVersions':[], 'earlyWindowLogHelpMessage':True,
+                              'earlyWindowSquir':False, 'earlyWindowShowCPU':False},tomllib.loads((home/'config/fml.toml').read_text()))
             self.assertEqual([],list(home.rglob('*.jar')))
 
     def test_existing_choices_are_byte_identical_when_preparing_the_owned_home(self):

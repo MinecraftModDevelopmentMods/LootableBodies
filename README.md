@@ -1,8 +1,8 @@
-# Lootable Bodies for Minecraft 1.21.11
+# Lootable Bodies for Minecraft 26.1.2
 
 Your items stay on a corpse when you die. Right-click the body to recover them.
 
-Use Forge 61.2.4 and Java 21. Install `LootableBodies-2.4.14.121111.jar`
+Use Forge 64.1.5 and Java 25. Install `LootableBodies-2.4.15.2601021.jar`
 in the client and server mods folders. Back up your world before upgrading.
 
 Created by Cyanobacterium (DrCyano), maintained by SkyBlade1978.

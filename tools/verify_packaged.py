@@ -1,4 +1,4 @@
-"""Verify the exact production jar in disposable native Forge 52 servers."""
+"""Verify the exact production jar in disposable native Forge 64 servers."""
 import argparse
 import json
 from pathlib import Path
@@ -29,7 +29,7 @@ def main():
     prepare(fresh, distribution, main_jar, probe)
     seed_flat_fixture(fresh,args.flat_header,args.flat_header_sha256)
     run(args.java, fresh, "fresh")
-    far = [fresh/('world/'+kind+'/r.8.8.mca') for kind in ('region','entities')]
+    far = [fresh/('world/dimensions/minecraft/overworld/'+kind+'/r.8.8.mca') for kind in ('region','entities')]
     before = {path.relative_to(fresh).as_posix():digest(path) for path in far}
     run(args.java, fresh, "reload")
     if any(digest(path)!=before[path.relative_to(fresh).as_posix()] for path in far):

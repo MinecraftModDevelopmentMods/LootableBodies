@@ -3,13 +3,11 @@ import cyano.lootable.entities.EntityLootableBody;
 import cyano.lootable.graphics.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
-import net.minecraftforge.api.distmarker.*;
 import net.minecraftforge.client.ConfigScreenHandler;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
-@OnlyIn(Dist.CLIENT)
 public final class ClientProxy {
     private ClientProxy() { }
     public static void register(FMLJavaModLoadingContext context) {

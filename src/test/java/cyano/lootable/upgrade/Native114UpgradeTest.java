@@ -33,13 +33,13 @@ class Native114UpgradeTest {
         return body;
     }
     @Test void currentFormatNamesThe119VanillaSchema() {
-        assertEquals(4671, UpgradePreservation.MINECRAFT_VERSION);
-        assertEquals(13,UpgradePreservation.DATA_VERSION);
+        assertEquals(4790, UpgradePreservation.MINECRAFT_VERSION);
+        assertEquals(14,UpgradePreservation.DATA_VERSION);
     }
     @Test void released113EquipmentAndOverflowAreRetainedBeforeNativeConversion() {
         CompoundTag original = body(3), before = original.copy();
         CompoundTag staged = NativeSafeFixer.stageCorpse(original, context(1631));
-        assertEquals(13,staged.getIntOr(UpgradePreservation.VERSION, 0));
+        assertEquals(14,staged.getIntOr(UpgradePreservation.VERSION, 0));
         assertEquals(readUuid(original, "UUID"), readUuid(staged, "UUID"));
         assertTrue(typedList(staged, "Equipment", 10).isEmpty());
         ListTag records = typedList(staged, "LootableBodiesUnresolved", 10); assertEquals(49, records.size());
@@ -57,7 +57,7 @@ class Native114UpgradeTest {
         record.put("SourceVersions", context(922)); ListTag recovery = new ListTag(); recovery.add(record.copy());
         original.put("LootableBodiesUnresolved", recovery);
         CompoundTag staged = NativeSafeFixer.stageCorpse(original, context(1631));
-        assertEquals(13,staged.getIntOr(UpgradePreservation.VERSION, 0));
+        assertEquals(14,staged.getIntOr(UpgradePreservation.VERSION, 0));
         assertEquals(record, typedList(staged, "LootableBodiesUnresolved", 10).getCompoundOrEmpty(49));
         assertEquals(record, typedList(original, "LootableBodiesUnresolved", 10).getCompoundOrEmpty(0));
     }

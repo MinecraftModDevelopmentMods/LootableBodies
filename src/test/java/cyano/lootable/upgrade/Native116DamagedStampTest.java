@@ -55,7 +55,7 @@ class Native116DamagedStampTest {
         context.putString("dimension", Level.OVERWORLD.identifier().toString());
         CompoundTag nativeInput = source.copy();
         SimpleRegionStorage.injectDatafixingContext(nativeInput, context);
-        CompoundTag expected=NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,nativeInput,2230,4671);
+        CompoundTag expected=NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,nativeInput,2230,4790);
         CompoundTag damaged=source.copy();damaged.remove("DataVersion");preserve(damaged);
         byte[] originalRegion=Files.readAllBytes(world.resolve("region/r.0.0.mca"));
         try(SimpleRegionStorage loader = new SimpleRegionStorage(
@@ -63,7 +63,7 @@ class Native116DamagedStampTest {
                 world.resolve("reader"), NativeVanillaDataFixer.get(), false, DataFixTypes.CHUNK)) {
             CompoundTag actual = UpgradePreservation.upgradeRegion(NativeVanillaDataFixer.get(), DataFixTypes.CHUNK,
                     damaged, 512, context, input -> { throw new AssertionError("Current source must not replay legacy structure conversion"); });
-            assertEquals(expected.get("block_entities"),loader.upgradeChunkTag(source.copy(), 2230, context).get("block_entities"));
+            assertEquals(expected.get("block_entities"),loader.upgradeChunkTag(source.copy(), 2230, context, net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version()).get("block_entities"));
             assertNotNull(expected.get("block_entities"));assertFalse(actual.contains("Level"));
             assertEquals(expected.get("block_entities"),actual.get("block_entities"));
             assertArrayEquals(originalRegion,Files.readAllBytes(world.resolve("region/r.0.0.mca")));

@@ -3,8 +3,6 @@ import cyano.lootable.LootableBodies;
 import cyano.lootable.entities.EntityLootableBody;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
-import net.minecraftforge.api.distmarker.*;
-@OnlyIn(Dist.CLIENT)
 public final class ClientConfigChanges {
     private ClientConfigChanges() { }
     public static void apply() {

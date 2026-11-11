@@ -15,7 +15,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.client.Screenshot;
 import net.minecraft.world.InteractionHand;
@@ -148,7 +148,7 @@ final class VisibilityClientChecks {
                 EntityLootableBody b=body(mc,phase==16?"second":"first");if(b==null)return;
                 if(!(mc.screen instanceof CorpseGUIContainer)) {
                     if(!rendered.contains(b.getUUID()))return;
-                    if(frames%10==0)mc.gameMode.interact(mc.player,b,InteractionHand.MAIN_HAND);return;
+                    if(frames%10==0)mc.gameMode.interact(mc.player, b, new net.minecraft.world.phys.EntityHitResult(b), InteractionHand.MAIN_HAND);return;
                 }
                 int index=phase==16?411:410;boolean found=false;
                 for(int slot=0;slot<48;slot++)if(RuntimeChecks.sameStack(mc.player.containerMenu.getSlot(slot).getItem(),RuntimeChecks.stack(index)))found=true;
@@ -164,7 +164,7 @@ final class VisibilityClientChecks {
             } else if(phase==12 || phase==120) {
                 EntityLootableBody b=body(mc,"first");if(b!=null&&!b.isRemoved()&&rendered.contains(b.getUUID()))ack();
             } else if(phase==17) {
-                if(role.equals("A"))for(int slot=0;slot<48;slot++)if(RuntimeChecks.sameStack(mc.player.containerMenu.getSlot(slot).getItem(),RuntimeChecks.stack(411)))mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,slot,0,ClickType.QUICK_MOVE,mc.player);
+                if(role.equals("A"))for(int slot=0;slot<48;slot++)if(RuntimeChecks.sameStack(mc.player.containerMenu.getSlot(slot).getItem(),RuntimeChecks.stack(411)))mc.gameMode.handleContainerInput(mc.player.containerMenu.containerId,slot,0,ContainerInput.QUICK_MOVE,mc.player);
                 // The following acknowledgement is not inventory proof; the server checks the resulting packet state.
                 ack();
             } else if(phase==18) {

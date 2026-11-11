@@ -32,7 +32,7 @@ import net.minecraftforge.fml.loading.FMLPaths;
 public final class LootableBodies {
     public static final String MODID = "lootablebodies";
     public static final String NAME = "DrCyano's Lootable Bodies";
-    public static final String VERSION = "2.4.14.121111";
+    public static final String VERSION = "2.4.15.2601021";
     public static final Identifier CORPSE_ID = Identifier.fromNamespaceAndPath(MODID,"corpse");
     public static EntityType<EntityLootableBody> CORPSE;
     public static Item CORPSE_EGG;
@@ -63,14 +63,14 @@ public final class LootableBodies {
         var modBus = context.getModBusGroup();
         FMLCommonSetupEvent.getBus(modBus).addListener(event ->
             event.enqueueWork(cyano.lootable.upgrade.EarlyWorldPreservation::install));
-        NewRegistryEvent.getBus(modBus).addListener(cyano.lootable.upgrade.LegacyProfessionRegistry::create);
-        EntityAttributeCreationEvent.getBus(modBus).addListener(event ->
+        NewRegistryEvent.BUS.addListener(cyano.lootable.upgrade.LegacyProfessionRegistry::create);
+        EntityAttributeCreationEvent.BUS.addListener(event ->
             event.put(corpseType(), EntityLootableBody.corpseAttributeDefaults().build()));
         RegisterEvent.getBus(modBus).addListener(this::registerEntities);
         RegisterEvent.getBus(modBus).addListener(this::registerItems);
         RegisterEvent.getBus(modBus).addListener(cyano.lootable.upgrade.LegacyRegistryMappings::retiredMemories);
         RegisterEvent.getBus(modBus).addListener(this::registerContainers);
-        BuildCreativeModeTabContentsEvent.getBus(modBus).addListener(event -> {
+        BuildCreativeModeTabContentsEvent.BUS.addListener(event -> {
             if (CreativeModeTabs.SPAWN_EGGS.equals(event.getTabKey())) event.accept(() -> CORPSE_EGG);
         });
         new PlayerDeathEventHandler().register();

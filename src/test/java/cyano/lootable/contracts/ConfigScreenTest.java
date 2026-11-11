@@ -149,7 +149,7 @@ class ConfigScreenTest {
         cyano.lootable.graphics.CorpseGUIContainer screen=new cyano.lootable.graphics.CorpseGUIContainer(
             (cyano.lootable.graphics.CorpseContainer)null,new net.minecraft.world.entity.player.Inventory(null,new net.minecraft.world.entity.EntityEquipment()),net.minecraft.network.chat.Component.literal("Saved owner"));
         java.lang.reflect.Method foreground=cyano.lootable.graphics.CorpseGUIContainer.class.getDeclaredMethod(
-            "renderLabels",net.minecraft.client.gui.GuiGraphics.class,int.class,int.class);foreground.setAccessible(true);
+            "extractLabels",net.minecraft.client.gui.GuiGraphicsExtractor.class,int.class,int.class);foreground.setAccessible(true);
         // The original layout uses all seven rows. Native labels would draw
         // over those slots; its original foreground needs no font or item state.
         foreground.invoke(screen,null,0,0);

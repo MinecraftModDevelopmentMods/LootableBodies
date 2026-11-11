@@ -12,7 +12,7 @@ import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Forge 61 uses required Mixins. Packaged runs separately exercise their actual application. */
+/** Forge uses required Mixins. Packaged runs separately exercise their actual application. */
 class Native119CoremodEngineTest {
     static ClassNode classFile(String name) throws Exception {
         try (var input = Native119CoremodEngineTest.class.getClassLoader().getResourceAsStream(name+".class")) {
@@ -62,7 +62,7 @@ class Native119CoremodEngineTest {
             var config = JsonParser.parseReader(new InputStreamReader(input, StandardCharsets.UTF_8)).getAsJsonObject();
             assertTrue(config.get("required").getAsBoolean());
             assertEquals(1, config.getAsJsonObject("injectors").get("defaultRequire").getAsInt());
-            assertEquals(java.util.Set.of("DataFixersMixin","SaveAccessMixin","RegionStorageMixin","LegacyStructuresMixin","CapabilityDataMixin"),
+            assertEquals(java.util.Set.of("DataFixersMixin","SaveAccessMixin","RegionStorageMixin","FileFixerMixin","FileFixLevelDataMixin","DimensionStorageMixin","CapabilityDataMixin"),
                     config.getAsJsonArray("mixins").asList().stream().map(v -> v.getAsString()).collect(java.util.stream.Collectors.toSet()));
             assertEquals("DedicatedWorldMixin", config.getAsJsonArray("server").get(0).getAsString());
             assertEquals(1, config.getAsJsonArray("client").size());
@@ -81,25 +81,29 @@ class Native119CoremodEngineTest {
         String target = "net/minecraft/server/Main";
         String save = "net/minecraft/world/level/storage/LevelStorageSource$LevelStorageAccess";
         var entry = method(classFile(target),"main","([Ljava/lang/String;)V");
-        requiredCall(entry,save,"getDataTag");
-        requiredCall(entry,save,"getDataTagFallback");
+        String fileFixer = "net/minecraft/util/filefix/FileFixerUpper";
+        requiredCall(entry,save,"getUnfixedDataTagWithFallback");
+        requiredCall(entry,fileFixer,"fix");
         var mixin = mixin("DedicatedWorldMixin",target);
-        for (String handler : java.util.List.of("readWorld","readFallback")) {
-            requiredCall(named(mixin,handler),"cyano/lootable/upgrade/EarlyWorldPreservation","readDedicatedWorld");
-        }
+        requiredCall(named(mixin,"readWorld"),"cyano/lootable/upgrade/EarlyWorldPreservation","readDedicatedWorld");
+        requiredCall(named(mixin,"fixWorldFiles"),"cyano/lootable/upgrade/EarlyWorldPreservation","handleDedicatedFileRefusal");
+        var layout = mixin("FileFixerMixin",fileFixer);
+        assertTrue(layout.interfaces.contains("cyano/lootable/upgrade/EarlyWorldPreservation$LayoutAttached"));
+        requiredCall(named(layout,"beforeFileChanges"),"cyano/lootable/upgrade/EarlyWorldPreservation","beforeFileFix");
+        requiredCall(named(layout,"afterFileChanges"),"cyano/lootable/upgrade/EarlyWorldPreservation","afterFileFix");
     }
 
     @Test void regionHookProtectsTheActualVersionShortcut() throws Exception {
         String target = "net/minecraft/world/level/chunk/storage/SimpleRegionStorage";
-        method(classFile(target),"upgradeChunkTag","(Lnet/minecraft/nbt/CompoundTag;ILnet/minecraft/nbt/CompoundTag;)Lnet/minecraft/nbt/CompoundTag;");
+        method(classFile(target),"upgradeChunkTag","(Lnet/minecraft/nbt/CompoundTag;ILnet/minecraft/nbt/CompoundTag;I)Lnet/minecraft/nbt/CompoundTag;");
         var mixin = mixin("RegionStorageMixin",target);
         assertTrue(mixin.interfaces.contains("cyano/lootable/upgrade/UpgradePreservation$RegionAttached"));
         requiredCall(named(mixin,"preserveRegion"),"cyano/lootable/upgrade/UpgradePreservation","upgradeRegion");
     }
 
     @Test void capabilitiesHookUsesTheActualDimensionDataReader() throws Exception {
-        String target = "net/minecraft/world/level/storage/DimensionDataStorage";
-        method(classFile(target),"readTagFromDisk","(Ljava/lang/String;Lnet/minecraft/util/datafix/DataFixTypes;I)Lnet/minecraft/nbt/CompoundTag;");
+        String target = "net/minecraft/world/level/storage/SavedDataStorage";
+        method(classFile(target),"readTagFromDisk","(Ljava/nio/file/Path;Lnet/minecraft/util/datafix/DataFixTypes;I)Lnet/minecraft/nbt/CompoundTag;");
         requiredCall(named(mixin("CapabilityDataMixin",target),"preserveOldCapabilities"),
                 "cyano/lootable/upgrade/UpgradePreservation","upgradeLevelCapabilities");
     }

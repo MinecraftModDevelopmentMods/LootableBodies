@@ -15,7 +15,7 @@ from owned_process import native_process
 
 def prepare_development_home(home):
     home.mkdir(exist_ok=True);(home/'eula.txt').write_text('eula=true\n')
-    seed_loader_defaults(home)
+    seed_loader_defaults(home,current=True)
     properties = 'level-name=world\nlevel-type=DEFAULT\nserver-ip=127.0.0.1\nserver-port=0\nonline-mode=false\n'
     if os.name == 'nt':
         properties += 'use-native-transport=false\n'
@@ -74,7 +74,7 @@ def main():
                     remaining=whole_deadline-time.monotonic()
                     if remaining<=0:raise subprocess.TimeoutExpired(command,210)
                     receipt=subprocess.run([str(binary),option,str(pid)],stdout=stream,stderr=subprocess.STDOUT,timeout=min(10,remaining))
-                if receipt.returncode or not target.stat().st_size:raise RuntimeError('Actual native17 diagnostic failed: '+str(target))
+                if receipt.returncode or not target.stat().st_size:raise RuntimeError('Actual native 26.1.2 diagnostic failed: '+str(target))
                 diagnostics[target.name]=digest(target)
             process.stdin.write('stop\n');process.stdin.flush()
             remaining=whole_deadline-time.monotonic()

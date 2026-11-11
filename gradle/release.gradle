@@ -5,10 +5,10 @@ def expectedIdentity = [
         mod_id: 'lootablebodies', mod_artifact: 'LootableBodies',
         mod_group: 'zone.moddev.mc.lootablebodies', mod_vendor: 'Cyanobacterium',
         mod_name: "DrCyano's Lootable Bodies", mod_authors: 'Cyanobacterium,SkyBlade1978',
-        minecraft_version: '1.21.11', forge_version: '61.2.4',
-        mapping_channel: 'official', mapping_version: '1.21.11',
+        minecraft_version: '26.1.2', forge_version: '64.1.5',
+        mapping_channel: 'official', mapping_version: '26.1.2',
         loader_name: 'forge', loader_code: '1', curseforge_project_id: '240968',
-        java_version: '21', java_toolchain_version: '21.0.7+6', gradle_java_version: '21',
+        java_version: '25', java_toolchain_version: '25.0.3+9', gradle_java_version: '25',
         mod_license: 'LGPL-2.1-only', mod_license_name: 'GNU Lesser General Public License, Version 2.1',
         mod_license_url: 'https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt',
         mod_url: 'https://github.com/MinecraftModDevelopmentMods/LootableBodies',
@@ -152,17 +152,15 @@ tasks.register('verifyPreparedReleaseArtifacts') {
     }
 }
 
-// Only the confirmed MMD release workflow may upload an audited prepared bundle.
+// Publish only the already audited bundle from the confirmed MMD dispatcher.
 gradle.taskGraph.whenReady { graph ->
     if (graph.allTasks.any { it instanceof AbstractPublishToMaven || it.name in ['publish', 'publishToMavenLocal'] }) {
-        if (graph.allTasks.any { it.name == 'publishToMavenLocal' || it.class.name.contains('PublishToMavenLocal') } ||
-                System.getenv('GITHUB_ACTIONS') != 'true' ||
+        if (System.getenv('GITHUB_ACTIONS') != 'true' ||
                 System.getenv('GITHUB_REPOSITORY') != 'MinecraftModDevelopmentMods/LootableBodies' ||
-                System.getenv('GITHUB_WORKFLOW') != 'Release Lootable Bodies' ||
-                System.getenv('GITHUB_REF') != 'refs/heads/master-1.12' ||
+                !System.getenv('LOOTABLEBODIES_RELEASE_SHA')?.matches('[a-f0-9]{40}') ||
                 System.getenv('LOOTABLEBODIES_RELEASE_VERSION') != project.version.toString() ||
-                !(System.getenv('GITHUB_RUN_ID') ==~ /[0-9]+/) || !preparedReleaseDir.isPresent())
-            throw new GradleException('Publication is disabled outside the confirmed MMD release workflow')
+                !preparedReleaseDir.isPresent() || graph.allTasks.any { it.name == 'publishToMavenLocal' })
+            throw new GradleException('Publication is disabled outside the confirmed MMD release')
     }
 }
 

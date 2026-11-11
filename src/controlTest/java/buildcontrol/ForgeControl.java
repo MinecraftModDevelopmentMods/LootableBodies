@@ -7,7 +7,6 @@ import net.minecraftforge.fml.loading.FMLEnvironment;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.EventLoopGroupHolder;
-import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.storage.LevelData;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.TickEvent;
@@ -25,7 +24,7 @@ public final class ForgeControl {
         if(rounds>0)event.enqueueWork(()->ResourceControl.run(rounds));
     }
     public void started(ServerStartedEvent event) {
-        if(net.minecraftforge.fml.ModList.get().getModContainerById("lootablebodies").isPresent())throw new AssertionError("Independent Forge control contains Lootable Bodies");
+        if(net.minecraftforge.fml.ModList.getModContainerById("lootablebodies").isPresent())throw new AssertionError("Independent Forge control contains Lootable Bodies");
         if(net.minecraftforge.fml.loading.FMLEnvironment.dist==net.minecraftforge.api.distmarker.Dist.DEDICATED_SERVER) {
             if(Boolean.getBoolean("lootablebodies.control.tcpServer"))System.out.println("FORGE_PLATFORM_CONTROL_READY");
             else {System.out.println("FORGE_PLATFORM_CONTROL_PASS");event.getServer().halt(false);}
@@ -151,8 +150,8 @@ public final class ForgeControl {
         }
         private void createWorld(net.minecraft.client.Minecraft client) {
             client.createWorldOpenFlows().createFreshLevel("platform-fixture",
-                new net.minecraft.world.level.LevelSettings("Platform fixture",net.minecraft.world.level.GameType.CREATIVE,false,
-                    net.minecraft.world.Difficulty.NORMAL,false,new GameRules(net.minecraft.world.level.WorldDataConfiguration.DEFAULT.enabledFeatures()),net.minecraft.world.level.WorldDataConfiguration.DEFAULT),
+                new net.minecraft.world.level.LevelSettings("Platform fixture",net.minecraft.world.level.GameType.CREATIVE,
+                    net.minecraft.world.level.LevelSettings.DifficultySettings.DEFAULT,false,net.minecraft.world.level.WorldDataConfiguration.DEFAULT),
                 new net.minecraft.world.level.levelgen.WorldOptions(4267321L,false,false),
                 access->access.lookupOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET)
                     .getOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions(),new net.minecraft.client.gui.screens.TitleScreen());

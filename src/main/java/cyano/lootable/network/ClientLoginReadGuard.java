@@ -7,13 +7,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.network.ConnectionProtocol;
 import net.minecraft.network.Connection;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
 import net.minecraftforge.event.TickEvent;
 
 /** Repairs the pinned Netty's stale read-clear task during client login. */
-@OnlyIn(Dist.CLIENT)
 public final class ClientLoginReadGuard {
     public void tick(TickEvent.ClientTickEvent.Post event) {
         Minecraft minecraft=Minecraft.getInstance();

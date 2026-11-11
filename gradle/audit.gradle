@@ -33,7 +33,7 @@ ext.auditReleaseArchives = { File directory ->
                     if (!path.startsWith('cyano/lootable/')) throw new GradleException("Foreign production class ${path}")
                     byte[] bytes = zip.getInputStream(entry).bytes
                     int major = ((bytes[6] & 255) << 8) | (bytes[7] & 255)
-                    if (major != 65) throw new GradleException("${path} is class major ${major}")
+                    if (major != 69) throw new GradleException("${path} is class major ${major}")
                 }
                 if (path.endsWith('.lang')) {
                     java.nio.charset.StandardCharsets.UTF_8.newDecoder().decode(
@@ -57,7 +57,8 @@ ext.auditReleaseArchives = { File directory ->
                 ['META-INF/mods.toml', 'pack.mcmeta', 'cyano/lootable/LootableBodies.class',
                  'lootablebodies.mixins.json', 'cyano/lootable/mixin/DataFixersMixin.class',
                  'cyano/lootable/mixin/SaveAccessMixin.class', 'cyano/lootable/mixin/DedicatedWorldMixin.class',
-                 'cyano/lootable/mixin/RegionStorageMixin.class', 'cyano/lootable/mixin/LegacyStructuresMixin.class',
+                 'cyano/lootable/mixin/RegionStorageMixin.class', 'cyano/lootable/mixin/FileFixerMixin.class',
+                 'cyano/lootable/mixin/FileFixLevelDataMixin.class', 'cyano/lootable/mixin/DimensionStorageMixin.class',
                  'cyano/lootable/mixin/CapabilityDataMixin.class', 'cyano/lootable/mixin/CorpseRenderDispatcherMixin.class',
                  'cyano/lootable/upgrade/EarlyWorldPreservation.class',
                  'assets/lootablebodies/textures/gui/corpse.png',
@@ -65,17 +66,17 @@ ext.auditReleaseArchives = { File directory ->
                     if (!names.contains(it)) throw new GradleException("Missing production entry ${it}")
                 }
                 String info=zip.getInputStream(zip.getEntry('META-INF/mods.toml')).getText('UTF-8')
-                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[1.21.11]"'].each {
+                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[26.1.2]"'].each {
                     if(!info.contains(it))throw new GradleException("Incorrect production metadata: ${it}")
                 }
                 def pack=new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack
-                if(pack.min_format!=[94,1] || pack.max_format!=[94,1] || pack.containsKey('pack_format') || pack.containsKey('supported_formats') || pack.containsKey('forge:server_data_pack_format') ||
+                if(pack.min_format!=[84,0] || pack.max_format!=[101,1] || pack.containsKey('pack_format') || pack.containsKey('supported_formats') || pack.containsKey('forge:server_data_pack_format') ||
                         pack.containsKey('forge:resource_pack_format') || pack.containsKey('forge:data_pack_format'))
-                    throw new GradleException('Forge mod pack metadata must use data format 94.1')
+                    throw new GradleException('Forge mod pack metadata must declare resource format 84.0 and data format 101.1')
                 def mixins = new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('lootablebodies.mixins.json')).getText('UTF-8'))
                 if (mixins.required != true || mixins.compatibilityLevel != 'JAVA_21' ||
                         mixins.package != 'cyano.lootable.mixin' || mixins.injectors != [defaultRequire: 1] ||
-                        mixins.mixins != ['DataFixersMixin', 'SaveAccessMixin', 'RegionStorageMixin', 'LegacyStructuresMixin', 'CapabilityDataMixin'] || mixins.server != ['DedicatedWorldMixin'] ||
+                        mixins.mixins != ['DataFixersMixin', 'SaveAccessMixin', 'RegionStorageMixin', 'FileFixerMixin', 'FileFixLevelDataMixin', 'DimensionStorageMixin', 'CapabilityDataMixin'] || mixins.server != ['DedicatedWorldMixin'] ||
                         mixins.client != ['CorpseRenderDispatcherMixin'] ||
                         manifest.getValue('MixinConfigs') != 'lootablebodies.mixins.json' || manifest.getValue('FMLAT') != null ||
                         names.contains('META-INF/coremods.json') || names.any { it.startsWith('coremods/') && !it.endsWith('/') })

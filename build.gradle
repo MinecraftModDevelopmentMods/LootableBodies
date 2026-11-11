@@ -5,7 +5,6 @@ plugins {
     id 'eclipse'
     id 'idea'
     id 'maven-publish'
-    id 'net.minecraftforge.renamer' version '1.1.5'
     id 'net.minecraftforge.gradle' version '7.0.34'
 }
 
@@ -13,69 +12,52 @@ group = project.mod_group
 version = project.mod_version
 base.archivesName = project.mod_artifact
 
-// Gradle uses Java 21; every compiler, test and game process uses this JDK 21.
-// Eclipse does not inherit the command-line helper's environment. Keep its
-// machine-specific toolchain selection in an ignored local properties file.
+// Gradle, Mavenizer and the game use the pinned Java 25 installation.
 Properties localJavaSetup = new Properties()
 File localJavaSetupFile = file('gradle-local.properties')
 if (localJavaSetupFile.isFile()) localJavaSetupFile.withInputStream { localJavaSetup.load(it) }
-def pinnedJava21 = providers.environmentVariable('LOOTABLEBODIES_JAVA21_HOME')
-        .orElse(providers.gradleProperty('lootablebodies.java21.home'))
-        .orElse(providers.provider { localJavaSetup.getProperty('lootablebodies.java21.home') })
-def exactJava21Spec = pinnedJava21.isPresent() ?
-        org.gradle.jvm.toolchain.internal.SpecificInstallationToolchainSpec.fromJavaHome(
-                project.services.get(org.gradle.api.internal.provider.PropertyFactory), file(pinnedJava21.get())) : null
-def pinnedJava25 = providers.environmentVariable('LOOTABLEBODIES_MAVENIZER_JAVA_HOME')
-        .orElse(providers.gradleProperty('lootablebodies.mavenizer.java.home'))
-        .orElse(providers.provider { localJavaSetup.getProperty('lootablebodies.mavenizer.java.home') })
+def pinnedJava25 = providers.environmentVariable('LOOTABLEBODIES_JAVA25_HOME')
+        .orElse(providers.gradleProperty('lootablebodies.java25.home'))
+        .orElse(providers.provider { localJavaSetup.getProperty('lootablebodies.java25.home') })
 def exactJava25Spec = pinnedJava25.isPresent() ?
         org.gradle.jvm.toolchain.internal.SpecificInstallationToolchainSpec.fromJavaHome(
                 project.services.get(org.gradle.api.internal.provider.PropertyFactory), file(pinnedJava25.get())) : null
-ext.mavenizerLauncher = exactJava25Spec != null ? javaToolchains.launcherFor(exactJava25Spec) :
-        javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25); vendor = JvmVendorSpec.ADOPTIUM }
-fgtools.configure('mavenizer') { javaLauncher.set(mavenizerLauncher) }
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
         vendor = JvmVendorSpec.ADOPTIUM
     }
     withSourcesJar()
     withJavadocJar()
 }
-ext.productionLauncher = exactJava21Spec != null ? javaToolchains.launcherFor(exactJava21Spec) :
+ext.productionLauncher = exactJava25Spec != null ? javaToolchains.launcherFor(exactJava25Spec) :
         javaToolchains.launcherFor(java.toolchain)
+ext.mavenizerLauncher = productionLauncher
+fgtools.configure('mavenizer') { javaLauncher.set(mavenizerLauncher) }
 fgtools.configure('slimelauncher') { javaLauncher.set(productionLauncher) }
-def productionCompiler = exactJava21Spec != null ? javaToolchains.compilerFor(exactJava21Spec) :
+def productionCompiler = exactJava25Spec != null ? javaToolchains.compilerFor(exactJava25Spec) :
         javaToolchains.compilerFor(java.toolchain)
-def productionJavadoc = exactJava21Spec != null ? javaToolchains.javadocToolFor(exactJava21Spec) :
+def productionJavadoc = exactJava25Spec != null ? javaToolchains.javadocToolFor(exactJava25Spec) :
         javaToolchains.javadocToolFor(java.toolchain)
 
 tasks.register('verifyJavaSetup') {
     group = 'verification'
     doLast {
-        if (JavaVersion.current() != JavaVersion.VERSION_21) throw new GradleException('Run Gradle with Java 21')
+        if (JavaVersion.current() != JavaVersion.VERSION_25) throw new GradleException('Run Gradle with Java 25')
         def metadata = productionLauncher.get().metadata
         Properties release = new Properties()
         metadata.installationPath.file('release').asFile.withInputStream { release.load(it) }
-        if (release.getProperty('JAVA_RUNTIME_VERSION') != '"21.0.7+6-LTS"' ||
-                release.getProperty('IMPLEMENTOR') != '"Eclipse Adoptium"') {
-            throw new GradleException("Production requires Temurin 21.0.7+6, found ${metadata.javaRuntimeVersion} ${metadata.vendor}")
-        }
+        if (release.getProperty('JAVA_RUNTIME_VERSION') != '"25.0.3+9-LTS"' ||
+                release.getProperty('IMPLEMENTOR') != '"Eclipse Adoptium"')
+            throw new GradleException("Production requires Temurin 25.0.3+9, found ${metadata.javaRuntimeVersion} ${metadata.vendor}")
         logger.lifecycle("Gradle Java: ${System.getProperty('java.runtime.version')}; production: ${metadata}")
-        def worker = mavenizerLauncher.get().metadata
-        Properties workerRelease = new Properties()
-        worker.installationPath.file('release').asFile.withInputStream { workerRelease.load(it) }
-        if (workerRelease.getProperty('JAVA_RUNTIME_VERSION') != '"25.0.3+9-LTS"' ||
-                workerRelease.getProperty('IMPLEMENTOR') != '"Eclipse Adoptium"')
-            throw new GradleException('The separate Mavenizer worker requires Temurin 25.0.3+9-LTS')
-        logger.lifecycle("Mavenizer worker: ${worker}; game/compilation remain on Java 21")
     }
 }
 tasks.withType(JavaCompile).configureEach {
     dependsOn 'verifyJavaSetup'
     javaCompiler = productionCompiler
-    sourceCompatibility = '21'
-    targetCompatibility = '21'
+    sourceCompatibility = '25'
+    targetCompatibility = '25'
     options.encoding = 'UTF-8'
     options.compilerArgs.addAll(['-Xmaxerrs','1000'])
 }
@@ -144,7 +126,6 @@ ext.normalizeArchiveText = { details ->
 apply from: 'gradle/assets.gradle'
 
 minecraft {
-    mappings channel: project.mapping_channel, version: project.mapping_version
     runs {
         configureEach {
             workingDir.convention layout.projectDirectory.dir(
@@ -233,10 +214,10 @@ tasks.named('jar', Jar) {
             'Implementation-Version': project.version, 'Implementation-Vendor': project.mod_vendor,
             'Maven-Artifact': "${project.group}:${base.archivesName.get()}:${project.version}",
             'Implementation-License': project.mod_license,
-            'Built-On-Java': '21', 'Built-On': "${minecraft_version}-${forge_version}", 'MixinConfigs': 'lootablebodies.mixins.json')
+            'Built-On-Java': '25', 'Built-On': "${minecraft_version}-${forge_version}", 'MixinConfigs': 'lootablebodies.mixins.json')
     filesMatching(archiveTextPatterns, normalizeArchiveText)
 }
-// Forge 52.1.20 ships its runtime with official names.
+// Minecraft 26.1.2 ships with named classes.
 ext.releaseJar = tasks.named('jar', Jar)
 ['sourcesJar', 'javadocJar'].each { name ->
     tasks.named(name, Jar) {
@@ -249,11 +230,11 @@ ext.releaseJar = tasks.named('jar', Jar)
         filesMatching(archiveTextPatterns, normalizeArchiveText)
     }
 }
-// Java 21 writes the index and its bundled SVG icons with the host line
+// Javadoc writes the index and its bundled SVG icons with the host line
 // separator. Keep the documentation bytes identical on Windows and Linux.
 tasks.named('javadocJar', Jar) {
-    inputs.property('javadocLineEndings', 'crlf-index-and-icons')
-    filesMatching(['element-list', 'copy.svg', 'link.svg']) {
+    inputs.property('javadocLineEndings', 'crlf-index-and-java25-icons')
+    filesMatching(['element-list', '**/copy.svg', '**/link.svg', '**/left.svg', '**/right.svg']) {
         filter(FixCrLfFilter, eol: FixCrLfFilter.CrLf.newInstance('crlf'),
                 eof: FixCrLfFilter.AddAsisRemove.newInstance('asis'))
     }

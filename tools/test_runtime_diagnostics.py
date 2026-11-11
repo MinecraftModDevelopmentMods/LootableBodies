@@ -50,8 +50,8 @@ class RuntimeDeadlineTests(unittest.TestCase):
                 [sys.executable, '-u', '-c', code], cwd=home,
                 log=home/'phase.log', timeout=timeout,
                 diagnostics=home/'phase.diagnostics',
-                diagnostic_command=collector or [sys.executable, '-c',
-                    'import sys; print("THREAD_CAPTURE_TARGET="+sys.argv[1], flush=True)'],
+                diagnostic_command=collector or [sys.executable, '-S', '-c',
+                    'import os,sys; print("THREAD_CAPTURE_TARGET="+sys.argv[1], flush=True); os._exit(0)'],
                 metric_command=metric)
         except BaseException:
             if os.environ.get('LOOTABLEBODIES_UNIT_EVIDENCE'):
@@ -62,25 +62,19 @@ class RuntimeDeadlineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             with self.assertRaises(subprocess.TimeoutExpired):
-                self.run_child(home, 'import time; time.sleep(30)', metric=[
-                    sys.executable, '-S', '-c', 'import os,sys,time; '
-                    'time.sleep(30) if os.path.exists("heap-seen") else None; '
-                    'open("heap-seen","w").close(); print("HEAP_TARGET="+sys.argv[1],flush=True); os._exit(0)'])
-            # The first fake collector's only task is its flushed output. Avoid
-            # unrelated interpreter shutdown consuming its original0.24s budget.
-            # Later collectors still really block and must be killed on time.
+                self.run_child(home, 'import time; time.sleep(30)', collector=[
+                    sys.executable, '-S', '-c', 'import os,sys; print("THREAD_TARGET="+sys.argv[1],flush=True); os._exit(0)'],
+                    metric=[sys.executable, '-S', '-c',
+                            'import os,sys; print("HEAP_TARGET="+sys.argv[1],flush=True); os._exit(0)'])
+            # This test proves one successful sample without a GC event.
+            # The separate stuck-collector test proves bounded termination.
             report = json.loads((home/'phase.diagnostics/result.json').read_text())
-            self.assertTrue(report['metrics'])
-            self.assertTrue(any(m['returncode']==0 for m in report['metrics']))
-            self.assertTrue(any(m['timed_out'] for m in report['metrics']))
-            for metric in report['metrics']:
-                # A later collector must stop at the existing runtime deadline.
-                # Require actual heap output and retain every bounded stop.
-                self.assertTrue(metric['returncode']==0 or
-                                (metric['timed_out'] and metric['returncode'] is not None))
-                if metric['returncode']==0:
-                    self.assertIn('HEAP_TARGET='+str(report['pid']),
-                                  (home/'phase.diagnostics'/metric['file']).read_text())
+            self.assertTrue(report['timed_out'])
+            complete = [sample for sample in report['metrics'] if sample['returncode']==0]
+            self.assertTrue(complete)
+            for sample in complete:
+                self.assertIn('HEAP_TARGET='+str(report['pid']),
+                              (home/'phase.diagnostics'/sample['file']).read_text())
 
     def test_a_stuck_heap_collector_is_killed_without_extending_the_deadline(self):
         with tempfile.TemporaryDirectory() as directory:

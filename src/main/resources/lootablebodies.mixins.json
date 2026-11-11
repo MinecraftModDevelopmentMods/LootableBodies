@@ -3,7 +3,7 @@
   "minVersion": "0.8.7",
   "package": "cyano.lootable.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": ["DataFixersMixin", "SaveAccessMixin", "RegionStorageMixin", "LegacyStructuresMixin", "CapabilityDataMixin"],
+  "mixins": ["DataFixersMixin", "SaveAccessMixin", "RegionStorageMixin", "FileFixerMixin", "FileFixLevelDataMixin", "DimensionStorageMixin", "CapabilityDataMixin"],
   "server": ["DedicatedWorldMixin"],
   "client": ["CorpseRenderDispatcherMixin"],
   "injectors": {

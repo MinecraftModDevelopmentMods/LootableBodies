@@ -257,9 +257,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	}
 
 	public boolean handleWaterMovement() {
-		// Native 1.17 updates both water and lava in this entry point.
-		// Keep its fluid heights, fire clearing and current pushing together.
-		return super.updateInWaterStateAndDoFluidPushing();
+		return super.updateFluidInteraction();
 	}
 	
 	private void generateVoidPlatform() {
@@ -666,7 +664,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
 	@Override
 	public void setChanged() {
 		Level level = level();
-		if(level != null && !level.isClientSide() && isAddedToWorld() && level.hasChunkAt(blockPosition())) {
+		if(level != null && !level.isClientSide() && isAddedToLevel() && level.hasChunkAt(blockPosition())) {
 			level.getChunkAt(blockPosition()).markUnsaved();
 		}
 	}
@@ -1260,7 +1258,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
                 var nbt = registryAccess().createSerializationContext(NbtOps.INSTANCE);
                 String saved = raw.asString().orElse("");
                 int marker = root.getIntOr(UpgradePreservation.VERSION, 0);
-                boolean legacyJson = marker >= 3 && marker < UpgradePreservation.DATA_VERSION;
+                boolean legacyJson = marker >= 3 && marker < 13;
                 // Staged copies can already carry the current marker while
                 // retaining a historical JSON component until the first save.
                 boolean stagedJson = !root.getCompoundOrEmpty(UpgradePreservation.SOURCES).isEmpty()

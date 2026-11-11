@@ -1,4 +1,4 @@
-"""Disposable official Forge 61 launches, separate from the development bootstrap."""
+"""Disposable official Forge 64 launches, separate from the development bootstrap."""
 import hashlib
 import json
 import os
@@ -13,33 +13,34 @@ import zipfile
 from command_logs import run_logged
 from runtime_diagnostics import run_monitored,validate_logging_inputs
 
-FORGE = 'forge-1.21.11-61.2.4'
-INSTALLER_SHA256 = 'B1C3EE57BADED63F7591293134FF079B69CACEF3317D2E6783B28D92CFDC2BF4'
-SERVER_INPUTS = json.loads(Path(__file__).with_name('native12111_server_inputs.json').read_text(encoding='utf-8'))
-WORKER_BUDGET_PATH = Path(__file__).with_name('native12111_worker_budget.json')
+FORGE = 'forge-26.1.2-64.1.5'
+INSTALLER_SHA256 = '6E01323837051176762BD466340A601DA122F179FE6A00AC616E05429AE07648'
+FLAT_INPUTS_PATH = Path(__file__).with_name('native2612_flat_inputs.json')
+SERVER_INPUTS = json.loads(Path(__file__).with_name('native2612_server_inputs.json').read_text(encoding='utf-8'))
+WORKER_BUDGET_PATH = Path(__file__).with_name('native2612_worker_budget.json')
 WORKER_BUDGET_PROOF = json.loads(WORKER_BUDGET_PATH.read_text(encoding='utf-8')) if WORKER_BUDGET_PATH.is_file() else {}
-# Forge 61 uses its actual default CPU/worker/GC configuration. A new target's
+# Forge 64 uses its actual default CPU/worker/GC configuration. A new target's
 # history cannot borrow an older engine's resource qualification.
 HISTORICAL_JVM_ARGS = ()
 
 
 def require_historical_budget():
     if not WORKER_BUDGET_PATH.is_file():
-        raise RuntimeError('Forge 61 historical runtime policy has not been qualified')
+        raise RuntimeError('Forge 64 historical runtime policy has not been qualified')
     proof=json.loads(WORKER_BUDGET_PATH.read_text(encoding='utf-8'))
-    if tuple(proof.get(key) for key in ('minecraft','forge','reloads','jvms','qualified'))!=('1.21.11','61.2.4',200,4,True):
-        raise RuntimeError('Forge 61 historical runtime policy has not been qualified')
+    if tuple(proof.get(key) for key in ('minecraft','forge','reloads','jvms','qualified'))!=('26.1.2','64.1.5',200,4,True):
+        raise RuntimeError('Forge 64 historical runtime policy has not been qualified')
     if proof.get('jvm_args')!=[]:
-        raise RuntimeError('Unqualified Forge 61 worker or GC override')
+        raise RuntimeError('Unqualified Forge 64 worker or GC override')
     source=Path(__file__).resolve().parents[1]/'src/controlTest/java/buildcontrol/ResourceControl.java'
-    manifest=Path(__file__).with_name('native12111_server_inputs.json')
+    manifest=Path(__file__).with_name('native2612_server_inputs.json')
     if proof.get('controller_sha256')!=digest(source) or proof.get('server_input_manifest_sha256')!=digest(manifest):
-        raise RuntimeError('Forge 61 resource qualification source or SDK binding changed')
+        raise RuntimeError('Forge 64 resource qualification source or SDK binding changed')
     if not __import__('re').fullmatch('[A-F0-9]{64}',proof.get('qualification_evidence_sha256','')):
-        raise RuntimeError('Missing Forge 61 resource qualification identity')
-    evidence=Path(__file__).resolve().parents[1]/'.gradle/native12111-resource-qualification/proof.json'
+        raise RuntimeError('Missing Forge 64 resource qualification identity')
+    evidence=Path(__file__).resolve().parents[1]/'.gradle/native2612-resource-qualification/proof.json'
     if not evidence.is_file() or digest(evidence)!=proof['qualification_evidence_sha256']:
-        raise RuntimeError('Missing or changed actual local Forge 61 resource qualification evidence')
+        raise RuntimeError('Missing or changed actual local Forge 64 resource qualification evidence')
     return HISTORICAL_JVM_ARGS
 
 
@@ -52,6 +53,17 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
 
 
+def sealed_runtime_jars(directory, logging):
+    from release_identity import MAIN_JAR
+    root=Path(directory).resolve()
+    identity=json.loads((root/'identity.json').read_text(encoding='utf-8'))
+    candidate,probe=(root/MAIN_JAR,root/'lootablebodies-build-tests.jar')
+    for path in (candidate,probe,logging):
+        if path.is_symlink() or not path.is_file() or digest(path)!=identity.get(path.name):
+            raise ValueError('Changed sealed runtime input: '+str(path))
+    return candidate,probe
+
+
 def fingerprint(directory):
     return {p.relative_to(directory).as_posix(): digest(p)
             for p in sorted(directory.rglob('*')) if p.is_file()}
@@ -60,20 +72,20 @@ def fingerprint(directory):
 def verify_server_inputs(distribution):
     """Pin the exact completed SDK after both official installer sides.
 
-    Forge 61 generated archives match the installer's declared expected hashes.
+    Forge 64 generated archives match the installer's declared expected hashes.
     No changed/truncated class, intermediate, resource or extra byte is accepted.
     """
     actual={}
     for name,expected in SERVER_INPUTS.items():
         artifact=Path(distribution)/name
-        if artifact.is_symlink() or not artifact.is_file():raise FileNotFoundError('Missing Forge 61 SDK input: '+name)
+        if artifact.is_symlink() or not artifact.is_file():raise FileNotFoundError('Missing Forge 64 SDK input: '+name)
         value=digest(artifact)
-        if value!=expected:raise RuntimeError('Incorrect official Forge 61 server input: '+name)
+        if value!=expected:raise RuntimeError('Incorrect official Forge 64 server input: '+name)
         actual[name]=value
     return actual
 
 
-def seed_loader_defaults(home, deterministic=False, include_default_path=True):
+def seed_loader_defaults(home, deterministic=False, include_default_path=True, *, current=False):
     """Seed an owned home; disable optional HTTP checks only for probes."""
     config=home/'config/fml.toml'
     config.parent.mkdir(parents=True, exist_ok=True)
@@ -81,6 +93,9 @@ def seed_loader_defaults(home, deterministic=False, include_default_path=True):
         with config.open('x', encoding='utf-8', newline='\n') as stream:
             stream.write('versionCheck = '+('false' if deterministic else 'true')+'\nsplashscreen = true\n'
                          'maxThreads = -1\n'+('defaultConfigPath = "defaultconfigs"\n' if include_default_path else ''))
+            if current:
+                stream.write('earlyWindowSkipGLVersions = []\nearlyWindowLogHelpMessage = true\n'
+                             'earlyWindowSquir = false\nearlyWindowShowCPU = false\n')
     except FileExistsError:
         pass  # Retain existing choices, comments and even unreadable bytes.
 
@@ -90,12 +105,12 @@ def prepare_server(home, distribution, candidate=None, probe=None):
     distribution = distribution.resolve()
     libraries = distribution / 'libraries'
     if not libraries.is_dir():
-        raise FileNotFoundError('Incomplete official Forge 61 server installation')
+        raise FileNotFoundError('Incomplete official Forge 64 server installation')
     verify_server_inputs(distribution)
     home.mkdir(parents=True, exist_ok=False)
     (home / 'mods').mkdir()
     shutil.copy2(distribution/(FORGE+'-shim.jar'),home/(FORGE+'-shim.jar'))
-    seed_loader_defaults(home, deterministic=probe is not None)
+    seed_loader_defaults(home, deterministic=probe is not None,current=True)
     # Share this disposable installation's immutable libraries, not a user
     # installation or Gradle cache. Every matrix run fingerprints the inputs.
     link = home / 'libraries'
@@ -134,10 +149,10 @@ def require_runtime_jdk(java):
     java=Path(java).resolve()
     release=java.parent.parent/'release'
     if not release.is_file():
-        raise RuntimeError('Native runtime requires exact Temurin 21.0.7+6 JDK metadata')
+        raise RuntimeError('Native runtime requires exact Temurin 25.0.3+9 JDK metadata')
     version=dict(line.split('=',1) for line in release.read_text(encoding='utf-8').splitlines() if '=' in line)
-    if version.get('JAVA_RUNTIME_VERSION')!='"21.0.7+6-LTS"' or version.get('IMPLEMENTOR')!='"Eclipse Adoptium"':
-        raise RuntimeError('Native runtime requires exact Temurin 21.0.7+6')
+    if version.get('JAVA_RUNTIME_VERSION')!='"25.0.3+9-LTS"' or version.get('IMPLEMENTOR')!='"Eclipse Adoptium"':
+        raise RuntimeError('Native runtime requires exact Temurin 25.0.3+9')
     return java
 
 
@@ -160,7 +175,7 @@ def run_java(java, home, phase, *, timeout=240, jvm_args=()):
     gc = diagnostics.relative_to(home) / 'gc.txt'
     arguments = 'win_args.txt' if os.name == 'nt' else 'unix_args.txt'
     command = [str(java), '-Dfile.encoding=UTF-8', '-Xms256m', '-Xmx2G', '-Xlog:gc*,safepoint:file=' + gc.as_posix() + ':time,uptime,level,tags',
-               *jvm_args, '@libraries/net/minecraftforge/forge/1.21.11-61.2.4/' + arguments, '--nogui']
+               *jvm_args, '@libraries/net/minecraftforge/forge/26.1.2-64.1.5/' + arguments, '--nogui']
     validate_logging_inputs(command)
     def initial_diagnostics(process):
         # Short refusals and successful phases must retain real thread/heap
@@ -193,7 +208,7 @@ def run_java(java, home, phase, *, timeout=240, jvm_args=()):
 
 
 def seed_flat_fixture(home, header, expected_sha256):
-    """Copy one sealed native-codec header into a new owned fixture world."""
+    """Copy the two sealed files needed by the native 26.1.2 flat-world codec."""
     import gzip
     from nbt_regions import decode
     home, header = Path(home).resolve(), Path(header).resolve()
@@ -204,21 +219,32 @@ def seed_flat_fixture(home, header, expected_sha256):
         raise FileExistsError('Refusing to overwrite an existing fixture world')
     if not header.is_file() or digest(header) != expected_sha256:
         raise RuntimeError('Native flat fixture header checksum mismatch')
-    _, root = decode(gzip.decompress(header.read_bytes()))
-    data = root.value.get('Data')
+    entries = json.loads(FLAT_INPUTS_PATH.read_text(encoding='utf-8'))
+    entry = entries.get(expected_sha256)
+    if entry is None or header.name != entry['header']:
+        raise RuntimeError('Flat fixture header is not an approved native 26.1.2 input')
+    settings = header.with_name(entry['worldgen'])
+    if not settings.is_file() or digest(settings) != entry['worldgen_sha256']:
+        raise RuntimeError('Native flat fixture world generator checksum mismatch')
     try:
-        version = data.value['DataVersion']
-        generator = data.value['WorldGenSettings'].value['dimensions'].value[
+        _, root = decode(gzip.decompress(header.read_bytes()))
+        _, config = decode(gzip.decompress(settings.read_bytes()))
+        version = root.value['Data'].value['DataVersion']
+        config_version = config.value['DataVersion']
+        generator = config.value['data'].value['dimensions'].value[
             'minecraft:overworld'].value['generator'].value['type']
-        if version.kind != 3 or version.value != 4671 or generator.kind != 8 or generator.value != 'minecraft:flat':
+        if ((version.kind,version.value)!=(3,4790) or (config_version.kind,config_version.value)!=(3,4790)
+                or (generator.kind,generator.value)!=(8,'minecraft:flat')):
             raise ValueError('Wrong native version or generator')
     except (AttributeError, KeyError, ValueError) as error:
-        raise RuntimeError('Expected an explicit native4671 flat codec header') from error
-    world.mkdir()
+        raise RuntimeError('Expected native 4790 flat-world codec inputs') from error
+    stored_settings = world/'data/minecraft/world_gen_settings.dat'
+    stored_settings.parent.mkdir(parents=True)
     shutil.copy2(header, world/'level.dat')
+    shutil.copy2(settings, stored_settings)
     (home/'native-flat-header-input.json').write_text(json.dumps({
-        'sha256':expected_sha256, 'native_data_version':4671, 'generator':'minecraft:flat',
-        'only_header_copied':True}, indent=2)+'\n', encoding='utf-8')
+        'sha256':expected_sha256,'worldgen_sha256':entry['worldgen_sha256'],
+        'native_data_version':4790,'generator':'minecraft:flat'},indent=2)+'\n',encoding='utf-8')
 
 
 def run_server(java, home, phase, *, timeout=240, extra=(), marker=None, message=None):
@@ -253,7 +279,7 @@ def _download(artifact, destination):
     destination.parent.mkdir(parents=True, exist_ok=True)
     for address in (artifact['url'], artifact['url'] + '?source=lootablebodies-runtime'):
         try:
-            request = urllib.request.Request(address, headers={'User-Agent': 'LootableBodiesRuntimeTests/2.4.14.121111'})
+            request = urllib.request.Request(address, headers={'User-Agent': 'LootableBodiesRuntimeTests/2.4.15.2601021'})
             with urllib.request.urlopen(request, timeout=60) as response:
                 content = response.read()
             if hashlib.sha1(content).hexdigest() != expected:
@@ -285,7 +311,7 @@ def validate_client_paths(paths):
     import re
     for path in paths:
         value=str(path).replace('\\','/').lower();name=path.name.lower()
-        # Forge 61's exact descriptor requires this dist-marker API archive.
+        # Forge 64's exact descriptor requires this dist-marker API archive.
         if (value.endswith('/net/minecraftforge/mergetool-api/1.0/mergetool-api-1.0.jar')
                 and not path.is_symlink() and path.is_file()
                 and digest(path) == '100F0C4D658B9DD73600CE4BB9C75657E0651F0F0F5E0B2F977F85D8F495350B'):
@@ -301,13 +327,13 @@ def client_inputs(runtime, prepared):
 
 
 def prepare_assets(runtime, cache=None):
-    raise RuntimeError('Use pinned native 1.21.11 assets; inherited cache-copy hydration is disabled')
+    raise RuntimeError('Use pinned native 26.1.2 assets; inherited cache-copy hydration is disabled')
 
 
 def prepare_client(home, candidate=None, probe=None):
     home.mkdir(parents=True, exist_ok=False)
     (home / 'mods').mkdir()
-    seed_loader_defaults(home, deterministic=probe is not None)
+    seed_loader_defaults(home, deterministic=probe is not None,current=True)
     for artifact in (candidate, probe):
         if artifact is not None:
             if not artifact.is_file():
@@ -320,20 +346,20 @@ def prepare_client(home, candidate=None, probe=None):
 def client_command(java, home, runtime, assets, *, username='LootableTest', extra=(), prepared=None):
     from native120_client import command
     if prepared is None:
-        prepared=Path(__file__).resolve().parents[1]/'.gradle/native12111-client-inputs'
+        prepared=Path(__file__).resolve().parents[1]/'.gradle/native2612-client-inputs'
     return command(java,home,runtime,assets,prepared,username=username,extra=extra)
 
 
 def install(java, home, client=False):
-    """Install Forge 61 locally; its installer owns the server downloads."""
+    """Install Forge 64 locally; its installer owns the server downloads."""
     from prepare_migration_inputs import fetch
     home=home.resolve();home.mkdir(parents=True,exist_ok=False)
     installer=home/(FORGE+'-installer.jar')
-    fetch('https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.11-61.2.4/'+installer.name,installer,INSTALLER_SHA256)
+    fetch('https://maven.minecraftforge.net/net/minecraftforge/forge/26.1.2-64.1.5/'+installer.name,installer,INSTALLER_SHA256)
     if client:
         from native120_client import BASE_VERSION,BASE_SHA1
         base=home/'versions'/BASE_VERSION/(BASE_VERSION+'.json')
-        _download({'sha1':BASE_SHA1,'url':'https://piston-meta.mojang.com/v1/packages/'+BASE_SHA1+'/1.21.11.json'},base)
+        _download({'sha1':BASE_SHA1,'url':'https://piston-meta.mojang.com/v1/packages/'+BASE_SHA1+'/26.1.2.json'},base)
         metadata=json.loads(base.read_text());_download(metadata['downloads']['client'],base.with_suffix('.jar'))
         (home/'launcher_profiles.json').write_text('{"profiles":{}}\n')
     run_logged([str(java),'-Djava.awt.headless=true','-jar',installer.name,

@@ -22,6 +22,7 @@ public final class ItemMigration {
     private static final int LAST_LEGACY_ITEM_VERSION=3817;
     private static final int RELEASED_COMPONENT_VERSION=3839;
     private static final int RELEASED_121_VERSION=3955;
+    private static final int RELEASED_12111_VERSION=4671;
 
     /** Null means the caller retains the original raw record for recovery. */
     public static CompoundTag convert(CompoundTag raw,CompoundTag versions) {
@@ -42,9 +43,9 @@ public final class ItemMigration {
         if(source==UpgradePreservation.MINECRAFT_VERSION)return raw.copy();
         if(source==RELEASED_COMPONENT_VERSION) {
             CompoundTag intermediate = convertReleasedComponents(raw);
-            return intermediate == null ? null : convert121Components(intermediate);
+            return intermediate == null ? null : convertModernComponents(intermediate,RELEASED_121_VERSION);
         }
-        if(source==RELEASED_121_VERSION)return convert121Components(raw);
+        if(source==RELEASED_121_VERSION || source==RELEASED_12111_VERSION)return convertModernComponents(raw,source);
         if(source<512 || source>LAST_LEGACY_ITEM_VERSION || pipeline==null)return null;
         CompoundTag legacy=convertNbt(raw,versions);
         if(legacy==null || !supportedLegacyStack(legacy))return null;
@@ -53,7 +54,7 @@ public final class ItemMigration {
             input.remove("Damage");
             CompoundTag fixed=NativeNbt.update(pipeline,net.minecraft.util.datafix.fixes.References.ITEM_STACK,
                     input,LAST_LEGACY_ITEM_VERSION,RELEASED_121_VERSION);
-            return componentsSurvive(legacy,fixed,true)?convert121Components(fixed):null;
+            return componentsSurvive(legacy,fixed,true)?convertModernComponents(fixed,RELEASED_121_VERSION):null;
         } catch(RuntimeException invalid) {
             return null;
         }
@@ -74,16 +75,23 @@ public final class ItemMigration {
         }
     }
 
-    private static CompoundTag convert121Components(CompoundTag raw) {
+    private static CompoundTag convertModernComponents(CompoundTag raw, int source) {
         if (pipeline == null || !Set.of("id", "count", "components", "Slot").containsAll(raw.keySet())
                 || !hasType(raw, "id", 8) || Identifier.tryParse(raw.getStringOr("id", "")) == null
                 || (raw.contains("components") && !hasType(raw, "components", 10))) return null;
         Long count = raw.contains("count") ? integral(raw.get("count")) : Long.valueOf(1);
         if (count == null || count <= 0 || count > 127) return null;
         try {
+            CompoundTag released = raw;
+            if (source == RELEASED_121_VERSION) {
+                released = NativeNbt.update(pipeline, net.minecraft.util.datafix.fixes.References.ITEM_STACK,
+                        raw.copy(), source, RELEASED_12111_VERSION);
+                if (!components121Survive(raw, released)) return null;
+            }
             CompoundTag fixed = NativeNbt.update(pipeline, net.minecraft.util.datafix.fixes.References.ITEM_STACK,
-                    raw.copy(), RELEASED_121_VERSION, UpgradePreservation.MINECRAFT_VERSION);
-            return components121Survive(raw, fixed) ? fixed : null;
+                    released.copy(), RELEASED_12111_VERSION, UpgradePreservation.MINECRAFT_VERSION);
+            // The 26.1.2 native fixer has no item changes after 1.21.11.
+            return released.equals(fixed) ? fixed : null;
         } catch (RuntimeException invalid) {
             return null;
         }

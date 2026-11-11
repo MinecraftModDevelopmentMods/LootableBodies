@@ -41,7 +41,9 @@ class OwnedLoaderDefaultsTests(unittest.TestCase):
             config=home/'config/fml.toml'
             self.assertTrue(config.is_file(), 'Prepare stock loader config before parallel loading starts')
             self.assertEqual({'versionCheck':True, 'splashscreen':True,
-                              'maxThreads':-1, 'defaultConfigPath':'defaultconfigs'},
+                              'maxThreads':-1, 'defaultConfigPath':'defaultconfigs',
+                              'earlyWindowSkipGLVersions':[], 'earlyWindowLogHelpMessage':True,
+                              'earlyWindowSquir':False, 'earlyWindowShowCPU':False},
                              tomllib.loads(config.read_text(encoding='utf-8')))
 
 if __name__=='__main__':unittest.main()

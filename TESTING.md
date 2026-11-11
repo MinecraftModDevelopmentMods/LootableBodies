@@ -1,7 +1,6 @@
 # Testing
 
-Run qualification for Forge 1.21.11 locally with Forge 61.2.4 and Java 21.
-Qualification runs locally on this branch.
+Run the Forge 26.1.2 checks locally with Forge 64.1.5 and Java 25.
 
 During development, reproduce the changed behaviour first, then batch the cheap
 Java and Python checks. Reserve the full runtime suite for a frozen candidate.
@@ -20,11 +19,11 @@ For a frozen candidate:
 3. Prepare and seal genuine historical writers/worlds once. Run the known
    recovery/terrain/entity-region failure origins first and count these runs in
    the full matrix. Stop later work after a genuine failure; do not hunt green.
-4. Complete the current 68-origin, 136-case, ten-phase history contract, all
+4. Complete the current 68-origin, 136-case, ten-phase history contract and the direct upgrade from the public 1.21.11 jar. Run all
    refusals, packaged/development launches, five graphical modes, configuration
    restart, rejected viewer, actual two-client inventory packets, 13 visibility
    checks and 64 respawns. Keep both 6,200 ticks and 310 seconds and the connected
-   restart. Keep the real native controls, Eclipse and Java 21 Tooling checks.
+   restart. Keep the real native controls, Eclipse and Java 25 Tooling checks.
 5. Independently check complete logs, crashes, images, diagnostics, receipts,
    original-world seals and every published byte. Missing, changed or unreadable
    evidence blocks reuse and publication. Reused proof keeps its original run
@@ -32,8 +31,8 @@ For a frozen candidate:
 
 Unchanged mod-free resource/protocol controls can be reused only with the same
 control, SDK, JDK, flags, resources and auditor contract. Changes to those inputs
-require new control qualification. Use `tools/fixtures/native12111-forge-only-flat-level.dat`
-for the Forge-only respawn control so it starts with Forge's own saved registry.
+require new control qualification. Use `tools/fixtures/native2612-forge-only-flat-level.dat`
+and its sealed world generator file for the Forge-only respawn control.
 Changes confined to a test fixture require
 the affected proof and tool contracts, not an automatic replay of unrelated
 passed groups. A changed production migration path still requires its full

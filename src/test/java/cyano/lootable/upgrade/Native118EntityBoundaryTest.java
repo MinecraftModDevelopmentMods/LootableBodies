@@ -26,14 +26,14 @@ class Native118EntityBoundaryTest {
         assertEquals(1,journal.size());
         CompoundTag converted=NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.ENTITY_CHUNK,raw,-1,3955);
         CompoundTag actual=typedList(converted, "Entities", 10).getCompoundOrEmpty(0);
-        assertEquals(13,actual.getIntOr(UpgradePreservation.VERSION, 0));
+        assertEquals(14,actual.getIntOr(UpgradePreservation.VERSION, 0));
         assertEquals(2730,actual.getCompoundOrEmpty(UpgradePreservation.SOURCES).getIntOr("DataVersion", 0));
         assertEquals(50,typedList(actual, "LootableBodiesUnresolved", 10).size());
         for(int slot=0;slot<48;slot++)assertEquals(typedList(corpse, "Equipment", 10).getCompoundOrEmpty(slot),typedList(actual, "LootableBodiesUnresolved", 10).getCompoundOrEmpty(slot).getCompoundOrEmpty("Data"));
         assertEquals(before,raw);assertArrayEquals(original,Files.readAllBytes(file));
     }
     @Test void futureFlattenedTerrainIsRefusedDuringPreflightEvenWithoutACorpse() throws Exception {
-        CompoundTag root=new CompoundTag();root.putInt("DataVersion",4672);root.putInt("xPos",0);root.putInt("zPos",0);
+        CompoundTag root=new CompoundTag();root.putInt("DataVersion",4791);root.putInt("xPos",0);root.putInt("zPos",0);
         root.put("sections",new ListTag());root.put("entities",new ListTag());
         Path folder=world.resolve("region");Files.createDirectories(folder);Path file=folder.resolve("r.0.0.mca");
         try(RegionFile region=new RegionFile(new net.minecraft.world.level.chunk.storage.RegionStorageInfo("fixture",net.minecraft.world.level.Level.OVERWORLD,"region"),file,folder,false);DataOutputStream output=region.getChunkDataOutputStream(new ChunkPos(0,0))){NbtIo.write(root,output);}
@@ -42,7 +42,7 @@ class Native118EntityBoundaryTest {
         assertNull(UpgradePreservation.journal());assertArrayEquals(original,Files.readAllBytes(file));
     }
     @Test void futureSeparateEntityVersionRefusesEvenWhenItsCorpseHasAnOlderKnownMarker() throws Exception {
-        CompoundTag raw=chunk(4672,body(new UUID(118,172),7)),before=raw.copy();
+        CompoundTag raw=chunk(4791,body(new UUID(118,172),7)),before=raw.copy();
         Path file=write(world,raw);byte[] original=Files.readAllBytes(file);
         assertThrows(IOException.class,()->UpgradePreservation.prepareEarly(world,world.resolve("level.dat")));
         assertNull(UpgradePreservation.journal());assertEquals(before,raw);assertArrayEquals(original,Files.readAllBytes(file));
@@ -54,7 +54,7 @@ class Native118EntityBoundaryTest {
             CompoundTag raw=chunk(2730,body(new UUID(118,173+i),7));raw.put("DataVersion",stamps[i]);CompoundTag before=raw.copy();
             Path file=write(folder,raw);byte[] original=Files.readAllBytes(file);UpgradePreservation.prepareEarly(folder,folder.resolve("level.dat"));
             CompoundTag converted=NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.ENTITY_CHUNK,raw,-1,3955).getListOrEmpty("Entities").getCompoundOrEmpty(0);
-            assertEquals(13,converted.getIntOr(UpgradePreservation.VERSION, 0));assertEquals(2730,converted.getCompoundOrEmpty(UpgradePreservation.SOURCES).getIntOr("DataVersion", 0));
+            assertEquals(14,converted.getIntOr(UpgradePreservation.VERSION, 0));assertEquals(2730,converted.getCompoundOrEmpty(UpgradePreservation.SOURCES).getIntOr("DataVersion", 0));
             assertEquals(50,typedList(converted, "LootableBodiesUnresolved", 10).size());assertEquals(before,raw);assertArrayEquals(original,Files.readAllBytes(file));
         }
     }

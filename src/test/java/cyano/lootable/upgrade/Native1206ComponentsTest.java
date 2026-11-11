@@ -39,10 +39,10 @@ class Native1206ComponentsTest {
         return stack;
     }
 
-    @Test void targetUsesTheActual4671NativeSchema() {
-        assertEquals(4671,SharedConstants.getCurrentVersion().dataVersion().version());
-        assertEquals(4671,UpgradePreservation.MINECRAFT_VERSION);
-        assertEquals(13,UpgradePreservation.DATA_VERSION);
+    @Test void targetUsesTheActual4790NativeSchema() {
+        assertEquals(4790,SharedConstants.getCurrentVersion().dataVersion().version());
+        assertEquals(4790,UpgradePreservation.MINECRAFT_VERSION);
+        assertEquals(14,UpgradePreservation.DATA_VERSION);
     }
 
     @Test void released120ItemShapePreservesDamageEnchantmentsAndTypedCustomData() {

@@ -17,7 +17,7 @@ import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -62,7 +62,7 @@ final class NbtClientChecks {
             before=NbtRecoveryChecks.items(b);visible=full(b);RuntimeChecks.saveExpected(folder(mc),"nbt-client-before",b);
         });next(4);}
         else if(stage==4 && done() && frames>20){if(open(mc))next(5);}
-        else if(stage==5 && gui(mc) && frames>20){verifyGui(mc);equal(mc.player.containerMenu.getSlot(6).getItem(),NbtRecoveryChecks.item(120,17),"Malformed GUI recovery source differs");screenshot(mc,"nbt-recovered-corpse.png");mark(mc,"malformed_disk_load_gui_exact_inventory");mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,6,0,ClickType.QUICK_MOVE,mc.player);next(6);}
+        else if(stage==5 && gui(mc) && frames>20){verifyGui(mc);equal(mc.player.containerMenu.getSlot(6).getItem(),NbtRecoveryChecks.item(120,17),"Malformed GUI recovery source differs");screenshot(mc,"nbt-recovered-corpse.png");mark(mc,"malformed_disk_load_gui_exact_inventory");mc.gameMode.handleContainerInput(mc.player.containerMenu.containerId,6,0,ContainerInput.QUICK_MOVE,mc.player);next(6);}
         else if(stage==6 && frames>25){schedule(mc,()->{
             Map<String,Integer> after=NbtRecoveryChecks.items(body(mc));for(int i=0;i<player(mc).getInventory().getContainerSize();i++)add(after,player(mc).getInventory().getItem(i));RuntimeChecks.require(before.equals(after),"Network recovery lost/duplicated malformed corpse contents");
             checkPlayer(player(mc).getInventory());RuntimeChecks.require(Objects.equals(visible.get(NbtRecoveryChecks.RECOVERY),NbtRecoveryChecks.saved(body(mc)).get(NbtRecoveryChecks.RECOVERY)),"Network extraction changed unresolved raw NBT");
@@ -113,7 +113,7 @@ final class NbtClientChecks {
         return FixtureApi.entities(mc.level).stream().anyMatch(entity -> entity.getUUID().equals(bodyId));
     }
 
-    private boolean open(Minecraft mc){for(Entity e:FixtureApi.entities(mc.level))if(e.getUUID().equals(bodyId)){RuntimeChecks.require(((EntityLootableBody)e).getCustomNameTag().equals("NbtFixture"),"Malformed name reached tracked client entity");RuntimeChecks.require(e instanceof EntityLootableBody && Float.isFinite(((EntityLootableBody)e).getHealth()) && ((EntityLootableBody)e).getHealth()>0,"Malformed health reached tracked client entity");RuntimeChecks.require(((EntityLootableBody)e).getActiveEffects().isEmpty() && ((EntityLootableBody)e).hurtTime==0,"Malformed effect/hurt state reached tracked client entity");PositionMotionChecks.finite((EntityLootableBody)e);RotationFallChecks.finite((EntityLootableBody)e);mc.gameMode.interact(mc.player,e,InteractionHand.MAIN_HAND);return true;}return false;}
+    private boolean open(Minecraft mc){for(Entity e:FixtureApi.entities(mc.level))if(e.getUUID().equals(bodyId)){RuntimeChecks.require(((EntityLootableBody)e).getCustomNameTag().equals("NbtFixture"),"Malformed name reached tracked client entity");RuntimeChecks.require(e instanceof EntityLootableBody && Float.isFinite(((EntityLootableBody)e).getHealth()) && ((EntityLootableBody)e).getHealth()>0,"Malformed health reached tracked client entity");RuntimeChecks.require(((EntityLootableBody)e).getActiveEffects().isEmpty() && ((EntityLootableBody)e).hurtTime==0,"Malformed effect/hurt state reached tracked client entity");PositionMotionChecks.finite((EntityLootableBody)e);RotationFallChecks.finite((EntityLootableBody)e);mc.gameMode.interact(mc.player, e, new net.minecraft.world.phys.EntityHitResult(e), InteractionHand.MAIN_HAND);return true;}return false;}
     private void schedule(Minecraft mc,Action action){pending=mc.getSingleplayerServer().submitAsync(()->{try{action.run();}catch(Exception e){throw new RuntimeException(e);}});}
     private boolean done() throws Exception{if(!pending.isDone())return false;pending.get();return true;}
     private void next(int value){stage=value;frames=0;System.out.println("NBT_CLIENT_STAGE "+stage);}

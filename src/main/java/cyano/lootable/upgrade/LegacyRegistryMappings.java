@@ -131,10 +131,13 @@ public final class LegacyRegistryMappings {
             if(old.getPath().equals("entity.zombie_pigman."+suffix))return Identifier.parse("minecraft:entity.zombified_piglin."+suffix);
         return null;
     }
-    /** This old Long memory had no serializer or saved values in vanilla1.15. */
+    /** Retain the registry slots of retired memories that never serialized values. */
     public static void retiredMemories(RegisterEvent event) {
         event.register(Registries.MEMORY_MODULE_TYPE,Identifier.parse("minecraft:golem_last_seen_time"),
                 ()->new net.minecraft.world.entity.ai.memory.MemoryModuleType<Long>(java.util.Optional.empty()));
+        event.register(Registries.MEMORY_MODULE_TYPE,Identifier.parse("minecraft:interactable_doors"),
+                ()->new net.minecraft.world.entity.ai.memory.MemoryModuleType<java.util.List<net.minecraft.core.GlobalPos>>(
+                        java.util.Optional.empty()));
     }
 
     public static void items(MissingMappingsEvent event) {

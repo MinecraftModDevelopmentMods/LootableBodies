@@ -12,10 +12,10 @@ from owned_process import OwnedProcess,native_process
 
 
 class OwnedProcessTest(unittest.TestCase):
-    def start(self,root,script,timeout):
+    def start(self,root,script,timeout,*,initial_diagnostics=None):
         home=root/'home';home.mkdir()
         return OwnedProcess([sys.executable,'-u','-c',script],cwd=home,log=root/'client.log',timeout=timeout,
-            diagnostic_command=[sys.executable,'-c','print("owned capture")'])
+            diagnostic_command=[sys.executable,'-c','print("owned capture")'],initial_diagnostics=initial_diagnostics)
     def test_completed_process_preserves_same_stdout_alias_and_receipt(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);p=self.start(root,'print("real owned output")',5)
@@ -32,7 +32,16 @@ class OwnedProcessTest(unittest.TestCase):
             self.assertFalse(record['timed_out']);self.assertIsNotNone(record['returncode'])
     def test_deadline_failure_still_keeps_a_failed_receipt_and_complete_stdout(self):
         with tempfile.TemporaryDirectory() as directory:
-            root=Path(directory);p=self.start(root,'import time; print("before deadline"); time.sleep(30)',.3)
+            root=Path(directory)
+            def wait_for_fixture_output(process):
+                log=root/'home/client.log'
+                ready_by=time.monotonic()+3
+                while b'before deadline' not in log.read_bytes():
+                    if process.poll() is not None or time.monotonic()>=ready_by:
+                        raise AssertionError('Synthetic child never wrote its startup line')
+                    time.sleep(.01)
+            p=self.start(root,'import time; print("before deadline"); time.sleep(30)',.3,
+                         initial_diagnostics=wait_for_fixture_output)
             with self.assertRaises(subprocess.TimeoutExpired):p.wait(timeout=5)
             record=json.loads((root/'home/client.diagnostics/result.json').read_text())
             self.assertTrue(record['timed_out']);self.assertNotEqual(0,record['returncode'])
@@ -113,11 +122,11 @@ class OwnedProcessTest(unittest.TestCase):
             self.assertIsNotNone(receipt['returncode']);self.assertNotEqual(0,receipt['returncode']);self.assertFalse(receipt['timed_out'])
 
     def test_previous_runtime_and_wrong_patch_refuse_before_group_launch(self):
-        for version,vendor in [('16.0.2+7','Eclipse Foundation'),('17.0.20.1+1','Eclipse Adoptium'),('21.0.8+9-LTS','Eclipse Adoptium'),('21.0.7+6-LTS','Other Vendor')]:
+        for version,vendor in [('16.0.2+7','Eclipse Foundation'),('17.0.20.1+1','Eclipse Adoptium'),('21.0.8+9-LTS','Eclipse Adoptium'),('21.0.7+6-LTS','Eclipse Adoptium'),('25.0.3+8-LTS','Eclipse Adoptium'),('25.0.3+9-LTS','Other Vendor')]:
             with self.subTest(version=version),tempfile.TemporaryDirectory() as directory:
                 root=Path(directory);java=root/'jdk/bin/java.exe';java.parent.mkdir(parents=True)
                 (java.parent.parent/'release').write_text('JAVA_RUNTIME_VERSION="'+version+'"\nIMPLEMENTOR="'+vendor+'"\n')
-                with patch('owned_process.OwnedProcess') as launch,self.assertRaisesRegex(RuntimeError,'21.0.7'):
+                with patch('owned_process.OwnedProcess') as launch,self.assertRaisesRegex(RuntimeError,'25.0.3'):
                     native_process([str(java)],cwd=root,log=root/'runtime.log',timeout=5)
                 launch.assert_not_called()
 

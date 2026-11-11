@@ -214,10 +214,12 @@ def main():
         parser.add_argument('--' + origin, type=Path)
     parser.add_argument('--origins', nargs='+', choices=list(ORIGINS), default=list(ORIGINS))
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--runtime-inputs',type=Path,help='Use one sealed local candidate and probe bundle')
     parser.add_argument('--seed-only', action='store_true')
     parser.add_argument('--seeds', nargs='+', type=Path)
     parser.add_argument('--prepared-sources', type=Path, help='Exact sealed47-origin paths; reuse original writer worlds')
     parser.add_argument('--variants', nargs='+', choices=['normal', 'stamps'], default=['normal', 'stamps'])
+    parser.add_argument('--workers', type=int, choices=(1,2), default=1)
     parser.add_argument('--control-report', type=Path)
     args = parser.parse_args()
     project = Path(__file__).resolve().parents[1]
@@ -634,17 +636,34 @@ def bridge_writer_inventory(source):
     return gzip.compress(encode('',Tag(10,rows)),mtime=0)
 
 
+def relocated_region(world, relative):
+    """Find the same native region after vanilla moves the three default dimensions."""
+    old = Path(relative)
+    parent = old.parts[0]
+    if parent in ('DIM-1','DIM1'):
+        dimension = 'the_nether' if parent == 'DIM-1' else 'the_end'
+        old = Path(*old.parts[1:])
+    else:
+        dimension = 'overworld'
+    return world/'dimensions/minecraft'/dimension/old
+
+
 def verify(args, project):
     prepared=getattr(args,'prepared_sources',None)
     if not args.seeds and not prepared:
         raise ValueError('--prepared-sources or --seeds is required for the upgrade matrix')
     if prepared and args.seeds:raise ValueError('Choose one unambiguous source route')
     if not args.forge_home:
-        raise ValueError('--forge-home is required for the native19 upgrade matrix')
+        raise ValueError('--forge-home is required for the native 26.1.2 upgrade matrix')
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
-    candidate = project / 'build/libs' / MAIN_JAR
-    probe = project / 'build/integration-test-mod/lootablebodies-build-tests.jar'
+    inputs=getattr(args,'runtime_inputs',None)
+    if inputs is None:
+        candidate = project / 'build/libs' / MAIN_JAR
+        probe = project / 'build/integration-test-mod/lootablebodies-build-tests.jar'
+    else:
+        from native_runtime import sealed_runtime_jars
+        candidate,probe=sealed_runtime_jars(inputs,project/'src/integrationTest/resources/log4j2.xml')
     candidate_hash = digest(candidate)
     probe_hash = digest(probe)
     sources = {};prepared_proof=None
@@ -711,7 +730,7 @@ def verify(args, project):
                 for relative, original in distant.items():
                     unopened = (relative.endswith('r.8.8.mca') and phase.startswith('upgrade-near')) or (
                         relative.endswith('r.16.16.mca') and phase in PHASES[:6])
-                    if unopened and digest(world / relative) != original:
+                    if unopened and digest(relocated_region(world,relative)) != original:
                         raise RuntimeError('Unopened distant region was modified: ' + relative)
                 if fingerprint(source) != details['world'] or digest(candidate) != candidate_hash or digest(probe) != probe_hash:
                     raise RuntimeError('Sealed source/candidate changed')

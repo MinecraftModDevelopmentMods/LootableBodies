@@ -12,8 +12,7 @@ final class FixtureStackData {
     static net.minecraft.core.HolderLookup.Provider registries() {
         var server=net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
         if(server!=null && server.isSameThread())return server.registryAccess();
-        var client=net.minecraftforge.fml.DistExecutor.unsafeCallWhenOn(
-                net.minecraftforge.api.distmarker.Dist.CLIENT,()->ClientChecks::fixtureRegistries);
+        var client=net.minecraftforge.fml.loading.FMLEnvironment.dist.isClient() ? ClientChecks.fixtureRegistries() : null;
         if(client!=null)return client;
         if(server!=null)return server.registryAccess();
         return net.minecraft.data.registries.VanillaRegistries.createLookup();

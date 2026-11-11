@@ -125,7 +125,7 @@ class Native118TerrainBoundaryTest {
         NbtIo.writeCompressed(expected,world.resolve("native-reference.nbt"));
         CompoundTag fixed=NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.CHUNK,old,2730,3955);
         assertFalse(fixed.contains("Level"));assertEquals(expected.get("sections"),fixed.get("sections"));assertTrue(typedList(fixed, "sections", 10).size()>=16);
-        CompoundTag staged=typedList(fixed, "entities", 10).getCompoundOrEmpty(0);assertEquals(13,staged.getIntOr(UpgradePreservation.VERSION, 0));
+        CompoundTag staged=typedList(fixed, "entities", 10).getCompoundOrEmpty(0);assertEquals(14,staged.getIntOr(UpgradePreservation.VERSION, 0));
         assertEquals(50,typedList(staged, "LootableBodiesUnresolved", 10).size());assertEquals(2730,staged.getCompoundOrEmpty(UpgradePreservation.SOURCES).getIntOr("DataVersion", 0));
         old.remove("__context");assertEquals(before,old);assertArrayEquals(original,Files.readAllBytes(file));
     }
@@ -147,10 +147,10 @@ class Native118TerrainBoundaryTest {
         assertEquals(before,old);assertArrayEquals(original,Files.readAllBytes(file));
     }
     @Test void genuinelyFutureFlattenedTerrainStillRefusesBeforeConversion()throws Exception {
-        CompoundTag future=root();future.putInt("DataVersion",4672);CompoundTag before=future.copy();
+        CompoundTag future=root();future.putInt("DataVersion",4791);CompoundTag before=future.copy();
         Path file=write(future);byte[] original=Files.readAllBytes(file);
         assertThrows(IOException.class,()->UpgradeJournal.scan(world));
-        assertThrows(Error.class,()->NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.CHUNK,future,4672,4671));
+        assertThrows(Error.class,()->NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.CHUNK,future,4791,4790));
         assertEquals(before,future);assertArrayEquals(original,Files.readAllBytes(file));
     }
 }

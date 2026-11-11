@@ -101,8 +101,12 @@ public final class MultiplayerChecks {
             RuntimeChecks.require(++ticks<2400,"Two-client timeout phase="+phase);
             if(new File(sync,"abort").exists())throw new AssertionError("Runner aborted multiplayer fixture");
             ServerPlayer a=player("A"),b=player("B");
+            ServerLevel w=server.getLevel(FixtureApi.dimensionKey(0));
+            if(phase>=1 && phase<=7 && w.getEntity(BODY) instanceof EntityLootableBody active && active!=body){
+                System.out.println("TCP_CORPSE_REINDEXED old="+body.getId()+" reason="+body.getRemovalReason()+" active="+active.getId());
+                body=active;
+            }
             if(phase==0 && a!=null && b!=null){
-                ServerLevel w=server.getLevel(FixtureApi.dimensionKey(0));
                 for(int x=93;x<=100;x++)for(int z=93;z<=100;z++)w.setBlockAndUpdate(new BlockPos(x,79,z),Blocks.STONE.defaultBlockState());
                 w.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.SPAWN_MOBS,false,null);
                 body=new EntityLootableBody(w);body.setUUID(BODY);body.setPos(96.5,80.5,96.5);body.setNoGravity(true);body.setUserName("SharedFixture");RuntimeChecks.disableVacuum(body);
@@ -111,9 +115,17 @@ public final class MultiplayerChecks {
                 a.connection.teleport(96.5,80,94.5,0,0);b.connection.teleport(98.5,80,96.5,0,0);
                 setPhase(1);
             }else if(phase==1 && ack("A",1) && ack("B",1))setPhase(2);
-            else if(phase==2 && ack("A",2) && ack("B",2)){
-                RuntimeChecks.require((body.getItem(6)).isEmpty() && count(a,19)+count(b,19)==23,"Two TCP clients duplicated/lost contested stack");
-                RuntimeChecks.require(count(a,19)==0 || count(b,19)==0,"Both clients recovered the same stack");
+            else if(phase==2){
+                RuntimeChecks.require(w.getEntity(BODY)==body && a.containerMenu.getSlot(6).container==body
+                        && b.containerMenu.getSlot(6).container==body,"Two TCP viewers must reference the active corpse");
+                ItemStack remaining=body.getItem(6);
+                int inBody=remaining.getCount(), inA=count(a,19), inB=count(b,19);
+                RuntimeChecks.require((remaining.isEmpty() || RuntimeChecks.sameStack(remaining,stack(19,23)))
+                        && inBody+inA+inB==23,"Two TCP clients duplicated/lost contested stack: "+inBody+"/"+inA+"/"+inB);
+                RuntimeChecks.require(inA==0 || inB==0,"Both clients recovered the same stack");
+                // A received test acknowledgement does not by itself prove
+                // that Minecraft has applied a queued container click.
+                if(inBody!=0 || !ack("A",2) || !ack("B",2))return;
                 mark("two_tcp_clients_contested_shift_click");
                 a.getInventory().clearContent();b.getInventory().clearContent();body.clearContent();
                 a.containerMenu.setCarried(stack(19,10));b.getInventory().getNonEquipmentItems().set(0,stack(20,7));refresh(a);refresh(b);setPhase(3);
@@ -155,7 +167,7 @@ public final class MultiplayerChecks {
         File folder=world.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();RuntimeChecks.verifyExpected(folder,"multiplayer-body",body);
         for(String role:new String[]{"A","B"}){
             CompoundTag expected;try(FileInputStream in=new FileInputStream(new File(folder,"multiplayer-player-"+role+".nbt"))){expected=NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
-            CompoundTag actual;try(FileInputStream in=new FileInputStream(new File(folder,"playerdata/"+expected.getStringOr("UUID", "")+".dat"))){actual=NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
+            CompoundTag actual;try(FileInputStream in=new FileInputStream(new File(folder,net.minecraft.world.level.storage.LevelResource.PLAYER_DATA_DIR.id()+"/"+expected.getStringOr("UUID", "")+".dat"))){actual=NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
             RuntimeChecks.require(expected.get("Inventory").equals(actual.get("Inventory")),"Real player "+role+" inventory changed on disk");
         }
     }
