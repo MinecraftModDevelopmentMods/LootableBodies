@@ -19,7 +19,7 @@ def gradle_roots(command):
     return roots
 
 def validate_workflow(text):
-    if "java-version: '21.0.7+6.0.LTS'" not in text:
+    if "java-version: '25.0.3+9.0.LTS'" not in text:
         raise ValueError('Use the setup-java SemVer identifier for the exact qualified JDK')
     commands='\n'.join(line.strip() for line in text.splitlines() if line.startswith('          ') and not line.strip().startswith('#'))
     for forbidden in ('unittest discover','-m unittest','native_runtime.py','native117_ci.py','verify_world_upgrades.py','verify_packaged','prepare_native','xvfb-run','--seed-only'):
@@ -64,7 +64,7 @@ def require_qualified_manifest(record):
     if record.get('local_qualification_complete') is not True or record.get('qualification_integrity_status')!='verified':
         raise ValueError('Local qualification evidence is incomplete or on an integrity hold')
     version=record.get('version','')
-    if not re.fullmatch(r'\d+\.\d+\.\d+\.121111',version) or record.get('minecraft')!='1.21.11' or record.get('forge')!='61.2.4':raise ValueError('Wrong target qualification')
+    if not re.fullmatch(r'\d+\.\d+\.\d+\.2601021',version) or record.get('minecraft')!='26.1.2' or record.get('forge')!='64.1.5':raise ValueError('Wrong target qualification')
     base='LootableBodies-'+version
     names={'CHANGELOG.txt','SHA256SUMS',base+'.jar',base+'-sources.jar',base+'-javadoc.jar',base+'.pom'}
     if set(record.get('files',{}))!=names or any(not re.fullmatch('[A-F0-9]{64}',value or '') for value in record['files'].values()):raise ValueError('Incomplete six-file declaration')
@@ -74,19 +74,19 @@ def require_qualified_manifest(record):
 def check_source(root):
     validate_workflow((root/'.github/workflows/native120.yml').read_text(encoding='utf-8'))
     for workflow in ('codeql-analysis.yml','deploy-release.yml'):
-        if "'21.0.7+6.0.LTS'" not in (root/'.github/workflows'/workflow).read_text(encoding='utf-8'):
-            raise ValueError('Missing qualified Java 21 version in '+workflow)
+        if "'25.0.3+9.0.LTS'" not in (root/'.github/workflows'/workflow).read_text(encoding='utf-8'):
+            raise ValueError('Missing qualified Java 25 version in '+workflow)
     if 'feature/**' in(root/'.github/workflows/build.yml').read_text():raise ValueError('Copied legacy CI still catches modern feature branches')
     if 'workflow_dispatch:' in(root/'.github/workflows/migration-matrix.yml').read_text():raise ValueError('Copied legacy migration workflow can still dispatch on a modern ref')
     guard=(root/'settings.gradle').read_text()
     policy=json.loads((root/'tools/qualification-policy.json').read_text())
-    if policy['target']!='1.21.11' or any(rule not in guard for rule in (
+    if policy['target']!='26.1.2' or policy['hosted'].get('local_only') is not False or any(rule not in guard for rule in (
             "System.getenv('GITHUB_ACTIONS') == 'true'",
             "System.getenv('GITHUB_REPOSITORY') != 'MinecraftModDevelopmentMods/LootableBodies'",
-            'Hosted builds are limited to the MMD repository' )):
+            'Hosted builds are limited to the MMD repository')):
         raise ValueError('Missing MMD-only hosted build guard')
     for name in ('native120.yml', 'codeql-analysis.yml', 'release-workflow-checks.yml'):
-        if 'master-1.21.11' not in (root/'.github/workflows'/name).read_text(encoding='utf-8'):
+        if 'master-26.1.2' not in (root/'.github/workflows'/name).read_text(encoding='utf-8'):
             raise ValueError('Missing current release check trigger in ' + name)
     runtime=(root/'gradle/runtime.gradle').read_text()
     if "tasks.named('check') { dependsOn 'integrationTest' }" in runtime or "tasks.register('localRuntimeVerification')" not in runtime:raise ValueError('Game checks must remain explicit local gates')

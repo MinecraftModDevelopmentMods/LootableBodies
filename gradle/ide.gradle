@@ -1,5 +1,5 @@
 eclipse {
-    jdt.javaRuntimeName = 'JavaSE-21'
+    jdt.javaRuntimeName = 'JavaSE-25'
     classpath {
         downloadSources = true
         downloadJavadoc = true
@@ -36,7 +36,7 @@ tasks.register('configureEclipseBuildship') {
         File localJavaSetup = file('gradle-local.properties')
         Properties toolchains = new Properties()
         if (localJavaSetup.isFile()) localJavaSetup.withInputStream { toolchains.load(it) }
-        toolchains.setProperty('lootablebodies.java21.home',
+        toolchains.setProperty('lootablebodies.java25.home',
                 productionLauncher.get().metadata.installationPath.asFile.canonicalPath)
         toolchains.setProperty('lootablebodies.mavenizer.java.home',
                 mavenizerLauncher.get().metadata.installationPath.asFile.canonicalPath)
@@ -71,11 +71,11 @@ tasks.register('isolateEclipseProductionRuns') {
             if (!launch.isFile()) throw new GradleException("Generate ${name} with genEclipseRuns first")
             String contents = launch.getText('UTF-8')
             File nativeRoot=minecraftNatives.asFile
-            if(!nativeRoot.isDirectory())throw new GradleException('Prepare the official native 1.21.11 client inputs before generating Eclipse launches')
+            if(!nativeRoot.isDirectory())throw new GradleException('Prepare the official native 26.1.2 client inputs before generating Eclipse launches')
             contents=contents.replace('{asset_index}',minecraftAssetIndex)
                 .replace('{assets_root}',minecraftAssets.asFile.absolutePath)
                 .replace('{natives}',nativeRoot.absolutePath)
-            contents = contents.replace('/JavaSE-8', '/JavaSE-21')
+            contents = contents.replace('/JavaSE-8', '/JavaSE-25')
             contents = contents.replaceAll(/<booleanAttribute key="org.eclipse.jdt.launching.ATTR_EXCLUDE_TEST_CODE" value="[^"]*"\/>/, '')
             contents = contents.replace('</launchConfiguration>',
                     '  <booleanAttribute key="org.eclipse.jdt.launching.ATTR_EXCLUDE_TEST_CODE" value="true"/>\n</launchConfiguration>')
@@ -161,9 +161,9 @@ tasks.register('verifyEclipseProductionClasspath') {
                 it.@key.text() == 'org.eclipse.jdt.launching.CLASSPATH'
             }.listEntry.collect { new groovy.xml.XmlSlurper().parseText(it.@value.text()) }
             if (entries.count { it.@projectName.text() == rootProject.name } != 1 ||
-                    !entries.any { it.@containerPath.text().endsWith('/JavaSE-21') } ||
+                    !entries.any { it.@containerPath.text().endsWith('/JavaSE-25') } ||
                     launchModel.mapAttribute.mapEntry.any { it.@key.text() == 'MOD_CLASSES' })
-                throw new GradleException("${name} must launch the production Eclipse project on Java 21")
+                throw new GradleException("${name} must launch the production Eclipse project on Java 25")
             def libraries = entries.findAll { it.@externalArchive.text() }.collect { file(it.@externalArchive.text()).canonicalFile }
             if (entries.size() != libraries.size() + 2 ||
                     libraries != eclipseRunLibraries(name - '.launch').collect { it.canonicalFile } ||

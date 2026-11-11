@@ -48,9 +48,19 @@ public final class UpgradeJournal {
     }
 
     static UpgradeJournal scan(Path world,Path levelHeader)throws IOException {
+        return scan(world, levelHeader, null);
+    }
+
+    static UpgradeJournal scanAfterLayoutMove(Path world, Path levelHeader, UpgradeJournal before) throws IOException {
+        if (!world.toRealPath().equals(before.world))
+            throw new IOException("Native relocation must preserve the same world identity");
+        return scan(world, levelHeader, before.worldVersions());
+    }
+
+    private static UpgradeJournal scan(Path world, Path levelHeader, CompoundTag preMoveContext) throws IOException {
         Files.createDirectories(world);
         UpgradeJournal journal=new UpgradeJournal(world,levelHeader);
-        journal.inspect();
+        journal.inspect(preMoveContext);
         for(Path original:journal.active.values()) {
             CompoundTag corpse=journal.readSnapshot(original).getCompoundOrEmpty("Entity");
             if(hasType(corpse, UpgradePreservation.VERSION, 3) && corpse.getIntOr(UpgradePreservation.VERSION, 0)>UpgradePreservation.DATA_VERSION)
@@ -125,7 +135,7 @@ public final class UpgradeJournal {
         for(int i=0;i<passengers.size();i++){int[] nested=Arrays.copyOf(path,path.length+1);nested[path.length]=i;collect(passengers.getCompoundOrEmpty(i),root,nested,result);}
     }
 
-    private void inspect() throws IOException {
+    private void inspect(CompoundTag preMoveContext) throws IOException {
         // Reject links rather than silently skipping a linked dimension or writing
         // a recovery journal outside this world. No region is opened in rw mode.
         List<Path> regions=new ArrayList<>();
@@ -149,13 +159,23 @@ public final class UpgradeJournal {
             for(Path path:files) readSnapshot(path);
         }
         Map<String,CompoundTag> previous=readIndex();
-        CompoundTag worldVersions=readWorldVersions();worldContext=worldVersions.copy();
+        CompoundTag worldVersions=preMoveContext != null ? preMoveContext : readWorldVersions();
+        worldContext=worldVersions.copy();
         ListTag updated=new ListTag();
         for(Path region:regions) {
             String relative=world.relativize(region).toString().replace('\\','/');
             String hash=fileDigest(region);
             CompoundTag record=previous.get(relative);
-            if(record==null || !hash.equals(record.getStringOr("Digest", "")))
+            if(record==null && preMoveContext!=null) {
+                String oldPath=legacyRegionPath(relative);
+                if(oldPath!=null) {
+                    if(Files.exists(world.resolve(oldPath), LinkOption.NOFOLLOW_LINKS))
+                        throw new IOException("Both old and relocated region paths exist: "+relative);
+                    record=previous.get(oldPath);
+                }
+            }
+            if(record==null || !relative.equals(record.getStringOr("Path", ""))
+                    || !hash.equals(record.getStringOr("Digest", "")))
                 record=scanRegion(region,relative,hash,worldVersions,record);
             else record=record.copy();
             ListTag originals=typedList(record, "Snapshots", 8);
@@ -177,6 +197,18 @@ public final class UpgradeJournal {
         CompoundTag envelope=new CompoundTag();envelope.putInt("Format",FORMAT);
         envelope.putString("Digest",digest(payload));envelope.putByteArray("Payload",payload);
         atomic(directory.resolve("index.nbt"),compressed(envelope),true);
+    }
+
+    static String legacyRegionPath(String path) {
+        for(String store : new String[]{"region", "entities"}) {
+            if(path.startsWith("dimensions/minecraft/overworld/"+store+"/"))
+                return path.substring("dimensions/minecraft/overworld/".length());
+            if(path.startsWith("dimensions/minecraft/the_nether/"+store+"/"))
+                return "DIM-1/"+path.substring("dimensions/minecraft/the_nether/".length());
+            if(path.startsWith("dimensions/minecraft/the_end/"+store+"/"))
+                return "DIM1/"+path.substring("dimensions/minecraft/the_end/".length());
+        }
+        return null;
     }
 
     private Map<String,CompoundTag> readIndex() throws IOException {
@@ -355,7 +387,8 @@ public final class UpgradeJournal {
         else if(marker==10)version=3465;
         else if(marker==11)version=3839;
         else if(marker==12)version=3955;
-        else if(marker==13)version=UpgradePreservation.MINECRAFT_VERSION;
+        else if(marker==13)version=4671;
+        else if(marker==14)version=UpgradePreservation.MINECRAFT_VERSION;
         if(legacy) {if(version!=512)context.putBoolean("Inferred",true);version=512;}
         if(legacy || (marker>=1 && marker<=UpgradePreservation.DATA_VERSION))
             context.putInt("CorpseWriterDataVersion",version);
@@ -364,7 +397,8 @@ public final class UpgradeJournal {
         for(int i=0;i<mods.size();i++) {
             CompoundTag mod=mods.getCompoundOrEmpty(i);if(!mod.getStringOr("ModId", "").equals("lootablebodies"))continue;
             String release=mod.getStringOr("ModVersion", "");
-            if(release.endsWith(".121111"))family=UpgradePreservation.MINECRAFT_VERSION;
+            if(release.endsWith(".2601021"))family=UpgradePreservation.MINECRAFT_VERSION;
+            else if(release.endsWith(".121111"))family=4671;
             else if(release.endsWith(".121011"))family=3955;
             else if(release.endsWith(".120061"))family=3839;
             else if(release.endsWith(".120011"))family=3465;

@@ -18,7 +18,7 @@ import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -64,7 +64,7 @@ final class ConnectedClientChecks {
         } else if(stage==4 && gui(mc) && frames>20) {
             verifyGui(mc); screenshot(mc,"connected-corpse-before-recovery.png");
             RuntimeChecks.require(RuntimeChecks.sameStack(mc.player.containerMenu.getSlot(6).getItem(),RuntimeChecks.stack(19)),"Client recovery slot NBT differs");
-            mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,6,0,ClickType.QUICK_MOVE,mc.player);
+            mc.gameMode.handleContainerInput(mc.player.containerMenu.containerId,6,0,ContainerInput.QUICK_MOVE,mc.player);
             next(5);
         } else if(stage==5 && frames>30) {
             schedule(mc,() -> {
@@ -91,8 +91,8 @@ final class ConnectedClientChecks {
             screenshot(mc,"connected-corpse-first-reload.png");
             RuntimeChecks.require(RuntimeChecks.sameStack(mc.player.containerMenu.getSlot(7).getItem(),RuntimeChecks.stack(20)),"Client normal-click slot NBT differs");
             int window=mc.player.containerMenu.containerId;
-            mc.gameMode.handleInventoryMouseClick(window,7,0,ClickType.PICKUP,mc.player);
-            mc.gameMode.handleInventoryMouseClick(window,48,0,ClickType.PICKUP,mc.player);
+            mc.gameMode.handleContainerInput(window,7,0,ContainerInput.PICKUP,mc.player);
+            mc.gameMode.handleContainerInput(window,48,0,ContainerInput.PICKUP,mc.player);
             next(11);
         } else if(stage==11 && frames>30) {
             schedule(mc,() -> {
@@ -201,7 +201,7 @@ final class ConnectedClientChecks {
     private static boolean gui(Minecraft mc){return mc.screen instanceof CorpseGUIContainer;}
     private boolean open(Minecraft mc){
         for(Entity entity:FixtureApi.entities(mc.level))if(entity instanceof EntityLootableBody && entity.getUUID().equals(corpseId)){
-            mc.gameMode.interact(mc.player,entity,InteractionHand.MAIN_HAND);return true;
+            mc.gameMode.interact(mc.player, entity, new net.minecraft.world.phys.EntityHitResult(entity), InteractionHand.MAIN_HAND);return true;
         }
         return false;
     }

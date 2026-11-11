@@ -1,4 +1,4 @@
-"""Explicit Forge 61 client diagnostics, separate from strict server/error audits."""
+"""Strict current client diagnostics and the retained Forge 61 audit contract."""
 from pathlib import Path
 import gzip,hashlib,json,re,tempfile
 from native120_logs import audit as strict_audit
@@ -26,7 +26,7 @@ def validated_baseline(policy_path=None,proof_path=None):
     if policy['events']!=['minecraft:item.goat_horn.play','minecraft:entity.goat.screaming.horn_break'] or any(not name.startswith('minecraft:') or name.removeprefix('minecraft:') in definitions for name in policy['events']):raise RuntimeError('Native diagnostic is no longer an unbound vanilla event')
     return policy
 
-def audit_client(path,**options):
+def audit_client(path,*,minecraft="26.1.2",**options):
     path=Path(path);raw=path.read_bytes()
     text=(gzip.decompress(raw) if path.name.endswith('.gz') else raw).decode('utf-8')
     lines=text.splitlines(keepends=True)
@@ -37,6 +37,8 @@ def audit_client(path,**options):
         result=strict_audit(path,**options)
         result.update(classified_native_sound_warnings=0,raw_strict_audit_passed=True,residual_strict_audit_passed=True)
         return result
+    if minecraft!='1.21.11':
+        raise RuntimeError(str(path)+'\nUnqualified native client sound diagnostic for '+minecraft)
     policy=validated_baseline();events=policy['events'];observed=[]
     pattern=r'^\[\d{2}:\d{2}:\d{2}(?:\.\d{3})?\] \[Render thread/WARN\] \[net\.minecraft\.client\.sounds\.SoundEngine\]: Missing sound for event: (minecraft:[a-z0-9_./]+)$'
     for index in selected:

@@ -11,9 +11,9 @@ import native_runtime
 class Native120LaunchTests(unittest.TestCase):
     def test_posix_native_diagnostics_fixture_uses_the_posix_tools(self):
         with patch.object(native_runtime,'os',SimpleNamespace(name='posix')):
-            self.test_packaged_server_uses_installer_module_arguments_and_java21_gc()
+            self.test_packaged_server_uses_installer_module_arguments_and_java25_gc()
 
-    def jdk(self, root, version='21.0.7+6-LTS'):
+    def jdk(self, root, version='25.0.3+9-LTS'):
         suffix='.exe' if native_runtime.os.name=='nt' else ''
         java = root/('jdk/bin/java'+suffix)
         java.parent.mkdir(parents=True)
@@ -23,7 +23,7 @@ class Native120LaunchTests(unittest.TestCase):
             'JAVA_RUNTIME_VERSION="'+version+'"\nIMPLEMENTOR="Eclipse Adoptium"\n')
         return java
 
-    def test_packaged_server_uses_installer_module_arguments_and_java21_gc(self):
+    def test_packaged_server_uses_installer_module_arguments_and_java25_gc(self):
         with tempfile.TemporaryDirectory() as directory:
             home=Path(directory); java=self.jdk(home)
             with patch('native_runtime.run_monitored', return_value=subprocess.CompletedProcess([],0)) as run:
@@ -31,7 +31,7 @@ class Native120LaunchTests(unittest.TestCase):
             command=run.call_args.args[0]
             self.assertNotIn('-jar',command)
             self.assertIn('-Xmx2G',command)
-            self.assertTrue(any(arg.startswith('@libraries/net/minecraftforge/forge/1.21.11-61.2.4/') for arg in command))
+            self.assertTrue(any(arg.startswith('@libraries/net/minecraftforge/forge/26.1.2-64.1.5/') for arg in command))
             gc=next((arg for arg in command if arg.startswith('-Xlog:')),None)
             self.assertIsNotNone(gc)
             self.assertIn('gc*,safepoint',gc)
@@ -45,7 +45,7 @@ class Native120LaunchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             home=Path(directory); java=self.jdk(home,'17.0.1+12')
             with patch('native_runtime.run_monitored') as run:
-                with self.assertRaisesRegex(RuntimeError,'21.0.7'):
+                with self.assertRaisesRegex(RuntimeError,'25.0.3'):
                     native_runtime.run_java(java,home,'fixture')
                 run.assert_not_called()
 
@@ -61,7 +61,7 @@ class Native120LaunchTests(unittest.TestCase):
                 options['process_started'](SimpleNamespace(pid=1234,poll=lambda:None))
                 return subprocess.CompletedProcess(command,0)
             def boot(_):
-                gc.write_text('[0.010s][info][gc,init] Version: 21.0.7+6-LTS\n')
+                gc.write_text('[0.010s][info][gc,init] Version: 25.0.3+9-LTS\n')
             def attach(command, **options):
                 self.assertTrue(gc.is_file(),'Attach ran before the owned JVM initialized GC logging')
                 self.assertEqual('1234',command[-1])
@@ -73,16 +73,16 @@ class Native120LaunchTests(unittest.TestCase):
             self.assertEqual(['jstack','jstat'],started)
 
     def test_server_inputs_pin_native50_instead_of_the_old_launcher(self):
-        self.assertEqual('forge-1.21.11-61.2.4',native_runtime.FORGE)
-        for path in ('libraries/net/minecraftforge/forge/1.21.11-61.2.4/win_args.txt',
-                     'libraries/net/minecraftforge/forge/1.21.11-61.2.4/unix_args.txt',
-                     'libraries/net/minecraftforge/forge/1.21.11-61.2.4/forge-1.21.11-61.2.4-server.jar'):
+        self.assertEqual('forge-26.1.2-64.1.5',native_runtime.FORGE)
+        for path in ('libraries/net/minecraftforge/forge/26.1.2-64.1.5/win_args.txt',
+                     'libraries/net/minecraftforge/forge/26.1.2-64.1.5/unix_args.txt',
+                     'libraries/net/minecraftforge/forge/26.1.2-64.1.5/forge-26.1.2-64.1.5-server.jar'):
             self.assertIn(path,native_runtime.SERVER_INPUTS)
         self.assertFalse(any('1.16.5' in path for path in native_runtime.SERVER_INPUTS))
 
     def test_native50_historical_workers_have_their_own_fresh_qualification_binding(self):
         proof=native_runtime.WORKER_BUDGET_PROOF
-        self.assertEqual(('1.21.11','61.2.4',200,4,True),tuple(proof[key] for key in
+        self.assertEqual(('26.1.2','64.1.5',200,4,True),tuple(proof[key] for key in
             ('minecraft','forge','reloads','jvms','qualified')))
         self.assertIn('server_input_manifest_sha256',proof)
         self.assertRegex(proof['qualification_evidence_sha256'],r'^[A-F0-9]{64}$')

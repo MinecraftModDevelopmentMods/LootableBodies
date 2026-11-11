@@ -11,10 +11,8 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.Container;
 import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.event.entity.item.ItemTossEvent;
 
 /**
@@ -44,24 +42,12 @@ public class CorpseContainer extends net.minecraft.world.inventory.AbstractConta
 				public boolean mayPlace(ItemStack item) {
 					return !emptyStack(item) && item.getCount() > 0 && super.mayPlace(item) && item.canEquip(EQUIPMENT_SLOTS[i], (Entity) targetInventory);
 				}
-				@OnlyIn(Dist.CLIENT)
-				public String getSlotTexture()
-				{
-					return new String[]{"item/empty_armor_slot_helmet","item/empty_armor_slot_chestplate","item/empty_armor_slot_leggings","item/empty_armor_slot_boots"}[i];
-				}
 			});
 			index++;
 		}
 		while(index < EQUIPMENT_SLOTS.length){
 			// held items
-			final int i = index;
-			this.addSlot(new net.minecraft.world.inventory.Slot(targetInventory, i, 8 + 18 * (i - 4), 98 ) {
-				@OnlyIn(Dist.CLIENT)
-				public String getSlotTexture()
-				{
-					return "item/empty_armor_slot_shield";
-				}
-			});
+			this.addSlot(new Slot(targetInventory, index, 8 + 18 * (index - 4), 98));
 			index++;
 		}
 
@@ -90,19 +76,19 @@ public class CorpseContainer extends net.minecraft.world.inventory.AbstractConta
 	}
 
 	@Override
-	public void clicked(int slotId, int button, ClickType type, Player player) {
+	public void clicked(int slotId, int button, ContainerInput type, Player player) {
 		// A click can arrive before the next player tick closes a stale window.
 		if(!stillValid(player)) {
 			resetQuickCraft();
 			return;
 		}
-		if(type != ClickType.QUICK_CRAFT && dragging) {
+		if(type != ContainerInput.QUICK_CRAFT && dragging) {
 			resetQuickCraft();
 			return;
 		}
-		if(type == ClickType.QUICK_CRAFT && getQuickcraftHeader(button) == 0
+		if(type == ContainerInput.QUICK_CRAFT && getQuickcraftHeader(button) == 0
 				&& !emptyStack(getCarried()) && isValidQuickcraftType(getQuickcraftType(button),player)) dragging = true;
-		if(type == ClickType.THROW && emptyStack(getCarried())
+		if(type == ContainerInput.THROW && emptyStack(getCarried())
 				&& slotId >= 0 && slotId < slots.size()) {
 			Slot slot = getSlot(slotId);
 			if(slot.hasItem() && slot.mayPickup(player)) {
@@ -116,7 +102,7 @@ public class CorpseContainer extends net.minecraft.world.inventory.AbstractConta
 			}
 			return;
 		}
-		if((type == ClickType.PICKUP || type == ClickType.QUICK_MOVE) && slotId == -999 && (button == 0 || button == 1)) {
+		if((type == ContainerInput.PICKUP || type == ContainerInput.QUICK_MOVE) && slotId == -999 && (button == 0 || button == 1)) {
 			ItemStack cursor = getCarried();
 			if(!emptyStack(cursor)) {
 				ItemStack original = cursor.copy();
@@ -129,7 +115,7 @@ public class CorpseContainer extends net.minecraft.world.inventory.AbstractConta
 			}
 			return;
 		}
-		if(type == ClickType.SWAP && button >= 0 && button < 9
+		if(type == ContainerInput.SWAP && button >= 0 && button < 9
 				&& slotId >= 0 && slotId < targetInventory.getContainerSize()) {
 			Slot slot = getSlot(slotId);
 			ItemStack incoming = player.getInventory().getItem(button);

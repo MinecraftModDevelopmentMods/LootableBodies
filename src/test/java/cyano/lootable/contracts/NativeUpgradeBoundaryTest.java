@@ -62,7 +62,7 @@ class NativeUpgradeBoundaryTest {
     }
     @Test void legacyIdentityAndEveryRawInventoryEntrySurviveBothAnvilPasses()throws Exception {
         CompoundTag body=corpse(),source=chunk(body,true);byte[] before=encoded(source);CompoundTag result=update(source),saved=findCorpse(result);
-        assertEquals("lootablebodies:corpse",saved.getStringOr("id", ""));assertEquals(13,saved.getIntOr("LootableBodiesDataVersion", 0));assertEquals(ID,readUuid(saved, "UUID"));
+        assertEquals("lootablebodies:corpse",saved.getStringOr("id", ""));assertEquals(14,saved.getIntOr("LootableBodiesDataVersion", 0));assertEquals(ID,readUuid(saved, "UUID"));
         ListTag records=typedList(saved, "LootableBodiesUnresolved", 10);assertEquals(49,records.size());
         for(int i=0;i<48;i++){CompoundTag record=records.getCompoundOrEmpty(i);assertEquals("Equipment",record.getStringOr("Source", ""));assertArrayEquals(encoded(typedList(body, "Equipment", 10).getCompoundOrEmpty(i)),encoded(record.getCompoundOrEmpty("Data")));assertEquals(512,record.getCompoundOrEmpty("SourceVersions").getIntOr("DataVersion", 0));}
         assertEquals("Aux",records.getCompoundOrEmpty(48).getStringOr("Source", ""));assertArrayEquals(before,encoded(source));assertFalse(saved.contains("LootableBodiesUpgradePayload"));assertFalse(saved.contains("LootableBodiesInventorySource"));

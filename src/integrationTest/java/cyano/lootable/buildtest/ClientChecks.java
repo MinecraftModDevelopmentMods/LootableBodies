@@ -99,7 +99,7 @@ public final class ClientChecks {
                 pending.get();
                 NamelessCorpseClientChecks.englishContract(mc);
                 for(Entity entity : FixtureApi.entities(mc.level)) if(entity instanceof EntityLootableBody && entity.getUUID().equals(RuntimeChecks.NEAR)) {
-                    mc.gameMode.interact(mc.player,entity,InteractionHand.MAIN_HAND);
+                    mc.gameMode.interact(mc.player, entity, new net.minecraft.world.phys.EntityHitResult(entity), InteractionHand.MAIN_HAND);
                     stage=3; break;
                 }
             } else if(stage==3 && mc.screen instanceof CorpseGUIContainer && ++frames>20) {
@@ -119,7 +119,7 @@ public final class ClientChecks {
             } else if(stage==6 && pending.isDone()) {
                 pending.get();
                 for(Entity entity:FixtureApi.entities(mc.level)) if(entity instanceof EntityLootableBody && entity.getUUID().equals(RuntimeChecks.NEAR)) {
-                    mc.gameMode.interact(mc.player,entity,InteractionHand.MAIN_HAND);
+                    mc.gameMode.interact(mc.player, entity, new net.minecraft.world.phys.EntityHitResult(entity), InteractionHand.MAIN_HAND);
                     stage=7; frames=0; break;
                 }
             } else if(stage==7 && mc.screen instanceof CorpseGUIContainer && ++frames>20) {

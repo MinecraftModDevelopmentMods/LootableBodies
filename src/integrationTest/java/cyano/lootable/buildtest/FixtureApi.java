@@ -44,8 +44,8 @@ final class FixtureApi {
     static final class ClientWorlds {
         static void create(net.minecraft.client.Minecraft client,String folder,String title,net.minecraft.world.level.GameType mode,boolean commands) {
             client.createWorldOpenFlows().createFreshLevel(folder,
-                new net.minecraft.world.level.LevelSettings(title,mode,false,net.minecraft.world.Difficulty.NORMAL,commands,
-                    new net.minecraft.world.level.gamerules.GameRules(net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS),net.minecraft.world.level.WorldDataConfiguration.DEFAULT),
+                new net.minecraft.world.level.LevelSettings(title,mode,net.minecraft.world.level.LevelSettings.DifficultySettings.DEFAULT,commands,
+                    net.minecraft.world.level.WorldDataConfiguration.DEFAULT),
                 new net.minecraft.world.level.levelgen.WorldOptions(4267321L,false,false),
                 access->access.lookupOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET)
                     .getOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions(),new net.minecraft.client.gui.screens.TitleScreen());
@@ -102,7 +102,7 @@ final class FixtureApi {
 
     static net.minecraft.network.protocol.game.ServerboundContainerClickPacket clickPacket(
             ServerPlayer player, int stateId, int slot, int button,
-            net.minecraft.world.inventory.ClickType type, net.minecraft.world.item.ItemStack predicted) {
+            net.minecraft.world.inventory.ContainerInput type, net.minecraft.world.item.ItemStack predicted) {
         var ops = player.registryAccess().createSerializationContext(net.minecraft.util.HashOps.CRC32C_INSTANCE);
         net.minecraft.network.HashedPatchMap.HashGenerator hash = component -> component.encodeValue(ops).getOrThrow().asInt();
         var changed = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<net.minecraft.network.HashedStack>();
@@ -128,12 +128,12 @@ final class FixtureApi {
     static Entity readChunkEntity(CompoundTag data, ServerLevel world, net.minecraft.world.level.chunk.LevelChunk chunk) {
         // Invoke the actual native chunk serializer; do not replace its admission callback.
         CompoundTag root=new CompoundTag();net.minecraft.nbt.ListTag list=new net.minecraft.nbt.ListTag();list.add(data.copy());root.put("entities",list);
-        root.putInt("xPos",chunk.getPos().x);root.putInt("zPos",chunk.getPos().z);root.put("sections",new net.minecraft.nbt.ListTag());root.putInt("DataVersion",4671);
+        root.putInt("xPos",chunk.getPos().x());root.putInt("zPos",chunk.getPos().z());root.put("sections",new net.minecraft.nbt.ListTag());root.putInt("DataVersion",4790);
         // Current fixture NBT follows the real native conversion boundary too.
         // The post-load admission callback remains Minecraft's own method.
         CompoundTag fixed=cyano.lootable.upgrade.NativeNbt.update(
                 cyano.lootable.upgrade.UpgradePreservation.wrapper(net.minecraft.util.datafix.DataFixers.getDataFixer()),
-                net.minecraft.util.datafix.fixes.References.CHUNK,root,4671,4671);
+                net.minecraft.util.datafix.fixes.References.CHUNK,root,4790,4790);
         try {
             java.lang.reflect.Method nativeRead=null;
             for(java.lang.reflect.Method method:net.minecraft.world.level.chunk.storage.SerializableChunkData.class.getDeclaredMethods())
@@ -146,7 +146,7 @@ final class FixtureApi {
             if(processor==null)throw new IllegalStateException("Native entity admission returned no processor");
             processor.run(chunk);
             java.util.UUID id=readUuid(TestNativeNbt.typedList(fixed, "entities", 10).getCompoundOrEmpty(0), "UUID");
-            return sectionEntities(world,chunk.getPos().toLong()).filter(entity->entity.getUUID().equals(id)).findFirst().orElse(null);
+            return sectionEntities(world,chunk.getPos().pack()).filter(entity->entity.getUUID().equals(id)).findFirst().orElse(null);
         }catch(ReflectiveOperationException failure){throw new IllegalStateException("Native chunk admission failed",failure);}
     }
     private static List<CompoundTag> compounds(CompoundTag data, String key) {
@@ -157,7 +157,7 @@ final class FixtureApi {
         // Forge 50 may have admitted a drop to the native section before its
         // chunk is tracked. Count both stores, once per actual entity.
         var all=new java.util.LinkedHashSet<>(entities(world));
-        sectionEntities(world,net.minecraft.world.level.ChunkPos.asLong(chunkX,chunkZ)).forEach(all::add);
+        sectionEntities(world,net.minecraft.world.level.ChunkPos.pack(chunkX,chunkZ)).forEach(all::add);
         return new ArrayList<>(all);
     }
     private static java.util.stream.Stream<Entity> sectionEntities(ServerLevel world,long chunk) {
@@ -199,15 +199,9 @@ final class FixtureApi {
             net.minecraft.world.level.entity.PersistentEntitySectionManager<?> manager=
                     (net.minecraft.world.level.entity.PersistentEntitySectionManager<?>)singleField(
                             ServerLevel.class,net.minecraft.world.level.entity.PersistentEntitySectionManager.class).get(world);
-            long chunk=net.minecraft.world.level.ChunkPos.asLong(x,z);
+            long chunk=net.minecraft.world.level.ChunkPos.pack(x,z);
             try {
-                NativeEntityInbox.await(manager,chunk,()->{
-                    // The real server loop services both executors. Fixture
-                    // callbacks execute before that loop, so pump both queues.
-                    boolean serverTask=world.getServer().pollTask();
-                    boolean chunkTask=world.getChunkSource().pollTask();
-                    return serverTask || chunkTask;
-                },System::nanoTime,System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(30),world.getServer()::managedBlock);
+                NativeEntityInbox.await(manager,chunk,world.getChunkSource()::pollTask,System::nanoTime,System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(30),world.getServer()::managedBlock);
             }catch(IllegalStateException failure){
                 net.minecraft.world.level.chunk.LevelChunk cached=world.getChunkSource().getChunkNow(x,z);
                 String state="full="+(cached==null?"absent":cached.getFullStatus())+" manager="+manager.gatherStats();

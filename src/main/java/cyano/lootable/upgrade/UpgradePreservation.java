@@ -15,8 +15,8 @@ import net.minecraft.world.level.chunk.storage.SimpleRegionStorage;
 import net.minecraft.world.level.storage.ValueOutput;
 /** World-local originals and the native conversion boundary. */
 public final class UpgradePreservation {
-    public static final int DATA_VERSION=13;
-    public static final int MINECRAFT_VERSION=4671;
+    public static final int DATA_VERSION=14;
+    public static final int MINECRAFT_VERSION=4790;
     public static final String VERSION="LootableBodiesDataVersion";
     public static final String SOURCES="LootableBodiesSourceVersions";
     public static final String ITEMS_PENDING="LootableBodiesInventorySource";
@@ -35,6 +35,10 @@ public final class UpgradePreservation {
     }
     static synchronized UpgradeJournal prepareEarly(Path world,Path header,DataFixer fixer)throws IOException {
         return activate(UpgradeJournal.scan(world,header),world.toRealPath(),fixer);
+    }
+    static synchronized UpgradeJournal prepareAfterLayoutMove(Path world, Path header, UpgradeJournal before) throws IOException {
+        return activate(UpgradeJournal.scanAfterLayoutMove(world, header, before), world.toRealPath(),
+                net.minecraft.util.datafix.DataFixers.getDataFixer());
     }
     private static UpgradeJournal activate(UpgradeJournal complete,Path openedWorld,DataFixer fixer)throws IOException {
         validateEntityChunks(complete,fixer);
@@ -73,13 +77,18 @@ public final class UpgradePreservation {
 
     public static CompoundTag upgradeRegion(DataFixer fixer, DataFixTypes kind, CompoundTag input,
             int fallback, CompoundTag context, UnaryOperator<CompoundTag> structures) {
+        return upgradeRegion(fixer, kind, input, fallback, context, MINECRAFT_VERSION, structures);
+    }
+
+    public static CompoundTag upgradeRegion(DataFixer fixer, DataFixTypes kind, CompoundTag input,
+            int fallback, CompoundTag context, int target, UnaryOperator<CompoundTag> structures) {
         CompoundTag copy = input.copy();
         SimpleRegionStorage.injectDatafixingContext(copy, context);
         DataFixer delegate = fixer instanceof NativeSafeFixer safe ? safe.delegate : fixer;
         boolean terrain = kind == DataFixTypes.CHUNK;
         CompoundTag converted = NativeNbt.update(new NativeSafeFixer(delegate, terrain ? structures : null),
                 terrain ? References.CHUNK : References.ENTITY_CHUNK, copy,
-                NbtUtils.getDataVersion(copy, fallback), MINECRAFT_VERSION);
+                NbtUtils.getDataVersion(copy, fallback), target);
         converted.remove("__context");
         return converted;
     }
@@ -90,7 +99,7 @@ public final class UpgradePreservation {
         if (input.contains("DataVersion")) {
             if (!hasType(input, "DataVersion", 3)) return input;
             int source = input.getIntOr("DataVersion", -1);
-            if (source < 512 || source >= MINECRAFT_VERSION) return input;
+            if (source < 512 || source >= 4671) return input;
         } else if (!input.keySet().equals(java.util.Set.of("data")) || !input.getCompoundOrEmpty("data").isEmpty()) {
             // The original Forge writer emitted an unstamped empty capability
             // record. Leave other unversioned shapes to the native codec.
@@ -119,7 +128,7 @@ public final class UpgradePreservation {
         for(int m=0;m<mods.size();m++) {
             CompoundTag mod=mods.getCompoundOrEmpty(m);if(!mod.getStringOr("ModId", "").equals("minecraft"))continue;
             String release=mod.getStringOr("ModVersion", "");
-            family=release.equals("1.21.11")?MINECRAFT_VERSION:release.equals("1.21.1")?3955:release.equals("1.20.6")?3839:release.equals("1.20.1")?3465:release.equals("1.19.4")?3337:release.equals("1.18.2")?2975:release.equals("1.17.1")?2730:release.equals("1.16.5")?2586:release.equals("1.15.2")?2230:release.equals("1.14.4")?1976:release.equals("1.13.2")?1631:release.equals("1.12.2")?1343:release.equals("1.11.2")?922:release.equals("1.10.2")?512:-1;
+            family=release.equals("26.1.2")?MINECRAFT_VERSION:release.equals("1.21.11")?4671:release.equals("1.21.1")?3955:release.equals("1.20.6")?3839:release.equals("1.20.1")?3465:release.equals("1.19.4")?3337:release.equals("1.18.2")?2975:release.equals("1.17.1")?2730:release.equals("1.16.5")?2586:release.equals("1.15.2")?2230:release.equals("1.14.4")?1976:release.equals("1.13.2")?1631:release.equals("1.12.2")?1343:release.equals("1.11.2")?922:release.equals("1.10.2")?512:-1;
         }
         int stamped=hasType(versions, "ChunkDataVersion", 3)?versions.getIntOr("ChunkDataVersion", 0):-1;
         int writer=hasType(versions, "CorpseWriterDataVersion", 3)?versions.getIntOr("CorpseWriterDataVersion", 0):-1;

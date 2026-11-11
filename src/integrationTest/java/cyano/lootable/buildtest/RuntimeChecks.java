@@ -54,7 +54,7 @@ public final class RuntimeChecks {
         RegisterEvent.getBus(bus).addListener(registries::items);
         RegisterEvent.getBus(bus).addListener(registries::potions);
         FixtureItems.register(bus);
-        net.minecraftforge.event.entity.player.PlayerInteractEvent.EntityInteract.BUS.addListener(this::rejectFirstCorpseOpen);
+        net.minecraftforge.event.entity.player.PlayerInteractEvent.EntityInteractSpecific.BUS.addListener(this::rejectFirstCorpseOpen);
         net.minecraftforge.event.entity.EntityJoinLevelEvent.BUS.addListener(Priority.LOWEST,this::fixtureAdmission);
         ServerStartedEvent.BUS.addListener(this::started);
         if (FMLEnvironment.dist == net.minecraftforge.api.distmarker.Dist.CLIENT) {
@@ -64,7 +64,7 @@ public final class RuntimeChecks {
             new RespawnPacketClientChecks().register();
         }
     }
-    private boolean rejectFirstCorpseOpen(net.minecraftforge.event.entity.player.PlayerInteractEvent.EntityInteract event) {
+    private boolean rejectFirstCorpseOpen(net.minecraftforge.event.entity.player.PlayerInteractEvent.EntityInteractSpecific event) {
         if(Boolean.getBoolean("lootablebodies.rejectFirstCorpseOpen") && !rejectedFirstCorpseOpen
                 && !event.getLevel().isClientSide() && event.getTarget() instanceof EntityLootableBody) {
             rejectedFirstCorpseOpen=true;
@@ -77,7 +77,7 @@ public final class RuntimeChecks {
         NbtWorldChecks.verifyGraphicalAdmission(event.getEntity());
         if(pendingDeathId!=null && event.getEntity() instanceof EntityLootableBody && !event.getLevel().isClientSide()
                 && "BuildDeath".equals(((EntityLootableBody)event.getEntity()).getCustomNameTag()))event.getEntity().setUUID(pendingDeathId);
-        if(Boolean.getBoolean("lootablebodies.assertFixtureAdmission") && event.getEntity() instanceof EntityLootableBody && !event.getLevel().isClientSide() && !event.getEntity().isAddedToWorld()) {
+        if(Boolean.getBoolean("lootablebodies.assertFixtureAdmission") && event.getEntity() instanceof EntityLootableBody && !event.getLevel().isClientSide() && !event.getEntity().isAddedToLevel()) {
             EntityLootableBody body=(EntityLootableBody)event.getEntity();
             require(event.getLevel().getChunkSource().hasChunk(net.minecraft.util.Mth.floor(body.getX())>>4,net.minecraft.util.Mth.floor(body.getZ())>>4),"Manual corpse fixture spawned before chunk admission: "+body.blockPosition()+" name="+body.getCustomNameTag());
         }
@@ -110,9 +110,9 @@ public final class RuntimeChecks {
     public static void run(MinecraftServer server, String phase) throws Exception {
         ServerLevel world = server.getLevel(FixtureApi.dimensionKey(0));
         File folder = world.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();
-        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.14.121111"), "identity/version");
-        require(net.minecraftforge.fml.ModList.get().getModContainerById("lootablebodies").get().getModInfo().getVersion().toString().equals(phase.equals("seed") ? "2.4.0" : phase.equals("issues") ?
-                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.14.121111") : "2.4.14.121111"), "loaded release version");
+        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.15.2601021"), "identity/version");
+        require(net.minecraftforge.fml.ModList.getModContainerById("lootablebodies").get().getModInfo().getVersion().toString().equals(phase.equals("seed") ? "2.4.0" : phase.equals("issues") ?
+                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.15.2601021") : "2.4.15.2601021"), "loaded release version");
         if (!defaultsChecked) require(LootableBodies.addBonesToCorpse && LootableBodies.displayNameTag && !LootableBodies.hurtByEnvironment &&
                 !LootableBodies.hurtByAttacks && !LootableBodies.hurtByMisc && LootableBodies.corpseHP == 20 &&
                 LootableBodies.ticksPerItemDecay == 6000 && LootableBodies.corpseDecayTime == 72000 &&
@@ -250,7 +250,7 @@ public final class RuntimeChecks {
         if (full) { body.addItem(stack(70)); body.addItem(stack(71)); }
         disableVacuum(body);
         require(world.addFreshEntity(body), "fixture spawn");
-        require(body.isAddedToWorld(),"Fresh fixture missed Forge's admission callback");
+        require(body.isAddedToLevel(),"Fresh fixture missed Forge's admission callback");
         return body;
     }
     static void verifyRoundTrip(ServerLevel world, EntityLootableBody body) {

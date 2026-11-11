@@ -34,6 +34,7 @@ final class ConfigClientChecks {
         tooltipsChecked++;
     }
     void tick(Minecraft mc)throws Exception {
+        if(mc.getOverlay()!=null)return;
         if(++frames<20)return;frames=0;
         if(report==null)report=new File(mc.gameDirectory,"config-checks.txt");
         if(stage==0 && mc.screen instanceof TitleScreen) {
@@ -112,8 +113,8 @@ final class ConfigClientChecks {
             try {
                 for(int y:positions)for(int x:new int[]{screen.width/2-150,screen.width/2,screen.width/2+150}) {
                     int before=observer.count;
-                    var graphics = new GuiGraphics(mc, new net.minecraft.client.gui.render.state.GuiRenderState(), x, y+5);
-                    screen.renderWithTooltipAndSubtitles(graphics,x,y+5,0);
+                    var graphics = new GuiGraphicsExtractor(mc, new net.minecraft.client.renderer.state.gui.GuiRenderState(), x, y+5);
+                    screen.extractRenderStateWithTooltipAndSubtitles(graphics,x,y+5,0);
                     RuntimeChecks.require(observer.count==before+1,
                             "Native config background rendered "+(observer.count-before)+" times");
                 }

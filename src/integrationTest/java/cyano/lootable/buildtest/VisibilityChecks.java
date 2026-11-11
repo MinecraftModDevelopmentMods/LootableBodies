@@ -81,7 +81,7 @@ public final class VisibilityChecks {
                 // Keep this disposable respawn within the intended viewing area.
                 w.setRespawnData(net.minecraft.world.level.storage.LevelData.RespawnData.of(w.dimension(),new BlockPos(96,PLAYER_Y,93),0F,0F));
                 w.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.RESPAWN_RADIUS,0,server);
-                w.setDayTime(6000);
+                w.clockManager().setTotalTicks(w.dimensionType().defaultClock().orElseThrow(),6000);
                 for(int x=88;x<=170;x++)for(int z=89;z<=103;z++)w.setBlockAndUpdate(new BlockPos(x,GROUND_Y,z),Blocks.OBSIDIAN.defaultBlockState());
                 for(ServerPlayer p:new ServerPlayer[]{a,b}) {p.setGameMode(GameType.SURVIVAL);p.getInventory().clearContent();FixtureApi.spawn(p,new BlockPos(96,PLAYER_Y,93),true,false,p.level().dimension());}
                 a.connection.teleport(96.5,PLAYER_Y,96.5,0,65);b.connection.teleport(98.5,PLAYER_Y,93.5,0,25);
@@ -145,7 +145,7 @@ public final class VisibilityChecks {
                 mark("cold_server_restart_both_clients_render_and_open_saved_corpse");a.closeContainer();b.closeContainer();
                 for(int x=397;x<=404;x++)for(int z=397;z<=404;z++)world().setBlockAndUpdate(new BlockPos(x,GROUND_Y,z),Blocks.OBSIDIAN.defaultBlockState());
                 a.connection.teleport(400.5,PLAYER_Y,400.5,0,25);b.connection.teleport(402.5,PLAYER_Y,400.5,0,25);phase(20);
-            } else if(phase==20 && both(20) && phaseTicks>240 && !world().getChunkSource().hasChunk(first.chunkPosition().x,first.chunkPosition().z) && !world().getChunkSource().hasChunk(second.chunkPosition().x,second.chunkPosition().z)) {
+            } else if(phase==20 && both(20) && phaseTicks>240 && !world().getChunkSource().hasChunk(first.chunkPosition().x(),first.chunkPosition().z()) && !world().getChunkSource().hasChunk(second.chunkPosition().x(),second.chunkPosition().z())) {
                 mark("both_clients_leave_and_corpse_chunk_really_unloads");
                 FixtureApi.flush(server);
                 a.connection.teleport(first.getX(),first.getY(),first.getZ()-2.5,0,25);b.connection.teleport(first.getX()+1.5,first.getY(),first.getZ()-2.5,0,25);phase(21);
@@ -178,7 +178,7 @@ public final class VisibilityChecks {
         ServerLevel w=server.getLevel(FixtureApi.dimensionKey(0));File folder=w.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();CompoundTag n;
         try(FileInputStream in=new FileInputStream(new File(folder,"visibility-state.nbt"))){n=NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
         for(String key:new String[]{"First","Second"}) {EntityLootableBody b=loadExpected(w,key.toLowerCase(Locale.ROOT));RuntimeChecks.require(b.getUUID().equals(readUuid(n, key)),"Saved identity differs");verifySnapshot(w,key.toLowerCase(Locale.ROOT),b);}
-        CompoundTag p;try(FileInputStream in=new FileInputStream(new File(folder,"playerdata/"+readUuid(n, "Player")+".dat"))){p=NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
+        CompoundTag p;try(FileInputStream in=new FileInputStream(new File(folder,net.minecraft.world.level.storage.LevelResource.PLAYER_DATA_DIR.id()+"/"+readUuid(n, "Player")+".dat"))){p=NbtIo.readCompressed(in,net.minecraft.nbt.NbtAccounter.create(64L*1024*1024));}
         RuntimeChecks.require(n.get("Inventory").equals(p.get("Inventory")),"Recovered inventory changed on cold restart");
     }
     private static EntityLootableBody loadExpected(ServerLevel w,String name) throws Exception {

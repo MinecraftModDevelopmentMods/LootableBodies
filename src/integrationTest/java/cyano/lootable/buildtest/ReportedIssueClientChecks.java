@@ -23,7 +23,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -78,11 +78,11 @@ final class ReportedIssueClientChecks {
         } else if(stage==4 && done() && open(mc,firstId)) {next(5);
         } else if(stage==5 && gui(mc) && frames>15) {
             equal(mc.player.containerMenu.getSlot(4).getItem(),original(),"First corpse main hand");shot(mc,"issue5-first-main-hand.png");
-            mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,4,0,ClickType.SWAP,mc.player);next(6);
+            mc.gameMode.handleContainerInput(mc.player.containerMenu.containerId,4,0,ContainerInput.SWAP,mc.player);next(6);
         } else if(stage==6 && frames>15) {
             equal(mc.player.getInventory().getNonEquipmentItems().get(0),original(),"Key1 original shovel recovery");
             for(int slot=0;slot<48;slot++)if(mc.player.containerMenu.getSlot(slot).hasItem())
-                mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,slot,0,ClickType.QUICK_MOVE,mc.player);
+                mc.gameMode.handleContainerInput(mc.player.containerMenu.containerId,slot,0,ContainerInput.QUICK_MOVE,mc.player);
             next(7);
         } else if(stage==7 && frames>20) {
             equal(mc.player.getInventory().getNonEquipmentItems().get(0),original(),"Original shovel changed before switch");
@@ -138,7 +138,7 @@ final class ReportedIssueClientChecks {
         } else if(stage==16 && gui(mc) && frames>20) {
             verifyClientOriginals(mc);shot(mc,"issue5-reloaded-corpse.png");
             for(int slot=0;slot<48;slot++)if(mc.player.containerMenu.getSlot(slot).hasItem())
-                mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,slot,0,ClickType.QUICK_MOVE,mc.player);
+                mc.gameMode.handleContainerInput(mc.player.containerMenu.containerId,slot,0,ContainerInput.QUICK_MOVE,mc.player);
             next(17);
         } else if(stage==17 && frames>20) {
             mc.player.closeContainer();schedule(mc,()->{
@@ -242,7 +242,7 @@ final class ReportedIssueClientChecks {
         approachPending=false;
         for(Entity e:FixtureApi.entities(mc.level))if(e instanceof EntityLootableBody && e.getUUID().equals(id) && mc.player.distanceToSqr(e)<=9){
             System.out.println("ISSUE5_GUI_OPEN_REQUEST corpse="+id+" distance_sq="+mc.player.distanceToSqr(e));
-            mc.gameMode.interact(mc.player,e,InteractionHand.MAIN_HAND);
+            mc.gameMode.interact(mc.player, e, new net.minecraft.world.phys.EntityHitResult(e), InteractionHand.MAIN_HAND);
             break;
         }
         return false;

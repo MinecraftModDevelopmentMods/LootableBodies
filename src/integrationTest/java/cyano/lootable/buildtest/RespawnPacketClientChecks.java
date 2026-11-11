@@ -119,7 +119,7 @@ final class RespawnPacketClientChecks {
                 Entity entity=mc.level.getEntity(entityId);
                 if(!(entity instanceof EntityLootableBody)||!entity.getUUID().equals(uuid)||!FixtureApi.entities(mc.level).contains(entity)||entity.isRemoved())return;
                 if(role.equals("A")) {
-                    if(!(mc.screen instanceof CorpseGUIContainer)){mc.gameMode.interact(mc.player,entity,InteractionHand.MAIN_HAND);return;}
+                    if(!(mc.screen instanceof CorpseGUIContainer)){mc.gameMode.interact(mc.player, entity, new net.minecraft.world.phys.EntityHitResult(entity), InteractionHand.MAIN_HAND);return;}
                     boolean found=false;for(int slot=0;slot<48;slot++)if(RuntimeChecks.sameStack(mc.player.containerMenu.getSlot(slot).getItem(),RuntimeChecks.stack(520+index)))found=true;
                     if(!found||++guiFrames<10)return;
                 }

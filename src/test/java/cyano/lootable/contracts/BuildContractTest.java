@@ -49,11 +49,11 @@ class BuildContractTest {
         assertTrue(info.contains("modId=\"lootablebodies\""));
         Properties release=new Properties();try(java.io.InputStream input=Files.newInputStream(Paths.get("gradle.properties"))){release.load(input);}
         assertTrue(info.contains("version=\""+release.getProperty("mod_version")+"\""));
-        assertTrue(info.contains("versionRange=\"[1.21.11]\""));assertTrue(info.contains("Cyanobacterium"));assertFalse(info.contains("${"));
+        assertTrue(info.contains("versionRange=\"[26.1.2]\""));assertTrue(info.contains("Cyanobacterium"));assertFalse(info.contains("${"));
         assertFalse(Files.exists(Paths.get("build/resources/main/mcmod.info")));
         com.google.gson.JsonObject pack=new com.google.gson.JsonParser().parse(text("build/resources/main/pack.mcmeta")).getAsJsonObject().getAsJsonObject("pack");
-        assertEquals("[94,1]",pack.getAsJsonArray("min_format").toString());
-        assertEquals("[94,1]",pack.getAsJsonArray("max_format").toString());
+        assertEquals("[84,0]",pack.getAsJsonArray("min_format").toString());
+        assertEquals("[101,1]",pack.getAsJsonArray("max_format").toString());
         assertFalse(pack.has("pack_format"));
         assertFalse(pack.has("supported_formats"));
         assertFalse(pack.has("forge:server_data_pack_format"));

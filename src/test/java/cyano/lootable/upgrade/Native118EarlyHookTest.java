@@ -13,18 +13,19 @@ class Native118EarlyHookTest {
         var nativeClass = Native119CoremodEngineTest.classFile(SAVE);
         var mixin = Native119CoremodEngineTest.mixin("SaveAccessMixin", SAVE);
         assertTrue(mixin.interfaces.contains(HOOK+"$Attached"));
-        Native119CoremodEngineTest.method(nativeClass,"getDataTag","(Z)Lcom/mojang/serialization/Dynamic;");
+        var fallback = Native119CoremodEngineTest.method(nativeClass,"getUnfixedDataTagWithFallback","()Lcom/mojang/serialization/Dynamic;");
+        Native119CoremodEngineTest.requiredCall(fallback,SAVE,"restoreLevelDataFromOld");
         var write = Native119CoremodEngineTest.method(nativeClass, "saveDataTag",
-                "(Lnet/minecraft/core/RegistryAccess;Lnet/minecraft/world/level/storage/WorldData;Lnet/minecraft/nbt/CompoundTag;)V");
+                "(Lnet/minecraft/world/level/storage/WorldData;Ljava/util/UUID;)V");
         assertEquals(1, Native119CoremodEngineTest.calls(write, "net/minecraftforge/common/ForgeHooks", "writeAdditionalLevelSaveData"));
-        assertEquals(1, Native119CoremodEngineTest.calls(Native119CoremodEngineTest.named(mixin,"preserveBeforeRead"), HOOK, "beforeRead"));
+        assertEquals(1, Native119CoremodEngineTest.calls(Native119CoremodEngineTest.named(mixin,"preserveBeforeFallbackRestoration"), HOOK, "beforeRead"));
         assertEquals(1, Native119CoremodEngineTest.calls(Native119CoremodEngineTest.named(mixin,"preserveBeforeWrite"), HOOK, "beforeWrite"));
     }
 
     @Test void missingNativeWriteSeamIsRejectedByTheLayoutContract() throws Exception {
         var nativeClass = Native119CoremodEngineTest.classFile(SAVE);
         var write = Native119CoremodEngineTest.method(nativeClass, "saveDataTag",
-                "(Lnet/minecraft/core/RegistryAccess;Lnet/minecraft/world/level/storage/WorldData;Lnet/minecraft/nbt/CompoundTag;)V");
+                "(Lnet/minecraft/world/level/storage/WorldData;Ljava/util/UUID;)V");
         for (var instruction : write.instructions.toArray()) {
             if (instruction instanceof MethodInsnNode call
                     && call.owner.equals("net/minecraftforge/common/ForgeHooks")

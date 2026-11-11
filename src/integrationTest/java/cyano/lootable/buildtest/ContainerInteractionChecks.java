@@ -1,5 +1,5 @@
 package cyano.lootable.buildtest;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.server.level.ServerLevel;
@@ -124,13 +124,13 @@ final class ContainerInteractionChecks {
     private static void toolThrow(int rejection) throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();open(p,b);b.setItem(4,item(4,1));Map<String,Integer> before=total(b,p);
         RejectedDrops reject=new RejectedDrops();reject.toss=rejection==1;reject.join=rejection==2;reject.install();
-        try{packet(p,4,0,ClickType.THROW,null);}finally{reject.close();}
+        try{packet(p,4,0,ContainerInput.THROW,null);}finally{reject.close();}
         conserved(before,b,p);equal(b.getItem(4),rejection==0?null:item(4,1),"Equipment throw changed damage/enchantment/custom data");
     }
     private static void interruptDrag(boolean outside) throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();open(p,b);b.setItem(6,item(120,17));p.containerMenu.setCarried(item(121,10));Map<String,Integer> before=total(b,p);
-        packet(p,-999,0,ClickType.QUICK_CRAFT,null);packet(p,7,1,ClickType.QUICK_CRAFT,null);
-        packet(p,outside?-999:6,0,outside?ClickType.PICKUP:ClickType.THROW,null);
+        packet(p,-999,0,ContainerInput.QUICK_CRAFT,null);packet(p,7,1,ContainerInput.QUICK_CRAFT,null);
+        packet(p,outside?-999:6,0,outside?ContainerInput.PICKUP:ContainerInput.THROW,null);
         equal(p.containerMenu.getCarried(),item(121,10),"Interrupted drag dropped cursor");equal(b.getItem(6),item(120,17),"Interrupted drag threw source");conserved(before,b,p);
     }
     private static void throwing(boolean creative,int source,int button,int rejection,boolean capture) throws Exception {
@@ -142,7 +142,7 @@ final class ContainerInteractionChecks {
         Map<String,Integer> before=total(b,p);RejectedDrops reject=new RejectedDrops();reject.toss=rejection==1;reject.join=rejection==2;
         RecordingConnection connection=(RecordingConnection)p.connection;int initialSyncs=connection.resyncs;
         reject.install();
-        try{packet(p,source==2?-999:source==0?6:48,button,source==2?ClickType.PICKUP:ClickType.THROW,null);}
+        try{packet(p,source==2?-999:source==0?6:48,button,source==2?ContainerInput.PICKUP:ContainerInput.THROW,null);}
         finally{reject.close();}
         conserved(before,b,p);RuntimeChecks.require((p.captureDrops()!=null)==capture,"Toss changed capture state");
         int amount=source==2?(button==0?17:1):(button==0?1:17);
@@ -160,7 +160,7 @@ final class ContainerInteractionChecks {
         if(swap){b.setItem(0,item(0,1));p.getInventory().getNonEquipmentItems().set(0,pumpkins(64));}
         else p.containerMenu.setCarried(item(120,17));
         Map<String,Integer> before=total(b,p);RejectedDrops reject=new RejectedDrops();reject.toss=toss;reject.join=!toss;reject.install();
-        try{if(swap)packet(p,0,0,ClickType.SWAP,null);else close(p);}finally{reject.close();}
+        try{if(swap)packet(p,0,0,ContainerInput.SWAP,null);else close(p);}finally{reject.close();}
         conserved(before,b,p);RuntimeChecks.require(b.isAlive(),"Creative fallback owner no longer alive");
     }
     private static void collect(int mode) throws Exception {
@@ -169,9 +169,9 @@ final class ContainerInteractionChecks {
         ItemStack differentDamage=item(120,12);differentDamage.setDamageValue((differentDamage.getDamageValue()+1)%16);b.setItem(9,differentDamage);
         p.getInventory().getNonEquipmentItems().set(9,item(120,10));p.containerMenu.setCarried(mode==3?ItemStack.EMPTY:item(120,mode==2?64:5));
         if(mode==4)p.setGameMode(GameType.CREATIVE);
-        if(mode==5){q.containerMenu.setCarried(item(120,4));packet(q,10,0,ClickType.PICKUP_ALL,null);}
+        if(mode==5){q.containerMenu.setCarried(item(120,4));packet(q,10,0,ContainerInput.PICKUP_ALL,null);}
         Map<String,Integer> before=total(b,p,q);int wanted=mode==3?0:mode==2?64:mode==5?15:64;
-        packet(p,10,mode==1?1:0,ClickType.PICKUP_ALL,null);
+        packet(p,10,mode==1?1:0,ContainerInput.PICKUP_ALL,null);
         RuntimeChecks.require(((p.containerMenu.getCarried()).isEmpty()?0:p.containerMenu.getCarried().getCount())==wanted,"Double click count/capacity differs");
         equal(b.getItem(8),item(121,14),"Double click collected different custom NBT");equal(b.getItem(9),differentDamage,"Double click collected different damage");
         if(mode==0)equal(p.getInventory().getNonEquipmentItems().get(9),item(120,1),"Forward collection order differs");
@@ -188,7 +188,7 @@ final class ContainerInteractionChecks {
     private static void cloneStack(boolean creative,boolean occupied) throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();p.setGameMode(creative?GameType.CREATIVE:GameType.SURVIVAL);open(p,b);b.setItem(6,item(120,17));
         if(occupied)p.containerMenu.setCarried(item(121,4));Map<String,Integer> expected=total(b,p);
-        if(creative && !occupied)add(expected,item(120,64));packet(p,6,2,ClickType.CLONE,null);
+        if(creative && !occupied)add(expected,item(120,64));packet(p,6,2,ContainerInput.CLONE,null);
         equal(b.getItem(6),item(120,17),"Creative clone removed source");equal(p.containerMenu.getCarried(),occupied?item(121,4):creative?item(120,64):null,"Clone cursor/NBT differs");conserved(expected,b,p);
     }
     private static void creativeDrag(boolean creative) throws Exception {
@@ -233,10 +233,10 @@ final class ContainerInteractionChecks {
     private static ItemStack pumpkins(int count){ItemStack s=new ItemStack(Blocks.CARVED_PUMPKIN,count);FixtureStackData.setCustom(s,FixtureStackData.custom(item(120,1)));return s;}
     private static void fill(ServerPlayer p){for(int i=0;i<36;i++)p.getInventory().getNonEquipmentItems().set(i,item(100+i,64));}
     private static void fill(EntityLootableBody b){for(int i=0;i<48;i++)b.setItem(i,item(i,i<6?1:64));b.addItem(item(70,31));}
-    private static void packet(ServerPlayer p,int slot,int button,ClickType type,ItemStack predicted) throws Exception {
+    private static void packet(ServerPlayer p,int slot,int button,ContainerInput type,ItemStack predicted) throws Exception {
         packetWithState(p,slot,button,type,predicted,p.containerMenu.getStateId());
     }
-    private static void packetWithState(ServerPlayer p,int slot,int button,ClickType type,ItemStack predicted,int stateId) throws Exception {
+    private static void packetWithState(ServerPlayer p,int slot,int button,ContainerInput type,ItemStack predicted,int stateId) throws Exception {
         // These server-side fixtures deliberately report pre-action predictions;
         // native broadcasts must repair them. Real clients cover normal prediction.
         ServerboundContainerClickPacket outgoing=FixtureApi.clickPacket(p,stateId,slot,button,type,predicted);
@@ -247,9 +247,9 @@ final class ContainerInteractionChecks {
             p.connection.handleContainerClick(decoded);
         } finally {wire.release();}
     }
-    private static void click(ServerPlayer p,int slot,int button,ClickType type) throws Exception {
+    private static void click(ServerPlayer p,int slot,int button,ContainerInput type) throws Exception {
         ItemStack predicted=null;
-        if((type==ClickType.PICKUP || type==ClickType.QUICK_MOVE) && slot>=0){
+        if((type==ContainerInput.PICKUP || type==ContainerInput.QUICK_MOVE) && slot>=0){
             ItemStack s=p.containerMenu.getSlot(slot).getItem();predicted=s.copy();
         }
         packet(p,slot,button,type,predicted);
@@ -263,9 +263,9 @@ final class ContainerInteractionChecks {
         } finally {wire.release();}
     }
     private static void drag(ServerPlayer p,int mode,int... slots) throws Exception {
-        packet(p,-999,mode<<2,ClickType.QUICK_CRAFT,null);
-        for(int slot:slots)packet(p,slot,1|(mode<<2),ClickType.QUICK_CRAFT,null);
-        packet(p,-999,2|(mode<<2),ClickType.QUICK_CRAFT,null);
+        packet(p,-999,mode<<2,ContainerInput.QUICK_CRAFT,null);
+        for(int slot:slots)packet(p,slot,1|(mode<<2),ContainerInput.QUICK_CRAFT,null);
+        packet(p,-999,2|(mode<<2),ContainerInput.QUICK_CRAFT,null);
     }
     private static void equal(ItemStack actual,ItemStack expected,String reason){RuntimeChecks.require(RuntimeChecks.sameStack(actual == null ? ItemStack.EMPTY : actual,expected == null ? ItemStack.EMPTY : expected),reason);}
     private static CompoundTag data(EntityLootableBody b){CompoundTag n=new CompoundTag();FixtureApi.writeAdditional(b,n);return n;}
@@ -297,22 +297,22 @@ final class ContainerInteractionChecks {
         EntityLootableBody b=body();ServerPlayer p=player();open(p,b);
         for(int key=0;key<9;key++){
             p.getInventory().getNonEquipmentItems().set(key,item(30+key,13));Map<String,Integer> before=total(b,p);
-            click(p,6,key,ClickType.SWAP);equal(b.getItem(6),item(30+key,13),"Empty hotbar swap failed");equal(p.getInventory().getNonEquipmentItems().get(key),null,"Hotbar source remained");
-            click(p,6,key,ClickType.SWAP);equal(b.getItem(6),null,"Hotbar return left source");
+            click(p,6,key,ContainerInput.SWAP);equal(b.getItem(6),item(30+key,13),"Empty hotbar swap failed");equal(p.getInventory().getNonEquipmentItems().get(key),null,"Hotbar source remained");
+            click(p,6,key,ContainerInput.SWAP);equal(b.getItem(6),null,"Hotbar return left source");
             b.setItem(6,item(19,23));before=total(b,p);
-            click(p,6,key,ClickType.SWAP);equal(b.getItem(6),item(30+key,13),"Occupied hotbar incoming differs");equal(p.getInventory().getNonEquipmentItems().get(key),item(19,23),"Occupied hotbar outgoing differs");
-            click(p,6,key,ClickType.SWAP);conserved(before,b,p);b.setItem(6,null);p.getInventory().getNonEquipmentItems().set(key,ItemStack.EMPTY);
+            click(p,6,key,ContainerInput.SWAP);equal(b.getItem(6),item(30+key,13),"Occupied hotbar incoming differs");equal(p.getInventory().getNonEquipmentItems().get(key),item(19,23),"Occupied hotbar outgoing differs");
+            click(p,6,key,ContainerInput.SWAP);conserved(before,b,p);b.setItem(6,null);p.getInventory().getNonEquipmentItems().set(key,ItemStack.EMPTY);
         }
     }
     private static void armorSwap() throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();open(p,b);p.getInventory().getNonEquipmentItems().set(0,item(4,1));
-        click(p,0,0,ClickType.SWAP);equal(b.getItem(0),null,"Sword inserted into armor slot");
-        p.getInventory().getNonEquipmentItems().set(0,pumpkins(64));Map<String,Integer> before=total(b,p);click(p,0,0,ClickType.SWAP);
+        click(p,0,0,ContainerInput.SWAP);equal(b.getItem(0),null,"Sword inserted into armor slot");
+        p.getInventory().getNonEquipmentItems().set(0,pumpkins(64));Map<String,Integer> before=total(b,p);click(p,0,0,ContainerInput.SWAP);
         equal(b.getItem(0),pumpkins(1),"Hotbar armor limit ignored");equal(p.getInventory().getNonEquipmentItems().get(0),pumpkins(63),"Hotbar armor remainder lost");conserved(before,b,p);
     }
     private static void wearableShift() throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();p.getInventory().getNonEquipmentItems().set(9,pumpkins(64));open(p,b);
-        Map<String,Integer> before=total(b,p);click(p,48,0,ClickType.QUICK_MOVE);
+        Map<String,Integer> before=total(b,p);click(p,48,0,ContainerInput.QUICK_MOVE);
         RuntimeChecks.require(!(b.getItem(0)).isEmpty() && b.getItem(0).getCount()==1,"Shift-click put a stack into the one-item head slot");
         conserved(before,b,p);
     }
@@ -334,21 +334,21 @@ final class ContainerInteractionChecks {
     }
     private static void dragCancel() throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();open(p,b);p.containerMenu.setCarried(item(19,10));Map<String,Integer> before=total(b,p);
-        packet(p,-999,2,ClickType.QUICK_CRAFT,null);packet(p,-999,0,ClickType.QUICK_CRAFT,null);packet(p,6,1,ClickType.QUICK_CRAFT,null);
-        packet(p,48,0,ClickType.PICKUP,null);packet(p,-999,2,ClickType.QUICK_CRAFT,null);
+        packet(p,-999,2,ContainerInput.QUICK_CRAFT,null);packet(p,-999,0,ContainerInput.QUICK_CRAFT,null);packet(p,6,1,ContainerInput.QUICK_CRAFT,null);
+        packet(p,48,0,ContainerInput.PICKUP,null);packet(p,-999,2,ContainerInput.QUICK_CRAFT,null);
         equal(b.getItem(6),null,"Cancelled drag wrote selected slot");equal(p.containerMenu.getCarried(),item(19,10),"Cancelled drag consumed cursor");conserved(before,b,p);
     }
     private static void fullPlayer() throws Exception {
         EntityLootableBody b=body();b.setItem(6,item(19,23));ServerPlayer p=player();fill(p);open(p,b);
-        Map<String,Integer> before=total(b,p);packet(p,6,0,ClickType.QUICK_MOVE,null);equal(b.getItem(6),item(19,23),"Full player inventory consumed corpse stack");conserved(before,b,p);
+        Map<String,Integer> before=total(b,p);packet(p,6,0,ContainerInput.QUICK_MOVE,null);equal(b.getItem(6),item(19,23),"Full player inventory consumed corpse stack");conserved(before,b,p);
     }
     private static void partialPlayer() throws Exception {
         EntityLootableBody b=body();b.setItem(6,item(19,23));ServerPlayer p=player();fill(p);p.getInventory().getNonEquipmentItems().set(35,item(19,63));open(p,b);
-        Map<String,Integer> before=total(b,p);click(p,6,0,ClickType.QUICK_MOVE);equal(p.getInventory().getNonEquipmentItems().get(35),item(19,64),"Partial merge did not fill one space");equal(b.getItem(6),item(19,22),"Partial merge discarded remainder");conserved(before,b,p);
+        Map<String,Integer> before=total(b,p);click(p,6,0,ContainerInput.QUICK_MOVE);equal(p.getInventory().getNonEquipmentItems().get(35),item(19,64),"Partial merge did not fill one space");equal(b.getItem(6),item(19,22),"Partial merge discarded remainder");conserved(before,b,p);
     }
     private static void fullCorpse() throws Exception {
         EntityLootableBody b=body();fill(b);ServerPlayer p=player();p.getInventory().getNonEquipmentItems().set(9,item(110,23));open(p,b);
-        CompoundTag unchanged=data(b);Map<String,Integer> before=total(b,p);packet(p,48,0,ClickType.QUICK_MOVE,null);b.baseTick();
+        CompoundTag unchanged=data(b);Map<String,Integer> before=total(b,p);packet(p,48,0,ContainerInput.QUICK_MOVE,null);b.baseTick();
         RuntimeChecks.require(unchanged.get("Equipment").equals(data(b).get("Equipment")) && unchanged.get("Aux").equals(data(b).get("Aux")),"Full corpse overwrote indexed/Aux contents");conserved(before,b,p);
     }
     public static final class RejectedDrops {
@@ -368,7 +368,7 @@ final class ContainerInteractionChecks {
     private static void displacement(boolean rejectJoin,boolean rejectToss) throws Exception {
         EntityLootableBody b=body();b.setItem(0,item(0,1));ServerPlayer p=player();fill(p);p.getInventory().getNonEquipmentItems().set(0,pumpkins(64));open(p,b);Map<String,Integer> before=total(b,p);
         RejectedDrops reject=new RejectedDrops();reject.join=rejectJoin;reject.toss=rejectToss;reject.install();
-        try{click(p,0,0,ClickType.SWAP);}finally{reject.close();}
+        try{click(p,0,0,ContainerInput.SWAP);}finally{reject.close();}
         equal(b.getItem(0),pumpkins(1),"Displacement changed normal incoming swap");equal(p.getInventory().getNonEquipmentItems().get(0),pumpkins(63),"Displacement changed hotbar remainder");conserved(before,b,p);
         if(!rejectJoin && !rejectToss)RuntimeChecks.require(FixtureApi.entities(world,6,6).stream().anyMatch(e->e instanceof ItemEntity && !e.isRemoved()),"Successful displacement no longer drops normally");
     }
@@ -398,9 +398,9 @@ final class ContainerInteractionChecks {
             EntityLootableBody b=body();b.setItem(6,item(19,23));ServerPlayer a=player(),c=player();open(a,b);open(c,b);
             ServerPlayer first=order==0?a:c,second=order==0?c:a;Map<String,Integer> before=total(b,a,c);
             int staleState=second.containerMenu.getStateId();
-            click(first,6,0,ClickType.QUICK_MOVE);second.containerMenu.broadcastChanges();
+            click(first,6,0,ContainerInput.QUICK_MOVE);second.containerMenu.broadcastChanges();
             RecordingConnection staleConnection=(RecordingConnection)second.connection;int beforeResync=staleConnection.resyncs;
-            packetWithState(second,6,0,ClickType.QUICK_MOVE,item(19,23),staleState);
+            packetWithState(second,6,0,ContainerInput.QUICK_MOVE,item(19,23),staleState);
             a.containerMenu.broadcastChanges();c.containerMenu.broadcastChanges();
             RuntimeChecks.require(staleConnection.resyncs>beforeResync && staleConnection.lastContentStateId==second.containerMenu.getStateId(),
                     "Stale menu state did not receive an authoritative native state correction");
@@ -413,25 +413,25 @@ final class ContainerInteractionChecks {
     private static void interleavedDrag(boolean swap) throws Exception {
         EntityLootableBody b=body();ServerPlayer a=player(),c=player();open(a,b);open(c,b);a.containerMenu.setCarried(item(19,10));
         if(swap)c.getInventory().getNonEquipmentItems().set(0,item(20,7));else c.containerMenu.setCarried(item(20,7));Map<String,Integer> before=total(b,a,c);
-        packet(a,-999,0,ClickType.QUICK_CRAFT,null);packet(a,6,1,ClickType.QUICK_CRAFT,null);packet(a,7,1,ClickType.QUICK_CRAFT,null);
-        click(c,6,0,swap?ClickType.SWAP:ClickType.PICKUP);packet(a,-999,2,ClickType.QUICK_CRAFT,null);
+        packet(a,-999,0,ContainerInput.QUICK_CRAFT,null);packet(a,6,1,ContainerInput.QUICK_CRAFT,null);packet(a,7,1,ContainerInput.QUICK_CRAFT,null);
+        click(c,6,0,swap?ContainerInput.SWAP:ContainerInput.PICKUP);packet(a,-999,2,ContainerInput.QUICK_CRAFT,null);
         equal(b.getItem(6),item(20,7),"Other player's stack was overwritten by drag");equal(b.getItem(7),item(19,5),"Surviving drag slot differs");equal(a.containerMenu.getCarried(),item(19,5),"Interrupted drag lost remainder");conserved(before,b,a,c);
     }
     private static void twoPlayerClose() throws Exception {
         EntityLootableBody b=body();b.setItem(6,item(19,23));ServerPlayer a=player(),c=player();fill(a);open(a,b);open(c,b);Map<String,Integer> before=total(b,a,c);
-        click(a,6,0,ClickType.PICKUP);packet(c,6,0,ClickType.QUICK_MOVE,item(19,23));RejectedDrops reject=new RejectedDrops();reject.join=true;reject.install();
+        click(a,6,0,ContainerInput.PICKUP);packet(c,6,0,ContainerInput.QUICK_MOVE,item(19,23));RejectedDrops reject=new RejectedDrops();reject.join=true;reject.install();
         try{close(a);}finally{reject.close();}
         c.containerMenu.broadcastChanges();conserved(before,b,a,c);
     }
     private static void stale(boolean removed) throws Exception {
         EntityLootableBody b=body();b.setItem(6,item(19,23));ServerPlayer p=player();open(p,b);Map<String,Integer> before=total(b,p);
         if(removed)b.discard();else p.setPos(200,80,200);
-        packet(p,6,0,ClickType.QUICK_MOVE,null);equal(b.getItem(6),item(19,23),"Stale packet extracted before tick closed GUI");conserved(before,b,p);
+        packet(p,6,0,ContainerInput.QUICK_MOVE,null);equal(b.getItem(6),item(19,23),"Stale packet extracted before tick closed GUI");conserved(before,b,p);
     }
     private static void staleDrag() throws Exception {
         EntityLootableBody b=body();ServerPlayer p=player();open(p,b);p.containerMenu.setCarried(item(19,10));Map<String,Integer> before=total(b,p);
-        packet(p,-999,0,ClickType.QUICK_CRAFT,null);packet(p,6,1,ClickType.QUICK_CRAFT,null);p.setPos(200,80,200);
-        packet(p,-999,2,ClickType.QUICK_CRAFT,null);equal(b.getItem(6),null,"Distant drag still distributed items");
+        packet(p,-999,0,ContainerInput.QUICK_CRAFT,null);packet(p,6,1,ContainerInput.QUICK_CRAFT,null);p.setPos(200,80,200);
+        packet(p,-999,2,ContainerInput.QUICK_CRAFT,null);equal(b.getItem(6),null,"Distant drag still distributed items");
         p.setPos(96.5,80,96.5);drag(p,0,7);equal(b.getItem(7),item(19,10),"New drag reused invalid selection");conserved(before,b,p);
     }
     private static final class RecordingConnection extends ServerGamePacketListenerImpl {

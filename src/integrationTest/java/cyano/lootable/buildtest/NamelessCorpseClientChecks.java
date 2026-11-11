@@ -151,7 +151,7 @@ final class NamelessCorpseClientChecks {
         } else if(stage==4) {
             for(Entity entity:FixtureApi.entities(mc.level))if(entity.getUUID().equals(BODY)) {
                 RuntimeChecks.require("Corpse".equals(entity.getName().getString()) && !entity.hasCustomName(),"Network corpse has wrong English fallback/custom name");
-                mc.gameMode.interact(mc.player,entity,InteractionHand.MAIN_HAND);stage=5;frames=0;break;
+                mc.gameMode.interact(mc.player, entity, new net.minecraft.world.phys.EntityHitResult(entity), InteractionHand.MAIN_HAND);stage=5;frames=0;break;
             }
         } else if(stage==5 && mc.screen instanceof CorpseGUIContainer && ++frames>20) {
             for(int slot=0;slot<48;slot++)RuntimeChecks.require(RuntimeChecks.sameStack(mc.player.containerMenu.getSlot(slot).getItem(),RuntimeChecks.stack(slot)),"Name fix changed network inventory slot "+slot);

@@ -17,7 +17,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -46,34 +46,34 @@ final class DropClientChecks {
         if(stage==0){schedule(mc,()->prepare(mc));next(1);}
         else if(stage==1 && done()){if(open(mc))next(2);}
         else if(stage==2 && gui(mc) && frames>20){
-            equal(slot(mc,6),item(120,17),"Initial client source");click(mc,6,0,ClickType.THROW);next(3);
+            equal(slot(mc,6),item(120,17),"Initial client source");click(mc,6,0,ContainerInput.THROW);next(3);
         } else if(stage==3 && frames>20){
             equal(slot(mc,6),item(120,16),"Accepted client single throw");
             schedule(mc,()->{equal(body(mc).getItem(6),item(120,16),"Accepted server single throw");drop(mc,item(120,1));mark(mc,"network_accepted_throw");reject.toss=true;reject.install();});next(4);
-        } else if(stage==4 && done()) {click(mc,6,1,ClickType.THROW);next(5);}
+        } else if(stage==4 && done()) {click(mc,6,1,ContainerInput.THROW);next(5);}
         else if(stage==5 && frames>20){
             equal(slot(mc,6),item(120,16),"Cancelled throw did not correct client source");screenshot(mc,"drop-cancelled-source-resync.png");
             schedule(mc,()->{equal(body(mc).getItem(6),item(120,16),"Cancelled server throw");mark(mc,"network_cancelled_throw_source_resync");reject.toss=false;reject.join=true;});next(6);
-        } else if(stage==6 && done()){click(mc,6,0,ClickType.PICKUP);next(7);}
-        else if(stage==7 && frames>20){equal(mc.player.containerMenu.getCarried(),item(120,16),"Pickup cursor");click(mc,-999,1,ClickType.PICKUP);next(8);}
+        } else if(stage==6 && done()){click(mc,6,0,ContainerInput.PICKUP);next(7);}
+        else if(stage==7 && frames>20){equal(mc.player.containerMenu.getCarried(),item(120,16),"Pickup cursor");click(mc,-999,1,ContainerInput.PICKUP);next(8);}
         else if(stage==8 && frames>20){
             equal(mc.player.containerMenu.getCarried(),item(120,16),"Rejected outside drop did not correct client cursor");equal(slot(mc,6),null,"Outside source reappeared");screenshot(mc,"drop-rejected-cursor-resync.png");
             schedule(mc,()->{equal(player(mc).containerMenu.getCarried(),item(120,16),"Rejected server outside cursor");mark(mc,"network_rejected_outside_cursor_resync");reject.join=false;});next(9);
-        } else if(stage==9 && done()){click(mc,-999,0,ClickType.PICKUP);next(10);}
+        } else if(stage==9 && done()){click(mc,-999,0,ContainerInput.PICKUP);next(10);}
         else if(stage==10 && frames>20){
             equal(mc.player.containerMenu.getCarried(),null,"Accepted outside client cursor");
             schedule(mc,()->{drop(mc,item(120,16));equal(player(mc).containerMenu.getCarried(),null,"Accepted outside server cursor");mark(mc,"network_accepted_outside_drop");
                 body(mc).setItem(6,item(120,17));player(mc).getInventory().getNonEquipmentItems().set(9,item(120,5));refresh(mc);});next(11);
-        } else if(stage==11 && done() && frames>20){click(mc,48,0,ClickType.PICKUP);click(mc,10,0,ClickType.PICKUP_ALL);next(12);}
+        } else if(stage==11 && done() && frames>20){click(mc,48,0,ContainerInput.PICKUP);click(mc,10,0,ContainerInput.PICKUP_ALL);next(12);}
         else if(stage==12 && frames>20){
             equal(mc.player.containerMenu.getCarried(),item(120,42),"Double-click client cursor");equal(slot(mc,8),item(121,10),"Double-click changed unlike NBT");
             schedule(mc,()->{equal(player(mc).containerMenu.getCarried(),item(120,42),"Double-click server cursor");equal(body(mc).getItem(6),null,"Double-click source 6");equal(body(mc).getItem(7),null,"Double-click source 7");mark(mc,"network_double_click_exact_nbt");});next(13);
-        } else if(stage==13 && done()){click(mc,48,0,ClickType.PICKUP);next(14);}
+        } else if(stage==13 && done()){click(mc,48,0,ContainerInput.PICKUP);next(14);}
         else if(stage==14 && frames>20){schedule(mc,()->{player(mc).setGameMode(GameType.CREATIVE);body(mc).setItem(6,item(120,17));refresh(mc);});next(15);}
-        else if(stage==15 && done() && frames>20){RuntimeChecks.require(mc.player.getAbilities().instabuild,"Client not creative");click(mc,6,2,ClickType.CLONE);next(16);}
+        else if(stage==15 && done() && frames>20){RuntimeChecks.require(mc.player.getAbilities().instabuild,"Client not creative");click(mc,6,2,ContainerInput.CLONE);next(16);}
         else if(stage==16 && frames>20){
             equal(mc.player.containerMenu.getCarried(),item(120,64),"Creative clone client NBT");equal(slot(mc,6),item(120,17),"Creative clone changed source");
-            click(mc,-999,8,ClickType.QUICK_CRAFT);click(mc,7,9,ClickType.QUICK_CRAFT);click(mc,9,9,ClickType.QUICK_CRAFT);click(mc,-999,10,ClickType.QUICK_CRAFT);next(17);
+            click(mc,-999,8,ContainerInput.QUICK_CRAFT);click(mc,7,9,ContainerInput.QUICK_CRAFT);click(mc,9,9,ContainerInput.QUICK_CRAFT);click(mc,-999,10,ContainerInput.QUICK_CRAFT);next(17);
         } else if(stage==17 && frames>20){
             equal(slot(mc,7),item(120,64),"Creative client fill first");equal(slot(mc,9),item(120,64),"Creative client fill second");equal(mc.player.containerMenu.getCarried(),null,"Creative fill vanilla cursor");screenshot(mc,"drop-creative-filled.png");
             schedule(mc,()->{equal(body(mc).getItem(7),item(120,64),"Creative server fill first");equal(body(mc).getItem(9),item(120,64),"Creative server fill second");equal(player(mc).getInventory().getNonEquipmentItems().get(9),item(120,42),"Creative operation changed recovered inventory");mark(mc,"network_creative_clone_and_fill");
@@ -114,7 +114,7 @@ final class DropClientChecks {
     private static void equal(ItemStack a,ItemStack b,String message){RuntimeChecks.require(RuntimeChecks.sameStack(a == null ? ItemStack.EMPTY : a,b == null ? ItemStack.EMPTY : b),message+" expected="+b+" actual="+a);}
     private void drop(Minecraft mc,ItemStack expected){int count=0;for(Entity e:new ArrayList<Entity>(FixtureApi.entities(player(mc).level())))if(e instanceof ItemEntity && !e.isRemoved() && !preexistingDrops.contains(e.getUUID())){equal(((ItemEntity)e).getItem(),expected,"Accepted new world drop NBT/count");count++;e.discard();}RuntimeChecks.require(count==1,"Expected exactly one new accepted drop, actual="+count);}
     private static ItemStack slot(Minecraft mc,int index){return mc.player.containerMenu.getSlot(index).getItem();}
-    private static void click(Minecraft mc,int slot,int button,ClickType type){mc.gameMode.handleInventoryMouseClick(mc.player.containerMenu.containerId,slot,button,type,mc.player);}
+    private static void click(Minecraft mc,int slot,int button,ContainerInput type){mc.gameMode.handleContainerInput(mc.player.containerMenu.containerId,slot,button,type,mc.player);}
     private static boolean gui(Minecraft mc){return mc.screen instanceof CorpseGUIContainer;}
     private static boolean ready(Minecraft mc){return mc.level!=null && mc.player!=null && mc.getSingleplayerServer()!=null;}
     private boolean open(Minecraft mc) throws Exception {
@@ -133,9 +133,8 @@ final class DropClientChecks {
                 if (player == null || corpse == null || !player.connection.hasClientLoaded() || !corpse.stillValid(player)) {
                     return false;
                 }
-                var packet = net.minecraft.network.protocol.game.ServerboundInteractPacket
-                        .createInteractionPacket(corpse, false, InteractionHand.MAIN_HAND);
-                return packet.isWithinRange(player, corpse.getBoundingBox(), 3.0);
+                return player.level().getWorldBorder().isWithinBounds(corpse.blockPosition())
+                        && player.isWithinEntityInteractionRange(corpse.getBoundingBox(), 3.0);
             });
             return false;
         }
@@ -143,7 +142,7 @@ final class DropClientChecks {
         boolean ready = openReady.get();
         openReady = null;
         if (!ready) return false;
-        var result = mc.gameMode.interact(mc.player, target, InteractionHand.MAIN_HAND);
+        var result = mc.gameMode.interact(mc.player, target, new net.minecraft.world.phys.EntityHitResult(target), InteractionHand.MAIN_HAND);
         System.out.println("DROP_NATIVE_INTERACTION_SENT target=" + target.getUUID() + " clientResult=" + result);
         return true;
     }
