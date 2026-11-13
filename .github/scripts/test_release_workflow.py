@@ -547,6 +547,18 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("if: needs.scope.outputs.required == 'true'",text)
 
 
+    def test_forge262_audit_subscribes_to_registered_default_build_name(self):
+        # workflow_run matches the name registered on the default branch even
+        # when the completed version branch supplies its own display name.
+        registered = 'LootableBodies 1.20 CI'  # registered native120.yml workflow name
+        audit = WORKFLOW.with_name('artifact-audit-26.2.yml').read_text()
+        subscriptions = audit.split('    workflows: [', 1)[1].split(']', 1)[0].split(',')
+        subscriptions = {name.strip() for name in subscriptions}
+        self.assertIn(registered, subscriptions)
+        self.assertIn('LootableBodies 26.2 CI', subscriptions)
+        self.assertIn("github.event.workflow_run.head_branch == 'master-26.2'", audit)
+        self.assertIn("github.event.workflow_run.name == 'LootableBodies 26.2 CI'", audit)
+
     def test_tag_at_another_commit_is_rejected(self):
         with self.assertRaises(SystemExit):
             self.validate('1.10.2', wrong_tag=True)
