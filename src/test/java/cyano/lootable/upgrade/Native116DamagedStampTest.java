@@ -55,7 +55,7 @@ class Native116DamagedStampTest {
         context.putString("dimension", Level.OVERWORLD.identifier().toString());
         CompoundTag nativeInput = source.copy();
         SimpleRegionStorage.injectDatafixingContext(nativeInput, context);
-        CompoundTag expected=NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,nativeInput,2230,4790);
+        CompoundTag expected=NativeNbt.update(NativeVanillaDataFixer.get(),References.CHUNK,nativeInput,2230,4903);
         CompoundTag damaged=source.copy();damaged.remove("DataVersion");preserve(damaged);
         byte[] originalRegion=Files.readAllBytes(world.resolve("region/r.0.0.mca"));
         try(SimpleRegionStorage loader = new SimpleRegionStorage(

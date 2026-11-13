@@ -32,7 +32,7 @@ import net.minecraftforge.fml.loading.FMLPaths;
 public final class LootableBodies {
     public static final String MODID = "lootablebodies";
     public static final String NAME = "DrCyano's Lootable Bodies";
-    public static final String VERSION = "2.4.15.2601021";
+    public static final String VERSION = "2.4.16.2602001";
     public static final Identifier CORPSE_ID = Identifier.fromNamespaceAndPath(MODID,"corpse");
     public static EntityType<EntityLootableBody> CORPSE;
     public static Item CORPSE_EGG;

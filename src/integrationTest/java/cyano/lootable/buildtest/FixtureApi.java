@@ -12,8 +12,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
 
 /** Read-only entity snapshots across the target's separate world APIs. */
 final class FixtureApi {
@@ -40,7 +38,6 @@ final class FixtureApi {
         try {java.lang.reflect.Field field=fields.get(0);field.setAccessible(true);return (net.minecraft.world.level.storage.PlayerDataStorage)field.get(server);}
         catch(ReflectiveOperationException failure){throw new IllegalStateException(failure);}
     }
-    @OnlyIn(Dist.CLIENT)
     static final class ClientWorlds {
         static void create(net.minecraft.client.Minecraft client,String folder,String title,net.minecraft.world.level.GameType mode,boolean commands) {
             client.createWorldOpenFlows().createFreshLevel(folder,
@@ -58,7 +55,7 @@ final class FixtureApi {
         return ClientEntities.read(world);
     }
     static Entity loadEntity(CompoundTag data, Level world) {
-        return net.minecraft.world.entity.EntityType.loadEntityRecursive(data, world, net.minecraft.world.entity.EntitySpawnReason.LOAD, entity -> entity);
+        return net.minecraft.world.entity.EntityType.loadEntityRecursive(data, world, new net.minecraft.world.entity.EntitySpawnRequest(net.minecraft.world.entity.EntitySpawnReason.LOAD, false), entity -> entity);
     }
     static boolean saveEntity(Entity entity, CompoundTag data) {
         var output = net.minecraft.world.level.storage.TagValueOutput.createWithContext(
@@ -128,12 +125,12 @@ final class FixtureApi {
     static Entity readChunkEntity(CompoundTag data, ServerLevel world, net.minecraft.world.level.chunk.LevelChunk chunk) {
         // Invoke the actual native chunk serializer; do not replace its admission callback.
         CompoundTag root=new CompoundTag();net.minecraft.nbt.ListTag list=new net.minecraft.nbt.ListTag();list.add(data.copy());root.put("entities",list);
-        root.putInt("xPos",chunk.getPos().x());root.putInt("zPos",chunk.getPos().z());root.put("sections",new net.minecraft.nbt.ListTag());root.putInt("DataVersion",4790);
+        root.putInt("xPos",chunk.getPos().x());root.putInt("zPos",chunk.getPos().z());root.put("sections",new net.minecraft.nbt.ListTag());root.putInt("DataVersion",4903);
         // Current fixture NBT follows the real native conversion boundary too.
         // The post-load admission callback remains Minecraft's own method.
         CompoundTag fixed=cyano.lootable.upgrade.NativeNbt.update(
                 cyano.lootable.upgrade.UpgradePreservation.wrapper(net.minecraft.util.datafix.DataFixers.getDataFixer()),
-                net.minecraft.util.datafix.fixes.References.CHUNK,root,4790,4790);
+                net.minecraft.util.datafix.fixes.References.CHUNK,root,4903,4903);
         try {
             java.lang.reflect.Method nativeRead=null;
             for(java.lang.reflect.Method method:net.minecraft.world.level.chunk.storage.SerializableChunkData.class.getDeclaredMethods())
@@ -265,7 +262,6 @@ final class FixtureApi {
             return result;
         }catch(ReflectiveOperationException failure){throw new IllegalStateException("Cannot inspect native tracking",failure);}
     }
-    @OnlyIn(Dist.CLIENT)
     private static final class ClientEntities {
         static List<Entity> read(Level world) {
             List<Entity> result = new ArrayList<>();

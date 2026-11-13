@@ -71,10 +71,10 @@ def prepareOwnedLoaderConfig = { File root ->
     }
 }
 
-// Use the actual Forge 64 header and generator data in each newly owned flat fixture world.
+// Use the actual Forge 65 header and generator data in each newly owned flat fixture world.
 def prepareOwnedFlatWorld = { File root ->
-    File header = file('tools/fixtures/native2612-flat-level.dat')
-    def fixtures = new groovy.json.JsonSlurper().parse(file('tools/native2612_flat_inputs.json'))
+    File header = file('tools/fixtures/native262-flat-level.dat')
+    def fixtures = new groovy.json.JsonSlurper().parse(file('tools/native262_flat_inputs.json'))
     def fixture = header.isFile() ? fixtures[releaseDigest(header)] : null
     if (fixture == null || fixture.header != header.name)
         throw new GradleException('Missing or changed native flat fixture header')

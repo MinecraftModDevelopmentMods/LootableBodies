@@ -95,7 +95,9 @@ public final class RespawnPacketChecks {
             } else if(phase==1&&ack("A",1)&&ack("B",1)&&phaseTicks>10) {
                 dead=a;Set<Entity> before=new HashSet<>(FixtureApi.entities(a.level()));a.kill(a.level());body=null;
                 for(Entity ent:FixtureApi.entities(a.level()))if(ent instanceof EntityLootableBody&&!before.contains(ent))body=(EntityLootableBody)ent;
-                RuntimeChecks.require(body!=null,"No server death corpse");state(2);
+                RuntimeChecks.require(body!=null,"No server death corpse");
+                if(index%8==2 && file("native65-collision-control.enabled").isFile())verifyOccupiedNativeId();
+                state(2);
                 if(simultaneous) {
                     observerDead=b;before=new HashSet<>(FixtureApi.entities(b.level()));b.kill(b.level());observerBody=null;
                     for(Entity ent:FixtureApi.entities(b.level()))if(ent instanceof EntityLootableBody&&!before.contains(ent))observerBody=(EntityLootableBody)ent;
@@ -134,6 +136,21 @@ public final class RespawnPacketChecks {
                 Files.write(file("respawn.pass").toPath(),new byte[]{1});System.out.println("LOOTABLE_BODIES_RESPAWN_MATRIX_PASS");finished=true;server.halt(false);
             }
         } catch(Throwable failure){failure.printStackTrace();try{Files.write(file("server.failure").toPath(),failure.toString().getBytes(StandardCharsets.UTF_8));}catch(IOException ignored){}finished=true;server.halt(false);}
+    }
+    private void verifyOccupiedNativeId() throws Exception {
+        // Native26.2 moved allocation out of Entity and rejects occupied IDs on the server.
+        var field=ServerLevel.class.getDeclaredField("ENTITY_COUNTER");field.setAccessible(true);
+        var counter=(java.util.concurrent.atomic.AtomicInteger)field.get(null);
+        int previous=counter.get(),occupied=body.getId();ServerLevel world=(ServerLevel)body.level();
+        RuntimeChecks.require(world.getEntity(occupied)==body,"Collision fixture corpse is not live in native storage");
+        try {
+            counter.set(occupied-1);int allocated=world.getNextEntityId();
+            RuntimeChecks.require(allocated!=occupied && world.getEntity(allocated)==null,"Native allocator reused an occupied corpse ID");
+            RuntimeChecks.require(world.getEntity(occupied)==body && !body.isRemoved(),"Native allocation displaced the existing corpse");
+            String receipt="occupied="+occupied+" allocated="+allocated+" skipped=true uuid="+body.getUUID()+"\n";
+            Files.writeString(file("native65-allocator-"+index+".receipt").toPath(),receipt,StandardCharsets.UTF_8,StandardOpenOption.CREATE_NEW);
+            System.out.println("NATIVE65_ALLOCATOR_COLLISION_PASS "+receipt.trim());
+        } finally {counter.accumulateAndGet(previous,Math::max);}
     }
     private void state(int value) throws Exception {
         phase=value;phaseTicks=0;String line=index+" "+phase+" "+(body==null?"none":body.getUUID())+" "+(body==null?-1:body.getId());

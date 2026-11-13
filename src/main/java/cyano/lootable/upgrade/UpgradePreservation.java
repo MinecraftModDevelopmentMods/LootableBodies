@@ -15,8 +15,8 @@ import net.minecraft.world.level.chunk.storage.SimpleRegionStorage;
 import net.minecraft.world.level.storage.ValueOutput;
 /** World-local originals and the native conversion boundary. */
 public final class UpgradePreservation {
-    public static final int DATA_VERSION=14;
-    public static final int MINECRAFT_VERSION=4790;
+    public static final int DATA_VERSION=15;
+    public static final int MINECRAFT_VERSION=4903;
     public static final String VERSION="LootableBodiesDataVersion";
     public static final String SOURCES="LootableBodiesSourceVersions";
     public static final String ITEMS_PENDING="LootableBodiesInventorySource";
@@ -128,7 +128,7 @@ public final class UpgradePreservation {
         for(int m=0;m<mods.size();m++) {
             CompoundTag mod=mods.getCompoundOrEmpty(m);if(!mod.getStringOr("ModId", "").equals("minecraft"))continue;
             String release=mod.getStringOr("ModVersion", "");
-            family=release.equals("26.1.2")?MINECRAFT_VERSION:release.equals("1.21.11")?4671:release.equals("1.21.1")?3955:release.equals("1.20.6")?3839:release.equals("1.20.1")?3465:release.equals("1.19.4")?3337:release.equals("1.18.2")?2975:release.equals("1.17.1")?2730:release.equals("1.16.5")?2586:release.equals("1.15.2")?2230:release.equals("1.14.4")?1976:release.equals("1.13.2")?1631:release.equals("1.12.2")?1343:release.equals("1.11.2")?922:release.equals("1.10.2")?512:-1;
+            family=release.equals("26.2")?MINECRAFT_VERSION:release.equals("26.1.2")?4790:release.equals("1.21.11")?4671:release.equals("1.21.1")?3955:release.equals("1.20.6")?3839:release.equals("1.20.1")?3465:release.equals("1.19.4")?3337:release.equals("1.18.2")?2975:release.equals("1.17.1")?2730:release.equals("1.16.5")?2586:release.equals("1.15.2")?2230:release.equals("1.14.4")?1976:release.equals("1.13.2")?1631:release.equals("1.12.2")?1343:release.equals("1.11.2")?922:release.equals("1.10.2")?512:-1;
         }
         int stamped=hasType(versions, "ChunkDataVersion", 3)?versions.getIntOr("ChunkDataVersion", 0):-1;
         int writer=hasType(versions, "CorpseWriterDataVersion", 3)?versions.getIntOr("CorpseWriterDataVersion", 0):-1;

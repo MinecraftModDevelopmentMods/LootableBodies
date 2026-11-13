@@ -325,7 +325,7 @@ final class NativeSafeFixer implements DataFixer {
             }catch(IOException damaged){throw new IllegalStateException("Corpse preservation could not be verified",damaged);}
         }
         CompoundTag context=new CompoundTag();int marker=entity.getIntOr(UpgradePreservation.VERSION, 0);
-        context.putInt("DataVersion",entity.getStringOr("id", "").equals("lootablebodies.Corpse")?512:marker==1?922:marker==2?1343:marker==3?1631:marker==4?1976:marker==5?2230:marker==6?2586:marker==7?2730:marker==8?2975:marker==9?3337:marker==10?3465:marker==11?3839:marker==12?3955:marker==13?4671:version);return context;
+        context.putInt("DataVersion",entity.getStringOr("id", "").equals("lootablebodies.Corpse")?512:marker==1?922:marker==2?1343:marker==3?1631:marker==4?1976:marker==5?2230:marker==6?2586:marker==7?2730:marker==8?2975:marker==9?3337:marker==10?3465:marker==11?3839:marker==12?3955:marker==13?4671:marker==14?4790:version);return context;
     }
     static CompoundTag stageCorpse(CompoundTag raw,CompoundTag context) {
         if(hasType(raw, UpgradePreservation.VERSION, 3) && raw.getIntOr(UpgradePreservation.VERSION, 0)>UpgradePreservation.DATA_VERSION)throw new IllegalStateException("This corpse was saved by a newer Lootable Bodies format");

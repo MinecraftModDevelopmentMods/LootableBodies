@@ -5,18 +5,18 @@ import native_runtime as runtime
 
 class Native120InfrastructureTest(unittest.TestCase):
     def test_native_distribution_and_every_server_input_use_the_target(self):
-        self.assertEqual('forge-26.1.2-64.1.5',runtime.FORGE)
-        self.assertEqual('6E01323837051176762BD466340A601DA122F179FE6A00AC616E05429AE07648',runtime.INSTALLER_SHA256)
+        self.assertEqual('forge-26.2-65.1.5',runtime.FORGE)
+        self.assertEqual('6F16AEC13C86BCFCDABF69A8DEAAF43D4CB07CE50D0AA979C4295D2B0BC3F51D',runtime.INSTALLER_SHA256)
         self.assertEqual(100,len(runtime.SERVER_INPUTS))
-        self.assertEqual('C6B85C178B037519464D436A75B7C68408CBE591576270BA0E826542B50BF41B',
-            runtime.SERVER_INPUTS['libraries/net/minecraftforge/forge/26.1.2-64.1.5/forge-26.1.2-64.1.5-server.jar'])
-        self.assertEqual('292659817651988B6403FF829550635A263F059359F46B51C949E49C2BEB3549',
-            runtime.SERVER_INPUTS['libraries/net/minecraftforge/forge/26.1.2-64.1.5/win_args.txt'])
+        self.assertEqual('BF25F79E8B86237DBDD8A029951434B88ED5E5B60F763C3169B2FE1441C16539',
+            runtime.SERVER_INPUTS['libraries/net/minecraftforge/forge/26.2-65.1.5/forge-26.2-65.1.5-server.jar'])
+        self.assertEqual('7C51711FDDD2E04C7D6B480D08E57C0D039E820F4ABB84D4578DF7ED7CA702A5',
+            runtime.SERVER_INPUTS['libraries/net/minecraftforge/forge/26.2-65.1.5/win_args.txt'])
         self.assertFalse(any('1.16.5' in path for path in runtime.SERVER_INPUTS))
     def test_development_assets_use_the_native_index(self):
         text=(Path(__file__).resolve().parents[1]/'gradle/assets.gradle').read_text()
-        self.assertIn("minecraftAssetIndex = '30'",text)
-        self.assertIn("26.1.2.json",text)
+        self.assertIn("minecraftAssetIndex = '32'",text)
+        self.assertIn("26.2.json",text)
         self.assertNotIn('e9d0adb8f642abe422909ede50f651b2b58a3573',text)
     def test_every_released115_history_extends_the_complete_earlier_matrix(self):
         from verify_world_upgrades import ORIGINS,PHASES

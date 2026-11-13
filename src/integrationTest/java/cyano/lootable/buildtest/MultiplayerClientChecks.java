@@ -37,7 +37,7 @@ final class MultiplayerClientChecks {
             RuntimeChecks.require(++ticks<6000,"Multiplayer client timeout role="+role+" phase="+lastPhase);
             if(new File(MultiplayerChecks.sync(),"abort").exists())throw new AssertionError("Multiplayer runner abort");
             if(FixtureConnections.retry(mc,role))connecting=false;
-            if(!connecting && FixtureConnections.ready(role) && mc.screen instanceof TitleScreen){
+            if(!connecting && FixtureConnections.ready(role) && mc.gui.screen() instanceof TitleScreen){
                 connecting=true;mc.options.pauseOnLostFocus=false;mc.options.framerateLimit().set(30);mc.options.renderDistance().set(4);
                 FixtureConnections.connect(mc);
             }
@@ -49,8 +49,8 @@ final class MultiplayerClientChecks {
                 System.out.println("LOOTABLE_BODIES_MULTIPLAYER_CLIENT_PASS role="+role);
                 finished=true;mc.player.closeContainer();FixtureConnections.disconnect(mc);return;
             }
-            if(frames%100==0)System.out.println("TCP_CLIENT_STATE role="+role+" phase="+phase+" screen="+(mc.screen==null?"world":mc.screen.getClass().getSimpleName())+" container="+mc.player.containerMenu.getClass().getSimpleName()+" window="+mc.player.containerMenu.containerId+" position="+mc.player.blockPosition()+" completed="+completed);
-            if(!(mc.screen instanceof CorpseGUIContainer)){
+            if(frames%100==0)System.out.println("TCP_CLIENT_STATE role="+role+" phase="+phase+" screen="+(mc.gui.screen()==null?"world":mc.gui.screen().getClass().getSimpleName())+" container="+mc.player.containerMenu.getClass().getSimpleName()+" window="+mc.player.containerMenu.containerId+" position="+mc.player.blockPosition()+" completed="+completed);
+            if(!(mc.gui.screen() instanceof CorpseGUIContainer)){
                 if(frames%10==0)for(Entity entity:FixtureApi.entities(mc.level))if(entity instanceof EntityLootableBody && entity.getUUID().equals(MultiplayerChecks.BODY))mc.gameMode.interact(mc.player, entity, new net.minecraft.world.phys.EntityHitResult(entity), InteractionHand.MAIN_HAND);
                 return;
             }
@@ -76,5 +76,5 @@ final class MultiplayerClientChecks {
         }catch(Throwable error){error.printStackTrace();mc.stop();}
     }
     private void ack(int phase){completed.add(phase);MultiplayerChecks.CHANNEL.send(new MultiplayerChecks.Step(phase),net.minecraftforge.network.PacketDistributor.SERVER.noArg());}
-    private void shot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));}
+    private void shot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.gameRenderer.mainRenderTarget(),1,message->System.out.println(message.getString()));}
 }

@@ -26,7 +26,7 @@ def validated_baseline(policy_path=None,proof_path=None):
     if policy['events']!=['minecraft:item.goat_horn.play','minecraft:entity.goat.screaming.horn_break'] or any(not name.startswith('minecraft:') or name.removeprefix('minecraft:') in definitions for name in policy['events']):raise RuntimeError('Native diagnostic is no longer an unbound vanilla event')
     return policy
 
-def audit_client(path,*,minecraft="26.1.2",**options):
+def audit_client(path,*,minecraft="26.2",**options):
     path=Path(path);raw=path.read_bytes()
     text=(gzip.decompress(raw) if path.name.endswith('.gz') else raw).decode('utf-8')
     lines=text.splitlines(keepends=True)

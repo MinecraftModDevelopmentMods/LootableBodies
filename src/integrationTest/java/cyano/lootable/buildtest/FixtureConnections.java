@@ -17,7 +17,7 @@ final class FixtureConnections {
         if(mc.getSingleplayerServer()!=null)retiringServer=mc.getSingleplayerServer().getRunningThread();
         if(mc.player!=null)mc.player.closeContainer();
         mc.disconnectFromWorld(net.minecraft.network.chat.Component.translatable("menu.disconnect"));
-        mc.setScreen(new TitleScreen());
+        mc.gui.setScreen(new TitleScreen());
     }
     static boolean stopped(Minecraft mc) {
         return ServerStopGate.ready(mc.level==null,mc.hasSingleplayerServer(),retiringServer);
@@ -31,7 +31,7 @@ final class FixtureConnections {
         ConnectScreen.startConnecting(new TitleScreen(),mc,net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(address),destination,false,null);
     }
     static boolean retry(Minecraft mc,String role) throws Exception {
-        if(!(mc.screen instanceof DisconnectedScreen)||mc.level!=null)return false;
+        if(!(mc.gui.screen() instanceof DisconnectedScreen)||mc.level!=null)return false;
         File sync=new File(System.getProperty("lootablebodies.multiplayer.sync"));
         File permit=new File(sync,"login-retry-"+role),used=new File(sync,"login-retried-"+role);
         if(!permit.isFile())return false;
@@ -40,7 +40,7 @@ final class FixtureConnections {
         RuntimeChecks.require(requested==previous+1&&requested<=3,"Invalid fixture login retry permit");
         Files.write(used.toPath(),Integer.toString(requested).getBytes(StandardCharsets.UTF_8));
         System.out.println("FIXTURE_FORGE_LOGIN_RETRY role="+role+" attempt="+requested);
-        mc.setScreen(new TitleScreen());return true;
+        mc.gui.setScreen(new TitleScreen());return true;
     }
     private static int read(File file) throws Exception {
         return Integer.parseInt(new String(Files.readAllBytes(file.toPath()),StandardCharsets.UTF_8).trim());

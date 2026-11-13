@@ -654,7 +654,7 @@ def verify(args, project):
         raise ValueError('--prepared-sources or --seeds is required for the upgrade matrix')
     if prepared and args.seeds:raise ValueError('Choose one unambiguous source route')
     if not args.forge_home:
-        raise ValueError('--forge-home is required for the native 26.1.2 upgrade matrix')
+        raise ValueError('--forge-home is required for the native 26.2 upgrade matrix')
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     inputs=getattr(args,'runtime_inputs',None)

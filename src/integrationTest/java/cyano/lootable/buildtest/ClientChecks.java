@@ -56,11 +56,11 @@ public final class ClientChecks {
         if(mc.isWindowActive()) mc.mouseHandler.releaseMouse();
         net.minecraft.client.KeyMapping.releaseAll();
         if(stage!=reportedStage || ticks%60==0) {
-            System.out.println("GRAPHICAL_STAGE "+stage+" screen="+(mc.screen==null?"world":mc.screen.getClass().getSimpleName())+
+            System.out.println("GRAPHICAL_STAGE "+stage+" screen="+(mc.gui.screen()==null?"world":mc.gui.screen().getClass().getSimpleName())+
                     " position="+(mc.player==null?"none":mc.player.blockPosition())+" focus="+mc.isWindowActive());
             reportedStage=stage;
         }
-        if(ticks>0 && ticks%150==0) Screenshot.grab(mc.gameDirectory,"diagnostic-stage-"+stage+"-tick-"+ticks+".png",mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));
+        if(ticks>0 && ticks%150==0) Screenshot.grab(mc.gameDirectory,"diagnostic-stage-"+stage+"-tick-"+ticks+".png",mc.gameRenderer.mainRenderTarget(),1,message->System.out.println(message.getString()));
         if(++ticks > 12000) fail(new AssertionError("client timeout stage="+stage));
         try {
             RuntimeChecks.require(!new File(mc.gameDirectory,"abort").exists(),"Disposable graphical check aborted");
@@ -68,7 +68,7 @@ public final class ClientChecks {
             if(Boolean.getBoolean("lootablebodies.namelessClientCheck")) {namelessNames.tick(mc);return;}
             if(Boolean.getBoolean("lootablebodies.visibilitySkinCheck")) {visibilitySkins.tick(mc);return;}
             if(Boolean.getBoolean("lootablebodies.issueClientCheck")) {reportedIssues.tick(mc);return;}
-            if(stage==0 && mc.screen instanceof TitleScreen) {
+            if(stage==0 && mc.gui.screen() instanceof TitleScreen) {
                 mc.options.pauseOnLostFocus=false;
                 mc.options.framerateLimit().set(30);
                 mc.options.renderDistance().set(4);
@@ -81,7 +81,7 @@ public final class ClientChecks {
                     // RuntimeChecks.run in the original continuous process.
                     cyano.lootable.LootableBodies.allowCorpseDecay=false;
                     cyano.lootable.LootableBodies.ticksPerItemDecay=-1;
-                    stage=40; mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));
+                    stage=40; mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.gui.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));
                 } else {
                     stage=1;
                     FixtureApi.ClientWorlds.create(mc,"build-fixture","Build fixture",net.minecraft.world.level.GameType.CREATIVE,false);
@@ -102,13 +102,13 @@ public final class ClientChecks {
                     mc.gameMode.interact(mc.player, entity, new net.minecraft.world.phys.EntityHitResult(entity), InteractionHand.MAIN_HAND);
                     stage=3; break;
                 }
-            } else if(stage==3 && mc.screen instanceof CorpseGUIContainer && ++frames>20) {
-                RuntimeChecks.require(((CorpseGUIContainer)mc.screen).getMenu().slots.size()==84,"rendered GUI slots");
-                Screenshot.grab(mc.gameDirectory,"corpse-gui-fresh.png",mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));
+            } else if(stage==3 && mc.gui.screen() instanceof CorpseGUIContainer && ++frames>20) {
+                RuntimeChecks.require(((CorpseGUIContainer)mc.gui.screen()).getMenu().slots.size()==84,"rendered GUI slots");
+                Screenshot.grab(mc.gameDirectory,"corpse-gui-fresh.png",mc.gameRenderer.mainRenderTarget(),1,message->System.out.println(message.getString()));
                 mc.player.closeContainer(); stage=4;
                 FixtureConnections.disconnect(mc);
             } else if(stage==4 && FixtureConnections.stopped(mc)) {
-                stage=5; mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));
+                stage=5; mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.gui.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));
             } else if(stage==5 && mc.player!=null && mc.level!=null && mc.getSingleplayerServer()!=null) {
                 stage=6;
                 pending=mc.getSingleplayerServer().submitAsync(() -> {
@@ -122,8 +122,8 @@ public final class ClientChecks {
                     mc.gameMode.interact(mc.player, entity, new net.minecraft.world.phys.EntityHitResult(entity), InteractionHand.MAIN_HAND);
                     stage=7; frames=0; break;
                 }
-            } else if(stage==7 && mc.screen instanceof CorpseGUIContainer && ++frames>20) {
-                Screenshot.grab(mc.gameDirectory,"corpse-gui-reload.png",mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));
+            } else if(stage==7 && mc.gui.screen() instanceof CorpseGUIContainer && ++frames>20) {
+                Screenshot.grab(mc.gameDirectory,"corpse-gui-reload.png",mc.gameRenderer.mainRenderTarget(),1,message->System.out.println(message.getString()));
                 mc.player.closeContainer(); stage=20; connected.start(mc);
             } else if(stage==20 && connected.tick(mc)) {
                 mc.player.closeContainer();

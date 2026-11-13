@@ -100,14 +100,14 @@ final class NamelessCorpseClientChecks {
     }
 
     void tick(Minecraft mc) throws Exception {
-        if(stage==0 && mc.screen instanceof TitleScreen) {
+        if(stage==0 && mc.gui.screen() instanceof TitleScreen) {
             mc.options.pauseOnLostFocus=false;mc.options.framerateLimit().set(30);mc.options.renderDistance().set(4);
             originalLanguage=mc.getLanguageManager().getSelected();
             originalUnicode=mc.options.forceUnicodeFont().get(); originalBidi=mc.font.isBidirectional();
             RenderLivingEvent.Post.BUS.addListener(this::rendered);
             FixtureApi.ClientWorlds.create(mc,"name-fixture","Name fixture",net.minecraft.world.level.GameType.CREATIVE,false);stage=1;
         } else if (stage == 1 && mc.level != null && mc.player != null && mc.getSingleplayerServer() != null
-                && !(mc.screen instanceof net.minecraft.client.gui.screens.LevelLoadingScreen)) {
+                && !(mc.gui.screen() instanceof net.minecraft.client.gui.screens.LevelLoadingScreen)) {
             pending=mc.getSingleplayerServer().submitAsync(() -> {
                 ServerLevel world=mc.getSingleplayerServer().getLevel(FixtureApi.dimensionKey(0));
                 RuntimeChecks.awaitChunk(world, 1, 1);
@@ -142,7 +142,7 @@ final class NamelessCorpseClientChecks {
             if(frames==15 && Arrays.asList("en_us","de_de","en_pt","es_es","zh_cn").contains(code)) {
                 System.out.println("NAME_CAMERA player="+mc.player.blockPosition()+" view="+mc.getCameraEntity().blockPosition()+" yaw="+mc.player.getYRot()+" pitch="+mc.player.getXRot()+" rendered="+renderedBody);
                 RuntimeChecks.require(renderedBody,"No corpse rendered for label screenshot "+code);
-                Screenshot.grab(mc.gameDirectory,"name-"+code+".png",mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));
+                Screenshot.grab(mc.gameDirectory,"name-"+code+".png",mc.gameRenderer.mainRenderTarget(),1,message->System.out.println(message.getString()));
             }
             if(frames>20) {frames=0;locale++;if(locale==LOCALES.length) {
                 mc.getLanguageManager().setSelected(originalLanguage);mc.getLanguageManager().onResourceManagerReload(mc.getResourceManager());
@@ -153,9 +153,9 @@ final class NamelessCorpseClientChecks {
                 RuntimeChecks.require("Corpse".equals(entity.getName().getString()) && !entity.hasCustomName(),"Network corpse has wrong English fallback/custom name");
                 mc.gameMode.interact(mc.player, entity, new net.minecraft.world.phys.EntityHitResult(entity), InteractionHand.MAIN_HAND);stage=5;frames=0;break;
             }
-        } else if(stage==5 && mc.screen instanceof CorpseGUIContainer && ++frames>20) {
+        } else if(stage==5 && mc.gui.screen() instanceof CorpseGUIContainer && ++frames>20) {
             for(int slot=0;slot<48;slot++)RuntimeChecks.require(RuntimeChecks.sameStack(mc.player.containerMenu.getSlot(slot).getItem(),RuntimeChecks.stack(slot)),"Name fix changed network inventory slot "+slot);
-            Screenshot.grab(mc.gameDirectory,"name-english-inventory.png",mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));
+            Screenshot.grab(mc.gameDirectory,"name-english-inventory.png",mc.gameRenderer.mainRenderTarget(),1,message->System.out.println(message.getString()));
             new File(mc.gameDirectory,"client.pass").createNewFile();System.out.println("LOOTABLE_BODIES_NAME_TRANSLATION_PASS locales="+LOCALES.length);
             mc.player.closeContainer();FixtureConnections.disconnect(mc);stage=6;
         } else if(stage==6 && FixtureConnections.stopped(mc)) {mc.stop();stage=7;}

@@ -4,6 +4,6 @@
   "package": "cyano.lootable.buildtest.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": ["ProbePreflightMixin"],
-  "client": ["ProbeFrameMixin"],
+  "client": ["ProbeFrameMixin", "ProbeRenderFrameMixin"],
   "injectors": {"defaultRequire": 1}
 }

@@ -37,9 +37,10 @@ final class VisibilitySkinChecks {
             } catch(Throwable failure) {failures.add("skin cache: "+failure);mark(report,"skin_cache_failure_has_visible_default",false);}
         } finally {skinField.set(mc,original);}
         AtomicInteger requests=new AtomicInteger();
+        java.util.concurrent.CountDownLatch entered=new java.util.concurrent.CountDownLatch(2);
         CompletableFuture<Optional<GameProfile>> delayed=new CompletableFuture<>();
         try(var ignored=FixtureProfileCache.install(name->{
-            requests.incrementAndGet();
+            requests.incrementAndGet();entered.countDown();
             if(name.equals("VisibilityFault"))return CompletableFuture.failedFuture(new IllegalStateException("injected lookup failure"));
             if(name.equals("VisibilitySlow"))return delayed;
             throw new AssertionError("Unexpected fixture profile: "+name);
@@ -74,6 +75,9 @@ final class VisibilitySkinChecks {
             } finally {
                 LootableBodies.useLocalSkin=local;
             }
+            // Observe real worker entry before completing faults or restoring the native resolver.
+            // The separately measured production tick above must still return without waiting.
+            RuntimeChecks.require(entered.await(2,java.util.concurrent.TimeUnit.SECONDS),"Native profile workers never entered the injected resolver");
             delayed.complete(Optional.of(new GameProfile(profile.id(),"VisibilitySlow")));
             RuntimeChecks.require(requests.get()==2,"Faults did not exercise the native profile lookup");
             RuntimeChecks.require(slow.getGameProfile().name().equals("VisibilityRenamed"),"Late skin result overwrote renamed corpse");

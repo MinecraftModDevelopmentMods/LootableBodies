@@ -32,8 +32,8 @@ public final class CorpseConfigGui extends Screen {
     @Override protected void init(){
         fields.clear();rows.clear();int left=width/2-155;
         if(group==null){
-            button(1,left,65,310,I18n.get("lootablebodies.config.appearance"),()->minecraft.setScreen(new CorpseConfigGui(this,"appearance",pending,0)));
-            button(2,left,95,310,I18n.get("lootablebodies.config.rules"),()->minecraft.setScreen(new CorpseConfigGui(this,"rules",pending,0))).active=minecraft.level==null;
+            button(1,left,65,310,I18n.get("lootablebodies.config.appearance"),()->minecraft.gui.setScreen(new CorpseConfigGui(this,"appearance",pending,0)));
+            button(2,left,95,310,I18n.get("lootablebodies.config.rules"),()->minecraft.gui.setScreen(new CorpseConfigGui(this,"rules",pending,0))).active=minecraft.level==null;
         }else{
             String[] keys=group.equals("appearance")?APPEARANCE:RULES;perPage=Math.max(2,(height-112)/26);page=Math.min(page,(keys.length-1)/perPage);
             int start=page*perPage,end=Math.min(keys.length,start+perPage);
@@ -48,9 +48,9 @@ public final class CorpseConfigGui extends Screen {
         }
         button(200,width/2-155,height-28,150,I18n.get("gui.done"),()->{
             capture();if(!validPending()){invalid=true;return;}
-            if(group==null){for(String key:keys())property(key).set(pending.get(key));ClientConfigChanges.apply();}else if(parent instanceof CorpseConfigGui)((CorpseConfigGui)parent).pending.putAll(pending);minecraft.setScreen(parent);
+            if(group==null){for(String key:keys())property(key).set(pending.get(key));ClientConfigChanges.apply();}else if(parent instanceof CorpseConfigGui)((CorpseConfigGui)parent).pending.putAll(pending);minecraft.gui.setScreen(parent);
         });
-        button(201,width/2+5,height-28,150,I18n.get("gui.cancel"),()->minecraft.setScreen(parent));
+        button(201,width/2+5,height-28,150,I18n.get("gui.cancel"),()->minecraft.gui.setScreen(parent));
     }
     private void capture(){for(Map.Entry<String,EditBox> entry:fields.entrySet())pending.put(entry.getKey(),entry.getValue().getValue());}
     private void changePage(int change){capture();page+=change;rebuildWidgets();}
@@ -76,7 +76,7 @@ public final class CorpseConfigGui extends Screen {
             graphics.renderComponentTooltip(font,java.util.Collections.singletonList(net.minecraft.network.chat.Component.translatable("lootablebodies.config.rules.tooltip")),mouseX,mouseY,net.minecraft.world.item.ItemStack.EMPTY);
         if(invalid)graphics.centeredText(font,I18n.get("lootablebodies.config.invalid"),width/2,height-72,0xffff5555);
     }
-    @Override public void onClose(){capture();minecraft.setScreen(parent);}
+    @Override public void onClose(){capture();minecraft.gui.setScreen(parent);}
     public static boolean isValidDecayTime(String value) {
         if (!value.matches("\\s*[0-9]+\\s*:\\s*[0-9]+\\s*(?::\\s*[0-9]+\\s*)?")) return false;
         String[] parts = value.trim().split(":");
