@@ -83,8 +83,9 @@ tasks.register('generateNative120Fixtures', JavaExec) {
     dependsOn 'testClasses'
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'cyano.lootable.buildtest.Native120FixtureGenerator'
-    args providers.gradleProperty('nativeFixtureOutput').getOrElse('build/native121-fixture-preparation-01'),
-        file('tools/fixtures/native12111-flat-level.dat').absolutePath
+    args providers.gradleProperty('nativeFixtureOutput').getOrElse('build/native262-fixture-preparation-01'),
+        file('tools/fixtures/native262-flat-level.dat').absolutePath,
+        file('tools/fixtures/native262-flat-worldgen.dat').absolutePath
 }
 tasks.withType(JavaExec).configureEach { javaLauncher = productionLauncher }
 tasks.withType(Javadoc).configureEach {
@@ -217,7 +218,7 @@ tasks.named('jar', Jar) {
             'Built-On-Java': '25', 'Built-On': "${minecraft_version}-${forge_version}", 'MixinConfigs': 'lootablebodies.mixins.json')
     filesMatching(archiveTextPatterns, normalizeArchiveText)
 }
-// Minecraft 26.1.2 ships with named classes.
+// Minecraft 26.2 ships with named classes.
 ext.releaseJar = tasks.named('jar', Jar)
 ['sourcesJar', 'javadocJar'].each { name ->
     tasks.named(name, Jar) {

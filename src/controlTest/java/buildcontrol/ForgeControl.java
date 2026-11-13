@@ -63,7 +63,7 @@ public final class ForgeControl {
         public void tick(TickEvent.ClientTickEvent.Post event) {
             net.minecraft.client.Minecraft mc=net.minecraft.client.Minecraft.getInstance();
             if(Integer.getInteger("lootablebodies.control.port",0)>0) {tcp(mc);return;}
-            if(stage==0 && mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen) {
+            if(stage==0 && mc.gui.screen() instanceof net.minecraft.client.gui.screens.TitleScreen) {
                 mc.options.pauseOnLostFocus=false;
                 if(Boolean.getBoolean("lootablebodies.control.world")) {
                     createWorld(mc);stage=1;
@@ -93,7 +93,7 @@ public final class ForgeControl {
                     }
                 });
             }
-            boolean next=mc.screen instanceof net.minecraft.client.gui.screens.DeathScreen && deathTicks<40;
+            boolean next=mc.gui.screen() instanceof net.minecraft.client.gui.screens.DeathScreen && deathTicks<40;
             boolean release=hold && !next;hold=next;
             if(release)delayContext.executor().execute(()->{
                 if(hold)return;
@@ -107,18 +107,18 @@ public final class ForgeControl {
         private void tcp(net.minecraft.client.Minecraft mc) {
             mc.options.pauseOnLostFocus=false;mc.options.framerateLimit().set(30);
             if(++wait>1600)throw new AssertionError("Native Forge control login timed out");
-            if(stage==1 && wait%40==0 && mc.screen instanceof net.minecraft.client.gui.screens.ConnectScreen) {
+            if(stage==1 && wait%40==0 && mc.gui.screen() instanceof net.minecraft.client.gui.screens.ConnectScreen) {
                 try {
                     for(java.lang.reflect.Field field:net.minecraft.client.gui.screens.ConnectScreen.class.getDeclaredFields())
                         if(field.getType()==net.minecraft.network.Connection.class) {
-                            field.setAccessible(true);net.minecraft.network.Connection manager=(net.minecraft.network.Connection)field.get(mc.screen);
+                            field.setAccessible(true);net.minecraft.network.Connection manager=(net.minecraft.network.Connection)field.get(mc.gui.screen());
                             if(manager!=null && manager.channel()!=null) {
                                 System.out.println("NATIVE_FORGE_TCP_STATE autoRead="+manager.channel().config().isAutoRead()+" active="+manager.channel().isActive()+" protocol="+manager.getInboundProtocolInfo());
                             }
                         }
                 }catch(ReflectiveOperationException failure){throw new IllegalStateException(failure);}
             }
-            if(stage==0 && mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen) {
+            if(stage==0 && mc.gui.screen() instanceof net.minecraft.client.gui.screens.TitleScreen) {
                 if(connections>=10){finish(mc);return;}
                 destination=new net.minecraft.client.multiplayer.ServerData("Owned native control","127.0.0.1:"+Integer.getInteger("lootablebodies.control.port"),net.minecraft.client.multiplayer.ServerData.Type.OTHER);
                 if(Boolean.getBoolean("lootablebodies.control.ping")) {
@@ -133,15 +133,15 @@ public final class ForgeControl {
             }else if(stage==1 && mc.level!=null && mc.player!=null) {
                 if(Boolean.getBoolean("lootablebodies.control.deaths")) {
                     delayNativePackets(mc);
-                    if(mc.screen instanceof net.minecraft.client.gui.screens.DeathScreen) {
+                    if(mc.gui.screen() instanceof net.minecraft.client.gui.screens.DeathScreen) {
                         if(++deathTicks==60){mc.player.respawn();System.out.println("NATIVE_RESPAWN "+(++respawns));}
                     }else if(mc.player.isAlive())deathTicks=0;
                     if(respawns>=8){finish(mc);return;}
                     wait=0;return;
                 }
                 System.out.println("NATIVE_FORGE_TCP_JOIN "+(++connections));
-                mc.disconnectFromWorld(Component.empty());mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen());stage=0;wait=0;
-            }else if(stage==1 && mc.screen instanceof net.minecraft.client.gui.screens.DisconnectedScreen) {
+                mc.disconnectFromWorld(Component.empty());mc.gui.setScreen(new net.minecraft.client.gui.screens.TitleScreen());stage=0;wait=0;
+            }else if(stage==1 && mc.gui.screen() instanceof net.minecraft.client.gui.screens.DisconnectedScreen) {
                 throw new AssertionError("NATIVE_FORGE_TCP_LOGIN_FAILURE joins="+connections);
             }
         }

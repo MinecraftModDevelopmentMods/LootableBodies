@@ -22,7 +22,7 @@ final class VisibilitySkinClientChecks {
     private Field skinField;
     private SkinManager original;
     void tick(Minecraft mc) throws Exception {
-        if(stage==0 && mc.screen instanceof TitleScreen) {
+        if(stage==0 && mc.gui.screen() instanceof TitleScreen) {
             mc.options.pauseOnLostFocus=false;mc.options.framerateLimit().set(30);mc.options.renderDistance().set(4);
             FixtureApi.ClientWorlds.create(mc,"skin-fixture","Skin fixture",net.minecraft.world.level.GameType.SURVIVAL,true);stage=1;
         } else if(stage==1 && mc.level!=null && mc.player!=null && ++frames>60) {
@@ -35,11 +35,11 @@ final class VisibilitySkinClientChecks {
             });
             Panel panel=new Panel(mc);
             panel.verifyExtractedTextures(mc);
-            mc.setScreen(panel);stage=2;frames=0;
+            mc.gui.setScreen(panel);stage=2;frames=0;
         } else if(stage==2 && ++frames>30) {
-            Panel panel=(Panel)mc.screen;
+            Panel panel=(Panel)mc.gui.screen();
             String name=new String[]{"skin-fallback-wide.png","skin-fallback-slim.png","skin-local.png"}[panel.preview];
-            Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));
+            Screenshot.grab(mc.gameDirectory,name,mc.gameRenderer.mainRenderTarget(),1,message->System.out.println(message.getString()));
             if(panel.preview+1<panel.bodies.length) {panel.preview++;frames=0;return;}
             skinField.set(mc,original);new File(mc.gameDirectory,"client.pass").createNewFile();
             System.out.println("LOOTABLE_BODIES_VISIBILITY_SKIN_PASS");mc.stop();stage=3;
@@ -50,7 +50,11 @@ final class VisibilitySkinClientChecks {
         private int preview;
         Panel(Minecraft mc) {
             super(net.minecraft.network.chat.Component.literal("Skin visibility fixture"));
-            for(int i=0;i<bodies.length;i++) bodies[i]=new EntityLootableBody(mc.level);
+            for(int i=0;i<bodies.length;i++) {
+                bodies[i]=new EntityLootableBody(mc.level);
+                // Native26.2 assigns IDs at storage admission; these isolated GUI previews never enter a level.
+                bodies[i].setId(-100-i);
+            }
             for(int i=0;i<2;i++) {
                 var model=i==0?net.minecraft.world.entity.player.PlayerModelType.WIDE:net.minecraft.world.entity.player.PlayerModelType.SLIM;
                 GameProfile profile=java.util.stream.LongStream.range(512,640).mapToObj(n->new GameProfile(new UUID(0,n),"VisibilityModel"))

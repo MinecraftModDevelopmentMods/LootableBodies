@@ -54,6 +54,7 @@ public final class RuntimeChecks {
         RegisterEvent.getBus(bus).addListener(registries::items);
         RegisterEvent.getBus(bus).addListener(registries::potions);
         FixtureItems.register(bus);
+        NativeShutdownChecks.register();
         net.minecraftforge.event.entity.player.PlayerInteractEvent.EntityInteractSpecific.BUS.addListener(this::rejectFirstCorpseOpen);
         net.minecraftforge.event.entity.EntityJoinLevelEvent.BUS.addListener(Priority.LOWEST,this::fixtureAdmission);
         ServerStartedEvent.BUS.addListener(this::started);
@@ -99,7 +100,15 @@ public final class RuntimeChecks {
         } catch (Throwable error) {
             failure = error;
             error.printStackTrace();
-        } finally { server.halt(false); }
+        } finally {
+            if (System.getProperty("lootablebodies.phase", "fresh").startsWith("upgrade-")) {
+                try { NativeShutdownChecks.request(server); }
+                catch (Throwable error) {
+                    if (failure == null) failure = error; else failure.addSuppressed(error);
+                    error.printStackTrace();server.halt(false);
+                }
+            } else server.halt(false);
+        }
     }
     static void require(boolean condition, String message) {
         if (!condition) throw new AssertionError(message);
@@ -110,9 +119,9 @@ public final class RuntimeChecks {
     public static void run(MinecraftServer server, String phase) throws Exception {
         ServerLevel world = server.getLevel(FixtureApi.dimensionKey(0));
         File folder = world.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();
-        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.15.2601021"), "identity/version");
+        require(LootableBodies.MODID.equals("lootablebodies") && LootableBodies.VERSION.equals("2.4.16.2602001"), "identity/version");
         require(net.minecraftforge.fml.ModList.getModContainerById("lootablebodies").get().getModInfo().getVersion().toString().equals(phase.equals("seed") ? "2.4.0" : phase.equals("issues") ?
-                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.15.2601021") : "2.4.15.2601021"), "loaded release version");
+                        System.getProperty("lootablebodies.expectedIssueVersion","2.4.16.2602001") : "2.4.16.2602001"), "loaded release version");
         if (!defaultsChecked) require(LootableBodies.addBonesToCorpse && LootableBodies.displayNameTag && !LootableBodies.hurtByEnvironment &&
                 !LootableBodies.hurtByAttacks && !LootableBodies.hurtByMisc && LootableBodies.corpseHP == 20 &&
                 LootableBodies.ticksPerItemDecay == 6000 && LootableBodies.corpseDecayTime == 72000 &&

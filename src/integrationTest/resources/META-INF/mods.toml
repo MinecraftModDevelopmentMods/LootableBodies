@@ -1,5 +1,5 @@
 modLoader="javafml"
-loaderVersion="[64,)"
+loaderVersion="[65,)"
 license="LGPL-2.1-only"
 [[mods]]
 modId="lootablebodiesbuildtest"
@@ -8,6 +8,6 @@ displayName="Disposable build checks"
 [[dependencies.lootablebodiesbuildtest]]
 modId="lootablebodies"
 mandatory=true
-versionRange="[2.4.15.2601021]"
+versionRange="[2.4.16.2602001]"
 ordering="AFTER"
 side="BOTH"

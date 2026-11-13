@@ -52,7 +52,7 @@ final class NbtClientChecks {
             NbtWorldChecks.seed(p.level(),bodyId,COORDINATE,folder(mc),"graphical");
         });next(1);}
         else if(stage==1 && done() && frames>20){quit(mc);next(2);}
-        else if(stage==2 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(3);}
+        else if(stage==2 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.gui.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(3);}
         else if(stage==3 && ready(mc) && frames>20){schedule(mc,()->player(mc).connection.teleport(COORDINATE+8.5,80,COORDINATE-.5,0,0));next(30);}
         else if(stage==30 && done() && frames>20 && trackedOnClient(mc)){schedule(mc,()->{
             RuntimeChecks.awaitChunk(player(mc).level(), COORDINATE >> 4, COORDINATE >> 4);
@@ -72,7 +72,7 @@ final class NbtClientChecks {
             mc.getSingleplayerServer().getPlayerList().saveAll();mc.getSingleplayerServer().saveAllChunks(false,true,false);mark(mc,"malformed_network_recovery_preserves_raw_records");
         });next(7);}
         else if(stage==7 && done()){checkPlayer(mc.player.getInventory());quit(mc);next(8);}
-        else if(stage==8 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(9);}
+        else if(stage==8 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.gui.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(9);}
         else if(stage==9 && ready(mc) && frames>20){schedule(mc,()->player(mc).connection.teleport(COORDINATE+8.5,80,COORDINATE-.5,0,0));next(90);}
         else if(stage==90 && done() && frames>20 && trackedOnClient(mc)){schedule(mc,()->{
             RuntimeChecks.awaitChunk(player(mc).level(), COORDINATE >> 4, COORDINATE >> 4);
@@ -105,11 +105,11 @@ final class NbtClientChecks {
     private File folder(Minecraft mc){return player(mc).level().getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toFile();}
     private static boolean ready(Minecraft mc) {
         return mc.level != null && mc.player != null && mc.getSingleplayerServer() != null
-                && !(mc.screen instanceof net.minecraft.client.gui.screens.LevelLoadingScreen);
+                && !(mc.gui.screen() instanceof net.minecraft.client.gui.screens.LevelLoadingScreen);
     }
-    private static boolean gui(Minecraft mc){return mc.screen instanceof CorpseGUIContainer;}
+    private static boolean gui(Minecraft mc){return mc.gui.screen() instanceof CorpseGUIContainer;}
     private boolean trackedOnClient(Minecraft mc) {
-        if (mc.level == null || mc.screen instanceof net.minecraft.client.gui.screens.LevelLoadingScreen) return false;
+        if (mc.level == null || mc.gui.screen() instanceof net.minecraft.client.gui.screens.LevelLoadingScreen) return false;
         return FixtureApi.entities(mc.level).stream().anyMatch(entity -> entity.getUUID().equals(bodyId));
     }
 
@@ -117,7 +117,7 @@ final class NbtClientChecks {
     private void schedule(Minecraft mc,Action action){pending=mc.getSingleplayerServer().submitAsync(()->{try{action.run();}catch(Exception e){throw new RuntimeException(e);}});}
     private boolean done() throws Exception{if(!pending.isDone())return false;pending.get();return true;}
     private void next(int value){stage=value;frames=0;System.out.println("NBT_CLIENT_STAGE "+stage);}
-    private static void screenshot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));}
+    private static void screenshot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.gameRenderer.mainRenderTarget(),1,message->System.out.println(message.getString()));}
     private static void quit(Minecraft mc){mc.player.closeContainer();FixtureConnections.disconnect(mc);}
     private static void mark(Minecraft mc,String name) throws Exception{try(FileWriter out=new FileWriter(new File(mc.gameDirectory,"nbt-client-checks.txt"),true)){out.write("PASS "+name+"\n");}System.out.println("NBT_CLIENT_CHECK_PASS "+name);}
 }

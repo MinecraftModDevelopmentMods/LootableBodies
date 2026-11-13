@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class Native119BundleTraceTest {
     @TempDir(cleanup=org.junit.jupiter.api.io.CleanupMode.ON_SUCCESS) Path temporary;
     private ClientboundAddEntityPacket spawn(int id) {
-        return new ClientboundAddEntityPacket(id,new UUID(1194,id),1,2,3,4,5,EntityType.PIG,6,new Vec3(.1,.2,.3),7);
+        return new ClientboundAddEntityPacket(id,new UUID(1194,id),1,2,3,4,5,net.minecraft.world.entity.EntityTypes.PIG,6,new Vec3(.1,.2,.3),7);
     }
     private byte[] bytes(ClientboundAddEntityPacket packet) {
         RegistryFriendlyByteBuf buffer=new RegistryFriendlyByteBuf(Unpooled.buffer(),registries());

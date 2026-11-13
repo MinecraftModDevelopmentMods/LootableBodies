@@ -32,7 +32,7 @@ class Native120ClientDiagnosticTests(unittest.TestCase):
     def test_new_target_cannot_reuse_the_previous_sound_control(self):
         with tempfile.TemporaryDirectory() as directory:
             log=Path(directory)/'client.log';log.write_text(lines(),encoding='utf-8')
-            with patch.object(logs,'validated_baseline') as old, self.assertRaisesRegex(RuntimeError,'26.1.2'):
+            with patch.object(logs,'validated_baseline') as old, self.assertRaisesRegex(RuntimeError,'26.2'):
                 logs.audit_client(log)
             old.assert_not_called()
     def test_generic_and_server_auditors_still_reject_this_raw_baseline(self):

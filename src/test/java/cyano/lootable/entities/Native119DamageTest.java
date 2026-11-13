@@ -109,7 +109,7 @@ class Native119DamageTest {
         assertEquals(CorpseDamageRules.Kind.MISC,CorpseDamageRules.kind(null));
     }
     private static final class SourceEntity extends Entity {
-        SourceEntity(){super(EntityType.FALLING_BLOCK,null);}
+        SourceEntity(){super(net.minecraft.world.entity.EntityTypes.FALLING_BLOCK,null);}
         protected void defineSynchedData(net.minecraft.network.syncher.SynchedEntityData.Builder builder){ }
         protected void readAdditionalSaveData(net.minecraft.world.level.storage.ValueInput tag){ }
         protected void addAdditionalSaveData(net.minecraft.world.level.storage.ValueOutput tag){ }

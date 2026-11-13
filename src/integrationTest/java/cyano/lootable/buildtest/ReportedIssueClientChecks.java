@@ -53,7 +53,7 @@ final class ReportedIssueClientChecks {
     }
     void tick(Minecraft mc) throws Exception {
         frames++;
-        if(stage==0 && mc.screen instanceof TitleScreen) {
+        if(stage==0 && mc.gui.screen() instanceof TitleScreen) {
             report=new File(mc.gameDirectory,"issue5-client-checks.txt");RuntimeChecks.require(!report.exists(),"Stale issue5 report");
             mc.options.pauseOnLostFocus=false;mc.options.framerateLimit().set(30);mc.options.renderDistance().set(4);
             FixtureApi.ClientWorlds.create(mc,"issue-fixture","Issue fixture",net.minecraft.world.level.GameType.SURVIVAL,true);next(1);
@@ -71,9 +71,9 @@ final class ReportedIssueClientChecks {
                 firstId = first.getUUID();
                 firstOrigin = first.blockPosition();
             });next(2);
-        } else if(stage==2 && done() && mc.screen instanceof DeathScreen && frames>10) {
+        } else if(stage==2 && done() && mc.gui.screen() instanceof DeathScreen && frames>10) {
             mc.player.respawn();next(3);
-        } else if(stage==3 && ready(mc) && mc.player.isAlive() && !(mc.screen instanceof DeathScreen)) {
+        } else if(stage==3 && ready(mc) && mc.player.isAlive() && !(mc.gui.screen() instanceof DeathScreen)) {
             schedule(mc,()->player(mc).connection.teleport(32.5,80,.5,0,0));next(4);
         } else if(stage==4 && done() && open(mc,firstId)) {next(5);
         } else if(stage==5 && gui(mc) && frames>15) {
@@ -94,9 +94,9 @@ final class ReportedIssueClientChecks {
             // Same ordered connection: held-item change, then a build-only death signal.
             // This uses the vanilla death path without native command permissions.
             MultiplayerChecks.CHANNEL.send(new MultiplayerChecks.FixtureDeath(active),net.minecraftforge.network.PacketDistributor.SERVER.noArg());next(8);
-        } else if(stage==8 && mc.screen instanceof DeathScreen && frames>10) {
+        } else if(stage==8 && mc.gui.screen() instanceof DeathScreen && frames>10) {
             mc.player.respawn();next(9);
-        } else if(stage==9 && ready(mc) && mc.player.isAlive() && !(mc.screen instanceof DeathScreen)) {
+        } else if(stage==9 && ready(mc) && mc.player.isAlive() && !(mc.gui.screen() instanceof DeathScreen)) {
             schedule(mc,()->{
                 ServerPlayer p=player(mc);EntityLootableBody second=null;
                 for(Entity e:FixtureApi.entities(p.level()))if(e instanceof EntityLootableBody && !e.getUUID().equals(firstId) && p.getGameProfile().name().equals(((EntityLootableBody)e).getCustomNameTag()))second=(EntityLootableBody)e;
@@ -131,7 +131,7 @@ final class ReportedIssueClientChecks {
             mc.player.closeContainer();schedule(mc,()->save(mc));next(12);
         } else if(stage==12 && done()) {quit(mc);next(13);
         } else if(stage==13 && FixtureConnections.stopped(mc)) {
-            mc.createWorldOpenFlows().openWorld("issue-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(14);
+            mc.createWorldOpenFlows().openWorld("issue-fixture",()->mc.gui.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(14);
         } else if(stage==14 && ready(mc) && frames>25) {
             schedule(mc,()->{verifyDisk(mc);verifyOriginals(body(mc));mark("first_disk_reload_complete_corpse_inventory");});next(15);
         } else if(stage==15 && done() && open(mc,secondId)) {next(16);
@@ -151,7 +151,7 @@ final class ReportedIssueClientChecks {
             });next(18);
         } else if(stage==18 && done()) {quit(mc);next(19);
         } else if(stage==19 && FixtureConnections.stopped(mc)) {
-            mc.createWorldOpenFlows().openWorld("issue-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(20);
+            mc.createWorldOpenFlows().openWorld("issue-fixture",()->mc.gui.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(20);
         } else if(stage==20 && ready(mc) && frames>25) {
             schedule(mc,()->{verifyDisk(mc);mark("second_disk_reload_complete_player_and_corpse_inventory");});next(21);
         } else if(stage==21 && done()) {
@@ -191,7 +191,7 @@ final class ReportedIssueClientChecks {
     private static void equal(ItemStack a,ItemStack b,String reason){RuntimeChecks.require(RuntimeChecks.sameStack(a == null ? ItemStack.EMPTY : a,b == null ? ItemStack.EMPTY : b),reason);}
     private boolean ready(Minecraft mc) throws Exception {
         if (mc.level == null || mc.player == null || mc.getSingleplayerServer() == null
-                || mc.screen instanceof net.minecraft.client.gui.screens.LevelLoadingScreen) {
+                || mc.gui.screen() instanceof net.minecraft.client.gui.screens.LevelLoadingScreen) {
             nativeLoaded = null;
             return false;
         }
@@ -209,7 +209,7 @@ final class ReportedIssueClientChecks {
         nativeLoaded = null;
         return loaded;
     }
-    private static boolean gui(Minecraft mc){return mc.screen instanceof CorpseGUIContainer;}
+    private static boolean gui(Minecraft mc){return mc.gui.screen() instanceof CorpseGUIContainer;}
     private boolean open(Minecraft mc,UUID id) throws Exception {
         // Sending an interaction does not mean the server has opened its GUI.
         if(gui(mc)){approachPending=false;return true;}
@@ -251,6 +251,6 @@ final class ReportedIssueClientChecks {
     private boolean done() throws Exception {if(!pending.isDone())return false;pending.get();return true;}
     private void next(int n){stage=n;frames=0;System.out.println("ISSUE5_CLIENT_STAGE "+n);}
     private void mark(String name) throws Exception {try(FileWriter out=new FileWriter(report,true)){out.write("PASS "+name+"\n");}System.out.println("ISSUE5_CLIENT_CHECK_PASS "+name);}
-    private static void shot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));}
+    private static void shot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.gameRenderer.mainRenderTarget(),1,message->System.out.println(message.getString()));}
     private static void quit(Minecraft mc){mc.player.closeContainer();FixtureConnections.disconnect(mc);}
 }

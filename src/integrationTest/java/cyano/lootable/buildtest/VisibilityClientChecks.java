@@ -50,13 +50,13 @@ final class VisibilityClientChecks {
                 || !(event.getState() instanceof net.minecraft.client.renderer.entity.state.AvatarRenderState state)
                 || !(mc.level.getEntity(state.id) instanceof EntityLootableBody body)) return;
         rendered.add(body.getUUID());
-        if (mc.screen instanceof DeathScreen && !body.isRemoved() && !body.isInvisible()) deathRendered.add(body.getUUID());
+        if (mc.gui.screen() instanceof DeathScreen && !body.isRemoved() && !body.isInvisible()) deathRendered.add(body.getUUID());
     }
 
     private void readyForRealDeath(ProbeFrames.Frame frame) {
         if(!role.equals("A") || (phase!=1&&phase!=13) || done.contains(phase) || frames<20) return;
         Minecraft mc=Minecraft.getInstance();
-        if(mc.level==null || mc.player==null || !mc.player.isAlive() || mc.screen!=null ||
+        if(mc.level==null || mc.player==null || !mc.player.isAlive() || mc.gui.screen()!=null ||
                 !mc.level.hasChunkAt(mc.player.blockPosition()) || frame.camera().entity()!=mc.player ||
                 frame.camera().forwardVector().y()>-0.75F)return;
         // Client ticks can catch up before a world frame has actually drawn.
@@ -118,14 +118,14 @@ final class VisibilityClientChecks {
             int n=Integer.parseInt(new String(Files.readAllBytes(VisibilityChecks.file("phase").toPath()),StandardCharsets.UTF_8).trim());
             if(n!=phase){phase=n;frames=0;guiFrames=0;respawnSent=false;rendered.clear();deathRendered.clear();System.out.println("VISIBILITY_CLIENT_PHASE "+role+" "+phase);}frames++;
             if(FixtureConnections.retry(mc,role))connecting=false;
-            if(!connecting && FixtureConnections.ready(role) && mc.level==null && mc.screen instanceof TitleScreen && (phase==0 || phase==9 || phase==11)) {
+            if(!connecting && FixtureConnections.ready(role) && mc.level==null && mc.gui.screen() instanceof TitleScreen && (phase==0 || phase==9 || phase==11)) {
                 connecting=true;mc.options.pauseOnLostFocus=false;mc.options.framerateLimit().set(30);mc.options.renderDistance().set(4);
                 FixtureConnections.connect(mc);
             }
             if(mc.level==null || mc.player==null)return;
             net.minecraft.network.Connection connection=mc.getConnection().getConnection();
             if(connection!=traced){RespawnPacketTrace.install(connection,new File(mc.gameDirectory,"client-packets.txt"),null);traced=connection;}
-            if(frames%200==0)System.out.println("VISIBILITY_CLIENT_STATE "+role+" phase="+phase+" position="+mc.player.blockPosition()+" rendered="+rendered+" screen="+(mc.screen==null?null:mc.screen.getClass().getName())+" deathScreen="+(mc.screen instanceof DeathScreen)+" done="+done+" firstBody="+body(mc,"first")+" secondBody="+body(mc,"second")+" container="+mc.player.containerMenu.getClass().getSimpleName());
+            if(frames%200==0)System.out.println("VISIBILITY_CLIENT_STATE "+role+" phase="+phase+" position="+mc.player.blockPosition()+" rendered="+rendered+" screen="+(mc.gui.screen()==null?null:mc.gui.screen().getClass().getName())+" deathScreen="+(mc.gui.screen() instanceof DeathScreen)+" done="+done+" firstBody="+body(mc,"first")+" secondBody="+body(mc,"second")+" container="+mc.player.containerMenu.getClass().getSimpleName());
             if(phase==12 && frames%200==0) {
                 EntityLootableBody b=body(mc,"first");RuntimeChecks.require(b!=null&&!b.isRemoved()&&!b.isInvisible(),"Corpse disappeared during five-minute wait");
             }
@@ -140,13 +140,13 @@ final class VisibilityClientChecks {
                 RuntimeChecks.require(!b.isRemoved()&&!b.isInvisible(),"Received corpse is dead/invisible");shot(mc,"death-"+phase+".png");ack();
             } else if(phase==3 || phase==15) {
                 if(role.equals("A")) {
-                    if(mc.screen instanceof DeathScreen){if(!respawnSent){mc.player.respawn();respawnSent=true;}return;}
+                    if(mc.gui.screen() instanceof DeathScreen){if(!respawnSent){mc.player.respawn();respawnSent=true;}return;}
                     if(!mc.player.isAlive())return;
                 }
                 if(body(mc,phase==3?"first":"second")!=null)ack();
             } else if(phase==4 || phase==16 || phase==19) {
                 EntityLootableBody b=body(mc,phase==16?"second":"first");if(b==null)return;
-                if(!(mc.screen instanceof CorpseGUIContainer)) {
+                if(!(mc.gui.screen() instanceof CorpseGUIContainer)) {
                     if(!rendered.contains(b.getUUID()))return;
                     if(frames%10==0)mc.gameMode.interact(mc.player, b, new net.minecraft.world.phys.EntityHitResult(b), InteractionHand.MAIN_HAND);return;
                 }
@@ -186,5 +186,5 @@ final class VisibilityClientChecks {
         for(Entity e:FixtureApi.entities(mc.level))if(e instanceof EntityLootableBody&&e.getUUID().equals(id))return (EntityLootableBody)e;return null;
     }
     private void ack() throws Exception {done.add(phase);Files.write(VisibilityChecks.file(role+".visibility-"+phase).toPath(),new byte[]{1});}
-    private static void shot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));}
+    private static void shot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.gameRenderer.mainRenderTarget(),1,message->System.out.println(message.getString()));}
 }

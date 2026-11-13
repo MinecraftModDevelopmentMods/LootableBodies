@@ -38,6 +38,9 @@ final class RespawnPacketClientChecks {
     private File observations;
     private Level profileWorld;
     void register(){if(Boolean.getBoolean("lootablebodies.respawn")&&role!=null){
+            if(Boolean.getBoolean("lootablebodies.respawn.counterCollision"))try {
+                Files.writeString(RespawnPacketChecks.file("native65-collision-control.enabled").toPath(),"true",StandardCharsets.UTF_8);
+            } catch(IOException error){throw new RuntimeException(error);}
             net.minecraftforge.client.event.ScreenEvent.MouseButtonPressed.Pre.BUS.addListener(event -> true);
             net.minecraftforge.client.event.ScreenEvent.KeyPressed.Pre.BUS.addListener(event -> true);
             TickEvent.ClientTickEvent.Pre.BUS.addListener(event -> tick(true));
@@ -45,22 +48,16 @@ final class RespawnPacketClientChecks {
         }}
     private void respawn(Minecraft mc) {
         if((!role.equals("A")&&!Boolean.getBoolean("lootablebodies.respawn.simultaneous"))||mc.player==null)return;
-        if(mc.screen instanceof DeathScreen) {
+        if(mc.gui.screen() instanceof DeathScreen) {
             int kind=index%8,delay=kind==1?1:kind==2?20:kind==3?60:0;
             if(!requested&&deathTicks>=delay){
                 if(Boolean.getBoolean("lootablebodies.respawn.counterCollision")&&kind==2) {
                     if(phase!=2)return;
                     try {
-                        java.lang.reflect.Field counter=null;
-                        for(java.lang.reflect.Field field:Entity.class.getDeclaredFields())
-                            if(java.lang.reflect.Modifier.isStatic(field.getModifiers())&&field.getType()==java.util.concurrent.atomic.AtomicInteger.class) {
-                                RuntimeChecks.require(counter==null,"Ambiguous native entity counter");counter=field;
-                            }
-                        RuntimeChecks.require(counter!=null,"Missing native entity counter");counter.setAccessible(true);
-                        // Native 1.14 increments before assigning the new entity ID.
-                        ((java.util.concurrent.atomic.AtomicInteger)counter.get(null)).set(entityId-1);
-                    } catch(ReflectiveOperationException error){throw new RuntimeException(error);}
-                    observe(mc,"SEEDED_CLIENT_COUNTER_COLLISION next_id="+entityId);
+                        String receipt=Files.readString(RespawnPacketChecks.file("native65-allocator-"+index+".receipt").toPath(),StandardCharsets.UTF_8);
+                        RuntimeChecks.require(receipt.contains("occupied="+entityId+" ") && receipt.contains("skipped=true"),"Missing actual native65 occupied-ID allocator receipt");
+                    } catch(IOException error){throw new RuntimeException(error);}
+                    observe(mc,"NATIVE65_SERVER_ALLOCATOR_COLLISION_VERIFIED corpse_id="+entityId);
                 }
                 requested=true;mc.player.respawn();observe(mc,"REQUEST_RESPAWN without_corpse_barrier delay="+delay);
             }
@@ -92,7 +89,7 @@ final class RespawnPacketClientChecks {
             if(nextIndex!=index||nextPhase!=phase){index=nextIndex;phase=nextPhase;frames=0;guiFrames=0;System.out.println("RESPAWN_CLIENT_PHASE "+role+" "+index+" "+phase);}
             uuid=state[2].equals("none")?null:UUID.fromString(state[2]);entityId=Integer.parseInt(state[3]);frames++;
             if(FixtureConnections.retry(mc,role))connecting=false;
-            if(!connecting&&FixtureConnections.ready(role)&&mc.screen instanceof TitleScreen) {
+            if(!connecting&&FixtureConnections.ready(role)&&mc.gui.screen() instanceof TitleScreen) {
                 connecting=true;mc.options.pauseOnLostFocus=false;mc.options.framerateLimit().set(30);mc.options.renderDistance().set(4);
                 FixtureConnections.connect(mc);
             }
@@ -101,7 +98,7 @@ final class RespawnPacketClientChecks {
                 traced=true;observations=new File(mc.gameDirectory,"main-packet-observations.txt");
                 RespawnPacketTrace.install(mc.getConnection().getConnection(),new File(mc.gameDirectory,"client-packets.txt"),packet->mc.submitAsync(()->{observe(mc,"AFTER "+packet);respawn(mc);}));
             }
-            if(mc.screen instanceof DeathScreen)deathTicks++;
+            if(mc.gui.screen() instanceof DeathScreen)deathTicks++;
             respawn(mc);
             if(frames%100==0)observe(mc,"TICK phase="+phase+" frame="+frames);
             RuntimeChecks.require(frames<450,"Client corpse missing case="+index+" phase="+phase+" role="+role);
@@ -119,12 +116,12 @@ final class RespawnPacketClientChecks {
                 Entity entity=mc.level.getEntity(entityId);
                 if(!(entity instanceof EntityLootableBody)||!entity.getUUID().equals(uuid)||!FixtureApi.entities(mc.level).contains(entity)||entity.isRemoved())return;
                 if(role.equals("A")) {
-                    if(!(mc.screen instanceof CorpseGUIContainer)){mc.gameMode.interact(mc.player, entity, new net.minecraft.world.phys.EntityHitResult(entity), InteractionHand.MAIN_HAND);return;}
+                    if(!(mc.gui.screen() instanceof CorpseGUIContainer)){mc.gameMode.interact(mc.player, entity, new net.minecraft.world.phys.EntityHitResult(entity), InteractionHand.MAIN_HAND);return;}
                     boolean found=false;for(int slot=0;slot<48;slot++)if(RuntimeChecks.sameStack(mc.player.containerMenu.getSlot(slot).getItem(),RuntimeChecks.stack(520+index)))found=true;
                     if(!found||++guiFrames<10)return;
                 }
                 observe(mc,"VERIFIED owner_or_observer exact_uuid_loaded_after_respawn");
-                if(index%8==0||index%8==7)Screenshot.grab(mc.gameDirectory,"respawn-case-"+index+".png",mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));
+                if(index%8==0||index%8==7)Screenshot.grab(mc.gameDirectory,"respawn-case-"+index+".png",mc.gameRenderer.mainRenderTarget(),1,message->System.out.println(message.getString()));
                 ack(key);
             } else if(phase==9) {
                 new File(mc.gameDirectory,"respawn-client.pass").createNewFile();System.out.println("LOOTABLE_BODIES_RESPAWN_CLIENT_PASS "+role);

@@ -23,6 +23,7 @@ public final class ItemMigration {
     private static final int RELEASED_COMPONENT_VERSION=3839;
     private static final int RELEASED_121_VERSION=3955;
     private static final int RELEASED_12111_VERSION=4671;
+    private static final int RELEASED_2612_VERSION=4790;
 
     /** Null means the caller retains the original raw record for recovery. */
     public static CompoundTag convert(CompoundTag raw,CompoundTag versions) {
@@ -45,7 +46,7 @@ public final class ItemMigration {
             CompoundTag intermediate = convertReleasedComponents(raw);
             return intermediate == null ? null : convertModernComponents(intermediate,RELEASED_121_VERSION);
         }
-        if(source==RELEASED_121_VERSION || source==RELEASED_12111_VERSION)return convertModernComponents(raw,source);
+        if(source==RELEASED_121_VERSION || source==RELEASED_12111_VERSION || source==RELEASED_2612_VERSION)return convertModernComponents(raw,source);
         if(source<512 || source>LAST_LEGACY_ITEM_VERSION || pipeline==null)return null;
         CompoundTag legacy=convertNbt(raw,versions);
         if(legacy==null || !supportedLegacyStack(legacy))return null;
@@ -89,12 +90,30 @@ public final class ItemMigration {
                 if (!components121Survive(raw, released)) return null;
             }
             CompoundTag fixed = NativeNbt.update(pipeline, net.minecraft.util.datafix.fixes.References.ITEM_STACK,
-                    released.copy(), RELEASED_12111_VERSION, UpgradePreservation.MINECRAFT_VERSION);
-            // The 26.1.2 native fixer has no item changes after 1.21.11.
-            return released.equals(fixed) ? fixed : null;
+                    released.copy(), Math.max(source,RELEASED_12111_VERSION), UpgradePreservation.MINECRAFT_VERSION);
+            return components262Survive(released,fixed) ? fixed : null;
         } catch (RuntimeException invalid) {
             return null;
         }
+    }
+
+    private static boolean components262Survive(CompoundTag raw,CompoundTag fixed) {
+        if(raw.equals(fixed))return true;
+        CompoundTag expected=raw.copy();
+        CompoundTag components=expected.getCompoundOrEmpty("components");
+        if(components.get("minecraft:block_entity_data") instanceof CompoundTag bed
+                && bed.getStringOr("id","").equals("minecraft:bed")) {
+            // The native 4885 fix removes bed block entities. Unknown payloads
+            // stay unresolved with their original data instead of being lost.
+            if(!bed.keySet().equals(Set.of("id")))return false;
+            components.remove("minecraft:block_entity_data");
+        }
+        if(components.get("minecraft:attribute_modifiers") instanceof ListTag modifiers) {
+            for(Tag value:modifiers)if(value instanceof CompoundTag modifier
+                    && modifier.getStringOr("type","").equals("minecraft:nameplate_distance"))
+                modifier.putString("type","minecraft:name_tag_distance");
+        }
+        return expected.equals(fixed);
     }
 
     private static boolean components121Survive(CompoundTag raw, CompoundTag fixed) {

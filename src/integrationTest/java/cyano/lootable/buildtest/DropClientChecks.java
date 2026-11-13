@@ -89,7 +89,7 @@ final class DropClientChecks {
                 CompoundTag expected=new CompoundTag();expected.put("Inventory",savedPlayer.copy());try(FileOutputStream out=new FileOutputStream(new File(folder(mc),"drop-creative-player.nbt"))){NbtIo.writeCompressed(expected,out);}
                 mc.getSingleplayerServer().getPlayerList().saveAll();mc.getSingleplayerServer().saveAllChunks(false,true,false);});next(20);
         } else if(stage==20 && done()){quit(mc);next(21);}
-        else if(stage==21 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(22);}
+        else if(stage==21 && FixtureConnections.stopped(mc)){mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.gui.setScreen(new net.minecraft.client.gui.screens.TitleScreen()));next(22);}
         else if(stage==22 && ready(mc) && frames>20){schedule(mc,()->{
             RuntimeChecks.awaitChunk(player(mc).level(),2,0);body(mc).baseTick();RuntimeChecks.verifyExpected(folder(mc),"drop-creative-final",body(mc));
             RuntimeChecks.require(savedPlayer.equals(FixtureApi.saveInventory(player(mc))),"Creative player inventory changed on disk reload");player(mc).connection.teleport(40.5,80,7.5,0,0);
@@ -115,7 +115,7 @@ final class DropClientChecks {
     private void drop(Minecraft mc,ItemStack expected){int count=0;for(Entity e:new ArrayList<Entity>(FixtureApi.entities(player(mc).level())))if(e instanceof ItemEntity && !e.isRemoved() && !preexistingDrops.contains(e.getUUID())){equal(((ItemEntity)e).getItem(),expected,"Accepted new world drop NBT/count");count++;e.discard();}RuntimeChecks.require(count==1,"Expected exactly one new accepted drop, actual="+count);}
     private static ItemStack slot(Minecraft mc,int index){return mc.player.containerMenu.getSlot(index).getItem();}
     private static void click(Minecraft mc,int slot,int button,ContainerInput type){mc.gameMode.handleContainerInput(mc.player.containerMenu.containerId,slot,button,type,mc.player);}
-    private static boolean gui(Minecraft mc){return mc.screen instanceof CorpseGUIContainer;}
+    private static boolean gui(Minecraft mc){return mc.gui.screen() instanceof CorpseGUIContainer;}
     private static boolean ready(Minecraft mc){return mc.level!=null && mc.player!=null && mc.getSingleplayerServer()!=null;}
     private boolean open(Minecraft mc) throws Exception {
         Entity target = null;
@@ -153,7 +153,7 @@ final class DropClientChecks {
     private void schedule(Minecraft mc,Action action){pending=mc.getSingleplayerServer().submitAsync(()->{try{action.run();}catch(Exception e){throw new RuntimeException(e);}});}
     private boolean done() throws Exception {if(!pending.isDone())return false;pending.get();return true;}
     private void next(int value){stage=value;frames=0;System.out.println("DROP_CLIENT_STAGE "+stage);}
-    private static void screenshot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));}
+    private static void screenshot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.gameRenderer.mainRenderTarget(),1,message->System.out.println(message.getString()));}
     private void mark(Minecraft mc,String name) throws Exception {try(FileWriter out=new FileWriter(new File(mc.gameDirectory,"drop-client-checks.txt"),true)){out.write("PASS "+name+"\n");}System.out.println("DROP_CLIENT_CHECK_PASS "+name);}
     private static void quit(Minecraft mc){mc.player.closeContainer();FixtureConnections.disconnect(mc);}
 }

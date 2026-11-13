@@ -14,9 +14,9 @@ import net.minecraftforge.event.TickEvent;
 public final class ClientLoginReadGuard {
     public void tick(TickEvent.ClientTickEvent.Post event) {
         Minecraft minecraft=Minecraft.getInstance();
-        if(!(minecraft.screen instanceof ConnectScreen))return;
+        if(!(minecraft.gui.screen() instanceof ConnectScreen screen))return;
         Connection manager=ObfuscationReflectionHelper.getPrivateValue(
-                ConnectScreen.class,(ConnectScreen)minecraft.screen,"connection");
+                ConnectScreen.class,screen,"connection");
         if(manager!=null)resumeReads(manager.channel(),()->{
             var protocol=manager.getInboundProtocolInfo();
             return protocol==null?null:protocol.id();

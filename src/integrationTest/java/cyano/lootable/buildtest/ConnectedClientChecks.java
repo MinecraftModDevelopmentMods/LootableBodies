@@ -47,10 +47,10 @@ final class ConnectedClientChecks {
         frames++;
         if(stage==0) {
             schedule(mc,() -> prepareDeath(mc)); next(1);
-        } else if(stage==1 && done() && mc.screen instanceof DeathScreen && frames>20) {
+        } else if(stage==1 && done() && mc.gui.screen() instanceof DeathScreen && frames>20) {
             screenshot(mc,"connected-player-death.png");
             mc.player.respawn(); next(2);
-        } else if(stage==2 && mc.player!=null && mc.player.isAlive() && !(mc.screen instanceof DeathScreen)) {
+        } else if(stage==2 && mc.player!=null && mc.player.isAlive() && !(mc.gui.screen() instanceof DeathScreen)) {
             schedule(mc,() -> {
                 ServerPlayer player=player(mc); EntityLootableBody corpse=corpse(mc);
                 RuntimeChecks.require(player.isAlive(),"Connected respawn failed");
@@ -77,7 +77,7 @@ final class ConnectedClientChecks {
             screenshot(mc,"connected-corpse-after-shift-recovery.png");
             quit(mc); next(7);
         } else if(stage==7 && FixtureConnections.stopped(mc)) {
-            mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen())); next(8);
+            mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.gui.setScreen(new net.minecraft.client.gui.screens.TitleScreen())); next(8);
         } else if(stage==8 && ready(mc) && frames>30) {
             schedule(mc,() -> {
                 verifyReload(mc,"connected-after-recovery","connected-player-after-recovery");
@@ -108,7 +108,7 @@ final class ConnectedClientChecks {
             screenshot(mc,"connected-corpse-after-normal-recovery.png");
             quit(mc); next(13);
         } else if(stage==13 && FixtureConnections.stopped(mc)) {
-            mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.setScreen(new net.minecraft.client.gui.screens.TitleScreen())); next(14);
+            mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.gui.setScreen(new net.minecraft.client.gui.screens.TitleScreen())); next(14);
         } else if(stage==14 && ready(mc) && frames>30) {
             schedule(mc,() -> {
                 verifyReload(mc,"connected-final","connected-player-final");
@@ -198,14 +198,14 @@ final class ConnectedClientChecks {
     private boolean done() throws Exception {if(!pending.isDone())return false;pending.get();return true;}
     private void next(int value){stage=value;frames=0;System.out.println("CONNECTED_CLIENT_STAGE "+stage);}
     private static boolean ready(Minecraft mc){return mc.level!=null && mc.player!=null && mc.getSingleplayerServer()!=null;}
-    private static boolean gui(Minecraft mc){return mc.screen instanceof CorpseGUIContainer;}
+    private static boolean gui(Minecraft mc){return mc.gui.screen() instanceof CorpseGUIContainer;}
     private boolean open(Minecraft mc){
         for(Entity entity:FixtureApi.entities(mc.level))if(entity instanceof EntityLootableBody && entity.getUUID().equals(corpseId)){
             mc.gameMode.interact(mc.player, entity, new net.minecraft.world.phys.EntityHitResult(entity), InteractionHand.MAIN_HAND);return true;
         }
         return false;
     }
-    private static void screenshot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.getMainRenderTarget(),1,message->System.out.println(message.getString()));}
+    private static void screenshot(Minecraft mc,String name){Screenshot.grab(mc.gameDirectory,name,mc.gameRenderer.mainRenderTarget(),1,message->System.out.println(message.getString()));}
     private static void quit(Minecraft mc){mc.player.closeContainer();FixtureConnections.disconnect(mc);}
     private void mark(String name) throws Exception {
         try(FileWriter out=new FileWriter(report,true)){out.write("PASS "+name+"\n");}

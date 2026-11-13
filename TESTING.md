@@ -1,6 +1,6 @@
 # Testing
 
-Run the Forge 26.1.2 checks locally with Forge 64.1.5 and Java 25.
+Run the Forge 26.2 checks locally with Forge 65.1.5 and Java 25.
 
 During development, reproduce the changed behaviour first, then batch the cheap
 Java and Python checks. Reserve the full runtime suite for a frozen candidate.
@@ -31,7 +31,7 @@ For a frozen candidate:
 
 Unchanged mod-free resource/protocol controls can be reused only with the same
 control, SDK, JDK, flags, resources and auditor contract. Changes to those inputs
-require new control qualification. Use `tools/fixtures/native2612-forge-only-flat-level.dat`
+require new control qualification. Use `tools/fixtures/native262-forge-only-flat-level.dat`
 and its sealed world generator file for the Forge-only respawn control.
 Changes confined to a test fixture require
 the affected proof and tool contracts, not an automatic replay of unrelated

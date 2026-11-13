@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "target": "26.1.2",
-  "status": "Manual testing accepted; expensive qualification stays local. Hosted work checks the exact release archives and security.",
+  "target": "26.2",
+  "status": "Manual testing accepted; expensive qualification stays local. Hosted checks compile and verify exact release files and security.",
   "hosted": {
     "allowed": [
       "compile",

@@ -66,13 +66,13 @@ ext.auditReleaseArchives = { File directory ->
                     if (!names.contains(it)) throw new GradleException("Missing production entry ${it}")
                 }
                 String info=zip.getInputStream(zip.getEntry('META-INF/mods.toml')).getText('UTF-8')
-                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[26.1.2]"'].each {
+                ['modId="lootablebodies"',"version=\"${project.version}\"",'authors="Cyanobacterium, SkyBlade1978"','modLoader="javafml"','versionRange="[26.2]"'].each {
                     if(!info.contains(it))throw new GradleException("Incorrect production metadata: ${it}")
                 }
                 def pack=new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('pack.mcmeta')).getText('UTF-8')).pack
-                if(pack.min_format!=[84,0] || pack.max_format!=[101,1] || pack.containsKey('pack_format') || pack.containsKey('supported_formats') || pack.containsKey('forge:server_data_pack_format') ||
+                if(pack.min_format!=[88,0] || pack.max_format!=[107,1] || pack.containsKey('pack_format') || pack.containsKey('supported_formats') || pack.containsKey('forge:server_data_pack_format') ||
                         pack.containsKey('forge:resource_pack_format') || pack.containsKey('forge:data_pack_format'))
-                    throw new GradleException('Forge mod pack metadata must declare resource format 84.0 and data format 101.1')
+                    throw new GradleException('Forge mod pack metadata must declare resource format 88.0 and data format 107.1')
                 def mixins = new JsonSlurper().parseText(zip.getInputStream(zip.getEntry('lootablebodies.mixins.json')).getText('UTF-8'))
                 if (mixins.required != true || mixins.compatibilityLevel != 'JAVA_21' ||
                         mixins.package != 'cyano.lootable.mixin' || mixins.injectors != [defaultRequire: 1] ||
