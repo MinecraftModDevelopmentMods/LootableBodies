@@ -2,7 +2,7 @@ name: Audit LootableBodies 26.2 artifacts
 run-name: Audit 26.2 artifacts from ${{ github.event.workflow_run.head_sha || inputs.source_sha }}
 on:
   workflow_run:
-    workflows: [LootableBodies 26.2 CI]
+    workflows: [LootableBodies 1.20 CI, LootableBodies 26.2 CI]
     types: [completed]
   workflow_dispatch:
     inputs:
