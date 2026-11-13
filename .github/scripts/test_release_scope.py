@@ -3,6 +3,12 @@ import unittest
 from release_scope import runtime_required, SCOPE_JOB, NEEDS_SCOPE
 
 class ReleaseScopeTest(unittest.TestCase):
+    def test_forge262_auditor_does_not_start_legacy_games(self):
+        path = '.github/workflows/artifact-audit-26.2.yml'
+        self.assertFalse(runtime_required([path]))
+        for other in (path + '.bak', '.github/workflows/artifact-audit-26.3.yml', '.github/workflows/unreviewed-26.2.yml'):
+            with self.subTest(other=other):self.assertTrue(runtime_required([other]))
+        self.assertTrue(runtime_required([path, 'src/main/java/Corpse.java']))
     def test_only_release_routes_use_the_small_checks(self):
         self.assertFalse(runtime_required(['.github/workflows/deploy-release.yml','.github/scripts/test_release_workflow.py']))
     def test_new_target_audit_uses_the_small_checks(self):

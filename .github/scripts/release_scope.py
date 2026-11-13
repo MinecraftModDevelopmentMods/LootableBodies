@@ -23,7 +23,7 @@ def runtime_required(paths,manual=False,workflow_pairs=None):
              '.github/scripts/test_release_workflow.py','.github/scripts/release_scope.py','.github/scripts/test_release_scope.py'}
     pairs=workflow_pairs or {}
     for name in paths:
-        if name in allowed or re.fullmatch(r'\.github/workflows/artifact-audit-(?:1\.\d+|26\.1)\.yml',name):continue
+        if name in allowed or re.fullmatch(r'\.github/workflows/artifact-audit-(?:1\.\d+|26\.[12])\.yml',name):continue
         if name not in ('.github/workflows/build.yml','.github/workflows/migration-matrix.yml') or name not in pairs:
             return True
         before,after=pairs[name]
