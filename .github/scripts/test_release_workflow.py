@@ -76,13 +76,14 @@ class ReleaseWorkflowTests(unittest.TestCase):
             '1.21.1': ('121011', 'master-1.21.1', '52.1.20'),
             '1.21.11': ('121111', 'master-1.21.11', '61.2.4'),
             '26.1.2': ('2601021', 'master-26.1.2', '64.1.5'),
-            '26.2': ('2602001', 'master-26.2', '65.1.5')}[minecraft]
+            '26.2': ('2602001', 'master-26.2', '65.1.5'),
+            '26.3': ('2603001', 'master-26.3', '66.1.9')}[minecraft]
         version = '2.4.2.' + suffix
         files={name:'C'*64 for name in ['main.jar','sources.jar','javadoc.jar','release.pom','CHANGELOG.txt','SHA256SUMS']}
         receipt={'schema':1,'source':SHA,'version':version,'files':files,'evidence_sha256':'F'*64,'qualified_locally':True,'manual_accepted':True}
         if local_receipt is not None:receipt=local_receipt
         values = dict(minecraft_version=minecraft, forge_version=forge, loader_name='forge', loader_code='1',
-            java_version='25' if minecraft in ('26.1.2','26.2') else '21' if minecraft in ('1.20.6','1.21.1','1.21.11') else '17' if minecraft in ('1.18.2','1.19.4','1.20.1') else '16' if minecraft=='1.17.1' else '8', java_toolchain_version='25.0.3+9' if minecraft in ('26.1.2','26.2') else '21.0.7+6' if minecraft in ('1.20.6','1.21.1','1.21.11') else '17.0.20.1+1' if minecraft in ('1.18.2','1.19.4','1.20.1') else '16.0.2+7' if minecraft=='1.17.1' else '8.0.502+7', gradle_java_version='25' if minecraft in ('26.1.2','26.2') else '21' if minecraft in ('1.20.6','1.21.1','1.21.11') else '17', mod_id='lootablebodies',
+            java_version='25' if minecraft in ('26.1.2','26.2','26.3') else '21' if minecraft in ('1.20.6','1.21.1','1.21.11') else '17' if minecraft in ('1.18.2','1.19.4','1.20.1') else '16' if minecraft=='1.17.1' else '8', java_toolchain_version='25.0.3+9' if minecraft in ('26.1.2','26.2','26.3') else '21.0.7+6' if minecraft in ('1.20.6','1.21.1','1.21.11') else '17.0.20.1+1' if minecraft in ('1.18.2','1.19.4','1.20.1') else '16.0.2+7' if minecraft=='1.17.1' else '8.0.502+7', gradle_java_version='25' if minecraft in ('26.1.2','26.2','26.3') else '21' if minecraft in ('1.20.6','1.21.1','1.21.11') else '17', mod_id='lootablebodies',
             mod_artifact='LootableBodies', mod_group='zone.moddev.mc.lootablebodies', mod_license='LGPL-2.1-only',
             curseforge_project_id='240968', mod_version=version)
         if mutation:
@@ -92,22 +93,23 @@ class ReleaseWorkflowTests(unittest.TestCase):
                          '1.14.4': MATRIX114 + ['Validate release workflow'],
                          '1.15.2': MATRIX115, '1.16.5': MATRIX116}.get(minecraft, []) if names is None else names
         if minecraft=='1.17.1' and names is None:checks=CORE117+MATRIX117
-        if minecraft in ('1.18.2','1.19.4','1.20.1','1.20.6','1.21.1','1.21.11','26.1.2','26.2') and names is None:checks=CORE118
+        if minecraft in ('1.18.2','1.19.4','1.20.1','1.20.6','1.21.1','1.21.11','26.1.2','26.2','26.3') and names is None:checks=CORE118
 
         def command(args, **options):
             if args[0] == 'git':
                 return SHA + '\n'
             if any('/actions/workflows/native'+code+'.yml/' in args[-1] for code in ['117','118','119','120']):
-                code={'1.17.1':'117','1.18.2':'118','1.19.4':'119','1.20.1':'120','1.20.6':'120','1.21.1':'120','1.21.11':'120','26.1.2':'120','26.2':'120'}[minecraft]
+                code={'1.17.1':'117','1.18.2':'118','1.19.4':'119','1.20.1':'120','1.20.6':'120','1.21.1':'120','1.21.11':'120','26.1.2':'120','26.2':'120','26.3':'120'}[minecraft]
                 row=dict(id=int(code),head_sha=SHA,head_branch=branch,event='push',path='.github/workflows/native'+code+'.yml',conclusion='success')
                 if qualification:row.update(qualification)
                 return json.dumps({'workflow_runs':[row]})
             if '/actions/workflows/' in args[-1]:
+                if minecraft=='26.3':self.assertIn('/artifact-audit-26.3.yml/runs?',args[-1])
                 if minecraft=='26.2':self.assertIn('/artifact-audit-26.2.yml/runs?',args[-1])
                 audit = {'id': 1, 'display_title': 'Audit ' + minecraft + ' artifacts from ' + SHA,
                          'conclusion': 'success' if audit_success else 'failure', 'event': 'workflow_run',
                          'head_sha': 'c' * 40, 'head_branch': 'master-1.12',
-                         'path': '.github/workflows/artifact-audit-26.2.yml' if minecraft=='26.2' else '.github/workflows/artifact-audit-26.1.yml' if minecraft=='26.1.2' else '.github/workflows/artifact-audit-1.21.yml'}
+                         'path': '.github/workflows/artifact-audit-26.3.yml' if minecraft=='26.3' else '.github/workflows/artifact-audit-26.2.yml' if minecraft=='26.2' else '.github/workflows/artifact-audit-26.1.yml' if minecraft=='26.1.2' else '.github/workflows/artifact-audit-1.21.yml'}
                 if audit_run is not None:
                     audit.update(audit_run)
                 return json.dumps({'workflow_runs': [audit]})
@@ -211,6 +213,22 @@ class ReleaseWorkflowTests(unittest.TestCase):
             with self.subTest(options=options), self.assertRaises(SystemExit):
                 self.validate('1.21.11', **options)
         self.assertNotEqual(0, self.select('2.4.15.261021')[0])
+
+    def test_forge263_publication_uses_java25_pin_and_curseforge_label(self):
+        workflow = (Path(__file__).resolve().parents[1] / 'workflows/deploy-release.yml').read_text()
+        self.assertIn("== '26.2' || '${{ needs.preflight.outputs.minecraft_version }}' == '26.3' ]]; then", workflow)
+        self.assertIn("java: ${{ needs.preflight.outputs.minecraft_version == '26.3' && 'Java 25'", workflow)
+
+    def test_forge263_routes_exact_release_without_hosted_runtime(self):
+        self.assertEqual((0, {'minecraft_version':'26.3','source_branch':'master-26.3'}), self.select('2.4.17.2603001'))
+        self.validate('26.3', audit_run={'event':'workflow_dispatch'})
+        for options in ({'mutation':{'java_version':'21'}}, {'mutation':{'java_toolchain_version':'25.0.2+10'}},
+                        {'mutation':{'forge_version':'65.1.5'}}, {'audit_success':False},
+                        {'qualification':{'head_branch':'master-26.2'}}, {'local_receipt':{'manual_accepted':False}},
+                        {'audit_run':{'head_sha':'d'*40}}, {'audit_run':{'path':'.github/workflows/artifact-audit-26.2.yml'}}):
+            with self.subTest(options=options), self.assertRaises(SystemExit):self.validate('26.3', **options)
+        for line in WORKFLOW.read_text().splitlines():
+            if 'if: needs.preflight.outputs.minecraft_version !=' in line:self.assertIn("!= '26.3'",line)
 
     def test_forge262_routes_exact_release_without_hosted_runtime(self):
         self.assertEqual((0, {'minecraft_version':'26.2','source_branch':'master-26.2'}), self.select('2.4.16.2602001'))
@@ -558,6 +576,18 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('LootableBodies 26.2 CI', subscriptions)
         self.assertIn("github.event.workflow_run.head_branch == 'master-26.2'", audit)
         self.assertIn("github.event.workflow_run.name == 'LootableBodies 26.2 CI'", audit)
+
+    def test_forge263_audit_subscribes_to_registered_default_build_name(self):
+        # workflow_run matches the name registered on the default branch even
+        # when the completed version branch supplies its own display name.
+        registered = 'LootableBodies 1.20 CI'  # registered native120.yml workflow name
+        audit = WORKFLOW.with_name('artifact-audit-26.3.yml').read_text()
+        subscriptions = audit.split('    workflows: [', 1)[1].split(']', 1)[0].split(',')
+        subscriptions = {name.strip() for name in subscriptions}
+        self.assertIn(registered, subscriptions)
+        self.assertIn('LootableBodies 26.3 CI', subscriptions)
+        self.assertIn("github.event.workflow_run.head_branch == 'master-26.3'", audit)
+        self.assertIn("github.event.workflow_run.name == 'LootableBodies 26.3 CI'", audit)
 
     def test_tag_at_another_commit_is_rejected(self):
         with self.assertRaises(SystemExit):
