@@ -5,18 +5,18 @@ import native_runtime as runtime
 
 class Native120InfrastructureTest(unittest.TestCase):
     def test_native_distribution_and_every_server_input_use_the_target(self):
-        self.assertEqual('forge-26.2-65.1.5',runtime.FORGE)
-        self.assertEqual('6F16AEC13C86BCFCDABF69A8DEAAF43D4CB07CE50D0AA979C4295D2B0BC3F51D',runtime.INSTALLER_SHA256)
-        self.assertEqual(100,len(runtime.SERVER_INPUTS))
-        self.assertEqual('BF25F79E8B86237DBDD8A029951434B88ED5E5B60F763C3169B2FE1441C16539',
-            runtime.SERVER_INPUTS['libraries/net/minecraftforge/forge/26.2-65.1.5/forge-26.2-65.1.5-server.jar'])
-        self.assertEqual('7C51711FDDD2E04C7D6B480D08E57C0D039E820F4ABB84D4578DF7ED7CA702A5',
-            runtime.SERVER_INPUTS['libraries/net/minecraftforge/forge/26.2-65.1.5/win_args.txt'])
+        self.assertEqual('forge-26.3-66.1.9',runtime.FORGE)
+        self.assertEqual('8E86798A64454C6254EDFE7C5D6707249A9E4B89190B5E40D59A93CA90143B31',runtime.INSTALLER_SHA256)
+        self.assertEqual(98,len(runtime.SERVER_INPUTS))
+        self.assertEqual('2D4B6C0E5D0D60886843D04405D418E16E284444A1B6C3C965470504BF6CB1EC',
+            runtime.SERVER_INPUTS['libraries/net/minecraftforge/forge/26.3-66.1.9/forge-26.3-66.1.9-server.jar'])
+        self.assertEqual('9126AAB3A0C053F113FC1927EFE622CF1FD3EC66DC3FF2F399E4B2DF9E7647C6',
+            runtime.SERVER_INPUTS['libraries/net/minecraftforge/forge/26.3-66.1.9/win_args.txt'])
         self.assertFalse(any('1.16.5' in path for path in runtime.SERVER_INPUTS))
     def test_development_assets_use_the_native_index(self):
         text=(Path(__file__).resolve().parents[1]/'gradle/assets.gradle').read_text()
-        self.assertIn("minecraftAssetIndex = '32'",text)
-        self.assertIn("26.2.json",text)
+        self.assertIn("minecraftAssetIndex = '34'",text)
+        self.assertIn("26.3.json",text)
         self.assertNotIn('e9d0adb8f642abe422909ede50f651b2b58a3573',text)
     def test_every_released115_history_extends_the_complete_earlier_matrix(self):
         from verify_world_upgrades import ORIGINS,PHASES

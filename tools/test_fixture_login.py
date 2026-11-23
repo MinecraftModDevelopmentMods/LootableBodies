@@ -85,6 +85,23 @@ class FixtureLoginTests(unittest.TestCase):
         self.monitor.poll()
         self.assertTrue((self.root/'sync/client-A-joined').is_file())
 
+    def test_native263_system_chat_join_opens_the_second_client_gate(self):
+        actual='[23:46:02] [Server thread/INFO] [net.minecraft.server.MinecraftServer]: System chat: ContainerA joined the game\n'
+        self.log.write_text(actual)
+        LoginMonitor(self.root,legacy_recovery=False).poll()
+        self.assertTrue((self.root/'sync/client-A-joined').is_file())
+        self.assertEqual(actual,self.log.read_text())
+
+    def test_native263_join_gate_rejects_other_messages(self):
+        actual='[23:46:02] [Server thread/INFO] [net.minecraft.server.MinecraftServer]: System chat: ContainerA joined the game\n'
+        for changed in (actual.replace('ContainerA','ContainerB'),actual.replace('INFO','ERROR'),
+                        actual.replace('Server thread','Render thread'),actual.replace('MinecraftServer','OtherLogger'),
+                        actual.replace('joined','left'),actual.replace('System chat: ','Player chat: ')):
+            with self.subTest(line=changed):
+                self.log.write_text(changed)
+                LoginMonitor(self.root,legacy_recovery=False).poll()
+                self.assertFalse((self.root/'sync/client-A-joined').exists())
+
     def test_coloured_retry_keeps_original_bytes_in_the_receipt_hash(self):
         original='\x1b[32m'+FAILURE+'\x1b[m'+JOIN
         self.log.write_text(original);self.monitor.poll()

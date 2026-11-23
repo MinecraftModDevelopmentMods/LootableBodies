@@ -29,6 +29,6 @@ public final class Native120FixtureGenerator {
         Path settingsDestination=world.resolve("data/minecraft/world_gen_settings.dat");
         Files.createDirectories(settingsDestination.getParent());Files.copy(settingsSource,settingsDestination);
         Native117RegionFixtures.write(world.resolve("dimensions/minecraft/overworld"),Native117RegionFixtures.chunk(2730,corpse));
-        System.out.println("NATIVE262_CODEC_FIXTURE_PREPARED version="+target+" markerSource=7/2730 synthetic=true root="+root);
+        System.out.println("NATIVE263_CODEC_FIXTURE_PREPARED version="+target+" markerSource=7/2730 synthetic=true root="+root);
     }
 }

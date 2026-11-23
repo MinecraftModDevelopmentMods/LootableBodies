@@ -48,7 +48,7 @@ public final class PortBaselineChecks {
                 require(RespawnPacketTrace.describe(sent).equals(RespawnPacketTrace.describe(received)),"Spawn observer differs before/after native decoding");
                 require(RespawnPacketTrace.describe(received).contains("mod=lootablebodies "),"Negative control cannot identify corpse spawns");
                 buffer.clear();
-                net.minecraft.network.protocol.game.ClientboundRespawnPacket outgoing=new net.minecraft.network.protocol.game.ClientboundRespawnPacket(new net.minecraft.network.protocol.game.CommonPlayerSpawnInfo(world.dimensionTypeRegistration(),world.dimension(),0x13572468ABCDEF01L,GameType.SURVIVAL,GameType.CREATIVE,false,true,java.util.Optional.empty(),0,63),net.minecraft.network.protocol.game.ClientboundRespawnPacket.KEEP_ALL_DATA);
+                net.minecraft.network.protocol.game.ClientboundRespawnPacket outgoing=new net.minecraft.network.protocol.game.ClientboundRespawnPacket(new net.minecraft.network.protocol.game.CommonPlayerSpawnInfo(world.dimensionTypeRegistration(),world.dimension(),0x13572468ABCDEF01L,GameType.SURVIVAL,java.util.Optional.of(GameType.CREATIVE),false,true,java.util.Optional.empty(),0,63),net.minecraft.network.protocol.game.ClientboundRespawnPacket.KEEP_ALL_DATA);
                 net.minecraft.network.protocol.game.ClientboundRespawnPacket.STREAM_CODEC.encode(buffer,outgoing);
                 net.minecraft.network.protocol.game.ClientboundRespawnPacket incoming=net.minecraft.network.protocol.game.ClientboundRespawnPacket.STREAM_CODEC.decode(buffer);
                 require(RespawnPacketTrace.describe(outgoing).equals(RespawnPacketTrace.describe(incoming)),"Respawn observer differs before/after native decoding");

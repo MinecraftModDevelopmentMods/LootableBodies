@@ -15,7 +15,7 @@ final class FixtureStackData {
         var client=net.minecraftforge.fml.loading.FMLEnvironment.dist.isClient() ? ClientChecks.fixtureRegistries() : null;
         if(client!=null)return client;
         if(server!=null)return server.registryAccess();
-        return net.minecraft.data.registries.VanillaRegistries.createLookup();
+        return net.minecraft.data.registries.VanillaRegistries.createWorldLookup();
     }
 
     static CompoundTag save(ItemStack stack) {

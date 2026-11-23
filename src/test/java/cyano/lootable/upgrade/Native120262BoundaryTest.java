@@ -14,7 +14,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Synthetic boundary regressions using the actual 26.2 native converter. */
+/** Synthetic boundary regressions using the actual 26.3 native converter. */
 class Native120262BoundaryTest {
     @TempDir Path world;
     @AfterEach void close() { UpgradePreservation.close(); }
@@ -32,7 +32,7 @@ class Native120262BoundaryTest {
         components.putString("minecraft:custom_name","Kept bed"); result.put("components",components); return result;
     }
     private static CompoundTag nativeItem(CompoundTag input) {
-        return NativeNbt.update(NativeVanillaDataFixer.get(),References.ITEM_STACK,input.copy(),4790,4903);
+        return NativeNbt.update(NativeVanillaDataFixer.get(),References.ITEM_STACK,input.copy(),4790,5023);
     }
     private static CompoundTag worldContext(String release) {
         CompoundTag result=new CompoundTag(), fml=new CompoundTag(), mod=new CompoundTag();
@@ -40,9 +40,9 @@ class Native120262BoundaryTest {
         ListTag mods=new ListTag(); mods.add(mod); fml.put("LoadingModList",mods); result.put("WorldFML",fml); return result;
     }
     @Test void targetAndWriterMarkerMatchTheActualNewBoundary() {
-        assertEquals(4903,net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version());
-        assertEquals(4903,UpgradePreservation.MINECRAFT_VERSION);
-        assertEquals(15,UpgradePreservation.DATA_VERSION);
+        assertEquals(5023,net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version());
+        assertEquals(5023,UpgradePreservation.MINECRAFT_VERSION);
+        assertEquals(16,UpgradePreservation.DATA_VERSION);
     }
     @Test void releasedMinecraftHeaderRemains4790AndNewHeaderIs4903() {
         assertEquals(4790,UpgradePreservation.chunkSourceVersion(worldContext("26.1.2")));
@@ -50,9 +50,9 @@ class Native120262BoundaryTest {
     }
     @Test void marker14OverridesADamagedDetachedEntityStamp() {
         CompoundTag body=Native117RegionFixtures.body(UUID.randomUUID(),14), original=body.copy();
-        CompoundTag fixed=NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.ENTITY_TREE,body,512,4903);
+        CompoundTag fixed=NativeNbt.update(UpgradePreservation.wrapper(NativeVanillaDataFixer.get()),References.ENTITY_TREE,body,512,5023);
         assertEquals(4790,fixed.getCompoundOrEmpty(UpgradePreservation.SOURCES).getIntOr("DataVersion",0));
-        assertEquals(15,fixed.getIntOr(UpgradePreservation.VERSION,0));
+        assertEquals(16,fixed.getIntOr(UpgradePreservation.VERSION,0));
         assertEquals(original,body);
     }
     @Test void marker14JournalRetainsEveryOriginalAndExactRegionBytes() throws Exception {

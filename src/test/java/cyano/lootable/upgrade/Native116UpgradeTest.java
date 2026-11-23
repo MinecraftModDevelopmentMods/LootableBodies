@@ -40,7 +40,7 @@ class Native116UpgradeTest {
         body.put("Equipment",inventory);return body;
     }
     @Test void currentFormatUsesThe119SchemaAndMarker() {
-        assertEquals(4903,UpgradePreservation.MINECRAFT_VERSION);assertEquals(15,UpgradePreservation.DATA_VERSION);
+        assertEquals(5023,UpgradePreservation.MINECRAFT_VERSION);assertEquals(16,UpgradePreservation.DATA_VERSION);
     }
     @Test void legacyCorpseUuidSurvivesShieldingWithoutTruncatingCustomInventory() {
         CompoundTag body=legacy(),before=body.copy(),context=new CompoundTag();context.putInt("DataVersion",2230);

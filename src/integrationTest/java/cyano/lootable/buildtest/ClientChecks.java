@@ -28,6 +28,7 @@ public final class ClientChecks {
     private boolean fixtureProfilesInstalled;
     private int reportedStage=-1;
     private Future<?> pending;
+    private final NativeClientInteractionGate interactionReady=new NativeClientInteractionGate();
     private final ConnectedClientChecks connected = new ConnectedClientChecks();
     private final DropClientChecks drops = new DropClientChecks();
     private final NbtClientChecks nbt = new NbtClientChecks();
@@ -98,7 +99,7 @@ public final class ClientChecks {
             } else if(stage==2 && pending.isDone()) {
                 pending.get();
                 NamelessCorpseClientChecks.englishContract(mc);
-                for(Entity entity : FixtureApi.entities(mc.level)) if(entity instanceof EntityLootableBody && entity.getUUID().equals(RuntimeChecks.NEAR)) {
+                for(Entity entity : FixtureApi.entities(mc.level)) if(entity instanceof EntityLootableBody && entity.getUUID().equals(RuntimeChecks.NEAR) && interactionReady.ready(mc,entity,"ordinaryGUI-stage"+stage)) {
                     mc.gameMode.interact(mc.player, entity, new net.minecraft.world.phys.EntityHitResult(entity), InteractionHand.MAIN_HAND);
                     stage=3; break;
                 }
@@ -118,7 +119,7 @@ public final class ClientChecks {
                 });
             } else if(stage==6 && pending.isDone()) {
                 pending.get();
-                for(Entity entity:FixtureApi.entities(mc.level)) if(entity instanceof EntityLootableBody && entity.getUUID().equals(RuntimeChecks.NEAR)) {
+                for(Entity entity:FixtureApi.entities(mc.level)) if(entity instanceof EntityLootableBody && entity.getUUID().equals(RuntimeChecks.NEAR) && interactionReady.ready(mc,entity,"ordinaryGUI-stage"+stage)) {
                     mc.gameMode.interact(mc.player, entity, new net.minecraft.world.phys.EntityHitResult(entity), InteractionHand.MAIN_HAND);
                     stage=7; frames=0; break;
                 }

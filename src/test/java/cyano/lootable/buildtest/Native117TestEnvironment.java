@@ -40,7 +40,7 @@ public final class Native117TestEnvironment implements LauncherSessionListener {
                 valid.setBoolean(null,true);
                 net.minecraft.server.Bootstrap.bootStrap();
                 net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS
-                        .build(net.minecraft.data.registries.VanillaRegistries.createLookup())
+                        .build(net.minecraft.data.registries.VanillaRegistries.createWorldLookup())
                         .forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
                 initialized=true;
             } catch(ReflectiveOperationException failure) {

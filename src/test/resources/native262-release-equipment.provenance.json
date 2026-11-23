@@ -1,0 +1,11 @@
+{
+  "scope": "Exact Equipment list extracted without rewriting any item from the native Forge 26.2 reopened public-writer output. Not a regenerated world or a 26.3 writer.",
+  "minecraft": "26.2",
+  "data_version": 4903,
+  "lootable_bodies": "2.4.16.2602001",
+  "released_source": "f2a94c3ceaa26d2228c8604175ede7ce2be9c4f7",
+  "writer_sha256": "84E471374B081541AFF468DBC3076B398779A13E91A31C9FA4453813BDBD04BF",
+  "original_region_sha256": "E7B79FA5D1DB765F6C5E09C599F4EF4B11C999B9C0C5C7E1F8CAE35ED804A4F7",
+  "fixture_sha256": "3E99353047ED2AA473DB22ACDF94A2357C83640F6309D3A66BEFC04F95045F3B",
+  "original_slots": 48
+}

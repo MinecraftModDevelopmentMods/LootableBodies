@@ -1,6 +1,6 @@
 # Testing
 
-Run the Forge 26.2 checks locally with Forge 65.1.5 and Java 25.
+Run the Forge 26.3 checks locally with Forge 66.1.9 and Java 25.
 
 During development, reproduce the changed behaviour first, then batch the cheap
 Java and Python checks. Reserve the full runtime suite for a frozen candidate.

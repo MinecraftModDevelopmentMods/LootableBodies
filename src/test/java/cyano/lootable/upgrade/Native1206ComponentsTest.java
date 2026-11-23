@@ -39,10 +39,10 @@ class Native1206ComponentsTest {
         return stack;
     }
 
-    @Test void targetUsesTheActual4903NativeSchema() {
-        assertEquals(4903,SharedConstants.getCurrentVersion().dataVersion().version());
-        assertEquals(4903,UpgradePreservation.MINECRAFT_VERSION);
-        assertEquals(15,UpgradePreservation.DATA_VERSION);
+    @Test void targetUsesTheActual5023NativeSchema() {
+        assertEquals(5023,SharedConstants.getCurrentVersion().dataVersion().version());
+        assertEquals(5023,UpgradePreservation.MINECRAFT_VERSION);
+        assertEquals(16,UpgradePreservation.DATA_VERSION);
     }
 
     @Test void released120ItemShapePreservesDamageEnchantmentsAndTypedCustomData() {
@@ -70,7 +70,7 @@ class Native1206ComponentsTest {
         assertEquals(27,components.getIntOr("minecraft:damage", 0));
         assertEquals(3,components.getCompoundOrEmpty("minecraft:enchantments").getIntOr("minecraft:sharpness", 0));
         assertArrayEquals(tag.getLongArray("keepsake").orElseGet(() -> new long[0]),components.getCompoundOrEmpty("minecraft:custom_data").getLongArray("keepsake").orElseGet(() -> new long[0]));
-        HolderLookup.Provider registry=net.minecraft.data.registries.VanillaRegistries.createLookup();
+        HolderLookup.Provider registry=net.minecraft.data.registries.VanillaRegistries.createWorldLookup();
         ItemStack stack=ItemStack.CODEC.parse(registry.createSerializationContext(NbtOps.INSTANCE), converted).getOrThrow();
         assertSame(Items.DIAMOND_SWORD,stack.getItem());
         assertEquals(27,stack.getDamageValue());
@@ -242,7 +242,7 @@ class Native1206ComponentsTest {
     }
 
     @Test void validCurrentComponentItemIsCopiedWithoutLegacyConversion() {
-        HolderLookup.Provider registry=net.minecraft.data.registries.VanillaRegistries.createLookup();
+        HolderLookup.Provider registry=net.minecraft.data.registries.VanillaRegistries.createWorldLookup();
         ItemStack stack=new ItemStack(Items.DIAMOND,31);
         stack.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
                 net.minecraft.network.chat.Component.literal("Saved keepsake"));
@@ -271,7 +271,7 @@ class Native1206ComponentsTest {
         assertEquals("mainhand",modifier.getStringOr("slot", ""));
         assertFalse(modifier.contains("uuid"));
         assertEquals(original,old);
-        HolderLookup.Provider registry=net.minecraft.data.registries.VanillaRegistries.createLookup();
+        HolderLookup.Provider registry=net.minecraft.data.registries.VanillaRegistries.createWorldLookup();
         ItemStack actual = ItemStack.CODEC.parse(registry.createSerializationContext(NbtOps.INSTANCE), migrated).getOrThrow();
         assertSame(Items.DIAMOND_SWORD, actual.getItem());
         CompoundTag encoded = cyano.lootable.buildtest.TestNativeNbt.saveStack(actual,registry).getCompoundOrEmpty("components");
