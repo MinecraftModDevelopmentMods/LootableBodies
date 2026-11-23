@@ -24,6 +24,7 @@ public final class ItemMigration {
     private static final int RELEASED_121_VERSION=3955;
     private static final int RELEASED_12111_VERSION=4671;
     private static final int RELEASED_2612_VERSION=4790;
+    private static final int RELEASED_262_VERSION=4903;
 
     /** Null means the caller retains the original raw record for recovery. */
     public static CompoundTag convert(CompoundTag raw,CompoundTag versions) {
@@ -46,7 +47,7 @@ public final class ItemMigration {
             CompoundTag intermediate = convertReleasedComponents(raw);
             return intermediate == null ? null : convertModernComponents(intermediate,RELEASED_121_VERSION);
         }
-        if(source==RELEASED_121_VERSION || source==RELEASED_12111_VERSION || source==RELEASED_2612_VERSION)return convertModernComponents(raw,source);
+        if(source==RELEASED_121_VERSION || source==RELEASED_12111_VERSION || source==RELEASED_2612_VERSION || source==RELEASED_262_VERSION)return convertModernComponents(raw,source);
         if(source<512 || source>LAST_LEGACY_ITEM_VERSION || pipeline==null)return null;
         CompoundTag legacy=convertNbt(raw,versions);
         if(legacy==null || !supportedLegacyStack(legacy))return null;

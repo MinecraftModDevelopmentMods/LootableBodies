@@ -21,7 +21,7 @@ class Native115PacketTest {
         var registry=dimensions().lookupOrThrow(net.minecraft.core.registries.Registries.DIMENSION_TYPE);
         var type=registry.getOrThrow(net.minecraft.world.level.dimension.BuiltinDimensionTypes.OVERWORLD);
         return new ClientboundRespawnPacket(new CommonPlayerSpawnInfo(type,dimension,seed,
-                GameType.SURVIVAL,GameType.CREATIVE,false,true,java.util.Optional.empty(),0,63),
+                GameType.SURVIVAL,java.util.Optional.of(GameType.CREATIVE),false,true,java.util.Optional.empty(),0,63),
                 ClientboundRespawnPacket.KEEP_ALL_DATA);
     }
     private static RegistryAccess dimensions() {

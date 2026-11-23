@@ -100,8 +100,8 @@ public class CorpseRenderer extends LivingEntityRenderer<EntityLootableBody, Ava
 
     @Override
     protected void setupRotations(AvatarRenderState state, PoseStack matrices, float bodyYaw, float scale) {
-        matrices.mulPose(Axis.XP.rotationDegrees(90F));
-        matrices.mulPose(Axis.ZP.rotationDegrees(state.bodyRot));
+        matrices.rotate(Axis.XP.rotationDegrees(90F));
+        matrices.rotate(Axis.ZP.rotationDegrees(state.bodyRot));
         matrices.translate(0D, -0.85D, -0.125D);
         super.setupRotations(state, matrices, 0F, scale);
     }

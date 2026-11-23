@@ -125,12 +125,12 @@ final class FixtureApi {
     static Entity readChunkEntity(CompoundTag data, ServerLevel world, net.minecraft.world.level.chunk.LevelChunk chunk) {
         // Invoke the actual native chunk serializer; do not replace its admission callback.
         CompoundTag root=new CompoundTag();net.minecraft.nbt.ListTag list=new net.minecraft.nbt.ListTag();list.add(data.copy());root.put("entities",list);
-        root.putInt("xPos",chunk.getPos().x());root.putInt("zPos",chunk.getPos().z());root.put("sections",new net.minecraft.nbt.ListTag());root.putInt("DataVersion",4903);
+        root.putInt("xPos",chunk.getPos().x());root.putInt("zPos",chunk.getPos().z());root.put("sections",new net.minecraft.nbt.ListTag());root.putInt("DataVersion",5023);
         // Current fixture NBT follows the real native conversion boundary too.
         // The post-load admission callback remains Minecraft's own method.
         CompoundTag fixed=cyano.lootable.upgrade.NativeNbt.update(
                 cyano.lootable.upgrade.UpgradePreservation.wrapper(net.minecraft.util.datafix.DataFixers.getDataFixer()),
-                net.minecraft.util.datafix.fixes.References.CHUNK,root,4903,4903);
+                net.minecraft.util.datafix.fixes.References.CHUNK,root,5023,5023);
         try {
             java.lang.reflect.Method nativeRead=null;
             for(java.lang.reflect.Method method:net.minecraft.world.level.chunk.storage.SerializableChunkData.class.getDeclaredMethods())

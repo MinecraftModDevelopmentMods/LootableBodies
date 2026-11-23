@@ -109,6 +109,10 @@ final class PositionMotionChecks {
         CompoundTag raw=base();raw.put("Pos",vector(Double.NaN,80,160.5));raw.put("Motion",vector(Double.NaN,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY));
         EntityLootableBody body=chunk(raw,10,10);
         try {
+            // Native66 collision impulses require a real entity-ticking chunk,
+            // beyond the terrain/section admission exercised by chunk().
+            FixtureApi.awaitTicking(body);
+            require(world.isPositionEntityTicking(body.blockPosition()) && body.isPushable(),"Native collision body is not eligible for a push");
             verifyWorldFields(body);CompoundTag before=saved(body);
             EntityLootableBody neighbour=new EntityLootableBody(world);neighbour.setPos(body.getX()-.25,body.getY(),body.getZ());
             require(body.getBoundingBox().intersects(neighbour.getBoundingBox()),"Native collision control did not overlap");
@@ -117,6 +121,6 @@ final class PositionMotionChecks {
             CompoundTag after=saved(body);
             for(String key:new String[]{"Equipment","Aux","LootableBodiesInvalidFields"})require(NameLifetimeChecks.same(before.get(key),after.get(key)),"Native collision changed preserved "+key);
             System.out.println("POSITION_NATIVE_COLLISION_MOTION "+body.getDeltaMovement());
-        } finally {body.discard();}
+        } finally {body.discard();world.setChunkForced(10,10,false);}
     }
 }

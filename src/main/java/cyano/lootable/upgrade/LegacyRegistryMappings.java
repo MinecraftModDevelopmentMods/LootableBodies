@@ -131,8 +131,13 @@ public final class LegacyRegistryMappings {
             if(old.getPath().equals("entity.zombie_pigman."+suffix))return Identifier.parse("minecraft:entity.zombified_piglin."+suffix);
         return null;
     }
-    /** Retain the registry slots of retired memories that never serialized values. */
+    /** Retain exact retired memory identities and their original serialization. */
     public static void retiredMemories(RegisterEvent event) {
+        // Native65 serialized both the Boolean and optional expiry. Preserve
+        // that codec for old brains rather than ignoring the registry binding.
+        event.register(Registries.MEMORY_MODULE_TYPE,Identifier.parse("minecraft:is_tempted"),
+                ()->new net.minecraft.world.entity.ai.memory.MemoryModuleType<Boolean>(
+                        java.util.Optional.of(com.mojang.serialization.Codec.BOOL)));
         event.register(Registries.MEMORY_MODULE_TYPE,Identifier.parse("minecraft:golem_last_seen_time"),
                 ()->new net.minecraft.world.entity.ai.memory.MemoryModuleType<Long>(java.util.Optional.empty()));
         event.register(Registries.MEMORY_MODULE_TYPE,Identifier.parse("minecraft:interactable_doors"),
@@ -170,7 +175,7 @@ public final class LegacyRegistryMappings {
         }
     }
     private static final class VanillaData {
-        static final net.minecraft.core.HolderLookup.Provider LOOKUP=net.minecraft.data.registries.VanillaRegistries.createLookup();
+        static final net.minecraft.core.HolderLookup.Provider LOOKUP=net.minecraft.data.registries.VanillaRegistries.createWorldLookup();
     }
 
     public static void paintings(MissingMappingsEvent event) {

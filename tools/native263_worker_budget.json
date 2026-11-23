@@ -1,0 +1,82 @@
+{
+  "minecraft": "26.3",
+  "forge": "66.1.9",
+  "reloads": 200,
+  "jvms": 4,
+  "qualified": true,
+  "jvm_args": [],
+  "elapsed_seconds": 47.31200000003446,
+  "controller_sha256": "4673C26F1A4F07585BDADFB5871B7061B9969575AA62A8613728E1248063B2FF",
+  "control_jar_sha256": "69BABECAE6881F8EE2ADE652B6F3670ED0F3C68FC65FBD3D63823203736F9358",
+  "server_input_manifest_sha256": "8845C2699CE67D2814EE80D63B44737CABDA14918696FB01C2FEB5CD5F73AEE9",
+  "scope": "Actual native66 default preparation pool and Main owner-thread apply; default Java25 G1. No world, LootableBodies or old-native override.",
+  "shards": [
+    {
+      "index": 1,
+      "rounds": 50,
+      "receipt": "rounds=50 cpus=24 preparationWorkers=23 noWorld=true noLootableBodies=true\n",
+      "logs": {
+        "resource.log": "6AF7AA8C64F3B25CBE5A472AB0AF569438B737F59A975E01B631E897EE33615F",
+        "resource.latest.log": "E17879EB073DFA331ECDC62E845792A04E5DC7CDA67A4B87EA31B988FF762D29",
+        "resource.debug.log": "C00E61401566B47EAEBAD6C1F631667D2FF763F22FC508C5ED398E20B61E30C3"
+      },
+      "diagnostics": {
+        "gc.txt": "D20E3546798AD6F3ED43FBBA821BA26C28D57F5675F8DA82D650D69803209C53",
+        "initial-heap-gc.txt": "C59665421C7D2AD1429DBAF3BA34F8E6BCE2CD8DDAE30FE981ACA6E542A5900A",
+        "initial-threads.txt": "CA57E1AA40806EE170C23DB5394E24D3BCFCBCC37421204B9F5AC5A13CBFBE43",
+        "result.json": "E4395DE7C1F6A8B1BAFF5399F77A4417D69D211A0A37F66F782A9256F288870C"
+      }
+    },
+    {
+      "index": 2,
+      "rounds": 50,
+      "receipt": "rounds=50 cpus=24 preparationWorkers=23 noWorld=true noLootableBodies=true\n",
+      "logs": {
+        "resource.log": "8257DEFBD0E58262D6659A743934B8E5F7CE9E3A4D42BB2A0205ECA90D934DBD",
+        "resource.latest.log": "58FE314C237E3CF1927F33273FE7FBF16ABBA1018E19C3CE2BCD3A5D0FBA28C5",
+        "resource.debug.log": "383CE0A2413689379F38DF941E5C714156526565A0BDFBCE5018BB01F7E6BA16"
+      },
+      "diagnostics": {
+        "gc.txt": "52187004E177ACB13A4B2FDC2E779A86319AF036D55FD80B7113FCD3598F8E93",
+        "initial-heap-gc.txt": "5B3856FB191A8D76994F3650162062D1263853852B1B03808CAC790F0D417B93",
+        "initial-threads.txt": "6691C4E0EB4DEF8938D126DBFDB9D81B57C9C2D0A1B639EA8EA4F8B5189A8F8D",
+        "result.json": "A116690423F8D926FD1317B0A57E489E7631896ACFF6514B6F04ABB9A9ADA1C1"
+      }
+    },
+    {
+      "index": 3,
+      "rounds": 50,
+      "receipt": "rounds=50 cpus=24 preparationWorkers=23 noWorld=true noLootableBodies=true\n",
+      "logs": {
+        "resource.log": "B6EF5908934719639A2FE6792316CB29DB5B95D419637CE6F07DB049A0E97F51",
+        "resource.latest.log": "2F3548461E5920313DB48AC824D7B625299DF08B1AEFEA2334B42E7B9AA8E8BE",
+        "resource.debug.log": "9F4327F6E692DBC916BF73C2B3991742F5515DDF1ADE5B9DC5B3908149B12941"
+      },
+      "diagnostics": {
+        "gc.txt": "20D1A3708B361A0426491EE31C43C0D5E60EED9B4D964D9634F51DE7C9909B5A",
+        "initial-heap-gc.txt": "CC87AD800A3F1742535642C9B3D010E784654F534D393149CB8A83363C8F0518",
+        "initial-threads.txt": "27DC69F0BF529C0834845F3BC891A69DE3F25570FE3EF1F578009781FE1AE2F2",
+        "result.json": "F0A8AC3C30D417D5B719D8221F0FBACC3532C12145FE464BAA7FF11090632AE5"
+      }
+    },
+    {
+      "index": 4,
+      "rounds": 50,
+      "receipt": "rounds=50 cpus=24 preparationWorkers=23 noWorld=true noLootableBodies=true\n",
+      "logs": {
+        "resource.log": "CFF09A88892ADA438FBC4D9B4336554BE623D8AB54E3F632FC53FC83473946F4",
+        "resource.latest.log": "B85DCA70A8E4F0892542B2F04B75AD3BEA63A49710B7915DEF3B4CC526A6048E",
+        "resource.debug.log": "4802AD2DBD7E216FFB5B5962ED8EC4E5313182DC88E9F2ED04394C1600CD926F"
+      },
+      "diagnostics": {
+        "gc.txt": "BFA17781F6C20DBE8B7013BA0996CBA49BE7A425B684F90F433614FBA3DEC085",
+        "initial-heap-gc.txt": "24984E098D0E46112AAC5DE42E2E2250C97055AB8DB268E069F8D82F419AE417",
+        "initial-threads.txt": "28F1B525020809434D7CFBA7B7E2A36A5DB38A6FF21F3E36B85D6A0F7CB5BA5B",
+        "result.json": "19244272BC0BDD8060F12B65F3D420E3E1E6165A11A8BB31B5CC87F2E6108C48"
+      }
+    }
+  ],
+  "qualification_evidence_sha256": "4DBB933007A9B1D2049EB62779F884F5E61D59EFADECFE7F0B4D81E20B6BB760",
+  "launch_context": "Normal desktop Explorer -> fixed PowerShell bootstrap -> Python worker -> exact Java25; no elevation/settings changes",
+  "launch_receipt_sha256": "A45D33A7FD495D033A898835B1359D4DCFA59F602A9019758843A79D00D1B131"
+}

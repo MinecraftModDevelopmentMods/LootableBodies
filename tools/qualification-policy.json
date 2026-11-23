@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "target": "26.2",
-  "status": "Manual testing accepted; expensive qualification stays local. Hosted checks compile and verify exact release files and security.",
+  "target": "26.3",
+  "status": "Human-accepted26.3 candidate; local evidence verified, hosted compile/archive/security/light workflow contracts only.",
   "hosted": {
     "allowed": [
       "compile",

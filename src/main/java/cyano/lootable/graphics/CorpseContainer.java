@@ -203,19 +203,16 @@ public class CorpseContainer extends net.minecraft.world.inventory.AbstractConta
 	private boolean tryRelease(Player player, ItemStack stack, boolean includeName) {
 		if(emptyStack(stack) || stack.getCount() <= 0) return false;
 		if (!(player.level() instanceof net.minecraft.server.level.ServerLevel world)) {
-			player.drop(stack.copy(),includeName);
+			player.drop(stack.copy(),includeName,includeName ? net.minecraft.util.Prediction.PREDICTED : net.minecraft.util.Prediction.SERVER_ONLY);
 			return true;
 		}
-		// Forge's legacy toss helper clears the caller's captured drops and
-		// ignores spawn rejection. Preserve both ownership and the toss event.
-		java.util.Collection<ItemEntity> capturing = player.captureDrops(new java.util.ArrayList<>());
-		ItemEntity dropped;
-		try {
-			dropped = player.drop(stack.copy(),false,includeName);
-			if(dropped != null) player.captureDrops().remove(dropped);
-		} finally {
-			player.captureDrops(capturing);
-		}
+        // Native Player.drop posts/spawns through Forge and clears captured
+        // drops. Build the native item first so cancellation or rejected spawn
+        // leaves the caller's inventory and capture collection intact.
+        java.util.Collection<ItemEntity> capturing = player.captureDrops();
+        player.swing(net.minecraft.world.InteractionHand.MAIN_HAND,
+                net.minecraft.world.item.component.SwingAnimation.DEFAULT,!includeName);
+        ItemEntity dropped = player.createItemStackToDrop(stack.copy(),false,includeName);
 		if(dropped == null) return false;
 		ItemTossEvent event = new ItemTossEvent(dropped,player);
 		if(ItemTossEvent.BUS.post(event)) return false;

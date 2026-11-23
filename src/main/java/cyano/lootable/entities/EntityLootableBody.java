@@ -21,7 +21,6 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.Container;
-import net.minecraft.world.item.ShovelItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.NumericTag;
@@ -379,7 +378,7 @@ public class EntityLootableBody extends Mob implements Container, net.minecraft.
         if(CorpseDamageRules.kind(src)==CorpseDamageRules.Kind.ATTACK && src.getEntity() instanceof Player){
             Player player=(Player)src.getEntity();
             ItemStack item=player.getItemInHand(InteractionHand.MAIN_HAND);
-            if(!emptyStack(item) && (item.getItem() instanceof ShovelItem || item.canPerformAction(net.minecraftforge.common.ToolActions.SHOVEL_DIG)))
+            if(!emptyStack(item) && (item.is(net.minecraft.tags.ItemTags.SHOVELS) || item.canPerformAction(net.minecraftforge.common.ToolAction.get("shovel_dig"))))
                 this.kill(world);
         }
         if(CorpseDamageRules.isWall(src))this.jumpOutOfWall();

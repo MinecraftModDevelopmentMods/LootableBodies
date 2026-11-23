@@ -9,7 +9,7 @@ import net.minecraft.world.level.levelgen.WorldDimensions;
 public final class Native119Registries {
     private Native119Registries(){ }
     private static final class Prepared {
-        static final HolderLookup.Provider LOOKUP=net.minecraft.data.registries.VanillaRegistries.createLookup();
+        static final HolderLookup.Provider LOOKUP=net.minecraft.data.registries.VanillaRegistries.createWorldLookup();
     }
     public static HolderLookup.Provider lookup(){return Prepared.LOOKUP;}
     public static RegistryAccess forDimensions(WorldDimensions dimensions) {

@@ -1,0 +1,12 @@
+{
+  "C7FD901A2684A08FDECA70F0902D87A594C51792F1AD8791F5E4C507A2C2C2AE": {
+    "header": "native263-forge-only-flat-level.dat",
+    "worldgen": "native263-forge-only-flat-worldgen.dat",
+    "worldgen_sha256": "A44CC4C281FC5ECBB876572FE53267EC23CB9FC13736C5A3372C28A7113A99C5"
+  },
+  "1644E311AFF233D2CC5C2874DF67BC0D9E0EDFBDE77BE604102E947E1F8B4169": {
+    "header": "native263-flat-level.dat",
+    "worldgen": "native263-flat-worldgen.dat",
+    "worldgen_sha256": "A44CC4C281FC5ECBB876572FE53267EC23CB9FC13736C5A3372C28A7113A99C5"
+  }
+}

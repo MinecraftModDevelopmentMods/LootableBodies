@@ -45,11 +45,11 @@ final class RespawnPacketTrace extends ChannelDuplexHandler {
         }
         if(packet instanceof ClientboundRespawnPacket respawn)return NativeRespawnDescription.describe(respawn);
         if(packet instanceof ClientboundRemoveEntitiesPacket destroy)
-            return "DESTROY ids="+Arrays.toString(destroy.getEntityIds().toIntArray());
+            return "DESTROY ids="+Arrays.toString(destroy.entityIds().toIntArray());
         if(packet instanceof ClientboundForgetLevelChunkPacket unload)
             return "UNLOAD chunk="+unload.pos().x()+","+unload.pos().z();
         if(packet instanceof ClientboundLevelChunkWithLightPacket chunk)
-            return "CHUNK chunk="+chunk.getX()+","+chunk.getZ()+" full=true";
+            return "CHUNK chunk="+chunk.x()+","+chunk.z()+" full=true";
         if(packet instanceof ClientboundPlayerCombatEnterPacket)return "COMBAT event=ENTER_COMBAT";
         if(packet instanceof ClientboundPlayerCombatEndPacket)return "COMBAT event=END_COMBAT";
         if(packet instanceof ClientboundPlayerCombatKillPacket killed)

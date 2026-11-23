@@ -167,7 +167,7 @@ def inject_future_entity_version(world):
     before=digest(path);original=world.parent/'future-entity-original.mca'
     if original.exists():raise ValueError('Future fixture original already exists')
     shutil.copy2(path,original)
-    future_version = 4904  # Immediately beyond Minecraft 26.2's 4903.
+    future_version = 5024  # Immediately beyond Minecraft26.3 native5023.
     root['DataVersion'] = Tag(3, future_version)
     write_disposable_region(path, chunks)
     return {'region':path.relative_to(world).as_posix(),'chunk_index':index,'source_version':2975,

@@ -29,8 +29,11 @@ class Native119DamageTest {
         net.minecraft.server.Bootstrap.bootStrap();
         MappedRegistry<DamageType> registry=new MappedRegistry<>(Registries.DAMAGE_TYPE,Lifecycle.stable());
         DamageTypes.bootstrap(new BootstrapContext<DamageType>() {
-            public Holder.Reference<DamageType> register(ResourceKey<DamageType> key,DamageType value,Lifecycle life) {
-                return registry.register(key,value,new net.minecraft.core.RegistrationInfo(java.util.Optional.empty(),life));
+            public Holder.Reference<DamageType> register(ResourceKey<DamageType> key,DamageType value) {
+                return registry.register(key,value,net.minecraft.core.RegistrationInfo.BUILT_IN);
+            }
+            public <S> java.util.stream.Stream<Holder.Reference<S>> listContextElements(ResourceKey<? extends Registry<? extends S>> key) {
+                throw new AssertionError("Damage type bootstrap unexpectedly lists another registry: "+key);
             }
             public <S> HolderGetter<S> lookup(ResourceKey<? extends Registry<? extends S>> key) {
                 throw new AssertionError("Damage type bootstrap unexpectedly needs another registry: "+key);

@@ -37,6 +37,10 @@ final class ConnectedClientChecks {
     private UUID playerId, corpseId;
     private CompoundTag visibleExpected;
     private File report;
+    private record OpenState(int id,boolean loaded,boolean ticking,boolean valid,String menu) { }
+    private Future<OpenState> openReadiness;
+    private String lastOpenState;
+    private boolean observedOpenStall;
 
     void start(Minecraft mc) {
         playerId=mc.player.getUUID();
@@ -51,10 +55,14 @@ final class ConnectedClientChecks {
             screenshot(mc,"connected-player-death.png");
             mc.player.respawn(); next(2);
         } else if(stage==2 && mc.player!=null && mc.player.isAlive() && !(mc.gui.screen() instanceof DeathScreen)) {
-            schedule(mc,() -> {
-                ServerPlayer player=player(mc); EntityLootableBody corpse=corpse(mc);
+            schedule(mc,()-> {
+                ServerPlayer player=player(mc);
                 RuntimeChecks.require(player.isAlive(),"Connected respawn failed");
                 player.connection.teleport(24.5,80,7.5,0,0);
+            });next(200);
+        } else if(stage==200 && done() && bodyReady(mc)) {
+            schedule(mc,() -> {
+                EntityLootableBody corpse=corpse(mc);
                 RuntimeChecks.saveExpected(folder(mc),"connected-death-before",corpse);
                 visibleExpected=read(folder(mc),"connected-death-before");
                 mark("connected_player_death_and_respawn");
@@ -78,7 +86,7 @@ final class ConnectedClientChecks {
             quit(mc); next(7);
         } else if(stage==7 && FixtureConnections.stopped(mc)) {
             mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.gui.setScreen(new net.minecraft.client.gui.screens.TitleScreen())); next(8);
-        } else if(stage==8 && ready(mc) && frames>30) {
+        } else if(stage==8 && ready(mc) && frames>30 && bodyReady(mc)) {
             schedule(mc,() -> {
                 verifyReload(mc,"connected-after-recovery","connected-player-after-recovery");
                 RuntimeChecks.require(player(mc).getInventory().getNonEquipmentItems().get(9).isEmpty(),"Normal-click destination not empty");
@@ -109,7 +117,7 @@ final class ConnectedClientChecks {
             quit(mc); next(13);
         } else if(stage==13 && FixtureConnections.stopped(mc)) {
             mc.createWorldOpenFlows().openWorld("build-fixture",()->mc.gui.setScreen(new net.minecraft.client.gui.screens.TitleScreen())); next(14);
-        } else if(stage==14 && ready(mc) && frames>30) {
+        } else if(stage==14 && ready(mc) && frames>30 && bodyReady(mc)) {
             schedule(mc,() -> {
                 verifyReload(mc,"connected-final","connected-player-final");
                 checkPlayer(player(mc).getInventory(),19);checkPlayer(player(mc).getInventory(),20);
@@ -123,6 +131,15 @@ final class ConnectedClientChecks {
             System.out.println("LOOTABLE_BODIES_CONNECTED_CLIENT_PASS");
             return true;
         }
+        if((stage==4 || stage==10 || stage==16) && frames==40 && !gui(mc) && !observedOpenStall) {
+            observedOpenStall=true;
+            schedule(mc,()-> {
+                ServerPlayer p=player(mc);EntityLootableBody body=corpse(mc);
+                System.out.println("CONNECTED_OPEN_NOT_DISPLAYED stage="+stage+" loaded="+p.connection.hasClientLoaded()+" serverMenu="+p.containerMenu.getClass().getName()+" serverBody="+(body==null?"missing":body.getId())+" valid="+(body!=null&&body.stillValid(p)));
+                throw new AssertionError("Connected native interaction did not display its menu; see actual server readiness/menu receipt");
+            });
+        }
+        if(observedOpenStall && pending.isDone())pending.get();
         return false;
     }
     private void prepareDeath(Minecraft mc) throws Exception {
@@ -199,9 +216,36 @@ final class ConnectedClientChecks {
     private void next(int value){stage=value;frames=0;System.out.println("CONNECTED_CLIENT_STAGE "+stage);}
     private static boolean ready(Minecraft mc){return mc.level!=null && mc.player!=null && mc.getSingleplayerServer()!=null;}
     private static boolean gui(Minecraft mc){return mc.gui.screen() instanceof CorpseGUIContainer;}
-    private boolean open(Minecraft mc){
-        for(Entity entity:FixtureApi.entities(mc.level))if(entity instanceof EntityLootableBody && entity.getUUID().equals(corpseId)){
-            mc.gameMode.interact(mc.player, entity, new net.minecraft.world.phys.EntityHitResult(entity), InteractionHand.MAIN_HAND);return true;
+    private OpenState observeReadiness(Minecraft mc) throws Exception {
+        if(openReadiness==null) {
+            openReadiness=mc.getSingleplayerServer().submit(()-> {
+                ServerPlayer player=player(mc);var level=mc.getSingleplayerServer().getLevel(FixtureApi.dimensionKey(0));
+                Entity entity=level.getEntity(corpseId);
+                EntityLootableBody corpse=entity instanceof EntityLootableBody body?body:null;
+                return new OpenState(corpse==null?-1:corpse.getId(),player!=null&&player.connection.hasClientLoaded(),corpse!=null&&level.isPositionEntityTicking(corpse.blockPosition()),player!=null&&corpse!=null&&corpse.stillValid(player),player==null?"missing player":player.containerMenu.getClass().getName());
+            });
+            return null;
+        }
+        if(!openReadiness.isDone())return null;
+        OpenState state=openReadiness.get();openReadiness=null;
+        String receipt="stage="+stage+" server="+state;
+        if(!receipt.equals(lastOpenState)){System.out.println("CONNECTED_OPEN_READINESS "+receipt);lastOpenState=receipt;}
+        return state;
+    }
+    private boolean bodyReady(Minecraft mc) throws Exception {
+        OpenState state=observeReadiness(mc);
+        return state!=null && state.loaded() && state.id()>=0;
+    }
+    private boolean open(Minecraft mc) throws Exception {
+        OpenState state=observeReadiness(mc);
+        // Observe real admission and native client-loaded state across normal
+        // server ticks. Never force a chunk ticket or fabricate a loaded packet.
+        if(state==null || !state.loaded() || !state.valid())return false;
+        for(Entity entity:FixtureApi.entities(mc.level))if(entity instanceof EntityLootableBody && entity.getUUID().equals(corpseId)) {
+            if(entity.getId()!=state.id())return false;
+            System.out.println("CONNECTED_OPEN_SENT stage="+stage+" id="+entity.getId()+" clientValid="+((EntityLootableBody)entity).stillValid(mc.player));
+            mc.gameMode.interact(mc.player,entity,new net.minecraft.world.phys.EntityHitResult(entity),InteractionHand.MAIN_HAND);
+            observedOpenStall=false;return true;
         }
         return false;
     }

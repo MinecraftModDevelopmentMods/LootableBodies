@@ -62,7 +62,7 @@ class Native119CoremodEngineTest {
             var config = JsonParser.parseReader(new InputStreamReader(input, StandardCharsets.UTF_8)).getAsJsonObject();
             assertTrue(config.get("required").getAsBoolean());
             assertEquals(1, config.getAsJsonObject("injectors").get("defaultRequire").getAsInt());
-            assertEquals(java.util.Set.of("DataFixersMixin","SaveAccessMixin","RegionStorageMixin","FileFixerMixin","FileFixLevelDataMixin","DimensionStorageMixin","CapabilityDataMixin"),
+            assertEquals(java.util.Set.of("DataFixersMixin","SaveAccessMixin","RegionStorageMixin","FileFixerMixin","FileFixLevelDataMixin","DimensionStorageMixin","CapabilityDataMixin","InventoryDeathDropMixin","EquipmentDeathDropMixin"),
                     config.getAsJsonArray("mixins").asList().stream().map(v -> v.getAsString()).collect(java.util.stream.Collectors.toSet()));
             assertEquals("DedicatedWorldMixin", config.getAsJsonArray("server").get(0).getAsString());
             assertEquals(1, config.getAsJsonArray("client").size());

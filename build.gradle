@@ -64,6 +64,7 @@ tasks.withType(JavaCompile).configureEach {
 tasks.named('compileTestJava', JavaCompile) { options.compilerArgs.add('-proc:none') }
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+    systemProperty 'junit.jupiter.tempdir.cleanup.mode.default', 'ON_SUCCESS'
     maxHeapSize = "1536m"
     javaLauncher = productionLauncher
     workingDir = projectDir
@@ -83,9 +84,9 @@ tasks.register('generateNative120Fixtures', JavaExec) {
     dependsOn 'testClasses'
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'cyano.lootable.buildtest.Native120FixtureGenerator'
-    args providers.gradleProperty('nativeFixtureOutput').getOrElse('build/native262-fixture-preparation-01'),
-        file('tools/fixtures/native262-flat-level.dat').absolutePath,
-        file('tools/fixtures/native262-flat-worldgen.dat').absolutePath
+    args providers.gradleProperty('nativeFixtureOutput').getOrElse('build/native263-fixture-preparation-01'),
+        file('tools/fixtures/native263-flat-level.dat').absolutePath,
+        file('tools/fixtures/native263-flat-worldgen.dat').absolutePath
 }
 tasks.withType(JavaExec).configureEach { javaLauncher = productionLauncher }
 tasks.withType(Javadoc).configureEach {
@@ -218,7 +219,7 @@ tasks.named('jar', Jar) {
             'Built-On-Java': '25', 'Built-On': "${minecraft_version}-${forge_version}", 'MixinConfigs': 'lootablebodies.mixins.json')
     filesMatching(archiveTextPatterns, normalizeArchiveText)
 }
-// Minecraft 26.2 ships with named classes.
+// Minecraft 26.3 ships with named classes.
 ext.releaseJar = tasks.named('jar', Jar)
 ['sourcesJar', 'javadocJar'].each { name ->
     tasks.named(name, Jar) {
